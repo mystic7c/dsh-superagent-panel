@@ -142,7 +142,7 @@ Object.assign(PAGE_TEXT, {
     acceptCard: ['验收', 'Acceptance'],
     acceptHint: ['在 UAT 上按工单正文的 UC/AC 验收；验收通过后，这张工单会从「需要你处理」移除。部署记录与构建证据保持不变。',
       'Verify the UC/AC from the Ticket body on UAT; accepting removes it from "needs you". The deploy record and its evidence stay untouched.'],
-    // Acceptance mode `merged` (repositories without CI, e.g. bpit/ebs): accept once the MR is merged.
+    // Acceptance mode `merged` (repositories without CI, e.g. group/project-b): accept once the MR is merged.
     acceptHintMerged: ['这个仓库在合并后验收：按工单正文的 UC/AC 在目标分支上核对；验收通过后，这张工单会从「需要你处理」移除。',
       'This repository is accepted after the merge: check the UC/AC from the Ticket body on the target branch; accepting removes it from "needs you".'],
     acceptOnlyMerged: ['只有 MR 已合入目标分支的工单可以验收。', 'Only a Ticket whose MR is merged into the target branch can be accepted.'],

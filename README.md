@@ -78,7 +78,7 @@ node scripts/check-keys.mjs            # 双语 key 覆盖检查
 ## 卸载
 
 ```bash
-plugin_manager remove_bundle target=@mlamp/dsh-superagent-ui
+plugin_manager remove_bundle target=@mystic7c/dsh-superagent-panel
 ```
 
 状态目录 `~/.dsh/superagent` 不会被删除，可手动清理。

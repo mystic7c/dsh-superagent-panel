@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const sourceDir = join(root, 'client', 'src')
 const outFile = join(root, 'client', 'index.js')
-const PACKAGE = '@mlamp/dsh-superagent-ui'
+const PACKAGE = '@mystic7c/dsh-superagent-panel'
 
 const files = readdirSync(sourceDir).filter(name => name.endsWith('.js')).sort()
 if (files.length === 0) throw new Error('client/src has no fragments')

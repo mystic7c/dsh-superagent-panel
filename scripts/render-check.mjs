@@ -40,13 +40,22 @@ const { Engine } = await import('../lib/live/engine.js')
 const stateDir = process.env.DSH_SUPERAGENT_STATE_DIR ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
 const engine = new Engine({ stateDir, log: () => {} })
 await engine.state.load()
+// Repository ids/projects come from this machine's live.json, so the checks below never assume specific
+// project names; only the machine that runs the check needs them configured.
+const { loadLiveConfig } = await import('../lib/live/config.js')
+const { configRepos } = await import('../lib/live/repos.js')
+const loadedLive = loadLiveConfig(stateDir)
+const liveRepos = configRepos(loadedLive.config)
+const primaryRepoId = liveRepos[0]?.id ?? 'repo-1'
+const defaultRepoId = loadedLive.config.defaultRepo ?? primaryRepoId
+const repoLabels = liveRepos.map(repo => repo.gitlab.project || repo.id)
 const nowIso = new Date().toISOString()
 if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deployed' && !ticket.links?.acceptance)) {
   const demoId = 'tkt_demo_accept'
   engine.state.tickets[demoId] = {
     id: demoId, title: '演示：验收按钮流程',
     body: 'UC-DEMO-001：检查验收按钮把工单移出待处理。\n\nSELECT Gcc.Segment1 公司, Hou.Name 公司名称, Gjh.Period_Name 期间\nFROM Gl_Je_Headers Gjh, Gl_Je_Batches Gbh, Gl_Je_Lines Gjl\nWHERE Gjh.Je_Batch_Id = Gbh.Je_Batch_Id AND Gjh.Je_Header_Id = Gjl.Je_Header_Id;',
-    status: 'deployed', repoId: 'demo-legacy-repo', createdAt: nowIso, updatedAt: nowIso, assignments: [],
+    status: 'deployed', repoId: primaryRepoId, createdAt: nowIso, updatedAt: nowIso, assignments: [],
     origin: { threadKey: 'octo:demo', actor: 'demo' },
     links: { branch: 'feature/tkt_demo_accept', commit: 'demo1234', worktree: '/tmp/demo',
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
@@ -66,7 +75,7 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
 const demoWorkId = 'tkt_demo_running'
 engine.state.tickets[demoWorkId] = {
   id: demoWorkId, title: '演示：正在执行的工单', body: 'UC-DEMO-002：检查概览是否显示执行中的工单。',
-  status: 'working', repoId: 'demo-legacy-repo', createdAt: new Date(Date.now() - 8 * 60_000).toISOString(),
+  status: 'working', repoId: primaryRepoId, createdAt: new Date(Date.now() - 8 * 60_000).toISOString(),
   updatedAt: new Date(Date.now() - 60_000).toISOString(), runId: 'run_demo_working', assignments: [],
   origin: { threadKey: 'octo:demo', actor: 'demo' },
   links: { branch: 'feature/tkt_demo_running', mergeRequest: null, pipeline: null },
@@ -311,7 +320,7 @@ check('header poll action reports a dry-run check', /检查完成/.test(text()) 
 clickByText('来源')
 await sleep(1000)
 const sourceText = text()
-check('source page shows both repositories', sourceText.includes('bpit/ebs') && sourceText.includes('demo-legacy-repo'), sourceText.slice(0, 260))
+check('source page shows both repositories', repoLabels.every(label => sourceText.includes(label)), sourceText.slice(0, 260))
 check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('GitLab / GitHub 仓库'), sourceText.slice(0, 260))
 check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
   String(rootElement.querySelectorAll('.sa-cards-2').length))
@@ -354,11 +363,11 @@ check('source settings offer group→repository bindings', sourceSettingsText.in
 clickByText('仓库', '.sa-settings-nav button')
 await sleep(900)
 const reposText = text()
-check('repositories group lists every repository', reposText.includes('bpit/ebs') && reposText.includes('demo-legacy-repo'), reposText.slice(0, 400))
+check('repositories group lists every repository', repoLabels.every(label => reposText.includes(label)), reposText.slice(0, 400))
 check('repositories group uses the two-up card grid', rootElement.querySelectorAll('.sa-main .sa-cards-2').length >= 1,
   String(rootElement.querySelectorAll('.sa-main .sa-cards-2').length))
-check('repositories group carries the default repository summary', /2 个仓库 · 默认仓库 demo-legacy-repo/.test(reposText), reposText.slice(0, 200))
-check('repositories group shows gates and clone path', reposText.includes('闸门') && reposText.includes('/Users/you/Documents/workspace/ebs'), reposText.slice(0, 300))
+check('repositories group carries the default repository summary', new RegExp(`${liveRepos.length} 个仓库 · 默认仓库 ${defaultRepoId}`).test(reposText), reposText.slice(0, 200))
+check('repositories group shows gates and clone path', reposText.includes('闸门') && reposText.includes('本地路径'), reposText.slice(0, 300))
 check('repositories group absorbs the deployment facts', reposText.includes('部署与限制') && reposText.includes('live.json'), reposText.slice(0, 500))
 const tokenInputs = [...rootElement.querySelectorAll('.sa-main input[type="password"]')]
 check('repositories group offers a GitLab token editor', tokenInputs.length >= 2, `inputs=${tokenInputs.length}`)
