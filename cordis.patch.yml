@@ -4,4 +4,4 @@
 # `sidebar.panellist` and `main` slots, so no shipped row is replaced or disabled.
 - insert:
     - id: superagent-panel
-      name: '@mlamp/dsh-superagent-ui'
+      name: '@mystic7c/dsh-superagent-panel'
