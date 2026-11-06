@@ -1,0 +1,7 @@
+# superagent-panel: the Superagent management panel (sidebar entry + full panel) and its host-side
+# management API on 127.0.0.1 under the same Web origin. Host state is kept in ~/.dsh/superagent
+# (override with DSH_SUPERAGENT_STATE_DIR); the panel registers itself through the shipped
+# `sidebar.panellist` and `main` slots, so no shipped row is replaced or disabled.
+- insert:
+    - id: superagent-panel
+      name: '@mlamp/dsh-superagent-ui'

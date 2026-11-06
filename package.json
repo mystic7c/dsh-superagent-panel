@@ -1,0 +1,38 @@
+{
+  "name": "@mlamp/dsh-superagent-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Superagent 管理面板：左侧栏入口，总览/来源/触发/评估/执行/设置六个管理页，工单与线程详情、全局搜索、术语表、设置保存历史。",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client/index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/**/*.js",
+    "client/index.js",
+    "client/src/**/*.js",
+    "scripts/**/*.mjs",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "check": "node --check index.js && node scripts/build-client.mjs --check"
+  }
+}
