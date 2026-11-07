@@ -282,6 +282,13 @@ export function apply(ctx, config = {}) {
           send(res, 200, value)
           return
         }
+        // P2-9: run-quality rollup (no token/cost data; cost.available is false until the host exposes usage).
+        if (method === 'GET' && second === 'metrics') {
+          const window = url.searchParams.get('window') ?? '24h'
+          if (!['24h', '7d', 'all'].includes(window)) throw new ActionError(400, 'window 必须是 24h / 7d / all')
+          send(res, 200, engine.metricsView?.({ window }) ?? { window, generatedAt: new Date().toISOString() })
+          return
+        }
         if (method === 'GET' && second === 'config') { send(res, 200, engine.configView()); return }
         // Read-only group list for the settings picker; writes nothing and never polls messages.
         if (method === 'GET' && second === 'octo' && third === 'groups') {
