@@ -788,7 +788,9 @@ function TicketDetail({ id, page = 'execution' }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
-  const [activeJump, setActiveJump] = useState()
+  // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
+  // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
+  const [activeJump, setActiveJump] = useState('sa-ticket-changes')
   const [headStuck, setHeadStuck] = useState(false)
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is

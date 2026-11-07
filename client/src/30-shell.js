@@ -46,6 +46,9 @@ function GlobalStatus() {
   const pending = data.inbox ? Number(data.inbox.blocking ?? 0) : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
   const setup = setupStateOf(data)
+  // When only the last switch (engine) is left, Overview owns the single "start automation" action; a second
+  // "配置 3/4" chip would compete with it. Keep the chip while prerequisites or the repository step are missing.
+  const onlyEnginePending = data.config?.enabled !== true && setup.done === setup.total - 1
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
   const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
@@ -61,7 +64,7 @@ function GlobalStatus() {
     active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
-    setup.done < setup.total
+    setup.done < setup.total && !onlyEnginePending
       ? h(Fragment, null,
         h('span', { 'aria-hidden': 'true' }, '·'),
         h('button', { type: 'button', className: 'sa-setup-chip', onClick: () => navigate({ page: 'overview' }) },

@@ -197,6 +197,11 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+/* Execution's view controls: label and control stay one unit, and at compact widths each becomes a full row. */
+.sa-exec-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-8) var(--sa-sp-20); min-width: 0; }
+.sa-toolbar-field { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-toolbar-field .sa-segmented { flex: none; width: 260px; max-width: 320px; }
+.sa-toolbar-switch { display: flex; align-items: center; gap: var(--sa-sp-8); margin-left: auto; }
 
 /* ---------- page head / global status ---------- */
 .sa-head { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between;
@@ -294,6 +299,7 @@ const PANEL_CSS = `
 .sa-pill:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-pill-active, .sa-pill-active:hover { color: var(--dsw-alias-label-primary); box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary); }
 .sa-segmented { width: 100%; max-width: 480px; box-sizing: border-box; display: inline-grid;
+  box-shadow: inset 0 0 0 1px var(--sa-line);
   grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sa-sp-2); padding: var(--sa-sp-2);
   border-radius: var(--sa-r-pill); background: var(--dsw-alias-bg-layer-2, transparent); }
 .sa-segment { height: 28px; padding: 0 var(--sa-sp-12); border: 0; border-radius: var(--sa-r-pill); background: transparent;
@@ -303,6 +309,11 @@ const PANEL_CSS = `
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-segment:disabled { cursor: default; opacity: 0.4; }
+
+/* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
+   selected while its detail is off-screen. */
+.sa-row-chevron { margin-left: auto; align-self: center; flex: none; display: inline-flex;
+  color: var(--sa-label-tertiary); }
 
 /* ---------- shape-coded status ---------- */
 .sa-status-icon { flex: none; display: inline-block; vertical-align: -2px; }
@@ -328,6 +339,8 @@ const PANEL_CSS = `
 /* Search results are real <button> rows; strip the platform button chrome so they read like every other .sa-row. */
 button.sa-row { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .sa-row[role='button']:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+/* A selected thread row paints a background; give its content an inset so the tint does not run under the text. */
+.sa-list .sa-row[role='button'] { padding-left: var(--sa-sp-8); padding-right: var(--sa-sp-8); }
 /* The whole-row affordance is mouse-only; keyboard opens through this title button, which is a sibling of the row's
    action buttons (no interactive element nested inside another). */
 .sa-row-open { flex: 1 1 auto; min-width: 0; min-height: 24px; display: flex; align-items: center; padding: 0;
@@ -427,6 +440,23 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-loadbar-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 
+/* ---------- one automation state line ---------- */
+.sa-automation { display: flex; align-items: center; gap: var(--sa-sp-12); flex-wrap: wrap;
+  padding: var(--sa-sp-12) var(--sa-sp-16); border: 0.5px solid var(--sa-line);
+  border-radius: var(--sa-r-md);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 7%, transparent); }
+.sa-automation-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-automation-title { font-size: var(--sa-fs-body); line-height: 1.4; font-weight: 600;
+  color: var(--dsw-alias-label-primary); }
+.sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
+.sa-automation .sa-btn { flex: none; }
+.sa-automation-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
+@container (max-width: 760px) {
+  .sa-automation { align-items: flex-start; }
+  .sa-automation-actions { width: 100%; flex-direction: row; align-items: center; }
+  .sa-automation-actions .sa-btn { flex: 1 1 0; min-width: 0; }
+}
+
 /* ---------- first-run setup (overview card + header chip + quiet banner) ---------- */
 .sa-setup { display: flex; flex-direction: column; gap: var(--sa-sp-12); padding: var(--sa-sp-16);
   border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-lg);
@@ -454,7 +484,16 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   line-height: 1.4; color: var(--sa-link-text); cursor: pointer; }
 .sa-setup-chip:hover { text-decoration: underline; }
 .sa-setup-chip:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
-@container (max-width: 760px) { .sa-setup-steps { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 760px) {
+  .sa-setup-steps { grid-template-columns: minmax(0, 1fr); }
+  /* The detail nav stays one horizontally scrollable row; wrapping it to two lines stole ~13% of the phone viewport. */
+  .sa-detail-nav { flex-wrap: nowrap; overflow-x: auto; }
+  .sa-detail-context { display: none; }
+  .sa-detail-jumps { flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+  .sa-detail-jump { white-space: nowrap; }
+  .sa-detail-context-action { margin-left: 0; }
+}
+@container (max-width: 480px) { .sa-segmented-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ---------- cards ---------- */
 .sa-card-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
@@ -504,7 +543,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
-.sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+.sa-settings-body { min-width: 0; max-width: 680px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
 .sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
@@ -634,7 +673,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-pre del { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, transparent); text-decoration: none; }
 
 /* ---------- markdown / text ---------- */
-.sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; overflow-wrap: anywhere; }
+.sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;
+  font-size: var(--sa-fs-body); line-height: 1.5; overflow-wrap: anywhere; }
 .sa-md p, .sa-md ul, .sa-md ol { margin: 0; }
 .sa-md ul, .sa-md ol { padding-left: var(--sa-sp-24); }
 .sa-md ul { list-style: disc outside; }
@@ -808,6 +848,19 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-scroll { padding: 0 0 var(--sa-sp-16); }
   .sa-main { padding-top: var(--sa-sp-16); }
   .sa-panes, .sa-settings { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-16); }
+  /* Settings becomes a horizontal, scrollable tab row instead of a 260px vertical list above the form. */
+  .sa-settings-nav { flex-direction: row; align-items: center; gap: 0; overflow-x: auto;
+    border-bottom: 0.5px solid var(--sa-line); padding-bottom: var(--sa-sp-4); scrollbar-width: thin; }
+  .sa-settings-nav .sa-settings-group { width: auto; flex: none; min-height: 36px; padding: 0 var(--sa-sp-12);
+    border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
+    border-bottom-color: var(--dsw-alias-brand-primary); }
+  .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
+  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-12); }
+  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
+  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
+  .sa-toolbar-switch { margin-left: 0; }
+  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
   .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
@@ -2136,7 +2189,8 @@ function GlossaryButton() {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   return h(Fragment, null,
-    h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'), onClick: () => setOpen(true) }),
+    h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
+      variant: 'outline', onClick: () => setOpen(true) }),
     h(GlossaryModal, { open, onClose: () => setOpen(false) }))
 }
 
@@ -2268,6 +2322,9 @@ function GlobalStatus() {
   const pending = data.inbox ? Number(data.inbox.blocking ?? 0) : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
   const setup = setupStateOf(data)
+  // When only the last switch (engine) is left, Overview owns the single "start automation" action; a second
+  // "配置 3/4" chip would compete with it. Keep the chip while prerequisites or the repository step are missing.
+  const onlyEnginePending = data.config?.enabled !== true && setup.done === setup.total - 1
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
   const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
@@ -2283,7 +2340,7 @@ function GlobalStatus() {
     active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
-    setup.done < setup.total
+    setup.done < setup.total && !onlyEnginePending
       ? h(Fragment, null,
         h('span', { 'aria-hidden': 'true' }, '·'),
         h('button', { type: 'button', className: 'sa-setup-chip', onClick: () => navigate({ page: 'overview' }) },
@@ -2925,13 +2982,31 @@ Object.assign(PAGE_TEXT, {
   funnelBranch: ['其中 {count} 条仅作上下文', '{count} context-only'],
   funnelSummary2: ['{received} 到达 · {judged} 评估 · {accepted} 接单 · {dropped} 出站失败',
     '{received} arrived · {judged} evaluated · {accepted} accepted · {dropped} not sent'],
+  automation: {
+    offTitle: ['自动化未启动', 'Automation is off'],
+    pausedTitle: ['处理已暂停', 'Processing is paused'],
+    paused: ['处理已暂停', 'Paused'],
+    engineOff: ['引擎未启用', 'Intake off'],
+    executorOff: ['执行器未启用', 'Executor off'],
+    start: ['启动自动化', 'Start automation'],
+    resume: ['恢复处理', 'Resume processing'],
+    startHint: ['启动后会按轮询间隔读取群消息，新工单会开始执行。',
+      'Starting reads groups on the poll interval and lets new Tickets run.'],
+    resumeHint: ['恢复后会继续评估、派工与回复。', 'Resuming continues Eval, dispatch and replies.'],
+    startTitle: ['启动自动化？', 'Start automation?'],
+    resumeTitle: ['恢复处理？', 'Resume processing?'],
+    startMessage: ['将恢复处理、启用引擎并启用执行器。启用后群消息会按轮询间隔读取，新工单会开始执行。',
+      'This resumes processing, enables intake and turns the executor on; group messages will be read on the interval and new Tickets will run.'],
+    resumeMessage: ['将恢复处理：继续评估、派工与回复。', 'This resumes processing: Eval, dispatch and replies continue.'],
+    started: ['自动化已启动。', 'Automation started.'],
+  },
   toast: {
     verifyOk: ['核对完成：UAT 可访问，构建已更新。', 'Checked: UAT reachable, new build detected.'],
     verifyDown: ['核对完成：UAT 当前不可访问，详见工单详情。', 'Checked: UAT is not reachable right now; see the Ticket detail.'],
     ciDone: ['CI 已刷新：{status}', 'CI refreshed: {status}'],
     ciNoToken: ['没有 GitLab token，无法观测 CI。', 'No GitLab token, CI cannot be observed.'],
     dryDone: ['干跑完成。', 'Dry run finished.'],
-    publishDone: ['已发布 MR !{iid}', 'Published MR !{iid}'],
+    publishDone: ['已发布 MR #{iid}', 'Published MR #{iid}'],
     publishPushed: ['已推送分支。', 'Branch pushed.'],
     pollDone: ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）', 'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
     pauseDone: ['已暂停处理。', 'Processing paused.'],
@@ -2943,7 +3018,7 @@ Object.assign(PAGE_TEXT, {
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
   'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
-  'runTrigger', 'runStop']
+  'runTrigger', 'runStop', 'automation']
 for (const group of TEXT_GROUPS) {
   const nested = PAGE_TEXT[group]
   if (!nested || Array.isArray(nested)) continue
@@ -3187,6 +3262,37 @@ function TicketStatusTag({ ticket }) {
   const view = ticketStatus(ticket)
   const unknown = view.key === 'unknown' && ticket?.status ? `（${ticket.status}）` : ''
   return h(Tag, { tone: view.tone }, pt(t, view.labelKey) + unknown)
+}
+
+/**
+ * One automation state line for three switches that are one story: processing paused, intake enabled,
+ * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
+ * instead of repeating the same warning in four places.
+ */
+function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false }) {
+  const { t } = usePanel()
+  const onlyPaused = paused && engineEnabled && executorEnabled
+  const facts = []
+  if (paused) facts.push(pt(t, 'automation.paused'))
+  if (!engineEnabled) facts.push(pt(t, 'automation.engineOff'))
+  if (!executorEnabled) facts.push(pt(t, 'automation.executorOff'))
+  const title = onlyPaused ? pt(t, 'automation.pausedTitle') : pt(t, 'automation.offTitle')
+  const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
+  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title },
+    h(StatusIcon, { state: 'warning', size: 16 }),
+    h('div', { className: 'sa-automation-main' },
+      h('span', { className: 'sa-automation-title' }, title),
+      h('span', { className: 'sa-automation-facts' }, facts.join(' · ')),
+      h('span', { className: 'sa-hint' }, hint)),
+    h('div', { className: 'sa-automation-actions' },
+      onCheck ? h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+        disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
+      h(ConfirmButton, {
+        label: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
+        title: onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle'),
+        message: onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage'),
+        variant: 'primary', icon: 'play', onConfirm: onStart,
+      })))
 }
 
 /** The one result worth a second tag in a row. */
@@ -3480,6 +3586,11 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const failedBeforeDismiss = view.key === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed')
   if (failedBeforeDismiss) chips.push(h(Tag, { key: 'dismissed-after-failure', tone: 'warning' }, pt(t, 'dismissedAfterFailure')))
+  // The left rail is the fast scan line; a done-but-accepted Ticket and a dismissed-after-failure Ticket must not
+  // both read as the same hollow "idle" dot. Keep the phase keys/tags, only make the shape honest.
+  const rowIconState = view.acceptance?.state === 'accepted' ? 'done'
+    : view.acceptance?.state === 'rejected' || failedBeforeDismiss ? 'warning'
+      : view.state
   // P1-5: a run interrupted by a plugin reload / host restart is resumable — the row says so before the phase label
   // (which still reads "排队中" after reconcile) can be mistaken for a healthy queue entry.
   const interrupted = ticketRunInterrupted(ticket, data?.runs)
@@ -3503,7 +3614,7 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const evidence = ticketEvidence(t, ticket, view)
   return h('li', null,
     h('div', { className: 'sa-row sa-row-openable', onClick: open },
-      h(StatusIcon, { state: view.state, size: 16 }),
+      h(StatusIcon, { state: rowIconState, size: 16 }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h('button', { type: 'button', className: 'sa-row-open',
@@ -3651,9 +3762,8 @@ function FunnelBar({ flow }) {
         h('span', { className: 'sa-funnel-label' }, pt(t, step.labelKey))),
     ]),
       contextOnly > 0 ? h('span', { className: 'sa-funnel-branch' }, pt(t, 'funnelBranch', { count: contextOnly })) : null),
-    // The conclusion the three numbers cannot state by themselves (critique #13/#O2).
-    h('p', { className: 'sa-funnel-summary' },
-      pt(t, 'funnelSummary2', { received, judged, accepted, dropped })))
+    // The three numbers are already on screen; only the outbound failure count is new information here.
+    dropped > 0 ? h('p', { className: 'sa-funnel-summary' }, pt(t, 'funnelDropped', { count: dropped })) : null)
 }
 
 /** Executor load: composition of running/queued/waiting/failed. No fake denominator without maxWorkers. */
@@ -4136,6 +4246,11 @@ function LiveOverviewPage({ route }) {
     notify(pt(t, 'toast.pollDone', { accepted: result?.accepted?.length ?? 0, ignored: result?.ignored?.length ?? 0 }))
   }, { reload })
   const reloadConfig = useAction(async () => { await actions.reloadConfig(); notify(pt(t, 'toast.configReloaded')) }, { reload })
+  // One action for the three switches that are one story: resume, enable intake and enable the executor together.
+  const startAutomation = useAction(async () => {
+    await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload })
   const [runtimeOpen, setRuntimeOpen] = useState(false)
   const now = useOverviewNow(1000)
   // The previous visit is read once (this render) and written after it: reading it in an effect would already see
@@ -4160,6 +4275,11 @@ function LiveOverviewPage({ route }) {
   const setup = setupStateOf(data)
   const health = globalHealth(data)
   const paused = data.paused === true || config.paused === true || engine.paused === true
+  const engineEnabled = config.enabled === true
+  const executorEnabled = config.executor?.enabled !== false
+  const prerequisitesReady = setup.steps.slice(0, 3).every(step => step.done)
+  const automationNeeded = paused || !engineEnabled || !executorEnabled
+  const showAutomationBar = automationNeeded && prerequisitesReady
   // The header count and this block share one source (#19); the rows are the latest 20 Tickets, so the count can be
   // larger than the list — that difference is said explicitly instead of showing a contradiction.
   const legacyHumanCount = needsYouCount(data)
@@ -4185,6 +4305,9 @@ function LiveOverviewPage({ route }) {
   // Work that is actually moving stays visible as one pulse sentence; the Ticket rows, queue bar and pause control
   // belong to the Execution page (contract §6.1, critique O3).
   const runs = Array.isArray(data.runs) ? data.runs : []
+  const hasHistory = Number(counts.received ?? 0) > 0 || Number(counts.tickets ?? 0) > 0
+    || Number(engine.events?.received ?? 0) > 0
+    || (Array.isArray(data.tickets) && data.tickets.length > 0)
   const activeTickets = (Array.isArray(data.tickets) ? data.tickets : [])
     .filter(ticket => { const view = ticketStatus(ticket); return view.group === 'working' && !view.needsHuman })
     .sort((left, right) => String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')))
@@ -4217,6 +4340,8 @@ function LiveOverviewPage({ route }) {
   const baseProblems = problemsOf(data).filter(problem => {
     if (engine.lastError && problem.key === 'engine-error') return false
     if (paused && problem.key === 'paused') return false
+    // The automation bar / setup card already names the missing switch; do not repeat it as a system problem.
+    if ((showAutomationBar || setup.done < setup.total) && problem.key === 'engine-off') return false
     return true
   })
   // P0 §3.6.5: the system-problems block merges the derived problems with the inbox's non-blocking items, deduped by
@@ -4382,16 +4507,21 @@ function LiveOverviewPage({ route }) {
       h(StatusIcon, { state: 'warning', size: 14 }),
       h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.inboxError')),
       h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void inbox.reload() } }, t('reload'))) : null,
-    paused ? h('div', { className: 'sa-banner',
-      style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-      h(StatusIcon, { state: 'warning', size: 14 }),
-      h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
-      h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
+    // One automation story, one primary action. When the three prerequisites are configured, it replaces both the
+    // paused banner and the setup card (which otherwise repeated the same engine step in two places).
+    showAutomationBar
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+      : paused ? h('div', { className: 'sa-banner',
+        style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+        h(StatusIcon, { state: 'warning', size: 14 }),
+        h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
+        h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
 
-    // First-run setup. With no live work it replaces the empty desk; if Tickets exist it stays one line so urgent
-    // work is never pushed below a tutorial. The card hides itself once all four prerequisites are true.
-    setup.done < setup.total
-      ? humanCount === 0 && activeTickets.length === 0
+    // First-run setup. The full card is for a quiet, empty workspace; once any history exists it stays one line so
+    // work is never pushed below a tutorial. It disappears when the automation bar takes over the remaining step.
+    setup.done < setup.total && !showAutomationBar
+      ? !hasHistory && humanCount === 0 && activeTickets.length === 0
         ? h(SetupChecklist, { setup, onNavigate: navigate })
         : h(SetupBanner, { setup, onNavigate: navigate })
       : null,
@@ -4471,8 +4601,8 @@ function LiveOverviewPage({ route }) {
    no request of its own. */
 
 Object.assign(PAGE_TEXT, {
-  'src.summary': ['启用中 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
-  'src.summaryNoSync': ['启用中 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
+  'src.summary': ['已启用 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
+  'src.summaryNoSync': ['已启用 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
   'src.state.ready': ['正常', 'Ready'],
   'src.state.error': ['异常', 'Error'],
   'src.state.idle': ['空闲', 'Idle'],
@@ -4784,7 +4914,9 @@ function LiveSourcePage() {
     const repoName = repo?.name ?? source.repoId
     const notes = []
     if (!source.enabled) notes.push(pt(t, 'src.disabled'))
-    if (source.detail) notes.push(String(source.detail))
+    // For an off Octo source the host detail says the same thing as the line above; repositories keep their own
+    // executor/token detail because it adds a different fact.
+    if (source.detail && !(!source.enabled && isOctoSource(source))) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
     return h('div', { key: source.id, className: 'sa-card' },
@@ -4811,7 +4943,8 @@ function LiveSourcePage() {
 
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h('p', { className: 'sa-hint', role: 'status' }, summary),
+    h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
+      meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
@@ -5014,7 +5147,7 @@ function ThreadDetailView({ threadKey, showBack }) {
 }
 
 /** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. */
-function ThreadListRow({ row, selected, onOpen, octoConfig }) {
+function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
   return h('li', {
@@ -5033,7 +5166,9 @@ function ThreadListRow({ row, selected, onOpen, octoConfig }) {
         h(Icon, { name: THREAD_SOURCE_ICON[row.source] ?? 'message', size: 12 }),
         h('span', null, threadSourceLabel(t, row.source))),
       row.lastAt ? h(When, { at: row.lastAt }) : null,
-      h(StatusText, { state: view.state }, pt(t, view.labelKey)))))
+      h(StatusText, { state: view.state }, pt(t, view.labelKey)))),
+    compact ? h('span', { className: 'sa-row-chevron', 'aria-hidden': 'true' },
+      h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
 function LiveTriggerPage({ route }) {
@@ -5077,8 +5212,11 @@ function LiveTriggerPage({ route }) {
       h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
-        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row,
-          selected: row.key === selected, onOpen: () => openThread(row.key), octoConfig })))
+        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
+          // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
+          // with no visible detail would otherwise promise a state the screen is not showing.
+          selected: compact ? row.key === routeId : row.key === selected,
+          onOpen: () => openThread(row.key), octoConfig })))
         : h(Hint, null, pt(t, 'trg.noneInFilter'))))
   const detail = h('div', { className: 'sa-pane' },
     selected
@@ -5684,8 +5822,18 @@ function ExecutionQueuePage() {
   })
   const status = model.data
   const paused = Boolean(status && (status.paused === true || status.config?.paused === true || status.engine?.paused === true))
+  const engineEnabled = status?.config?.enabled === true
+  const executorEnabled = status?.config?.executor?.enabled !== false
+  const automationNeeded = Boolean(status) && (paused || !engineEnabled || !executorEnabled)
+  const automationReady = Boolean(status?.config?.octo?.tokenConfigured
+    && (status?.config?.octo?.watchChatIds ?? []).length > 0
+    && (status?.config?.repos ?? []).length > 0)
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
   const poll = useAction(() => model.actions.poll(), { reload: reloadBoth })
+  const startAutomation = useAction(async () => {
+    await model.actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload: reloadBoth })
 
   if (!status && !model.error) return h(Skeleton, { rows: 5 })
   if (!status) return h(ErrorState, { error: model.error, onRetry: model.reload })
@@ -5763,17 +5911,21 @@ function ExecutionQueuePage() {
     return groups
   }
   const viewToolbar = tickets.length
-    ? h('div', { className: 'sa-filters', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
-      h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
-        { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
-        onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') }),
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
-      h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
-        { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
-        onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') }),
-      h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }), label: pt(t, 'ex.showDone') }),
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone')))
+    ? h('div', { className: 'sa-exec-toolbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+      h('div', { className: 'sa-toolbar-field' },
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
+        h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
+          { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
+          onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') })),
+      h('div', { className: 'sa-toolbar-field' },
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
+        h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
+          { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
+          onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') })),
+      h('div', { className: 'sa-toolbar-switch' },
+        h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
+          label: pt(t, 'ex.showDone') }),
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone'))))
     : null
   // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
   const stagePills = h('div', { className: 'sa-filters' },
@@ -5806,9 +5958,13 @@ function ExecutionQueuePage() {
     title: pt(t, 'ex.refresh'), onClick: () => { void reloadBoth() } })
 
   return h(Fragment, null,
+    automationNeeded && automationReady
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+      : null,
     h(Section, { title: pt(t, 'ex.executor'),
       badge: paused ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
-      action: h('span', { className: 'sa-actions' }, refreshButton, pauseConfirm) },
+      action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
         h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
         h('div', { className: 'sa-executor-recent' },
@@ -6654,7 +6810,9 @@ function TicketDetail({ id, page = 'execution' }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
-  const [activeJump, setActiveJump] = useState()
+  // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
+  // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
+  const [activeJump, setActiveJump] = useState('sa-ticket-changes')
   const [headStuck, setHeadStuck] = useState(false)
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is

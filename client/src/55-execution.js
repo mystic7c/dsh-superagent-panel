@@ -115,8 +115,18 @@ function ExecutionQueuePage() {
   })
   const status = model.data
   const paused = Boolean(status && (status.paused === true || status.config?.paused === true || status.engine?.paused === true))
+  const engineEnabled = status?.config?.enabled === true
+  const executorEnabled = status?.config?.executor?.enabled !== false
+  const automationNeeded = Boolean(status) && (paused || !engineEnabled || !executorEnabled)
+  const automationReady = Boolean(status?.config?.octo?.tokenConfigured
+    && (status?.config?.octo?.watchChatIds ?? []).length > 0
+    && (status?.config?.repos ?? []).length > 0)
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
   const poll = useAction(() => model.actions.poll(), { reload: reloadBoth })
+  const startAutomation = useAction(async () => {
+    await model.actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload: reloadBoth })
 
   if (!status && !model.error) return h(Skeleton, { rows: 5 })
   if (!status) return h(ErrorState, { error: model.error, onRetry: model.reload })
@@ -194,17 +204,21 @@ function ExecutionQueuePage() {
     return groups
   }
   const viewToolbar = tickets.length
-    ? h('div', { className: 'sa-filters', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
-      h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
-        { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
-        onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') }),
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
-      h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
-        { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
-        onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') }),
-      h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }), label: pt(t, 'ex.showDone') }),
-      h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone')))
+    ? h('div', { className: 'sa-exec-toolbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+      h('div', { className: 'sa-toolbar-field' },
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
+        h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
+          { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
+          onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') })),
+      h('div', { className: 'sa-toolbar-field' },
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
+        h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
+          { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
+          onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') })),
+      h('div', { className: 'sa-toolbar-switch' },
+        h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
+          label: pt(t, 'ex.showDone') }),
+        h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone'))))
     : null
   // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
   const stagePills = h('div', { className: 'sa-filters' },
@@ -237,9 +251,13 @@ function ExecutionQueuePage() {
     title: pt(t, 'ex.refresh'), onClick: () => { void reloadBoth() } })
 
   return h(Fragment, null,
+    automationNeeded && automationReady
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+      : null,
     h(Section, { title: pt(t, 'ex.executor'),
       badge: paused ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
-      action: h('span', { className: 'sa-actions' }, refreshButton, pauseConfirm) },
+      action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
         h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
         h('div', { className: 'sa-executor-recent' },

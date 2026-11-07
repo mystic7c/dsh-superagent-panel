@@ -284,6 +284,11 @@ function LiveOverviewPage({ route }) {
     notify(pt(t, 'toast.pollDone', { accepted: result?.accepted?.length ?? 0, ignored: result?.ignored?.length ?? 0 }))
   }, { reload })
   const reloadConfig = useAction(async () => { await actions.reloadConfig(); notify(pt(t, 'toast.configReloaded')) }, { reload })
+  // One action for the three switches that are one story: resume, enable intake and enable the executor together.
+  const startAutomation = useAction(async () => {
+    await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload })
   const [runtimeOpen, setRuntimeOpen] = useState(false)
   const now = useOverviewNow(1000)
   // The previous visit is read once (this render) and written after it: reading it in an effect would already see
@@ -308,6 +313,11 @@ function LiveOverviewPage({ route }) {
   const setup = setupStateOf(data)
   const health = globalHealth(data)
   const paused = data.paused === true || config.paused === true || engine.paused === true
+  const engineEnabled = config.enabled === true
+  const executorEnabled = config.executor?.enabled !== false
+  const prerequisitesReady = setup.steps.slice(0, 3).every(step => step.done)
+  const automationNeeded = paused || !engineEnabled || !executorEnabled
+  const showAutomationBar = automationNeeded && prerequisitesReady
   // The header count and this block share one source (#19); the rows are the latest 20 Tickets, so the count can be
   // larger than the list — that difference is said explicitly instead of showing a contradiction.
   const legacyHumanCount = needsYouCount(data)
@@ -333,6 +343,9 @@ function LiveOverviewPage({ route }) {
   // Work that is actually moving stays visible as one pulse sentence; the Ticket rows, queue bar and pause control
   // belong to the Execution page (contract §6.1, critique O3).
   const runs = Array.isArray(data.runs) ? data.runs : []
+  const hasHistory = Number(counts.received ?? 0) > 0 || Number(counts.tickets ?? 0) > 0
+    || Number(engine.events?.received ?? 0) > 0
+    || (Array.isArray(data.tickets) && data.tickets.length > 0)
   const activeTickets = (Array.isArray(data.tickets) ? data.tickets : [])
     .filter(ticket => { const view = ticketStatus(ticket); return view.group === 'working' && !view.needsHuman })
     .sort((left, right) => String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? '')))
@@ -365,6 +378,8 @@ function LiveOverviewPage({ route }) {
   const baseProblems = problemsOf(data).filter(problem => {
     if (engine.lastError && problem.key === 'engine-error') return false
     if (paused && problem.key === 'paused') return false
+    // The automation bar / setup card already names the missing switch; do not repeat it as a system problem.
+    if ((showAutomationBar || setup.done < setup.total) && problem.key === 'engine-off') return false
     return true
   })
   // P0 §3.6.5: the system-problems block merges the derived problems with the inbox's non-blocking items, deduped by
@@ -530,16 +545,21 @@ function LiveOverviewPage({ route }) {
       h(StatusIcon, { state: 'warning', size: 14 }),
       h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.inboxError')),
       h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void inbox.reload() } }, t('reload'))) : null,
-    paused ? h('div', { className: 'sa-banner',
-      style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-      h(StatusIcon, { state: 'warning', size: 14 }),
-      h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
-      h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
+    // One automation story, one primary action. When the three prerequisites are configured, it replaces both the
+    // paused banner and the setup card (which otherwise repeated the same engine step in two places).
+    showAutomationBar
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+      : paused ? h('div', { className: 'sa-banner',
+        style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+        h(StatusIcon, { state: 'warning', size: 14 }),
+        h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
+        h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
 
-    // First-run setup. With no live work it replaces the empty desk; if Tickets exist it stays one line so urgent
-    // work is never pushed below a tutorial. The card hides itself once all four prerequisites are true.
-    setup.done < setup.total
-      ? humanCount === 0 && activeTickets.length === 0
+    // First-run setup. The full card is for a quiet, empty workspace; once any history exists it stays one line so
+    // work is never pushed below a tutorial. It disappears when the automation bar takes over the remaining step.
+    setup.done < setup.total && !showAutomationBar
+      ? !hasHistory && humanCount === 0 && activeTickets.length === 0
         ? h(SetupChecklist, { setup, onNavigate: navigate })
         : h(SetupBanner, { setup, onNavigate: navigate })
       : null,
