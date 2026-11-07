@@ -88,11 +88,17 @@ engine.state.runs.unshift({ id: 'run_demo_working', ticketId: demoWorkId, status
 
 engine.lastStatus = { phase: 'ok', mode: 'sync', at: new Date().toISOString() }
 engine.started = true
+// P0: the panel now reads the derived inbox; build it from the same fixture state. Saving is stubbed so this read-only
+// check never writes inbox.json into the operator's real state directory.
+await engine.inbox.load()
+engine.inbox.save = async () => {}
+await engine.refreshInbox()
 const fixtures = {
   status: engine.status(),
   tickets: engine.ticketsView({}),
   threads: engine.threadsView({}),
   decisions: engine.decisionsView({}),
+  inbox: engine.inboxView(),
 }
 const detailOf = id => engine.ticketView(id)
 const threadOf = key => engine.threadView(key)
@@ -117,6 +123,14 @@ window.fetch = global.fetch = async (input, init = {}) => {
   const p = url.pathname.replace('/superagent/api/', '')
   if (method === 'GET' && p === 'engine/status') return json(fixtures.status)
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
+  if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
+  if (method === 'GET' && p === 'engine/signals') return json({ items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
+  const readItem = /^engine\/inbox\/([^/]+)\/read$/.exec(p)
+  if (method === 'POST' && readItem) {
+    const item = fixtures.inbox.items.find(candidate => candidate.id === decodeURIComponent(readItem[1]))
+    if (item) item.readAt = new Date().toISOString()
+    return json({ item })
+  }
   if (method === 'GET' && p.startsWith('engine/ticket/')) {
     const id = decodeURIComponent(p.slice('engine/ticket/'.length))
     return json(detailOf(id))
@@ -141,6 +155,14 @@ window.fetch = global.fetch = async (input, init = {}) => {
     const acceptance = { ok: body.ok !== false, at: new Date().toISOString() }
     engine.state.tickets[id] = { ...engine.state.tickets[id], links: { ...engine.state.tickets[id].links, acceptance } }
     recalcStatus()
+    // P0: accepting settles the derived accept item; drop it from the fixture inbox as the next refresh would.
+    fixtures.inbox.items = fixtures.inbox.items.filter(item => !(item.refs?.ticketId === id && item.blocking === true))
+    fixtures.inbox.counts = {
+      blocking: fixtures.inbox.items.filter(item => item.blocking === true).length,
+      system: fixtures.inbox.items.filter(item => item.blocking !== true).length,
+      unread: fixtures.inbox.items.filter(item => !item.readAt).length,
+    }
+    fixtures.status.inbox = { ...fixtures.inbox.counts }
     return json({ ticket: engine.state.tickets[id] })
   }
   if (method === 'POST' && p === 'engine/poll') return json({ fetched: 0, accepted: [], ignored: [], skipped: [], dryRun: true })
@@ -203,6 +225,11 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
   [...rootElement.querySelectorAll('.sa-main .sa-section-title')].map(node => (node.textContent ?? '').trim()).join(','))
 {
   const deskWithWork = text()
+  const runningSection = [...rootElement.querySelectorAll('.sa-main section')]
+    .find(section => (section.querySelector('.sa-section-title')?.textContent ?? '').includes('正在执行'))
+  check('overview lists the in-flight Ticket itself, not only a pulse rollup',
+    Boolean(runningSection) && Boolean(runningSection.querySelector('.sa-row-open')),
+    runningSection?.textContent?.slice(0, 260) ?? 'no section')
   check('overview surfaces in-progress work as one pulse sentence',
     deskWithWork.includes('系统脉搏') && deskWithWork.includes('在飞') && deskWithWork.includes('导出 UAT 对象')
       && /已运行 \d+ 分钟/.test(deskWithWork),
@@ -222,8 +249,11 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
   check('header shows the running count', /执行中\s*\d+/.test(headerText), headerText)
 }
 }
-const acceptButtons = [...rootElement.querySelectorAll('button')].filter(node => (node.textContent ?? '').trim() === '去验收')
-check('deployed tickets offer 去验收', acceptButtons.length >= 1, `buttons=${acceptButtons.length}`)
+// P0: the desk lists derived inbox items; an accept item's row action is 去工单. Pick the demo row explicitly so a
+// real state with parked gates cannot change which ticket this walkthrough opens.
+const inboxButtons = [...rootElement.querySelectorAll('button')].filter(node => (node.textContent ?? '').trim() === '去工单')
+const acceptButtons = inboxButtons.filter(node => (node.closest('li')?.textContent ?? '').includes('演示：验收按钮流程'))
+check('inbox desk offers 去工单 for a pending acceptance', acceptButtons.length >= 1, `buttons=${acceptButtons.length}`)
 acceptButtons[0]?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 check('去验收 opens the ticket detail', text().includes('阶段链路') && text().includes('权限依据'),
@@ -241,9 +271,9 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
     String(rootElement.querySelectorAll('.sa-md ol li').length))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
-  check('detail nav keeps the six jumps in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 6,
+  check('detail nav keeps the seven jumps in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
-check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 6,
+check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
 {
   const changes = rootElement.querySelector('#sa-ticket-changes')
@@ -303,10 +333,9 @@ await sleep(1200)
 const deskText = text()
 // Other tickets (e.g. the two failed ones in real state) stay in "needs you", so count the accept actions rather than
 // assuming an empty desk after one acceptance.
-const remainingAccepts = [...rootElement.querySelectorAll('button')]
-  .filter(node => (node.textContent ?? '').trim() === '去验收').length
-check('accepted ticket leaves the human queue', remainingAccepts < acceptButtons.length,
-  `before=${acceptButtons.length} after=${remainingAccepts}`)
+// The accepted Ticket must disappear from the derived desk. The demo row is the deterministic signal; other real
+// items (parked gates, failures) may legitimately remain.
+check('accepted ticket leaves the human queue', !deskText.includes('演示：验收按钮流程'), deskText.slice(0, 300))
 
 // Non-acceptance actions must confirm visibly: the page-level poll emits a toast.
 const pollButton = [...rootElement.querySelectorAll('button')]
@@ -321,7 +350,7 @@ clickByText('来源')
 await sleep(1000)
 const sourceText = text()
 check('source page shows both repositories', repoLabels.every(label => sourceText.includes(label)), sourceText.slice(0, 260))
-check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('GitLab / GitHub 仓库'), sourceText.slice(0, 260))
+check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('GitLab 仓库'), sourceText.slice(0, 260))
 check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
   String(rootElement.querySelectorAll('.sa-cards-2').length))
 clickByText('设置')
@@ -402,7 +431,10 @@ check('stage filter keeps the counts for every stage', ['排队', '执行中', '
 check('execution ledger has a column header', ['工单', '证据', '操作'].every(label => (rootElement.querySelector('.sa-queue-head')?.textContent ?? '').includes(label)),
   rootElement.querySelector('.sa-queue-head')?.textContent ?? '')
 check('executor band shows the last run', /最近一次执行/.test(execText), execText.slice(0, 400))
+// P1 adds view-option segments (group/sort) to the same toolbar; only the six stage pills carry stage words.
+const stageWords = /全部|等待你|失败工单|执行中|排队|已结束/
 const stageButtons = [...rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment')]
+  .filter(button => stageWords.test(button.textContent ?? ''))
 check('execution offers six stage filters with counts', stageButtons.length === 6 && /全部/.test(stageButtons[0]?.textContent ?? ''),
   JSON.stringify(stageButtons.map(button => (button.textContent ?? '').trim())))
 const doneBadge = [...rootElement.querySelectorAll('.sa-exec-queue .sa-section-title .sa-hint')]

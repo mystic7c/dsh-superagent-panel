@@ -8,6 +8,7 @@
 
 Object.assign(PAGE_TEXT, {
   'ov.needsYou': ['需要你处理', 'Needs you'],
+  'ov.inboxError': ['待办列表加载失败，概览计数可能滞后；可重试。', 'The inbox failed to load; the desk count may be stale. Retry.'],
   'ov.activeProgress': ['{step} · 已运行 {elapsed}', '{step} · running {elapsed}'],
   'ov.elapsedLess': ['不到 1 分钟', '< 1 min'],
   'ov.elapsedMinutes': ['{count} 分钟', '{count} min'],
@@ -40,6 +41,7 @@ Object.assign(PAGE_TEXT, {
   'ov.pulseSources': ['来源', 'Sources'],
   'ov.pulseExecutor': ['执行器', 'Executor'],
   'ov.pulseLifetime': ['累计', 'Lifetime'],
+  'ov.running': ['正在执行', 'Running now'],
   'ov.pulseInFlight': ['在飞', 'In flight'],
   'ov.pulseNext': ['每 {seconds} 秒轮询 · 下次轮询 {remain} 秒后', 'Polls every {seconds}s · next in {remain}s'],
   'ov.pulseDue': ['每 {seconds} 秒轮询 · 正在轮询', 'Polls every {seconds}s · polling now'],
@@ -77,6 +79,10 @@ Object.assign(PAGE_TEXT, {
   'ov.since': ['上次查看 {time} · 之后 {decisions} 次评估 · {tickets} 张新工单 · {failures} 次执行失败',
     'Last look {time} · since then {decisions} Evals · {tickets} new Tickets · {failures} failed runs'],
   'ov.sinceNone': ['上次查看 {time} · 之后没有新的变化', 'Last look {time} · nothing new since'],
+
+  // ---- actionable inbox (P0-5): the desk is the host's own blocking items, not a client-side status filter --------
+  'ov.inboxGoTicket': ['去工单', 'Open Ticket'],
+  'ov.inboxGoSource': ['去来源', 'Open Source'],
 })
 
 const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
@@ -114,6 +120,24 @@ const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en'
 const ovClip = (value, limit = 64) => {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
+/** Inbox kind → the row's shape icon (the same icon family the other list rows use). Unknown kinds fall back to inbox. */
+const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', failure: 'alert-triangle', source: 'inbox', engine: 'shield' }
+const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
+/** Where one inbox item lives: its Ticket when it names one, else its Source, else the execution queue. */
+function ovInboxTarget(item) {
+  const refs = item?.refs ?? {}
+  if (refs.ticketId) return { page: 'execution', id: refs.ticketId }
+  if (refs.sourceId) return { page: 'source' }
+  return { page: 'execution' }
+}
+/** The row's one button says where it goes; a gate/accept item always names its Ticket. */
+function ovInboxActionKey(item) {
+  const refs = item?.refs ?? {}
+  if (refs.ticketId) return 'ov.inboxGoTicket'
+  if (refs.sourceId) return 'ov.inboxGoSource'
+  return 'ov.watchOpen'
 }
 
 /** Policy ledger fallback for payloads without `rules24h`: per rule, how often it blocked vs passed in the last 24h.
@@ -214,6 +238,9 @@ function LiveOverviewPage({ route }) {
   // the new value and every visit would claim "nothing new".
   const [lastSeen] = useState(ovReadLastSeen)
   useEffect(() => { ovSaveLastSeen(Date.now()) }, [])
+  // P0 inbox (contract §3.6.5): the host derives the actionable items, the desk lists them verbatim. An older host
+  // has no `inbox` field, so the resource stays disabled (no 404 polling) and every surface falls back to needsHuman.
+  const inbox = useLiveResource('engine/inbox', {}, 30000, { enabled: Boolean(data?.inbox) })
 
   // A ticket id on the overview route is a deep link: the full detail replaces the desk, as on every other tab.
   if (route?.id) return h(TicketDetail, { id: route.id, page: 'overview' })
@@ -223,12 +250,31 @@ function LiveOverviewPage({ route }) {
   const engine = data.engine ?? {}
   const config = data.config ?? {}
   const counts = data.counts ?? {}
+  const setup = setupStateOf(data)
   const health = globalHealth(data)
   const paused = data.paused === true || config.paused === true || engine.paused === true
   // The header count and this block share one source (#19); the rows are the latest 20 Tickets, so the count can be
   // larger than the list — that difference is said explicitly instead of showing a contradiction.
-  const humanCount = needsYouCount(data)
-  const tickets = needsHuman(data)
+  const legacyHumanCount = needsYouCount(data)
+  const legacyTickets = needsHuman(data)
+  // Actionable inbox (P0): when the host exposes `inbox`, the desk is its blocking items — one row per item, count =
+  // rendered rows. Without the field the old status-derived needsHuman logic still runs unchanged.
+  const inboxSupported = Boolean(data.inbox)
+  const inboxItems = (Array.isArray(inbox.data?.items) ? inbox.data.items : [])
+    .filter(item => item && typeof item === 'object' && !item.resolvedAt)
+  const blockingItems = inboxItems.filter(item => item.blocking === true)
+  const systemInboxItems = inboxItems.filter(item => item.blocking !== true)
+  const humanCount = inboxSupported ? (blockingItems.length || Math.max(0, Number(data.inbox?.blocking ?? 0))) : legacyHumanCount
+  // Best effort on read: marking one item read must never stop the navigation the person asked for.
+  const readInboxItem = item => {
+    if (!item?.id) return
+    void Promise.resolve(actions.readInbox?.(item.id)).then(() => inbox.reload?.()).catch(() => {})
+  }
+  const openInboxItem = item => {
+    if (!item) return
+    readInboxItem(item)
+    navigate(ovInboxTarget(item))
+  }
   // Work that is actually moving stays visible as one pulse sentence; the Ticket rows, queue bar and pause control
   // belong to the Execution page (contract §6.1, critique O3).
   const runs = Array.isArray(data.runs) ? data.runs : []
@@ -261,11 +307,23 @@ function LiveOverviewPage({ route }) {
 
   // The engine error and the paused switch are also derivable through `problemsOf`, but this page renders both as
   // their own state block right above the desk; listing them twice would say the same thing in two places (§4.2).
-  const problems = problemsOf(data).filter(problem => {
+  const baseProblems = problemsOf(data).filter(problem => {
     if (engine.lastError && problem.key === 'engine-error') return false
     if (paused && problem.key === 'paused') return false
     return true
   })
+  // P0 §3.6.5: the system-problems block merges the derived problems with the inbox's non-blocking items, deduped by
+  // title so one failure is never reported twice (the inbox row keeps its own destination).
+  const problems = [...baseProblems]
+  const problemTitles = new Set(problems.map(problem => problem.title))
+  for (const item of systemInboxItems) {
+    const title = String(item.title ?? '')
+    if (!title || problemTitles.has(title)) continue
+    problemTitles.add(title)
+    problems.push({ key: `inbox-${item.id}`, severity: item.priority === 'urgent' ? 'error' : 'warning',
+      title, detail: item.summary ? String(item.summary) : '',
+      action: { labelKey: ovInboxActionKey(item), kind: 'navigate', payload: ovInboxTarget(item) }, inbox: item })
+  }
   const flow = data.flow24h
   const hasFlow = Boolean(flow) && ['received', 'filtered', 'judged', 'accepted', 'dropped']
     .some(name => Number(flow[name] ?? 0) > 0)
@@ -328,6 +386,8 @@ function LiveOverviewPage({ route }) {
 
   // `problemsOf` actions are already vocabulary-mapped; the page only wires the three kinds to their transport.
   const runProblem = (problem) => {
+    // An inbox-backed problem is read the moment its destination is opened (best effort, never blocking).
+    if (problem.inbox) readInboxItem(problem.inbox)
     const action = problem.action ?? {}
     if (action.kind === 'poll') { void poll.run(); return }
     if (action.kind === 'reloadConfig') { void reloadConfig.run(); return }
@@ -345,15 +405,32 @@ function LiveOverviewPage({ route }) {
       onClick: () => navigate(handled > 0 ? { page: 'execution' } : { page: 'source' }) },
     pt(t, handled > 0 ? 'actions.viewHandled' : 'actions.openSource')))
 
-  const moreCount = humanCount - tickets.length
-  const needsBody = tickets.length
+  // Legacy desk (hosts without `inbox`): the latest 20 status-derived Ticket rows; the count may exceed the list.
+  const moreCount = legacyHumanCount - legacyTickets.length
+  const legacyNeedsBody = legacyTickets.length
     ? h(Fragment, null,
-      h('ul', { className: 'sa-list' }, tickets.map(ticket =>
+      h('ul', { className: 'sa-list' }, legacyTickets.map(ticket =>
         h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true }))),
-      moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount })) : null)
+      moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount })) : null)
+    : legacyHumanCount > 0
+      ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount }))
+      : null
+  // Inbox desk (P0): one row per blocking item — kind icon, title, summary and the one step that settles it (open the
+  // Ticket or the Source). Count = rendered rows; a count without rows (list still loading) says so instead of lying.
+  const inboxRows = blockingItems.length
+    ? h('ul', { className: 'sa-list' }, blockingItems.map(item => h('li', { key: item.id },
+      h('div', { className: 'sa-row sa-row-openable', onClick: () => openInboxItem(item) },
+        h(Icon, { name: ovInboxIcon(item), size: 16 }),
+        h('div', { className: 'sa-row-main' },
+          h('div', { className: 'sa-row-title' }, h('span', null, String(item.title ?? ''))),
+          item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
+        h('div', { className: 'sa-row-actions' },
+          h(Button, { variant: 'outline', size: 'sm',
+            onClick: event => { event.stopPropagation(); openInboxItem(item) } }, pt(t, ovInboxActionKey(item))))))))
     : humanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount }))
-      : idleRow
+      : null
+  const needsBody = inboxSupported ? (inboxRows ?? idleRow) : (legacyNeedsBody ?? idleRow)
   // When the desk says "nothing needs you" while the right column reports failures, name the split once.
   const deskScope = watch.length
     ? h('p', { className: 'sa-hint', role: 'note' }, pt(t, 'ov.deskScope')) : null
@@ -362,16 +439,37 @@ function LiveOverviewPage({ route }) {
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
     engine.lastError ? h(ErrorState, { error: String(engine.lastError), onRetry: () => { void poll.run() } }) : null,
+    // P0-8: a failed inbox fetch is not allowed to silently empty the desk; say so and offer a retry.
+    inbox.error && !inbox.data ? h('div', { className: 'sa-banner', role: 'alert',
+      style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+      h(StatusIcon, { state: 'warning', size: 14 }),
+      h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.inboxError')),
+      h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void inbox.reload() } }, t('reload'))) : null,
     paused ? h('div', { className: 'sa-banner',
       style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
       h(StatusIcon, { state: 'warning', size: 14 }),
       h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
       h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
 
+    // First-run setup. With no live work it replaces the empty desk; if Tickets exist it stays one line so urgent
+    // work is never pushed below a tutorial. The card hides itself once all four prerequisites are true.
+    setup.done < setup.total
+      ? humanCount === 0 && activeTickets.length === 0
+        ? h(SetupChecklist, { setup, onNavigate: navigate })
+        : h(SetupBanner, { setup, onNavigate: navigate })
+      : null,
+
     // 1. The desk. The global "check for new messages" action lives in the header, not in this section (#3).
     h(Section, { title: pt(t, 'ov.needsYou'), count: humanCount || undefined }, needsBodyWithScope),
 
-    // 2. System problems: each row keeps its own next step; an empty list hides the whole block.
+    // 2. Work in flight: the pulse row only rolls up a count; the operator still needs the Ticket itself (title,
+    //    repository, current step, age) without leaving Overview. Full queue stays on Execution.
+    activeTickets.length ? h(Section, { title: pt(t, 'ov.running'), count: activeTickets.length,
+      action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
+        pt(t, 'actions.openExecution')) },
+      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload })) : null,
+
+    // 3. System problems: each row keeps its own next step; an empty list hides the whole block.
     problems.length ? h(Section, { title: pt(t, 'ov.problems'), count: problems.length },
       h('ul', { className: 'sa-list' }, problems.map(problem => h('li', { key: problem.key },
         h('div', { className: 'sa-row' },
@@ -383,7 +481,7 @@ function LiveOverviewPage({ route }) {
             problem.action ? h(Button, { variant: 'outline', size: 'sm',
               onClick: () => runProblem(problem) }, pt(t, problem.action.labelKey)) : null)))))) : null,
 
-    // 3. The shift brief: what changed (funnel, policy ledger, since last look) on the left; what is true now
+    // 4. The shift brief: what changed (funnel, policy ledger, since last look) on the left; what is true now
     //    (pulse, watchlist) on the right. One column below 1024 px.
     h('div', { className: 'sa-brief-grid' },
       h('div', { className: 'sa-brief-col' },
@@ -416,7 +514,7 @@ function LiveOverviewPage({ route }) {
               h(StatusIcon, { state: 'done', size: 16 }),
               h('span', { className: 'sa-hint' }, pt(t, 'ov.watchEmpty')))))),
 
-    // 4. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
+    // 5. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
     h(DisclosureRow, { title: pt(t, 'ov.runtime'), open: runtimeOpen,
       onToggle: () => setRuntimeOpen(open => !open),
       collapsedContent: h('span', { className: 'sa-hint' }, pt(t, 'ov.summary', {

@@ -5,11 +5,70 @@
    state where the value comes from (live.json / built-in prompts) and never render a fake switch. */
 
 Object.assign(PAGE_TEXT, {
-  'repos.intro': ['执行器使用的 GitLab / GitHub 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
-    'Repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one GitLab token per repository.'],
+  'repos.intro': ['执行器使用的 GitLab 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
+    'GitLab repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one GitLab token per repository.'],
   'repos.summary': ['{count} 个仓库 · 默认仓库 {default}', '{count} repositories · default {default}'],
-  'repos.empty': ['live.json 里没有 repos；旧版单仓库字段会自动合成一个仓库。',
-    'No repos in live.json; a legacy single-repository file is synthesised into one repository.'],
+  'repos.empty': ['live.json 里还没有仓库；先用示例补一条仓库定义，再回到这里保存 token。',
+    'No repository in live.json yet; add one from the example, then come back to save its token.'],
+  'repos.emptyAction': ['查看示例', 'View example'],
+  'repos.sampleTitle': ['仓库配置示例', 'Repository configuration example'],
+  'repos.sampleHint': ['把绝对路径、GitLab 项目与 tokenFile 换成你的值；保存后点「重载配置」。token 值不要写在这里。',
+    'Replace the absolute path, GitLab project and tokenFile with yours; save, then “Reload config”. Never put the token value here.'],
+  'repos.sampleCopy': ['复制示例', 'Copy example'],
+
+  // ---- P2-5: read-only worker backend capability matrix (static, mirrors the actual implementation) --------------
+  'st.capTitle': ['运行后端能力', 'Worker capability matrix'],
+  'st.capHint': ['当前实现能力，不是产品承诺；后端能力来自各自 CLI/宿主的实际实现，新增后端时需同步更新 README 与本表。',
+    'What the current implementation can do — not a product promise. Capabilities come from each CLI/host implementation; update the README and this table when adding a backend.'],
+  'st.capCurrent': ['当前', 'Current'],
+  'st.capBackend': ['后端', 'Backend'],
+  'st.capStream': ['流式事件', 'Streaming events'],
+  'st.capApproval': ['工具调用审批', 'Tool-call approval'],
+  'st.capResume': ['会话恢复', 'Session resume'],
+  'st.capDiff': ['文件 diff', 'File diff'],
+  'st.capReport': ['报告工具', 'Report tools'],
+  'st.capYes': ['是', 'Yes'],
+  'st.capNo': ['否', 'No'],
+  'st.capDsh': ['DSH（进程内）', 'DSH (in-process)'],
+  'st.capCodex': ['Codex CLI', 'Codex CLI'],
+  'st.capClaude': ['Claude Code CLI', 'Claude Code CLI'],
+  'st.capDshApproval': ['worker approval=never', 'worker approval=never'],
+  'st.capDshResume': ['每个 run 新建 session', 'new session per run'],
+  'st.capDshReport': ['P1 四个报告工具', 'P1 four report tools'],
+  'st.capCodexStream': ['解析 codex --json', 'codex --json parsing'],
+  'st.capCodexApproval': ['approval_policy=never', 'approval_policy=never'],
+  'st.capCodexResume': ['--ephemeral', '--ephemeral'],
+  'st.capClaudeStream': ['stream-json', 'stream-json'],
+  'st.capClaudeApproval': ['permission-mode acceptEdits + 工具白名单', 'permission-mode acceptEdits + tool allow-list'],
+  'st.capClaudeResume': ['-p 一次性会话', '-p one-shot session'],
+  'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
+  'repos.add': ['添加仓库', 'Add repository'],
+  'repos.addTitle': ['添加仓库', 'Add repository'],
+  'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
+    'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
+  'repos.saved': ['仓库已添加', 'Repository added'],
+  'repos.field.id': ['仓库 id', 'Repository id'],
+  'repos.field.idHint': ['小写字母、数字、点、下划线或短横线；创建后不可改。', 'Lowercase letters, digits, dots, underscores or dashes; immutable after creation.'],
+  'repos.field.name': ['显示名称', 'Display name'],
+  'repos.field.kind': ['仓库类型', 'Repository kind'],
+  'repos.field.repo': ['本地路径', 'Local path'],
+  'repos.field.repoHint': ['必须是已存在的本地仓库目录。', 'Must be an existing local repository directory.'],
+  'repos.field.baseBranch': ['基础分支', 'Base branch'],
+  'repos.field.targetBranch': ['目标分支', 'Target branch'],
+  'repos.field.baseUrl': ['GitLab 地址', 'GitLab base URL'],
+  'repos.field.project': ['GitLab 项目', 'GitLab project'],
+  'repos.field.verifyMode': ['验证方式', 'Verification mode'],
+  'repos.field.acceptance': ['验收方式', 'Acceptance'],
+  'repos.field.uatUrl': ['UAT 地址（可选）', 'UAT URL (optional)'],
+  'repos.field.healthUrl': ['健康检查地址（可选）', 'Health URL (optional)'],
+  'repos.field.makeDefault': ['设为默认仓库', 'Make default repository'],
+  'repos.field.makeDefaultHint': ['手工建单和未绑定群会使用默认仓库。', 'Manual Tickets and unbound groups use the default repository.'],
+  'repos.kindWeb': ['Web / 常规', 'Web'],
+  'repos.kindEbs': ['Oracle EBS', 'Oracle EBS'],
+  'repos.verifyWebUat': ['Web UAT', 'Web UAT'],
+  'repos.verifyManual': ['人工验证（只观察合并）', 'Manual (observe merge only)'],
+  'repos.acceptDeployed': ['部署后验收', 'Accept after deploy'],
+  'repos.acceptMerged': ['合并后验收', 'Accept after merge'],
   'repos.manageHint': ['自动接单群 → 仓库的绑定在「设置 → 来源」里管理；手工建单在「设置 → 运行」里选择仓库。',
     'Group → repository bindings live under Settings → Source; manual tickets pick a repository under Settings → Runtime.'],
   'repos.gates': ['闸门', 'Gates'],
@@ -27,8 +86,8 @@ Object.assign(PAGE_TEXT, {
   'repos.tokenHint': ['写入该仓库在 live.json 里声明的 tokenFile（权限 600），不会回显。',
     'Written to the tokenFile declared for this repository in live.json (mode 600); never echoed back.'],
   // ---- page chrome / navigation ----
-  'st.pageIntro': ['设置会写回 ~/.dsh/superagent/live.json。只有改动的分组才会出现保存条，保存后立即生效。',
-    'Settings are written to ~/.dsh/superagent/live.json. Only a changed group shows a save bar, and saving applies immediately.'],
+  'st.pageIntro': ['设置会写回 ~/.dsh/superagent/live.json；开关类改动点保存后生效，令牌类项目保存即生效。',
+    'Settings are written to ~/.dsh/superagent/live.json; switch changes apply after saving, token fields apply on save.'],
   'st.navLabel': ['设置分组', 'Settings groups'],
   // Reference groups (评估 / 提示词) are read-only: they sit below a divider in the rail and never show a save bar.
   'st.reference': ['参考', 'Reference'],
@@ -38,8 +97,8 @@ Object.assign(PAGE_TEXT, {
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
-  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群需要填 Octo 群的 chatId（可在群信息里查看），保存后引擎开始监听。',
-    'Bind one repository to each watched group. A new group needs its Octo chat id (visible in the group info); the engine starts watching it after saving.'],
+  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写 chatId，保存后按引擎开关状态开始监听。',
+    'Bind one repository to each watched group. Add a group from the list or paste a chat id; the engine watches it once enabled and saved.'],
   'st.bindingChat': ['群 chatId', 'Group chat id'],
   'st.bindingTitle': ['群名称（可选）', 'Group name (optional)'],
   'st.bindingRepo': ['接单仓库', 'Repository'],
@@ -49,10 +108,40 @@ Object.assign(PAGE_TEXT, {
     'No bound group yet. Existing groups fall back to the default repository.'],
   'st.bindingSaved': ['群绑定已保存', 'Group bindings saved'],
   'st.bindingChatRequired': ['请填写群 chatId。', 'Enter the group chat id.'],
+  'st.groupsPick': ['从群列表选择', 'Pick from group list'],
+  'st.groupsLoading': ['读取群列表…', 'Loading groups…'],
+  'st.groupsSearch': ['搜索群名或 chatId…', 'Search group name or chat id…'],
+  'st.groupsCount': ['{count} 个群', '{count} groups'],
+  'st.groupsEmpty': ['没有可用的群。确认机器人已在群里，或直接填写 chatId。',
+    'No group available. Make sure the bot is in a group, or paste a chat id.'],
+  'st.groupsWatched': ['已监听', 'Watched'],
+  'st.groupsClose': ['收起', 'Collapse'],
+  'st.groupsNoToken': ['先保存 Octo token，再读取群列表。', 'Save the Octo token before loading groups.'],
+  'st.octoTokenHint': ['保存在本机 token 文件（权限 600），不会回显；读取群列表可验证 token 是否有效。',
+    'Stored in the local token file (mode 600) and never echoed; load the group list to verify it.'],
+  'st.octoTokenPlaceholder': ['粘贴 Octo token', 'Paste the Octo token'],
+  'st.octoTokenSave': ['保存令牌', 'Save token'],
+  'st.octoTokenSaved': ['Octo token 已保存', 'Octo token saved'],
+  'st.octoTokenCleared': ['已清除 Octo token', 'Octo token cleared'],
+  'st.octoTokenEnv': ['环境变量', 'Env var'],
+  'st.octoTokenEnvHint': ['当前使用 OCTO_TOKEN 环境变量；要改为本机保存，请移除该环境变量后再保存令牌。',
+    'Using the OCTO_TOKEN environment variable; remove it before saving a local token file.'],
+  'st.copyConfigPath': ['复制路径', 'Copy path'],
+  'st.history': ['变更历史', 'Change history'],
+  'st.historyTitle': ['配置变更历史', 'Configuration history'],
+  'st.historyHint': ['每次保存 live.json 前会自动留一份；恢复也会先备份当前版本。token 文件不进入历史。',
+    'A copy is saved before every live.json write; restoring backs up the current version first. Token files are not included.'],
+  'st.historyEmpty': ['还没有历史版本。保存一次设置后就会出现。', 'No saved version yet. Save a setting once to create one.'],
+  'st.historyRestore': ['恢复', 'Restore'],
+  'st.historyRestored': ['配置已恢复', 'Configuration restored'],
+  'st.historyLoading': ['读取历史…', 'Loading history…'],
+  'st.historySettings': ['设置变更', 'Settings change'],
+  'st.historyAddRepo': ['添加仓库', 'Add repository'],
+  'st.historyBeforeRestore': ['恢复前的备份', 'Backup before restore'],
 
   // ---- one-line intro hints of the groups (the group name itself lives in the left nav) ----
-  'st.sourceHint': ['输入通道：监听哪些群、谁能触发，以及多久轮询一次。只读项直接来自 live.json。',
-    'Intake: which groups are watched, who may trigger work, and the poll interval. Read-only items come straight from live.json.'],
+  'st.sourceHint': ['输入通道：先连接 Octo，再选择监听群、触发人范围与轮询间隔；只读项由宿主状态提供。',
+    'Intake: connect Octo first, then choose watched groups, who may trigger work, and the poll interval; read-only values come from the host.'],
   'st.evalHint': ['评估方式与规则目录由代码和 eval.mode 决定，这里只读展示。',
     'The evaluation mode and rule catalog come from code and eval.mode; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式与 worker 配置。改完保存后立即生效；写权限在「写权限」分组单独管理。',
@@ -70,8 +159,16 @@ Object.assign(PAGE_TEXT, {
   'st.pollSecondsHint': ['最小 2 秒；暂停期间不会自动轮询。', 'At least 2 seconds; nothing polls automatically while paused.'],
   'st.pollInvalid': ['轮询间隔必须是不小于 2 的整数秒。', 'The poll interval must be a whole number of seconds, at least 2.'],
   'st.allowAnyHuman': ['允许任意人类触发', 'Accept any human'],
-  'st.allowAnyHumanHint': ['关闭时只接受“允许发送者”名单里的消息。',
-    'When off, only messages from the allowed-senders list are accepted.'],
+  'st.allowAnyHumanHint': ['开启后任何人类发送的文本消息都能触发；关闭时只接受下方名单里的发送者。',
+    'When on, any human text message can trigger; when off, only senders in the list below are accepted.'],
+  'st.sendersHint': ['填写发送者的 Octo UID；关闭「允许任意人类」时只接受名单中的发送者。',
+    'Enter the sender Octo UID; when “accept any human” is off, only listed senders are accepted.'],
+  'st.sendersEmpty': ['还没有允许的发送者。', 'No allowed sender yet.'],
+  'st.senderPlaceholder': ['发送者 UID', 'Sender UID'],
+  'st.addSender': ['添加', 'Add'],
+  'st.removeSender': ['移除发送者 {sender}', 'Remove sender {sender}'],
+  'st.anyHumanSendersHint': ['「允许任意人类」已开启，名单暂不参与判断；关闭后可继续编辑名单。',
+    '“Accept any human” is on; the list is ignored until you turn it off.'],
   'st.watchChats': ['监听群', 'Watched groups'],
   'st.senders': ['允许发送者', 'Allowed senders'],
   'st.allHumans': ['任意人类', 'Any human'],
@@ -82,8 +179,8 @@ Object.assign(PAGE_TEXT, {
   'st.lastPoll': ['最近轮询', 'Last poll'],
   'st.noSenders': ['没有允许发送者，也没有“允许任意人类”：轮询会被引擎拒绝。',
     'No allowed senders and "accept any human" is off, so the engine rejects polling.'],
-  'st.noChats': ['还没有监听群。在 live.json 的 octo.watchChatIds 填入群 ID，然后重载配置。',
-    'No watched groups yet. Put group ids in octo.watchChatIds in live.json, then reload the config.'],
+  'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写 chatId。',
+    'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
   'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
     '"Check for new messages" is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
   'st.probeAt': ['检查于 {time}', 'Checked {time}'],
@@ -93,7 +190,7 @@ Object.assign(PAGE_TEXT, {
   'st.errBusy': ['已有一次轮询在进行中，请稍后再试。', 'A poll is already running; try again shortly.'],
   'st.errPaused': ['引擎已暂停：非干跑轮询会被拒绝。', 'The engine is paused: a non-dry-run poll is rejected.'],
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
-  'st.errDisabled': ['live.json 里引擎未启用（enabled=false）。', 'The engine is disabled in live.json (enabled=false).'],
+  'st.errDisabled': ['引擎未启用，请先在设置→来源打开「启用引擎」。', 'The engine is disabled; turn on “Engine enabled” under Settings → Source first.'],
   'st.errNoToken': ['Octo token 未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
   'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and "accept any human" is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
@@ -205,6 +302,30 @@ Object.assign(PAGE_TEXT, {
   'st.httpStatus': ['HTTP {status}', 'HTTP {status}'],
 })
 
+/** A copyable, secret-free example of the file-only repository block. */
+const REPO_CONFIG_SAMPLE = `{
+  "repos": [
+    {
+      "id": "my-repo",
+      "name": "my-repo",
+      "repo": "/absolute/path/to/my-repo",
+      "baseBranch": "dev",
+      "gitlab": {
+        "baseUrl": "https://gitlab.example.com",
+        "project": "group/my-repo",
+        "tokenFile": "/home/you/.dsh/superagent/gitlab-my-repo.token"
+      }
+    }
+  ],
+  "defaultRepo": "my-repo"
+}
+`
+/** Blank repository form; values map to the fields accepted by POST engine/repos. */
+const emptyRepoForm = () => ({
+  id: '', name: '', kind: 'web', path: '', baseBranch: 'dev', featurePrefix: 'feature/', verifyMode: 'web-uat',
+  acceptance: 'deployed', baseUrl: '', project: '', targetBranch: 'dev', uatUrl: '', healthUrl: '', makeDefault: false,
+})
+
 /** Group order of the left column; labels come from the shared settingsGroup dictionary in 06-i18n.js, except the
     two executor groups whose labels are page-local overrides (settingsGroup.run / settingsGroup.write above).
     `reference: true` marks a read-only group: the rail lists the groups that can be changed first, then a divider and
@@ -242,6 +363,10 @@ function settingsPatchOf(group, draft) {
     if ('enabled' in draft) patch.enabled = draft.enabled === true
     if ('pollSeconds' in draft) patch.pollSeconds = Number(draft.pollSeconds)
     if ('octo.allowAnyHuman' in draft) patch['octo.allowAnyHuman'] = draft['octo.allowAnyHuman'] === true
+    if ('octo.allowSenderIds' in draft) {
+      const list = Array.isArray(draft['octo.allowSenderIds']) ? draft['octo.allowSenderIds'] : []
+      patch['octo.allowSenderIds'] = list.map(value => String(value).trim()).filter(Boolean)
+    }
   } else if (group === 'run' || group === 'write') {
     // `run` and `write` are two views of the same executor block: the union below patches every draft key either group
     // can hold, so a field moved between the two groups keeps saving through the same `executor.*` allow-list.
@@ -340,6 +465,66 @@ function repoGateLabel(t, gate) {
 /** One repository card: read-only facts plus its own write-only token editor. Saving a token is the reversible edit;
     clearing one stops what the executor can observe for this repository, so it goes through a confirmation that names
     the consequence (C6) — a plain button here used to clear on a single click. */
+/** P2-5 capability table: static data describing what each backend actually does today (contract §2). */
+const WORKER_CAP_COLUMNS = [
+  { key: 'stream', labelKey: 'st.capStream' },
+  { key: 'approval', labelKey: 'st.capApproval' },
+  { key: 'resume', labelKey: 'st.capResume' },
+  { key: 'diff', labelKey: 'st.capDiff' },
+  { key: 'report', labelKey: 'st.capReport' },
+]
+const WORKER_CAPABILITIES = [
+  { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
+    stream: { yes: true },
+    approval: { yes: false, noteKey: 'st.capDshApproval' },
+    resume: { yes: false, noteKey: 'st.capDshResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: true, noteKey: 'st.capDshReport' },
+  } },
+  { backend: 'codex', nameKey: 'st.capCodex', capabilities: {
+    stream: { yes: true, noteKey: 'st.capCodexStream' },
+    approval: { yes: false, noteKey: 'st.capCodexApproval' },
+    resume: { yes: false, noteKey: 'st.capCodexResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: false },
+  } },
+  { backend: 'claude', nameKey: 'st.capClaude', capabilities: {
+    stream: { yes: true, noteKey: 'st.capClaudeStream' },
+    approval: { yes: false, noteKey: 'st.capClaudeApproval' },
+    resume: { yes: false, noteKey: 'st.capClaudeResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: false },
+  } },
+]
+
+/** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
+function WorkerCapabilityCard({ currentBackend }) {
+  const { t } = usePanel()
+  const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
+  return h('div', { className: 'sa-field' },
+    h('span', { className: 'sa-field-head' }, pt(t, 'st.capTitle')),
+    h(Hint, null, pt(t, 'st.capHint')),
+    h('table', { className: 'sa-glossary sa-capabilities' },
+      h('thead', null, h('tr', null,
+        h('th', null, pt(t, 'st.capBackend')),
+        WORKER_CAP_COLUMNS.map(column => h('th', { key: column.key }, pt(t, column.labelKey))))),
+      h('tbody', null, WORKER_CAPABILITIES.map(entry => {
+        const active = entry.backend === current
+        return h('tr', { key: entry.backend, 'data-current': active ? 'true' : undefined,
+          style: active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined },
+          h('th', { scope: 'row' },
+            h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-4)' } },
+              h('span', null, pt(t, entry.nameKey)),
+              active ? h(Tag, { tone: 'info' }, pt(t, 'st.capCurrent')) : null)),
+          WORKER_CAP_COLUMNS.map(column => {
+            const cell = entry.capabilities[column.key] ?? { yes: false }
+            return h('td', { key: column.key },
+              h(Tag, { tone: cell.yes ? 'success' : 'neutral' }, pt(t, cell.yes ? 'st.capYes' : 'st.capNo')),
+              cell.noteKey ? h('div', { className: 'sa-hint' }, pt(t, cell.noteKey)) : null)
+          }))
+      }))))
+}
+
 function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
   const { t } = usePanel()
   const [token, setToken] = useState('')
@@ -387,10 +572,11 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
       h(Hint, null, pt(t, 'repos.tokenHint'))))
 }
 
-function LiveSettingsPage() {
+function LiveSettingsPage({ route }) {
   const { t, notify } = usePanel()
   const { data, error, reload, actions } = usePanelData()
-  const [active, setActive] = useState('source')
+  const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
+  const [active, setActive] = useState(requestedGroup)
   const [drafts, setDrafts] = useState({})
   const [savingGroup, setSavingGroup] = useState(null)
   const [saveErrors, setSaveErrors] = useState({})
@@ -400,11 +586,38 @@ function LiveSettingsPage() {
   const [probe, setProbe] = useState({ busy: false })
   const [uatState, setUatState] = useState({ busy: false })
   const [tokenSaving, setTokenSaving] = useState(null)
+  const [octoTokenDraft, setOctoTokenDraft] = useState('')
+  const [octoTokenBusy, setOctoTokenBusy] = useState(false)
+  const [octoGroups, setOctoGroups] = useState({ open: false, busy: false, error: undefined, items: [] })
+  const [octoGroupQuery, setOctoGroupQuery] = useState('')
+  const [configSampleOpen, setConfigSampleOpen] = useState(false)
+  const [repoModalOpen, setRepoModalOpen] = useState(false)
+  const [repoForm, setRepoForm] = useState(emptyRepoForm)
+  const [repoSaving, setRepoSaving] = useState(false)
+  const [repoError, setRepoError] = useState(undefined)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState([])
+  const [historyBusy, setHistoryBusy] = useState(false)
+  const [historyError, setHistoryError] = useState(undefined)
+  const [senderDraft, setSenderDraft] = useState('')
   const [bindingForm, setBindingForm] = useState({ chatId: '', title: '', repoId: '' })
   const [bindingBusy, setBindingBusy] = useState(false)
   useEffect(() => () => {
     for (const timer of Object.values(savedTimers.current)) clearTimeout(timer)
   }, [])
+  // Deep links from the setup checklist and system problems select the matching group. The effect only depends on
+  // the requested group, so clicking the left rail afterwards is never overridden by an old route.
+  useEffect(() => {
+    if (route?.group && SETTINGS_GROUPS.some(group => group.id === route.group)) setActive(route.group)
+  }, [route?.group])
+  // A setup step can point at one field inside a group; scroll it into view after the pane switched.
+  useEffect(() => {
+    if (!route?.focus) return undefined
+    const timer = setTimeout(() => {
+      document.getElementById(`sa-settings-${route.focus}`)?.scrollIntoView({ block: 'center' })
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [route?.focus, active])
   if (!data) {
     return error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : h(Skeleton, { rows: 6 })
   }
@@ -434,6 +647,128 @@ function LiveSettingsPage() {
     } finally { setTokenSaving(null) }
   }
 
+  /** Save/clear the Octo bot token; the value is write-only and the host never echoes it back. */
+  const saveOctoTokenFor = async (value) => {
+    if (octoTokenBusy) return false
+    setOctoTokenBusy(true)
+    try {
+      await actions.saveOctoToken(value)
+      await reload()
+      setOctoTokenDraft('')
+      notify(pt(t, value ? 'st.octoTokenSaved' : 'st.octoTokenCleared'))
+      return true
+    } catch (failure) {
+      notify(errorText(failure))
+      return false
+    } finally { setOctoTokenBusy(false) }
+  }
+
+  /** Load the bot's group list through the host; this is a read-only query, not a poll. */
+  const loadOctoGroups = async () => {
+    if (octo.tokenConfigured !== true) { notify(pt(t, 'st.groupsNoToken')); return }
+    setOctoGroups(previous => ({ ...previous, open: true, busy: true, error: undefined }))
+    try {
+      const result = await actions.listOctoGroups()
+      setOctoGroups({ open: true, busy: false, error: undefined, items: Array.isArray(result?.groups) ? result.groups : [] })
+    } catch (failure) {
+      setOctoGroups({ open: true, busy: false, error: errorText(failure), items: [] })
+    }
+  }
+
+  /** Selecting a group only fills the binding form; the operator still confirms the repository and saves. */
+  const chooseGroup = (group) => {
+    setBindingForm(previous => ({ ...previous, chatId: String(group.id ?? ''), title: group.name ?? '' }))
+    setOctoGroups(previous => ({ ...previous, open: false }))
+  }
+
+  /** Add/remove one sender UID in the source-group draft; saving uses the existing group save bar. */
+  const senderValuesOf = (draft) => {
+    const value = draft && 'octo.allowSenderIds' in draft ? draft['octo.allowSenderIds'] : octo.allowSenderIds
+    return Array.isArray(value) ? value.filter(item => typeof item === 'string' && item.trim()) : []
+  }
+  const addSender = () => {
+    const value = senderDraft.trim()
+    if (!value) return
+    const current = senderValuesOf(drafts.source)
+    if (!current.includes(value)) {
+      editField('source', 'octo.allowSenderIds', [...current, value],
+        Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
+    }
+    setSenderDraft('')
+  }
+  const removeSender = value => {
+    const current = senderValuesOf(drafts.source)
+    editField('source', 'octo.allowSenderIds', current.filter(item => item !== value),
+      Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
+  }
+
+  /** Add one repository definition; the token is a separate write on the new card. */
+  const submitRepo = async () => {
+    if (repoSaving) return
+    const form = repoForm
+    const repo = {
+      id: form.id.trim(),
+      name: form.name.trim() || form.id.trim(),
+      kind: form.kind,
+      repo: form.path.trim(),
+      baseBranch: form.baseBranch.trim(),
+      featurePrefix: form.featurePrefix.trim(),
+      verifyMode: form.verifyMode,
+      acceptance: form.acceptance,
+      gitlab: {
+        baseUrl: form.baseUrl.trim(),
+        project: form.project.trim(),
+        targetBranch: form.targetBranch.trim(),
+        ...(form.uatUrl.trim() ? { uatUrl: form.uatUrl.trim() } : {}),
+        ...(form.healthUrl.trim() ? { healthUrl: form.healthUrl.trim() } : {}),
+      },
+    }
+    setRepoSaving(true)
+    setRepoError(undefined)
+    try {
+      await actions.addRepo(repo, { makeDefault: form.makeDefault === true })
+      await reload()
+      setRepoModalOpen(false)
+      setRepoForm(emptyRepoForm())
+      notify(pt(t, 'repos.saved'))
+    } catch (failure) {
+      setRepoError(errorText(failure))
+    } finally { setRepoSaving(false) }
+  }
+
+  /** Load saved live.json versions; the list contains configuration only, never tokens. */
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryBusy(true)
+    setHistoryError(undefined)
+    try {
+      const response = await actions.settingsHistory()
+      setHistoryEntries(Array.isArray(response?.entries) ? response.entries : [])
+    } catch (failure) {
+      setHistoryError(errorText(failure))
+    } finally { setHistoryBusy(false) }
+  }
+  const historyLabel = entry => {
+    const label = entry.label ?? ''
+    if (label.startsWith('settings:')) return `${pt(t, 'st.historySettings')} · ${label.slice('settings:'.length).trim()}`
+    if (label.startsWith('add repository ')) return `${pt(t, 'st.historyAddRepo')} · ${label.slice('add repository '.length)}`
+    if (label.startsWith('before restore')) return pt(t, 'st.historyBeforeRestore')
+    return label || entry.id
+  }
+  const restoreHistory = async (id) => {
+    if (historyBusy) return
+    setHistoryBusy(true)
+    setHistoryError(undefined)
+    try {
+      await actions.restoreSettings(id)
+      await reload()
+      setHistoryOpen(false)
+      notify(pt(t, 'st.historyRestored'))
+    } catch (failure) {
+      setHistoryError(errorText(failure))
+    } finally { setHistoryBusy(false) }
+  }
+
   // ---- group heading (O18) ----------------------------------------------------------------------------------
   // Each content group opens with a real H2 mirroring its left-nav label; `.sa-settings-title` owns the typography
   // (05-style.js), so the element here carries no inline styles.
@@ -458,12 +793,23 @@ function LiveSettingsPage() {
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
       h(Hint, null, pt(t, 'repos.intro')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'primary', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
+          onClick: () => { setRepoForm(emptyRepoForm()); setRepoError(undefined); setRepoModalOpen(true) } },
+        pt(t, 'repos.add')),
+        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
+        h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(true) },
+          pt(t, 'repos.emptyAction'))),
       repos.length
         ? h(Fragment, null,
           h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
           h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
             isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id }))))
-        : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty') }),
+        : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
+          action: h('div', { className: 'sa-actions' },
+            config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
+            h(Button, { variant: 'outline', size: 'sm',
+              onClick: () => setConfigSampleOpen(true) }, pt(t, 'repos.emptyAction'))) }),
       h('p', { className: 'sa-hint' }, pt(t, 'repos.manageHint')),
       h('h3', { className: 'sa-ledger-title' }, pt(t, 'st.deployTitle')),
       h(Hint, null, pt(t, 'st.deployHint')),
@@ -630,6 +976,89 @@ function LiveSettingsPage() {
   const reloadButton = () => h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
     disabled: reloadState.busy, onClick: () => { void reloadEngineConfig() } }, pt(t, 'st.reloadConfig'))
 
+  /** Write-only Octo token editor. An env-provided token is shown as read-only, because the file cannot override it. */
+  const renderOctoToken = () => {
+    const configured = octo.tokenConfigured === true
+    const tokenSource = octo.tokenSource
+    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token' },
+      h('span', { className: 'sa-field-head' }, pt(t, 'st.octoToken'),
+        configured
+          ? h(Tag, { tone: tokenSource === 'env' ? 'info' : 'success' },
+            tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk'))
+          : h(Tag, { tone: 'outline' }, pt(t, 'st.tokenMissing'))),
+      tokenSource === 'env'
+        ? h(Hint, null, pt(t, 'st.octoTokenEnvHint'))
+        : h(Fragment, null,
+          h('div', { style: { display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+            h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
+              h(Input, { className: 'sa-input-full', type: 'password', value: octoTokenDraft, autoComplete: 'off',
+                placeholder: pt(t, 'st.octoTokenPlaceholder'), 'aria-label': pt(t, 'st.octoTokenPlaceholder'),
+                disabled: octoTokenBusy,
+                onChange: event => setOctoTokenDraft(event.target.value) })),
+            h(Button, { variant: 'outline', size: 'sm', disabled: octoTokenBusy || !octoTokenDraft.trim(),
+              onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
+            octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
+            configured
+              ? h(Button, { variant: 'ghost', size: 'sm', disabled: octoTokenBusy,
+                onClick: () => { void saveOctoTokenFor('') } }, pt(t, 'repos.tokenClear'))
+              : null),
+          h(Hint, null, pt(t, 'st.octoTokenHint'))))
+  }
+
+  /** Searchable group picker: fills the binding form, never writes a binding by itself. */
+  const renderGroupPicker = () => {
+    const watched = new Set(Array.isArray(octo.watchChatIds) ? octo.watchChatIds : [])
+    const query = octoGroupQuery.trim().toLowerCase()
+    const items = (octoGroups.items ?? []).filter(group => !query
+      || String(group.name ?? '').toLowerCase().includes(query) || String(group.id ?? '').toLowerCase().includes(query))
+    return h('div', { className: 'sa-group-picker' },
+      h('div', { className: 'sa-group-picker-head' },
+        h(Input, { value: octoGroupQuery, placeholder: pt(t, 'st.groupsSearch'), 'aria-label': pt(t, 'st.groupsSearch'),
+          onChange: event => setOctoGroupQuery(event.target.value) }),
+        h('span', { className: 'sa-hint' }, pt(t, 'st.groupsCount', { count: items.length }))),
+      octoGroups.busy
+        ? h(Hint, null, pt(t, 'st.groupsLoading'))
+        : octoGroups.error
+          ? h('p', { className: 'sa-error', role: 'alert' }, octoGroups.error)
+          : items.length
+            ? h('ul', { className: 'sa-list' }, items.map(group => h('li', { key: String(group.id) },
+              h('button', { type: 'button', className: 'sa-group-option', disabled: watched.has(String(group.id)),
+                onClick: () => chooseGroup(group) },
+              h('span', { className: 'sa-group-option-main' },
+                h('span', { className: 'sa-group-option-name' }, group.name || String(group.id)),
+                h('span', { className: 'sa-mono sa-hint' }, String(group.id))),
+              watched.has(String(group.id))
+                ? h(Tag, { tone: 'success' }, pt(t, 'st.groupsWatched'))
+                : h(Icon, { name: 'plus', size: 14 })))))
+            : h(Hint, null, pt(t, 'st.groupsEmpty')))
+  }
+
+  /** Sender allowlist: editable when "accept any human" is off; ignored (and explained) while it is on. */
+  const renderSenders = () => {
+    const draft = drafts.source ?? {}
+    const allowAnyHuman = 'octo.allowAnyHuman' in draft ? draft['octo.allowAnyHuman'] : octo.allowAnyHuman === true
+    const senders = senderValuesOf(draft)
+    const list = senders.length
+      ? h('div', { className: 'sa-sender-list' }, senders.map(sender => h('span', { key: sender, className: 'sa-sender-chip' },
+        h('span', { className: 'sa-mono' }, sender),
+        h('button', { type: 'button', className: 'sa-sender-remove', 'aria-label': pt(t, 'st.removeSender', { sender }),
+          onClick: () => removeSender(sender) }, '×'))))
+      : h(Hint, null, pt(t, 'st.sendersEmpty'))
+    const add = h('div', { className: 'sa-actions' },
+      h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
+        h(Input, { className: 'sa-input-full', value: senderDraft, placeholder: pt(t, 'st.senderPlaceholder'),
+          'aria-label': pt(t, 'st.senderPlaceholder'), disabled: savingGroup === 'source',
+          onChange: event => setSenderDraft(event.target.value),
+          onKeyDown: event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } } })),
+      h(Button, { variant: 'outline', size: 'sm', disabled: savingGroup === 'source' || !senderDraft.trim(),
+        onClick: addSender }, pt(t, 'st.addSender')))
+    return h('div', { className: 'sa-field' },
+      h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'),
+        allowAnyHuman ? h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')) : null),
+      allowAnyHuman ? h(Hint, null, pt(t, 'st.anyHumanSendersHint')) : h(Fragment, null, list, add),
+      allowAnyHuman ? null : h(Hint, null, pt(t, 'st.sendersHint')))
+  }
+
   // ---- source group -----------------------------------------------------------------------------------------
   const renderSource = () => {
     const draft = drafts.source ?? {}
@@ -638,26 +1067,25 @@ function LiveSettingsPage() {
     const pollSeconds = 'pollSeconds' in draft ? draft.pollSeconds : String(config.pollSeconds ?? '')
     const chatIds = Array.isArray(octo.watchChatIds) ? octo.watchChatIds : []
     const chatNames = chatIds.map(id => octo.chatTitles?.[id] ?? id)
-    const senders = Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : []
+    const senders = senderValuesOf(draft)
     const cursors = engine.channelCursors ?? {}
     const cursorRows = Object.entries(cursors).map(([chat, seq]) => `${octo.chatTitles?.[chat] ?? chat} · ${seq}`)
     const rows = [
       [pt(t, 'st.watchChats'), chatNames.length ? chatNames.join(t('listSeparator')) : t('empty')],
-      [pt(t, 'st.senders'), allowAnyHuman ? pt(t, 'st.allHumans')
-        : (senders.length ? senders.join(t('listSeparator')) : t('empty'))],
-      [pt(t, 'st.octoToken'), octo.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
       [pt(t, 'st.cursors'), cursorRows.length ? cursorRows.join(t('listSeparator')) : t('empty')],
       [pt(t, 'st.lastPoll'), engine.lastPollAt ? h(When, { at: engine.lastPollAt }) : t('empty')],
     ]
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
       h(Hint, null, pt(t, 'st.sourceHint')),
+      renderOctoToken(),
       h(SettingsSwitchRow, { label: pt(t, 'st.enabled'), hint: pt(t, 'st.enabledHint'), checked: enabled,
         disabled: savingGroup === 'source',
         onChange: next => editField('source', 'enabled', next, config.enabled === true) }),
       h(SettingsSwitchRow, { label: pt(t, 'st.allowAnyHuman'), hint: pt(t, 'st.allowAnyHumanHint'), checked: allowAnyHuman,
         disabled: savingGroup === 'source',
         onChange: next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true) }),
+      renderSenders(),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.pollSeconds')),
         // The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18).
@@ -677,9 +1105,18 @@ function LiveSettingsPage() {
       h(SettingsStatusLine, { view: probe.view,
         note: probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined }),
       h(SettingsStatusLine, { view: reloadView }),
-      h('div', { className: 'sa-field' },
+      h('div', { className: 'sa-field', id: 'sa-settings-bindings' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.bindings')),
         h(Hint, null, pt(t, 'st.bindingsHint')),
+        h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
+          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+            disabled: octoGroups.busy || bindingBusy, onClick: () => { void loadOctoGroups() } },
+          octoGroups.busy ? pt(t, 'st.groupsLoading') : pt(t, 'st.groupsPick')),
+          octoGroups.open
+            ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => setOctoGroups(previous => ({ ...previous, open: false, error: undefined })) },
+              pt(t, 'st.groupsClose'))
+            : null),
+        octoGroups.open ? renderGroupPicker() : null,
         chatIds.length
           ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
             chatIds.map(chatId => h('div', { key: chatId, className: 'sa-switch-row' },
@@ -797,6 +1234,8 @@ function LiveSettingsPage() {
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
       h(ManualTicketForm, { onDone: () => { void reload() } }),
+      // P2-5: static capability matrix, read-only; highlights the saved executor.workerBackend (defaults to DSH).
+      h(WorkerCapabilityCard, { currentBackend: executor.workerBackend ?? 'dsh' }),
       saveBarFor('run'))
   }
 
@@ -869,7 +1308,12 @@ function LiveSettingsPage() {
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
 
   return h(Fragment, null,
-    h(Hint, null, pt(t, 'st.pageIntro')),
+    h('div', { className: 'sa-settings-intro' },
+      h(Hint, null, pt(t, 'st.pageIntro')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'history', size: 14 }),
+          onClick: () => { void openHistory() } }, pt(t, 'st.history')),
+        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null)),
     h('div', { className: 'sa-settings' },
       h('nav', { className: 'sa-settings-nav', 'aria-label': pt(t, 'st.navLabel') },
         writableGroups.map(settingsNavButton),
@@ -881,5 +1325,101 @@ function LiveSettingsPage() {
           : null),
       h('div', { className: 'sa-settings-body' },
         error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
-        renderGroup())))
+        renderGroup())),
+    historyOpen ? h(Modal, { open: true, onClose: () => { if (!historyBusy) setHistoryOpen(false) },
+      title: pt(t, 'st.historyTitle'), closeLabel: t('close'), className: 'sa-history-modal',
+      footer: h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
+        onClick: () => setHistoryOpen(false) }, t('close')) },
+      h('p', { className: 'sa-hint' }, pt(t, 'st.historyHint')),
+      historyError ? h('p', { className: 'sa-error', role: 'alert' }, historyError) : null,
+      historyBusy && !historyEntries.length ? h(Hint, null, pt(t, 'st.historyLoading')) : null,
+      historyEntries.length
+        ? h('div', { className: 'sa-history-list' }, historyEntries.map(entry => h('div', { key: entry.id, className: 'sa-history-row' },
+          h('div', { className: 'sa-history-main' },
+            h('span', { className: 'sa-history-label' }, historyLabel(entry)),
+            h('span', { className: 'sa-hint' }, h(When, { at: entry.at }))),
+          h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
+            onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
+        : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
+    repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
+      title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
+      footer: h(Fragment, null,
+        h(Button, { variant: 'ghost', disabled: repoSaving, onClick: () => setRepoModalOpen(false) }, t('cancel')),
+        h(Button, { variant: 'primary', disabled: repoSaving, onClick: () => { void submitRepo() } },
+          repoSaving ? t('saving') : pt(t, 'repos.add'))) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.addHint')),
+      h('div', { className: 'sa-form-grid' },
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.id')),
+          h(Input, { className: 'sa-input-full', value: repoForm.id, 'aria-label': pt(t, 'repos.field.id'),
+            onChange: event => setRepoForm(previous => ({ ...previous, id: event.target.value })) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint'))),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
+          h(Input, { className: 'sa-input-full', value: repoForm.name, 'aria-label': pt(t, 'repos.field.name'),
+            onChange: event => setRepoForm(previous => ({ ...previous, name: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.kind')),
+          h(Select, { label: pt(t, 'repos.field.kind'), value: repoForm.kind,
+            options: [{ value: 'web', label: pt(t, 'repos.kindWeb') }, { value: 'oracle-ebs', label: pt(t, 'repos.kindEbs') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, kind: next,
+              verifyMode: next === 'oracle-ebs' ? 'manual' : 'web-uat',
+              acceptance: next === 'oracle-ebs' ? 'merged' : 'deployed' })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
+          h(Input, { className: 'sa-input-full', value: repoForm.path, 'aria-label': pt(t, 'repos.field.repo'),
+            placeholder: '/Users/you/work/my-repo',
+            onChange: event => setRepoForm(previous => ({ ...previous, path: event.target.value })) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint'))),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseBranch')),
+          h(Input, { className: 'sa-input-full', value: repoForm.baseBranch, 'aria-label': pt(t, 'repos.field.baseBranch'),
+            onChange: event => setRepoForm(previous => ({ ...previous, baseBranch: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.targetBranch')),
+          h(Input, { className: 'sa-input-full', value: repoForm.targetBranch, 'aria-label': pt(t, 'repos.field.targetBranch'),
+            onChange: event => setRepoForm(previous => ({ ...previous, targetBranch: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.baseUrl, 'aria-label': pt(t, 'repos.field.baseUrl'),
+            placeholder: 'https://gitlab.example.com',
+            onChange: event => setRepoForm(previous => ({ ...previous, baseUrl: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.project')),
+          h(Input, { className: 'sa-input-full', value: repoForm.project, 'aria-label': pt(t, 'repos.field.project'),
+            placeholder: 'group/project',
+            onChange: event => setRepoForm(previous => ({ ...previous, project: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.verifyMode')),
+          h(Select, { label: pt(t, 'repos.field.verifyMode'), value: repoForm.verifyMode,
+            options: [{ value: 'web-uat', label: pt(t, 'repos.verifyWebUat') }, { value: 'manual', label: pt(t, 'repos.verifyManual') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, verifyMode: next })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.acceptance')),
+          h(Select, { label: pt(t, 'repos.field.acceptance'), value: repoForm.acceptance,
+            options: [{ value: 'deployed', label: pt(t, 'repos.acceptDeployed') }, { value: 'merged', label: pt(t, 'repos.acceptMerged') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, acceptance: next })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.uatUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.uatUrl, 'aria-label': pt(t, 'repos.field.uatUrl'),
+            placeholder: 'https://uat.example.com',
+            onChange: event => setRepoForm(previous => ({ ...previous, uatUrl: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.healthUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.healthUrl, 'aria-label': pt(t, 'repos.field.healthUrl'),
+            placeholder: 'https://uat.example.com/health',
+            onChange: event => setRepoForm(previous => ({ ...previous, healthUrl: event.target.value })) }))),
+      h(SettingsSwitchRow, { label: pt(t, 'repos.field.makeDefault'), hint: pt(t, 'repos.field.makeDefaultHint'),
+        checked: repoForm.makeDefault, disabled: repoSaving,
+        onChange: next => setRepoForm(previous => ({ ...previous, makeDefault: next })) }),
+      repoError ? h('p', { className: 'sa-error', role: 'alert' }, repoError) : null) : null,
+    configSampleOpen ? h(Modal, { open: true, onClose: () => setConfigSampleOpen(false),
+      title: pt(t, 'repos.sampleTitle'), closeLabel: t('close'), className: 'sa-glossary-modal',
+      footer: h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(false) }, t('close')) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.sampleHint')),
+      h('div', { className: 'sa-md-code' },
+        h('div', { className: 'sa-md-code-head' },
+          h('span', { className: 'sa-md-code-lang' }, 'live.json'),
+          h(CopyButton, { value: REPO_CONFIG_SAMPLE, label: pt(t, 'repos.sampleCopy') })),
+        h('pre', { className: 'sa-md-pre' }, REPO_CONFIG_SAMPLE))) : null)
 }

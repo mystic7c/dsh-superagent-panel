@@ -34,5 +34,8 @@
   "scripts": {
     "build": "node scripts/build-client.mjs",
     "check": "node --check index.js && node scripts/build-client.mjs --check"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "*"
   }
 }

@@ -30,12 +30,18 @@ Object.assign(PAGE_TEXT, {
     'deploy-pending': ['部署 UAT 中', 'Deploying to UAT'], 'deploy-failed': ['部署失败', 'Deploy failed'],
     closed: ['MR 已关闭', 'MR closed'], dismissed: ['已忽略', 'Dismissed'], failed: ['失败', 'Failed'], unknown: ['状态未知', 'Unknown state'],
     'dry-run': ['干跑完成', 'Dry run finished'], running: ['运行中', 'Running'],
+    // P0: a run parked on a failing gate is a state of its own; the Ticket keeps the phase label it reached.
+    'gate-blocked': ['闸门待处理', 'Gate needs you'],
+    // P1-4: the worker asked a question; the run is parked until a person answers (group waiting, primary 'answer').
+    'awaiting-answer': ['等待回答', 'Awaiting your answer'],
+    waiting_for_human: ['等待人工', 'Waiting for you'], interrupted: ['已中断', 'Interrupted'],
     accepted: ['已验收', 'Accepted'],
   },
   group: { queued: ['待排', 'Queued'], working: ['执行中', 'Working'], waiting: ['等待人', 'Waiting for you'],
     failed: ['失败', 'Failed'], done: ['已结束', 'Ended'] },
   primary: { accept: ['去验收', 'Review UAT'], merge: ['去合并 MR', 'Merge MR'], deploy: ['刷新部署', 'Refresh deploy'],
-    diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'] },
+    diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'],
+    gate: ['去处理闸门', 'Handle the gate'], answer: ['去回答', 'Answer the question'] },
   disposition: { queued: ['排队', 'Queued'], evaluating: ['评估中', 'Evaluating'], delivered: ['已送达', 'Delivered'],
     fanout: ['扇出', 'Fanned out'], filtered: ['被过滤', 'Filtered'] },
   rail: { trigger: ['触发', 'Trigger'], eval: ['评估', 'Eval'], ticket: ['工单', 'Ticket'], execution: ['执行', 'Execution'],
@@ -48,19 +54,34 @@ Object.assign(PAGE_TEXT, {
   shell: { running: ['运行中', 'Running'], paused: ['已暂停', 'Paused'], stopped: ['已停止', 'Stopped'],
     error: ['异常', 'Error'], blocked: ['被阻塞', 'Blocked'], unknown: ['状态未知', 'Status unknown'],
     loading: ['读取中…', 'Loading…'], pending: ['需要你处理 {count} 件', '{count} need you'],
-    active: ['执行中 {count}', '{count} running'] },
+    active: ['执行中 {count}', '{count} running'],
+    setupChip: ['配置 {done}/{total}', 'Set up {done}/{total}'] },
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
     evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
-    evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'] },
+    evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
+    evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
+    acceptanceAccepted: ['已验收', 'Accepted'], acceptanceRejected: ['已打回', 'Rejected'],
+    interrupted: ['已中断', 'Interrupted'] },
+  // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
+  runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
+    publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
+    other: ['触发方式：{trigger}', 'Trigger: {trigger}'] },
+  runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
+    worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
+    gate_failed: ['闸门未通过', 'Gate failed'], prepare_failed: ['准备工作区失败', 'Worktree preparation failed'],
+    bootstrap_failed: ['依赖安装失败', 'Dependency install failed'], guard_failed: ['改动校验失败', 'Change guard failed'],
+    commit_failed: ['提交失败', 'Commit failed'], push_failed: ['推送失败', 'Push failed'],
+    mr_failed: ['MR 创建失败', 'MR creation failed'], interrupted: ['已中断', 'Interrupted'],
+    stopped: ['人工终止', 'Stopped by a person'], other: ['其他原因（{reason}）', 'Other ({reason})'] },
   problem: { engineError: ['引擎报告异常', 'The engine reported an error'], paused: ['处理已暂停', 'Processing is paused'],
     engineOff: ['自动触发未开启', 'Automatic intake is off'], sourceError: ['{name} 异常', '{name} is failing'],
     octoToken: ['Octo token 未配置', 'Octo token is missing'], gitlabToken: ['GitLab token 未配置', 'GitLab token is missing'],
     pausedDetail: ['恢复前不会开始新的评估、派工或回复。', 'No new Eval, dispatch or reply runs until you resume.'],
-    engineOffDetail: ['改 ~/.dsh/superagent/live.json 并重载配置后，引擎才会自动轮询群消息。',
-      'Set enabled in ~/.dsh/superagent/live.json and reload the config to poll the group automatically.'],
+    engineOffDetail: ['在设置→来源打开「启用引擎」并保存后，引擎才会自动轮询群消息。',
+      'Turn on “Engine enabled” under Settings → Source and save; the engine then polls the group automatically.'],
     octoTokenDetail: ['没有 Octo token，引擎读不到群消息。', 'Without an Octo token the engine cannot read the group.'],
     gitlabTokenDetail: ['没有 GitLab token 时无法观测 CI 与部署，只能做无 token 的核对。',
       'Without a GitLab token CI and deploy results cannot be observed; only token-free verification runs.'] },
@@ -174,6 +195,24 @@ Object.assign(PAGE_TEXT, {
     viewHandled: ['查看已处理工单', 'View handled tickets'],
   },
   dismissedAfterFailure: ['失败后忽略', 'Dismissed after failure'],
+  // P2-1: a Ticket can run itself; the same summary wording serves the row chip and the automation card.
+  'auto.everyMinutes': ['每 {minutes} 分钟', 'Every {minutes} min'],
+  'auto.everyHours': ['每 {hours} 小时', 'Every {hours} h'],
+  'auto.daily': ['每天 {time}', 'Daily {time}'],
+  'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
+  'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
+  'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
+  'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
+  'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
+  // P2-7: GitLab observation upgrades shown on the MR card.
+  'mr.draft': ['草稿', 'Draft'],
+  'mr.draftHint': ['这个 MR 仍是草稿/WIP：自动巡检会跳过合并与 UAT 判定。',
+    'This MR is still a draft/WIP; auto-verification skips merge and UAT checks.'],
+  'mr.stale': ['过期 CI', 'Stale CI'],
+  'mr.staleHint': ['最新流水线属于另一个提交（当前 {head}，最新 {latest}），CI 结论不覆盖工单状态。',
+    'The newest pipeline belongs to another commit (current {head}, latest {latest}); the CI result does not change the Ticket.'],
   // 24h funnel: 过滤 is a branch of 到达, and `dropped` means outbound replies that failed to send — neither is a stage.
   funnelBranch: ['其中 {count} 条仅作上下文', '{count} context-only'],
   funnelSummary2: ['{received} 到达 · {judged} 评估 · {accepted} 接单 · {dropped} 出站失败',
@@ -195,7 +234,8 @@ Object.assign(PAGE_TEXT, {
 
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
-  'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast']
+  'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
+  'runTrigger', 'runStop']
 for (const group of TEXT_GROUPS) {
   const nested = PAGE_TEXT[group]
   if (!nested || Array.isArray(nested)) continue
@@ -257,6 +297,38 @@ function repoAcceptanceText(t, acceptance) {
   return key ? pt(t, key) : pt(t, 'repo.unknownMode', { mode: acceptance })
 }
 
+/** Automation summary in the operator's language: mirrors lib/live/schedule.js `describeAutomation` on the client. */
+function automationSummaryText(t, automation) {
+  if (!automation || automation.enabled !== true || automation.mode === 'off') return ''
+  if (automation.mode === 'heartbeat') {
+    const raw = Number(automation.intervalMinutes)
+    const minutes = Number.isFinite(raw) && raw > 0 ? raw : 60
+    return minutes % 60 === 0 ? pt(t, 'auto.everyHours', { hours: minutes / 60 })
+      : pt(t, 'auto.everyMinutes', { minutes })
+  }
+  if (automation.mode === 'schedule') return pt(t, 'auto.daily', { time: String(automation.at || '09:00') })
+  return ''
+}
+
+/** The row chip for a self-running Ticket; the tooltip carries the next run when the host computed one. */
+function automationChip(t, ticket) {
+  const automation = ticket?.automation
+  if (!automation || automation.enabled !== true || automation.mode === 'off') return null
+  const label = automationSummaryText(t, automation)
+  if (!label) return null
+  return h(Tag, { key: 'automation', tone: 'info',
+    title: automation.nextAt ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) }) : undefined },
+  label)
+}
+
+/** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+function autoSkipReasonText(t, reason) {
+  const key = AUTO_SKIP_KEYS[String(reason ?? '')]
+  return key ? pt(t, key) : String(reason ?? '')
+}
+
 // ---- status model ---------------------------------------------------------------------------------------------
 
 /** Engine ticket status → shape, tag tone, group, whether a person has to act, and the one row action. */
@@ -277,30 +349,112 @@ const TICKET_VIEW = {
   dismissed: { state: 'idle', tone: 'neutral', group: 'done', needsHuman: false, primary: 'none' },
   'dry-run': { state: 'done', tone: 'info', group: 'done', needsHuman: false, primary: 'none' },
   running: { state: 'ongoing', tone: 'info', group: 'working', needsHuman: false, primary: 'none' },
+  // A parked gate is non-terminal and belongs to the person (P0-3): the row says so and its one action opens the detail.
+  'gate-blocked': { state: 'warning', tone: 'warning', group: 'waiting', needsHuman: true, primary: 'gate' },
+  // P1-4: the worker asked a question; the Ticket waits in the same shape as a gate park, with the answer as its action.
+  'awaiting-answer': { state: 'warning', tone: 'warning', group: 'waiting', needsHuman: true, primary: 'answer' },
+  // Run-level statuses (runs never reach the waiting/failed ticket groups; they only borrow the label and shape).
+  waiting_for_human: { state: 'warning', tone: 'warning', group: 'working', needsHuman: false, primary: 'none' },
+  interrupted: { state: 'warning', tone: 'warning', group: 'failed', needsHuman: false, primary: 'none' },
   failed: { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
   'ci-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
   'deploy-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
 }
 
 /**
- * One Ticket status → the view every page renders.
- * → { key, state, tone, group, needsHuman, primary, labelKey } (label key is read through `pt`).
+ * A Ticket's raw engine status → the phase view, before the human sign-off is applied.
+ * Repositories accepted after the merge (no CI/UAT, contract §12) keep `merged` waiting for a person.
  */
-function ticketStatus(ticket) {
+function ticketBaseView(ticket) {
   const key = ticket?.status ?? ticket?.stage
-  // A person's UAT sign-off is a property of the ticket, not of the engine status: the deployment record stays
-  // `deployed`, but the Ticket is done waiting for a human.
-  if (ticket?.links?.acceptance?.ok === true) {
-    return { key: 'accepted', state: 'done', tone: 'success', group: 'done', needsHuman: false, primary: 'none', labelKey: 'ticketState.accepted' }
-  }
-  // Repositories that are accepted after the merge (no CI/UAT, contract §12): a merged Ticket still waits for a
-  // person, so it groups under "needs you" with acceptance as its one action.
   if (ticket?.repoAcceptance === 'merged' && ticket?.status === 'merged') {
-    return { key: 'merged', state: 'idle', tone: 'success', group: 'waiting', needsHuman: true, primary: 'accept', labelKey: 'ticketState.merged' }
+    return { key: 'merged', state: 'idle', tone: 'success', group: 'waiting', needsHuman: true, primary: 'accept',
+      labelKey: 'ticketState.merged' }
   }
   const view = TICKET_VIEW[key] ? { key, ...TICKET_VIEW[key] } : { key: 'unknown', ...TICKET_VIEW.queued, state: 'idle', group: 'queued', primary: 'none' }
   view.labelKey = `ticketState.${view.key}`
   return view
+}
+
+/**
+ * The person's sign-off on a Ticket (spec §3.6.1), orthogonal to the engine status.
+ * → { state: 'accepted'|'rejected'|'pending'|'none', at?, note? }.
+ * A Ticket only has a *pending* sign-off while its phase view waits for a person with accept/merge as the one action;
+ * every other status owns no acceptance duty.
+ */
+function ticketAcceptanceOf(ticket) {
+  const acceptance = ticket?.links?.acceptance
+  if (acceptance?.ok === true) return { state: 'accepted', at: acceptance.at, note: acceptance.note }
+  if (acceptance?.ok === false) return { state: 'rejected', at: acceptance.at, note: acceptance.note }
+  const base = ticketBaseView(ticket)
+  if (base.group === 'waiting' && (base.primary === 'accept' || base.primary === 'merge')) return { state: 'pending' }
+  return { state: 'none' }
+}
+
+/**
+ * One Ticket status → the view every page renders.
+ * → { key, state, tone, group, needsHuman, primary, acceptance, labelKey } (label key is read through `pt`).
+ * The sign-off is a property of the Ticket, not of the engine status: an accepted Ticket keeps its phase key/state/tone
+ * (the row still says “已部署 UAT”) but leaves the attention groups and owns no primary action.
+ */
+function ticketStatus(ticket) {
+  const view = ticketBaseView(ticket)
+  const acceptance = ticketAcceptanceOf(ticket)
+  if (acceptance.state === 'accepted') {
+    return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  return { ...view, acceptance }
+}
+
+/**
+ * The middle row chip for a Ticket with an acceptance duty: the sign-off fact, or the wait the person owns. A pending
+ * sign-off borrows the shared wait wording (验收 vs 合并) so the same fact is never printed twice on one row.
+ */
+function rowAcceptanceChip(t, view) {
+  const acceptance = view?.acceptance
+  if (!acceptance || acceptance.state === 'none') return null
+  if (acceptance.state === 'accepted') return h(Tag, { key: 'acceptance', tone: 'success' }, pt(t, 'row.acceptanceAccepted'))
+  if (acceptance.state === 'rejected') return h(Tag, { key: 'acceptance', tone: 'danger' }, pt(t, 'row.acceptanceRejected'))
+  return h(Tag, { key: 'acceptance', tone: 'warning' }, pt(t, view.primary === 'merge' ? 'row.evidenceMerge' : 'row.evidenceReview'))
+}
+
+/** Latest run of one Ticket: the detail payload carries `ticket.runs`; list rows rely on the status document's index. */
+function latestRunFor(ticket, runs) {
+  const inline = Array.isArray(ticket?.runs) ? ticket.runs.filter(Boolean) : []
+  const pool = inline.length ? inline : (Array.isArray(runs) ? runs.filter(run => run && run.ticketId === ticket?.id) : [])
+  return [...pool].sort((left, right) => String(right?.startedAt ?? '').localeCompare(String(left?.startedAt ?? '')))[0]
+}
+
+/** True when the newest run of the Ticket was interrupted by a plugin reload / host restart (P1-5). */
+function ticketRunInterrupted(ticket, runs) {
+  return latestRunFor(ticket, runs)?.status === 'interrupted'
+}
+
+/** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
+const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
+  publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
+function runTriggerLabel(t, run) {
+  const trigger = run?.trigger
+  if (!trigger) return null
+  const key = RUN_TRIGGER_KEYS[String(trigger)]
+  return key ? pt(t, key) : pt(t, 'runTrigger.other', { trigger: String(trigger) })
+}
+
+/** Why a run stopped (P0 `run.stopReason`/`errorCode`) → label + tone; an unknown reason stays visible. */
+const RUN_STOP_REASON_KEYS = { done: 'runStop.done', error: 'runStop.error', timeout: 'runStop.timeout',
+  worker_failed: 'runStop.worker_failed', no_changes: 'runStop.no_changes', gate_failed: 'runStop.gate_failed',
+  prepare_failed: 'runStop.prepare_failed', bootstrap_failed: 'runStop.bootstrap_failed', guard_failed: 'runStop.guard_failed',
+  commit_failed: 'runStop.commit_failed', push_failed: 'runStop.push_failed', mr_failed: 'runStop.mr_failed',
+  interrupted: 'runStop.interrupted', stopped: 'runStop.stopped' }
+const RUN_STOP_TONE = { done: 'success', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
+  interrupted: 'warning', stopped: 'neutral', error: 'danger', timeout: 'danger', worker_failed: 'danger',
+  prepare_failed: 'danger', bootstrap_failed: 'danger', guard_failed: 'danger', commit_failed: 'danger', push_failed: 'danger' }
+function runStopLabel(t, run) {
+  const reason = run?.stopReason ?? run?.errorCode
+  if (!reason) return null
+  const key = RUN_STOP_REASON_KEYS[String(reason)]
+  return { tone: RUN_STOP_TONE[String(reason)] ?? 'outline',
+    label: key ? pt(t, key) : pt(t, 'runStop.other', { reason: String(reason) }) }
 }
 
 /** Old public seam: status string → tag tone. Kept because pages may still import it. */
@@ -409,20 +563,28 @@ function problemsOf(data) {
   }
   if (config.enabled === false) {
     out.push({ key: 'engine-off', severity: 'warning', title: liveText('自动触发未开启', 'Automatic intake is off'),
-      detail: liveText('改 ~/.dsh/superagent/live.json 并重载配置后，引擎才会自动轮询群消息。',
-        'Enable it in ~/.dsh/superagent/live.json and reload the config to poll the group automatically.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→来源打开「启用引擎」并保存后，引擎才会自动轮询群消息。',
+        'Turn on “Engine enabled” under Settings → Source and save; the engine then polls the groups automatically.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
   }
   if (config.octo && config.octo.tokenConfigured === false) {
     out.push({ key: 'octo-token', severity: 'warning', title: liveText('Octo token 未配置', 'Octo token is missing'),
-      detail: liveText('没有 Octo token，引擎读不到群消息。', 'Without an Octo token the engine cannot read the group.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→来源保存 Octo token 后，引擎才能读取群消息。',
+        'Save the Octo token under Settings → Source so the engine can read group messages.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
+  }
+  if (config.octo && config.octo.allowAnyHuman !== true
+    && !(Array.isArray(config.octo.allowSenderIds) && config.octo.allowSenderIds.length > 0)) {
+    out.push({ key: 'octo-senders', severity: 'warning', title: liveText('没有允许的触发人', 'No allowed sender'),
+      detail: liveText('在设置→来源开启「允许任意人类」或添加发送者；否则真实轮询会被引擎拒绝。',
+        'Turn on “accept any human” or add allowed senders under Settings → Source; otherwise a live poll is refused.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
   }
   if (config.gitlab && config.gitlab.tokenConfigured === false) {
     out.push({ key: 'gitlab-token', severity: 'warning', title: liveText('GitLab token 未配置', 'GitLab token is missing'),
-      detail: liveText('没有 GitLab token 时无法观测 CI 与部署，只能做无 token 的核对。',
-        'Without a GitLab token CI and deploy results cannot be observed; only token-free verification runs.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→仓库为对应仓库保存 GitLab token 后，才能观测 CI 与部署。',
+        'Save a GitLab token for the repository under Settings → Repositories to observe CI and deployment.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'repos' } } })
   }
   const sources = Array.isArray(data.sources) ? data.sources : []
   for (const source of sources) {
@@ -458,6 +620,10 @@ function primaryActionOf(ticket, view) {
     case 'openMr': return external ? { labelKey: 'primary.openMr', kind: 'external', href: external } : { labelKey: 'primary.openMr', kind: 'detail' }
     case 'deploy': return { labelKey: 'primary.deploy', kind: 'refreshCi' }
     case 'diagnose': return { labelKey: 'primary.diagnose', kind: 'detail' }
+    // A parked gate needs the three-way human decision that only the detail can state; the row opens it. A parked
+    // question is the same contract: the answer form lives in the detail banner.
+    case 'gate': return { labelKey: 'primary.gate', kind: 'detail' }
+    case 'answer': return { labelKey: 'primary.answer', kind: 'detail' }
     case 'progress': return { labelKey: 'primary.progress', kind: 'dryRun' }
     default: return null
   }
@@ -485,28 +651,32 @@ function failureLabel(t, error) {
 }
 
 /**
- * The one piece of physical evidence the execution ledger shows on the right: the MR that shipped it, the Chinese
- * cause of a failed run, the wait a person owns, or the current run's age. Deliberately never repeats a status that a
- * Tag already states (state/result stay in the meta line), and it stays empty for Tickets that have no evidence yet.
+ * The one piece of physical evidence the execution ledger shows on the right: the gate that parked the run, the MR that
+ * shipped it, the Chinese cause of a failed run, or the current run's age — exactly one of those, never a status or a
+ * result a chip already states (P0 §3.6.4: state + acceptance/result + time are the row's whole information budget).
  */
 function ticketEvidence(t, ticket, view) {
-  const links = ticket.links ?? {}
-  const assignments = Array.isArray(ticket.assignments) ? ticket.assignments : []
+  const links = ticket?.links ?? {}
+  const assignments = Array.isArray(ticket?.assignments) ? ticket.assignments : []
+  // A parked gate: the gate's name is the evidence a person needs; the state and the wait are on the chips.
+  if (ticket?.status === 'gate-blocked') {
+    const name = ticket.pendingGate?.name
+    return name ? pt(t, 'row.evidenceGate', { name }) : pt(t, 'row.evidenceGateWait')
+  }
   const failed = [...assignments].reverse().find(assignment => assignment?.report?.state === 'failed')
+  const recovered = view?.group === 'done' || ['merged', 'deployed'].includes(ticket?.status)
+  if (failed && !recovered) {
+    const raw = String(failed.report?.text ?? '')
+    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
+  }
   const mr = links.mergeRequest ?? {}
-  const delivered = ['merged', 'deployed'].includes(ticket.status) || links.acceptance?.ok === true
-  if (mr.iid && (!failed || delivered)) {
+  if (mr.iid) {
     const label = pt(t, 'row.evidenceMr', { iid: mr.iid })
     return mr.webUrl
       ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
         title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
-  if (failed) {
-    const raw = String(failed.report?.text ?? '')
-    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
-  }
-  if (view?.group === 'waiting') return pt(t, ticket.status === 'deployed' ? 'row.evidenceReview' : 'row.evidenceMerge')
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
     const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
@@ -602,9 +772,21 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const failedBeforeDismiss = view.key === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed')
   if (failedBeforeDismiss) chips.push(h(Tag, { key: 'dismissed-after-failure', tone: 'warning' }, pt(t, 'dismissedAfterFailure')))
+  // P1-5: a run interrupted by a plugin reload / host restart is resumable — the row says so before the phase label
+  // (which still reads "排队中" after reconcile) can be mistaken for a healthy queue entry.
+  const interrupted = ticketRunInterrupted(ticket, data?.runs)
+  if (interrupted) chips.push(h(Tag, { key: 'interrupted', tone: 'warning' }, pt(t, 'row.interrupted')))
+  // The middle slot is the person's sign-off when the Ticket has one, otherwise the one result worth a second tag
+  // (P0 §3.6.4: 状态 + 验收/结果, never both). Time is the third chip and only where the row has room; the overview
+  // (compact) keeps exactly two. The repository name stays a plain hint, outside the tag budget.
+  const acceptanceChip = rowAcceptanceChip(t, view)
+  // P2-1: a self-running Ticket says so in the middle slot (state + automation/result + time stays within the budget).
+  const scheduleChip = automationChip(t, ticket)
+  if (acceptanceChip) chips.push(acceptanceChip)
+  else if (scheduleChip) chips.push(scheduleChip)
+  else if (result) chips.push(h(Tag, { key: 'result', tone: result.tone }, pt(t, result.labelKey)))
+  if (!compact && !interrupted) chips.push(h(When, { key: 'at', at: ticket.updatedAt ?? ticket.createdAt }))
   if (showRepo) chips.push(h('span', { key: 'repo', className: 'sa-hint' }, String(repoName)))
-  chips.push(h(When, { key: 'at', at: ticket.updatedAt ?? ticket.createdAt }))
-  if (result && !compact) chips.push(h(Tag, { key: 'result', tone: result.tone }, pt(t, result.labelKey)))
   if (extra) chips.push(h('span', { key: 'extra', className: 'sa-hint' }, extra))
 
   // The row itself is a plain div (mouse convenience); the title is a real <button> so keyboard users get one focus
@@ -649,7 +831,9 @@ function TicketList({ tickets, page = 'execution', actions, reload }) {
     h(TicketRow, { key: ticket.id, ticket, page, actions, reload })))
 }
 
-const TICKET_GROUP_ORDER = ['queued', 'working', 'waiting', 'failed', 'done']
+// Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
+// the settled history. The same order drives the execution stage filter (55-execution EXEC_STAGES).
+const TICKET_GROUP_ORDER = ['waiting', 'failed', 'working', 'queued', 'done']
 
 /** Execution tab: one Section per non-empty stage group, stage order fixed. `groupNotes` adds a one-line summary
     (e.g. the done group's accepted/dismissed/retried split) as the section badge; `className` wraps the groups so a
@@ -882,8 +1066,21 @@ function MergeRequestCard({ ticket }) {
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
+  // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
+  const draft = mr.draft === true || mr.workInProgress === true
+  const stale = pipeline.stale && typeof pipeline.stale === 'object' ? pipeline.stale : undefined
+  const badges = [
+    draft ? h(Tag, { key: 'draft', tone: 'warning' }, pt(t, 'mr.draft')) : null,
+    stale ? h(Tag, { key: 'stale', tone: 'warning' }, pt(t, 'mr.stale')) : null,
+  ].filter(Boolean)
   return h('div', { className: 'sa-card' },
     h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'ticket.mrCard'))),
+    badges.length ? h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } }, badges) : null,
+    draft ? h(Folded, { summary: pt(t, 'mr.draft') }, h('p', { className: 'sa-hint' }, pt(t, 'mr.draftHint'))) : null,
+    stale
+      ? h(Folded, { summary: pt(t, 'mr.stale') }, h('p', { className: 'sa-hint' },
+        pt(t, 'mr.staleHint', { head: liveShortId(stale.headSha, 8) || '—', latest: liveShortId(stale.latestSha, 8) || '—' })))
+      : null,
     mr.iid || pipeline.status || autoMerge.state
       ? h(KeyValues, { rows })
       : h(Hint, null, liveText('还没有合并请求。', 'No merge request yet.')))

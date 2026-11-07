@@ -32,7 +32,7 @@ function globalHealth(data) {
 
 /** `运行中 · 需要你处理 2 件 · 数据更新于 12:31`; the only "data updated" line in the panel (title = full time). */
 function GlobalStatus() {
-  const { t } = usePanel()
+  const { t, navigate } = usePanel()
   const { data, error, reload, updatedAt } = usePanelData()
   if (!data) {
     return h('div', { className: 'sa-global-status', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)',
@@ -42,8 +42,10 @@ function GlobalStatus() {
       error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
   }
   const health = globalHealth(data)
-  const pending = needsYouCount(data)
+  // P0: the header count follows the derived inbox when the host exposes it; older hosts keep the status-derived count.
+  const pending = data.inbox ? Number(data.inbox.blocking ?? 0) : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
+  const setup = setupStateOf(data)
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
   const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
@@ -59,6 +61,12 @@ function GlobalStatus() {
     active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
+    setup.done < setup.total
+      ? h(Fragment, null,
+        h('span', { 'aria-hidden': 'true' }, '·'),
+        h('button', { type: 'button', className: 'sa-setup-chip', onClick: () => navigate({ page: 'overview' }) },
+          pt(t, 'shell.setupChip', { done: setup.done, total: setup.total })))
+      : null,
     error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
 }
 
