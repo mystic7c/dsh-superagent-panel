@@ -5,8 +5,8 @@
    no request of its own. */
 
 Object.assign(PAGE_TEXT, {
-  'src.summary': ['启用中 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
-  'src.summaryNoSync': ['启用中 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
+  'src.summary': ['已启用 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
+  'src.summaryNoSync': ['已启用 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
   'src.state.ready': ['正常', 'Ready'],
   'src.state.error': ['异常', 'Error'],
   'src.state.idle': ['空闲', 'Idle'],
@@ -318,7 +318,9 @@ function LiveSourcePage() {
     const repoName = repo?.name ?? source.repoId
     const notes = []
     if (!source.enabled) notes.push(pt(t, 'src.disabled'))
-    if (source.detail) notes.push(String(source.detail))
+    // For an off Octo source the host detail says the same thing as the line above; repositories keep their own
+    // executor/token detail because it adds a different fact.
+    if (source.detail && !(!source.enabled && isOctoSource(source))) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
     return h('div', { key: source.id, className: 'sa-card' },
@@ -345,7 +347,8 @@ function LiveSourcePage() {
 
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h('p', { className: 'sa-hint', role: 'status' }, summary),
+    h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
+      meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },

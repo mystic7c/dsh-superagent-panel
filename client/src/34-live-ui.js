@@ -217,13 +217,31 @@ Object.assign(PAGE_TEXT, {
   funnelBranch: ['其中 {count} 条仅作上下文', '{count} context-only'],
   funnelSummary2: ['{received} 到达 · {judged} 评估 · {accepted} 接单 · {dropped} 出站失败',
     '{received} arrived · {judged} evaluated · {accepted} accepted · {dropped} not sent'],
+  automation: {
+    offTitle: ['自动化未启动', 'Automation is off'],
+    pausedTitle: ['处理已暂停', 'Processing is paused'],
+    paused: ['处理已暂停', 'Paused'],
+    engineOff: ['引擎未启用', 'Intake off'],
+    executorOff: ['执行器未启用', 'Executor off'],
+    start: ['启动自动化', 'Start automation'],
+    resume: ['恢复处理', 'Resume processing'],
+    startHint: ['启动后会按轮询间隔读取群消息，新工单会开始执行。',
+      'Starting reads groups on the poll interval and lets new Tickets run.'],
+    resumeHint: ['恢复后会继续评估、派工与回复。', 'Resuming continues Eval, dispatch and replies.'],
+    startTitle: ['启动自动化？', 'Start automation?'],
+    resumeTitle: ['恢复处理？', 'Resume processing?'],
+    startMessage: ['将恢复处理、启用引擎并启用执行器。启用后群消息会按轮询间隔读取，新工单会开始执行。',
+      'This resumes processing, enables intake and turns the executor on; group messages will be read on the interval and new Tickets will run.'],
+    resumeMessage: ['将恢复处理：继续评估、派工与回复。', 'This resumes processing: Eval, dispatch and replies continue.'],
+    started: ['自动化已启动。', 'Automation started.'],
+  },
   toast: {
     verifyOk: ['核对完成：UAT 可访问，构建已更新。', 'Checked: UAT reachable, new build detected.'],
     verifyDown: ['核对完成：UAT 当前不可访问，详见工单详情。', 'Checked: UAT is not reachable right now; see the Ticket detail.'],
     ciDone: ['CI 已刷新：{status}', 'CI refreshed: {status}'],
     ciNoToken: ['没有 GitLab token，无法观测 CI。', 'No GitLab token, CI cannot be observed.'],
     dryDone: ['干跑完成。', 'Dry run finished.'],
-    publishDone: ['已发布 MR !{iid}', 'Published MR !{iid}'],
+    publishDone: ['已发布 MR #{iid}', 'Published MR #{iid}'],
     publishPushed: ['已推送分支。', 'Branch pushed.'],
     pollDone: ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）', 'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
     pauseDone: ['已暂停处理。', 'Processing paused.'],
@@ -235,7 +253,7 @@ Object.assign(PAGE_TEXT, {
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
   'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
-  'runTrigger', 'runStop']
+  'runTrigger', 'runStop', 'automation']
 for (const group of TEXT_GROUPS) {
   const nested = PAGE_TEXT[group]
   if (!nested || Array.isArray(nested)) continue
@@ -479,6 +497,37 @@ function TicketStatusTag({ ticket }) {
   const view = ticketStatus(ticket)
   const unknown = view.key === 'unknown' && ticket?.status ? `（${ticket.status}）` : ''
   return h(Tag, { tone: view.tone }, pt(t, view.labelKey) + unknown)
+}
+
+/**
+ * One automation state line for three switches that are one story: processing paused, intake enabled,
+ * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
+ * instead of repeating the same warning in four places.
+ */
+function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false }) {
+  const { t } = usePanel()
+  const onlyPaused = paused && engineEnabled && executorEnabled
+  const facts = []
+  if (paused) facts.push(pt(t, 'automation.paused'))
+  if (!engineEnabled) facts.push(pt(t, 'automation.engineOff'))
+  if (!executorEnabled) facts.push(pt(t, 'automation.executorOff'))
+  const title = onlyPaused ? pt(t, 'automation.pausedTitle') : pt(t, 'automation.offTitle')
+  const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
+  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title },
+    h(StatusIcon, { state: 'warning', size: 16 }),
+    h('div', { className: 'sa-automation-main' },
+      h('span', { className: 'sa-automation-title' }, title),
+      h('span', { className: 'sa-automation-facts' }, facts.join(' · ')),
+      h('span', { className: 'sa-hint' }, hint)),
+    h('div', { className: 'sa-automation-actions' },
+      onCheck ? h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+        disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
+      h(ConfirmButton, {
+        label: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
+        title: onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle'),
+        message: onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage'),
+        variant: 'primary', icon: 'play', onConfirm: onStart,
+      })))
 }
 
 /** The one result worth a second tag in a row. */
@@ -772,6 +821,11 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const failedBeforeDismiss = view.key === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed')
   if (failedBeforeDismiss) chips.push(h(Tag, { key: 'dismissed-after-failure', tone: 'warning' }, pt(t, 'dismissedAfterFailure')))
+  // The left rail is the fast scan line; a done-but-accepted Ticket and a dismissed-after-failure Ticket must not
+  // both read as the same hollow "idle" dot. Keep the phase keys/tags, only make the shape honest.
+  const rowIconState = view.acceptance?.state === 'accepted' ? 'done'
+    : view.acceptance?.state === 'rejected' || failedBeforeDismiss ? 'warning'
+      : view.state
   // P1-5: a run interrupted by a plugin reload / host restart is resumable — the row says so before the phase label
   // (which still reads "排队中" after reconcile) can be mistaken for a healthy queue entry.
   const interrupted = ticketRunInterrupted(ticket, data?.runs)
@@ -795,7 +849,7 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const evidence = ticketEvidence(t, ticket, view)
   return h('li', null,
     h('div', { className: 'sa-row sa-row-openable', onClick: open },
-      h(StatusIcon, { state: view.state, size: 16 }),
+      h(StatusIcon, { state: rowIconState, size: 16 }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h('button', { type: 'button', className: 'sa-row-open',
@@ -943,9 +997,8 @@ function FunnelBar({ flow }) {
         h('span', { className: 'sa-funnel-label' }, pt(t, step.labelKey))),
     ]),
       contextOnly > 0 ? h('span', { className: 'sa-funnel-branch' }, pt(t, 'funnelBranch', { count: contextOnly })) : null),
-    // The conclusion the three numbers cannot state by themselves (critique #13/#O2).
-    h('p', { className: 'sa-funnel-summary' },
-      pt(t, 'funnelSummary2', { received, judged, accepted, dropped })))
+    // The three numbers are already on screen; only the outbound failure count is new information here.
+    dropped > 0 ? h('p', { className: 'sa-funnel-summary' }, pt(t, 'funnelDropped', { count: dropped })) : null)
 }
 
 /** Executor load: composition of running/queued/waiting/failed. No fake denominator without maxWorkers. */

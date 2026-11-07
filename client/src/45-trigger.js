@@ -169,7 +169,7 @@ function ThreadDetailView({ threadKey, showBack }) {
 }
 
 /** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. */
-function ThreadListRow({ row, selected, onOpen, octoConfig }) {
+function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
   return h('li', {
@@ -188,7 +188,9 @@ function ThreadListRow({ row, selected, onOpen, octoConfig }) {
         h(Icon, { name: THREAD_SOURCE_ICON[row.source] ?? 'message', size: 12 }),
         h('span', null, threadSourceLabel(t, row.source))),
       row.lastAt ? h(When, { at: row.lastAt }) : null,
-      h(StatusText, { state: view.state }, pt(t, view.labelKey)))))
+      h(StatusText, { state: view.state }, pt(t, view.labelKey)))),
+    compact ? h('span', { className: 'sa-row-chevron', 'aria-hidden': 'true' },
+      h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
 function LiveTriggerPage({ route }) {
@@ -232,8 +234,11 @@ function LiveTriggerPage({ route }) {
       h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
-        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row,
-          selected: row.key === selected, onOpen: () => openThread(row.key), octoConfig })))
+        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
+          // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
+          // with no visible detail would otherwise promise a state the screen is not showing.
+          selected: compact ? row.key === routeId : row.key === selected,
+          onOpen: () => openThread(row.key), octoConfig })))
         : h(Hint, null, pt(t, 'trg.noneInFilter'))))
   const detail = h('div', { className: 'sa-pane' },
     selected

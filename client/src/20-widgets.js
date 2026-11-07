@@ -201,7 +201,8 @@ function GlossaryButton() {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   return h(Fragment, null,
-    h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'), onClick: () => setOpen(true) }),
+    h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
+      variant: 'outline', onClick: () => setOpen(true) }),
     h(GlossaryModal, { open, onClose: () => setOpen(false) }))
 }
 
