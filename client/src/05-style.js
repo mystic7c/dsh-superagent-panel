@@ -86,6 +86,7 @@ const PANEL_CSS = `
 .sa-head-title { min-width: 0; display: flex; align-items: baseline; gap: var(--sa-sp-12); flex-wrap: wrap; }
 .sa-title { margin: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; color: var(--dsw-alias-label-primary); }
 .sa-head-actions, .sa-header-actions, .sa-head-tools { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-mobile-tools { display: none; }
 .sa-global-status { display: inline-flex; align-items: center; gap: var(--sa-sp-4); font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
 .sa-global-status .sa-status-icon { flex: none; }
@@ -327,6 +328,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   color: var(--dsw-alias-label-primary); }
 .sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-automation .sa-btn { flex: none; }
+.sa-automation[data-compact='true'] { padding: var(--sa-sp-8) var(--sa-sp-12); }
+.sa-automation[data-compact='true'] .sa-automation-main { gap: 1px; }
 .sa-automation-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
 @container (max-width: 760px) {
   .sa-automation { align-items: flex-start; }
@@ -363,14 +366,21 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-setup-chip:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
 @container (max-width: 760px) {
   .sa-setup-steps { grid-template-columns: minmax(0, 1fr); }
-  /* The detail nav stays one horizontally scrollable row; wrapping it to two lines stole ~13% of the phone viewport. */
-  .sa-detail-nav { flex-wrap: nowrap; overflow-x: auto; }
-  .sa-detail-context { display: none; }
-  .sa-detail-jumps { flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
-  .sa-detail-jump { white-space: nowrap; }
+  /* Keep the ticket context on a first row and the section links on a second, horizontally scrollable row; hiding the
+     context left a deep scroll with only links and no identity. */
+  .sa-detail-nav { flex-wrap: wrap; row-gap: var(--sa-sp-4); overflow: visible; }
+  .sa-detail-context { display: flex; flex: 1 1 100%; max-width: 100%; }
+  .sa-detail-jumps { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
+  .sa-detail-jump { white-space: nowrap; min-height: 32px; }
   .sa-detail-context-action { margin-left: 0; }
 }
-@container (max-width: 480px) { .sa-segmented-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 480px) {
+  /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */
+  .sa-settings-nav { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
+  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; }
+}
 
 /* ---------- cards ---------- */
 .sa-card-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
@@ -386,7 +396,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-source-groups { display: flex; flex-direction: column; gap: var(--sa-sp-16); min-width: 0; }
 .sa-cards-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-12);
   align-items: start; min-width: 0; }
-@media (max-width: 760px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 900px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .sa-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
@@ -685,7 +695,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* Two columns when the PANEL is wide enough, not when the viewport is: the DSH sidebar/right rail decide the usable
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
-  .sa-brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
+  .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
 }
 /* 过滤 is a branch of 到达, not a funnel stage: it hangs under the step row as a quiet annotation. */
@@ -733,11 +744,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
     border-bottom-color: var(--dsw-alias-brand-primary); }
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
-  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-12); }
-  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
-  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
-  .sa-toolbar-switch { margin-left: 0; }
-  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Keep label + control inline down to 560px; only phones turn the view controls into a full form. */
+  .sa-exec-toolbar { gap: var(--sa-sp-8) var(--sa-sp-12); }
+  .sa-toolbar-field .sa-segmented { width: 210px; max-width: 210px; }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
   .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
@@ -746,5 +755,19 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
   .sa-empty-action { margin-left: 0; }
+}
+@container (max-width: 560px) {
+  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
+  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
+  .sa-toolbar-field > .sa-hint { display: none; }
+  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
+  .sa-toolbar-switch { margin-left: 0; }
+  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 600px) {
+  .sa-head-tools > .sa-icon-btn { display: none; }
+  .sa-mobile-tools { display: inline-flex; }
+  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 36px; height: 36px; }
+  .sa-tabs .sa-tab { min-height: 40px; }
 }
 `

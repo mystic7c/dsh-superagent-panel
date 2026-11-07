@@ -504,7 +504,7 @@ function TicketStatusTag({ ticket }) {
  * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
  * instead of repeating the same warning in four places.
  */
-function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false }) {
+function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false, compact = false, progress }) {
   const { t } = usePanel()
   const onlyPaused = paused && engineEnabled && executorEnabled
   const facts = []
@@ -513,12 +513,16 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
   if (!executorEnabled) facts.push(pt(t, 'automation.executorOff'))
   const title = onlyPaused ? pt(t, 'automation.pausedTitle') : pt(t, 'automation.offTitle')
   const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
-  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title },
+  const progressText = progress && progress.done < progress.total
+    ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
+  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title,
+    'data-compact': compact ? 'true' : undefined },
     h(StatusIcon, { state: 'warning', size: 16 }),
     h('div', { className: 'sa-automation-main' },
       h('span', { className: 'sa-automation-title' }, title),
-      h('span', { className: 'sa-automation-facts' }, facts.join(' · ')),
-      h('span', { className: 'sa-hint' }, hint)),
+      h('span', { className: 'sa-automation-facts' }, facts.join(' · '),
+        progressText ? h(Fragment, null, ' · ', progressText) : null),
+      compact ? null : h('span', { className: 'sa-hint' }, hint)),
     h('div', { className: 'sa-automation-actions' },
       onCheck ? h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
         disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,

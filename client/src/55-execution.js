@@ -61,8 +61,8 @@ Object.assign(PAGE_TEXT, {
   'ex.stageWaiting': ['等待你', 'Waiting on you'],
   'ex.stageFailed': ['失败工单', 'Failed Tickets'],
   'ex.stageDone': ['已结束', 'Ended'],
-  'ex.doneSummary': ['共 {total} 张 · {accepted} 已验收 · {dismissed} 已忽略，其中 {retried} 张重试后完成',
-    '{total} total · {accepted} accepted · {dismissed} dismissed, {retried} of them completed after a retry'],
+  'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
+    '{total} Tickets: {accepted} accepted, {dismissed} dismissed; {retried} completed after a failed-run retry'],
   'ex.doneShowAll': ['查看全部（{count}）', 'Show all ({count})'],
   'ex.doneCollapse': ['收起', 'Collapse'],
   'ex.stageEmptyTitle': ['这个阶段还没有工单。', 'No Tickets in this stage yet.'],
@@ -121,6 +121,8 @@ function ExecutionQueuePage() {
   const automationReady = Boolean(status?.config?.octo?.tokenConfigured
     && (status?.config?.octo?.watchChatIds ?? []).length > 0
     && (status?.config?.repos ?? []).length > 0)
+  const barShown = Boolean(status) && automationNeeded && automationReady
+  const setup = status ? setupStateOf(status) : undefined
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
   const poll = useAction(() => model.actions.poll(), { reload: reloadBoth })
   const startAutomation = useAction(async () => {
@@ -253,10 +255,10 @@ function ExecutionQueuePage() {
   return h(Fragment, null,
     automationNeeded && automationReady
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
       : null,
     h(Section, { title: pt(t, 'ex.executor'),
-      badge: paused ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
+      badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
       action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
         h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
@@ -279,7 +281,7 @@ function ExecutionQueuePage() {
           h('a', { href: '#', className: 'sa-inline-link',
             onClick: event => { event.preventDefault(); navigate({ page: 'overview' }) } },
             pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
-      status.config?.executor?.enabled === false ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
+      status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
           pt(t, 'ex.createTicket')),

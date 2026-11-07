@@ -13,6 +13,7 @@ Object.assign(PAGE_TEXT, {
   'search.triggers': ['消息', 'Messages'],
   'search.showCount': ['{count} 条', '{count}'],
   'actions.search': ['搜索', 'Search'],
+  'actions.more': ['更多操作', 'More actions'],
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
@@ -159,22 +160,34 @@ function GlobalSearch({ open, onClose }) {
 function Header({ onOpenSearch }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
+  const [glossaryOpen, setGlossaryOpen] = useState(false)
   const poll = useAction(async () => {
     const result = await model.actions.poll({ dryRun: true })
     notify(pt(t, 'toast.pollDone', { accepted: result?.accepted?.length ?? 0, ignored: result?.ignored?.length ?? 0 }))
   }, { reload: model.reload })
-  return h('header', { className: 'sa-head' },
-    h('div', { className: 'sa-head-title' },
-      h('h1', { className: 'sa-title' }, t('title'))),
-    h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-      h(GlobalStatus, null),
-      h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
-        title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
-      h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
-        title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
-      h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
-        title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
-      h(GlossaryButton, null)))
+  return h(Fragment, null,
+    h('header', { className: 'sa-head' },
+      h('div', { className: 'sa-head-title' },
+        h('h1', { className: 'sa-title' }, t('title'))),
+      h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+        h(GlobalStatus, null),
+        h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
+          title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
+        h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
+          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
+        h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
+          title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
+        h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
+          variant: 'outline', onClick: () => setGlossaryOpen(true) }),
+        // Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable.
+        h('div', { className: 'sa-mobile-tools' },
+          h(Menu, { label: pt(t, 'actions.more'), iconName: 'more', items: [
+            { key: 'search', label: pt(t, 'actions.search'), onSelect: onOpenSearch },
+            { key: 'check', label: pt(t, 'actions.checkNow'), disabled: poll.busy, onSelect: () => { void poll.run() } },
+            { key: 'refresh', label: pt(t, 'actions.refreshStatus'), onSelect: () => { void model.reload() } },
+            { key: 'glossary', label: t('glossary'), onSelect: () => setGlossaryOpen(true) },
+          ] }))),
+    ), h(GlossaryModal, { open: glossaryOpen, onClose: () => setGlossaryOpen(false) }))
 }
 
 /** Route → the page component for that tab. Pages receive the route as a prop (detail id included). */

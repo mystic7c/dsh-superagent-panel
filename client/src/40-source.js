@@ -24,6 +24,7 @@ Object.assign(PAGE_TEXT, {
   'src.action.filtered': ['查看被过滤', 'See filtered'],
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
+  'src.checkNeedsToken': ['先保存 Octo token 才能检查新消息。', 'Save the Octo token before checking for messages.'],
   'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
@@ -223,6 +224,10 @@ function LiveSourcePage() {
   const [uatBusy, setUatBusy] = useState(false)
   const filteredRef = useRef(null)
   const poll = useAction(() => actions.poll({ dryRun: true }), { reload })
+  const startAutomation = useAction(async () => {
+    await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload })
   const checkUat = async () => {
     setUatBusy(true)
     try { setUat(await actions.checkUat()) }
@@ -254,6 +259,15 @@ function LiveSourcePage() {
 
   const sources = Array.isArray(data.sources) ? data.sources : []
   const octo = sources.find(source => source.id === 'octo')
+  const paused = data.paused === true || data.config?.paused === true || data.engine?.paused === true
+  const engineEnabled = data.config?.enabled === true
+  const executorEnabled = data.config?.executor?.enabled !== false
+  const automationNeeded = paused || !engineEnabled || !executorEnabled
+  const automationReady = Boolean(data.config?.octo?.tokenConfigured
+    && (data.config?.octo?.watchChatIds ?? []).length > 0
+    && (data.config?.repos ?? []).length > 0)
+  const showAutomationBar = automationNeeded && automationReady
+  const setup = setupStateOf(data)
   // No Source at all, or Octo has neither a watched chat nor a token: nothing can arrive, so teach instead of showing
   // two empty cards. The token flag lives on the status config (the source payload has no token field of its own).
   const octoUnconfigured = Boolean(octo) && (octo.config?.watchChatIds ?? []).length === 0
@@ -287,7 +301,10 @@ function LiveSourcePage() {
         // Unified action vocabulary (critique §3): 检查新消息 = dry-run poll, with the message icon and no
         // white primary fill, so it reads the same as the header action instead of a generic refresh button.
         h(Button, { key: 'poll', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-          disabled: poll.busy || !source.enabled, onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+          // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
+          disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
+          title: !source.enabled && data.config?.octo?.tokenConfigured !== true ? pt(t, 'src.checkNeedsToken') : undefined,
+          onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
           onClick: focusFiltered }, pt(t, 'src.action.filtered')),
       ]
@@ -317,10 +334,10 @@ function LiveSourcePage() {
     const repo = repoOf(source)
     const repoName = repo?.name ?? source.repoId
     const notes = []
-    if (!source.enabled) notes.push(pt(t, 'src.disabled'))
-    // For an off Octo source the host detail says the same thing as the line above; repositories keep their own
-    // executor/token detail because it adds a different fact.
-    if (source.detail && !(!source.enabled && isOctoSource(source))) notes.push(String(source.detail))
+    // When the page-level automation bar already says why everything is off, the cards only keep their state tag;
+    // otherwise each card explains its own off state.
+    if (!source.enabled && !showAutomationBar) notes.push(pt(t, 'src.disabled'))
+    if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
     return h('div', { key: source.id, className: 'sa-card' },
@@ -349,6 +366,10 @@ function LiveSourcePage() {
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
       meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
+    showAutomationBar
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
+      : null,
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },

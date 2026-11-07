@@ -209,6 +209,7 @@ const PANEL_CSS = `
 .sa-head-title { min-width: 0; display: flex; align-items: baseline; gap: var(--sa-sp-12); flex-wrap: wrap; }
 .sa-title { margin: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; color: var(--dsw-alias-label-primary); }
 .sa-head-actions, .sa-header-actions, .sa-head-tools { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-mobile-tools { display: none; }
 .sa-global-status { display: inline-flex; align-items: center; gap: var(--sa-sp-4); font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
 .sa-global-status .sa-status-icon { flex: none; }
@@ -450,6 +451,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   color: var(--dsw-alias-label-primary); }
 .sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-automation .sa-btn { flex: none; }
+.sa-automation[data-compact='true'] { padding: var(--sa-sp-8) var(--sa-sp-12); }
+.sa-automation[data-compact='true'] .sa-automation-main { gap: 1px; }
 .sa-automation-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
 @container (max-width: 760px) {
   .sa-automation { align-items: flex-start; }
@@ -486,14 +489,21 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-setup-chip:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
 @container (max-width: 760px) {
   .sa-setup-steps { grid-template-columns: minmax(0, 1fr); }
-  /* The detail nav stays one horizontally scrollable row; wrapping it to two lines stole ~13% of the phone viewport. */
-  .sa-detail-nav { flex-wrap: nowrap; overflow-x: auto; }
-  .sa-detail-context { display: none; }
-  .sa-detail-jumps { flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
-  .sa-detail-jump { white-space: nowrap; }
+  /* Keep the ticket context on a first row and the section links on a second, horizontally scrollable row; hiding the
+     context left a deep scroll with only links and no identity. */
+  .sa-detail-nav { flex-wrap: wrap; row-gap: var(--sa-sp-4); overflow: visible; }
+  .sa-detail-context { display: flex; flex: 1 1 100%; max-width: 100%; }
+  .sa-detail-jumps { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
+  .sa-detail-jump { white-space: nowrap; min-height: 32px; }
   .sa-detail-context-action { margin-left: 0; }
 }
-@container (max-width: 480px) { .sa-segmented-wide { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 480px) {
+  /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */
+  .sa-settings-nav { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
+  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; }
+}
 
 /* ---------- cards ---------- */
 .sa-card-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
@@ -509,7 +519,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-source-groups { display: flex; flex-direction: column; gap: var(--sa-sp-16); min-width: 0; }
 .sa-cards-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-12);
   align-items: start; min-width: 0; }
-@media (max-width: 760px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
+@container (max-width: 900px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .sa-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
@@ -808,7 +818,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* Two columns when the PANEL is wide enough, not when the viewport is: the DSH sidebar/right rail decide the usable
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
-  .sa-brief-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
+  .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
 }
 /* 过滤 is a branch of 到达, not a funnel stage: it hangs under the step row as a quiet annotation. */
@@ -856,11 +867,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
     border-bottom-color: var(--dsw-alias-brand-primary); }
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
-  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-12); }
-  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
-  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
-  .sa-toolbar-switch { margin-left: 0; }
-  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* Keep label + control inline down to 560px; only phones turn the view controls into a full form. */
+  .sa-exec-toolbar { gap: var(--sa-sp-8) var(--sa-sp-12); }
+  .sa-toolbar-field .sa-segmented { width: 210px; max-width: 210px; }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
   .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
@@ -869,6 +878,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
   .sa-empty-action { margin-left: 0; }
+}
+@container (max-width: 560px) {
+  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
+  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
+  .sa-toolbar-field > .sa-hint { display: none; }
+  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
+  .sa-toolbar-switch { margin-left: 0; }
+  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (max-width: 600px) {
+  .sa-head-tools > .sa-icon-btn { display: none; }
+  .sa-mobile-tools { display: inline-flex; }
+  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 36px; height: 36px; }
+  .sa-tabs .sa-tab { min-height: 40px; }
 }
 `
 
@@ -2289,6 +2312,7 @@ Object.assign(PAGE_TEXT, {
   'search.triggers': ['消息', 'Messages'],
   'search.showCount': ['{count} 条', '{count}'],
   'actions.search': ['搜索', 'Search'],
+  'actions.more': ['更多操作', 'More actions'],
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
@@ -2435,22 +2459,34 @@ function GlobalSearch({ open, onClose }) {
 function Header({ onOpenSearch }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
+  const [glossaryOpen, setGlossaryOpen] = useState(false)
   const poll = useAction(async () => {
     const result = await model.actions.poll({ dryRun: true })
     notify(pt(t, 'toast.pollDone', { accepted: result?.accepted?.length ?? 0, ignored: result?.ignored?.length ?? 0 }))
   }, { reload: model.reload })
-  return h('header', { className: 'sa-head' },
-    h('div', { className: 'sa-head-title' },
-      h('h1', { className: 'sa-title' }, t('title'))),
-    h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-      h(GlobalStatus, null),
-      h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
-        title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
-      h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
-        title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
-      h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
-        title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
-      h(GlossaryButton, null)))
+  return h(Fragment, null,
+    h('header', { className: 'sa-head' },
+      h('div', { className: 'sa-head-title' },
+        h('h1', { className: 'sa-title' }, t('title'))),
+      h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+        h(GlobalStatus, null),
+        h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
+          title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
+        h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
+          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
+        h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
+          title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
+        h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
+          variant: 'outline', onClick: () => setGlossaryOpen(true) }),
+        // Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable.
+        h('div', { className: 'sa-mobile-tools' },
+          h(Menu, { label: pt(t, 'actions.more'), iconName: 'more', items: [
+            { key: 'search', label: pt(t, 'actions.search'), onSelect: onOpenSearch },
+            { key: 'check', label: pt(t, 'actions.checkNow'), disabled: poll.busy, onSelect: () => { void poll.run() } },
+            { key: 'refresh', label: pt(t, 'actions.refreshStatus'), onSelect: () => { void model.reload() } },
+            { key: 'glossary', label: t('glossary'), onSelect: () => setGlossaryOpen(true) },
+          ] }))),
+    ), h(GlossaryModal, { open: glossaryOpen, onClose: () => setGlossaryOpen(false) }))
 }
 
 /** Route → the page component for that tab. Pages receive the route as a prop (detail id included). */
@@ -3269,7 +3305,7 @@ function TicketStatusTag({ ticket }) {
  * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
  * instead of repeating the same warning in four places.
  */
-function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false }) {
+function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false, compact = false, progress }) {
   const { t } = usePanel()
   const onlyPaused = paused && engineEnabled && executorEnabled
   const facts = []
@@ -3278,12 +3314,16 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
   if (!executorEnabled) facts.push(pt(t, 'automation.executorOff'))
   const title = onlyPaused ? pt(t, 'automation.pausedTitle') : pt(t, 'automation.offTitle')
   const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
-  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title },
+  const progressText = progress && progress.done < progress.total
+    ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
+  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title,
+    'data-compact': compact ? 'true' : undefined },
     h(StatusIcon, { state: 'warning', size: 16 }),
     h('div', { className: 'sa-automation-main' },
       h('span', { className: 'sa-automation-title' }, title),
-      h('span', { className: 'sa-automation-facts' }, facts.join(' · ')),
-      h('span', { className: 'sa-hint' }, hint)),
+      h('span', { className: 'sa-automation-facts' }, facts.join(' · '),
+        progressText ? h(Fragment, null, ' · ', progressText) : null),
+      compact ? null : h('span', { className: 'sa-hint' }, hint)),
     h('div', { className: 'sa-automation-actions' },
       onCheck ? h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
         disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
@@ -4511,7 +4551,7 @@ function LiveOverviewPage({ route }) {
     // paused banner and the setup card (which otherwise repeated the same engine step in two places).
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, progress: setup })
       : paused ? h('div', { className: 'sa-banner',
         style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(StatusIcon, { state: 'warning', size: 14 }),
@@ -4563,10 +4603,10 @@ function LiveOverviewPage({ route }) {
               ? h('div', { className: 'sa-ledger' }, ruleLedger.rows.map(row =>
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
                   pt(t, 'ov.ruleValue', { name: row.name, blocked: row.blocked, hits: row.hits }))))
-              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty'))))),
+              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty')))),
 
         // P2-9: run quality sits directly under the 24h funnel it summarises; hidden when metrics are unavailable.
-        qualitySection,
+        qualitySection),
 
       h('div', { className: 'sa-brief-col' },
         // Pulse: every fact is a rollup. The in-flight row deliberately says one sentence, never a TicketRow.
@@ -4620,6 +4660,7 @@ Object.assign(PAGE_TEXT, {
   'src.action.filtered': ['查看被过滤', 'See filtered'],
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
+  'src.checkNeedsToken': ['先保存 Octo token 才能检查新消息。', 'Save the Octo token before checking for messages.'],
   'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
@@ -4819,6 +4860,10 @@ function LiveSourcePage() {
   const [uatBusy, setUatBusy] = useState(false)
   const filteredRef = useRef(null)
   const poll = useAction(() => actions.poll({ dryRun: true }), { reload })
+  const startAutomation = useAction(async () => {
+    await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
+    notify(pt(t, 'automation.started'))
+  }, { reload })
   const checkUat = async () => {
     setUatBusy(true)
     try { setUat(await actions.checkUat()) }
@@ -4850,6 +4895,15 @@ function LiveSourcePage() {
 
   const sources = Array.isArray(data.sources) ? data.sources : []
   const octo = sources.find(source => source.id === 'octo')
+  const paused = data.paused === true || data.config?.paused === true || data.engine?.paused === true
+  const engineEnabled = data.config?.enabled === true
+  const executorEnabled = data.config?.executor?.enabled !== false
+  const automationNeeded = paused || !engineEnabled || !executorEnabled
+  const automationReady = Boolean(data.config?.octo?.tokenConfigured
+    && (data.config?.octo?.watchChatIds ?? []).length > 0
+    && (data.config?.repos ?? []).length > 0)
+  const showAutomationBar = automationNeeded && automationReady
+  const setup = setupStateOf(data)
   // No Source at all, or Octo has neither a watched chat nor a token: nothing can arrive, so teach instead of showing
   // two empty cards. The token flag lives on the status config (the source payload has no token field of its own).
   const octoUnconfigured = Boolean(octo) && (octo.config?.watchChatIds ?? []).length === 0
@@ -4883,7 +4937,10 @@ function LiveSourcePage() {
         // Unified action vocabulary (critique §3): 检查新消息 = dry-run poll, with the message icon and no
         // white primary fill, so it reads the same as the header action instead of a generic refresh button.
         h(Button, { key: 'poll', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-          disabled: poll.busy || !source.enabled, onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+          // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
+          disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
+          title: !source.enabled && data.config?.octo?.tokenConfigured !== true ? pt(t, 'src.checkNeedsToken') : undefined,
+          onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
           onClick: focusFiltered }, pt(t, 'src.action.filtered')),
       ]
@@ -4913,10 +4970,10 @@ function LiveSourcePage() {
     const repo = repoOf(source)
     const repoName = repo?.name ?? source.repoId
     const notes = []
-    if (!source.enabled) notes.push(pt(t, 'src.disabled'))
-    // For an off Octo source the host detail says the same thing as the line above; repositories keep their own
-    // executor/token detail because it adds a different fact.
-    if (source.detail && !(!source.enabled && isOctoSource(source))) notes.push(String(source.detail))
+    // When the page-level automation bar already says why everything is off, the cards only keep their state tag;
+    // otherwise each card explains its own off state.
+    if (!source.enabled && !showAutomationBar) notes.push(pt(t, 'src.disabled'))
+    if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
     return h('div', { key: source.id, className: 'sa-card' },
@@ -4945,6 +5002,10 @@ function LiveSourcePage() {
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
       meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
+    showAutomationBar
+      ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
+      : null,
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
@@ -5768,8 +5829,8 @@ Object.assign(PAGE_TEXT, {
   'ex.stageWaiting': ['等待你', 'Waiting on you'],
   'ex.stageFailed': ['失败工单', 'Failed Tickets'],
   'ex.stageDone': ['已结束', 'Ended'],
-  'ex.doneSummary': ['共 {total} 张 · {accepted} 已验收 · {dismissed} 已忽略，其中 {retried} 张重试后完成',
-    '{total} total · {accepted} accepted · {dismissed} dismissed, {retried} of them completed after a retry'],
+  'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
+    '{total} Tickets: {accepted} accepted, {dismissed} dismissed; {retried} completed after a failed-run retry'],
   'ex.doneShowAll': ['查看全部（{count}）', 'Show all ({count})'],
   'ex.doneCollapse': ['收起', 'Collapse'],
   'ex.stageEmptyTitle': ['这个阶段还没有工单。', 'No Tickets in this stage yet.'],
@@ -5828,6 +5889,8 @@ function ExecutionQueuePage() {
   const automationReady = Boolean(status?.config?.octo?.tokenConfigured
     && (status?.config?.octo?.watchChatIds ?? []).length > 0
     && (status?.config?.repos ?? []).length > 0)
+  const barShown = Boolean(status) && automationNeeded && automationReady
+  const setup = status ? setupStateOf(status) : undefined
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
   const poll = useAction(() => model.actions.poll(), { reload: reloadBoth })
   const startAutomation = useAction(async () => {
@@ -5960,10 +6023,10 @@ function ExecutionQueuePage() {
   return h(Fragment, null,
     automationNeeded && automationReady
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
       : null,
     h(Section, { title: pt(t, 'ex.executor'),
-      badge: paused ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
+      badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
       action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
         h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
@@ -5986,7 +6049,7 @@ function ExecutionQueuePage() {
           h('a', { href: '#', className: 'sa-inline-link',
             onClick: event => { event.preventDefault(); navigate({ page: 'overview' }) } },
             pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
-      status.config?.executor?.enabled === false ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
+      status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
           pt(t, 'ex.createTicket')),
@@ -6806,6 +6869,9 @@ function AutomationCard({ ticket, onSaved }) {
  * Full ticket detail. `id` is the engine ticket id; `page` says which tab hosts it so a row click on another tab
  * keeps the same route page.
  */
+const DETAIL_JUMP_IDS = ['sa-ticket-changes', 'sa-acceptance', 'sa-ticket-stages', 'sa-ticket-gates',
+  'sa-ticket-runs', 'sa-ticket-activities', 'sa-ticket-timeline']
+
 function TicketDetail({ id, page = 'execution' }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
@@ -6893,6 +6959,21 @@ function TicketDetail({ id, page = 'execution' }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [back])
 
+  // Keep the section link row honest while the page scrolls; a click-only active state went stale after one scroll.
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return undefined
+    const root = document.querySelector('.sa-scroll')
+    if (!root) return undefined
+    const nodes = DETAIL_JUMP_IDS.map(jumpId => document.getElementById(jumpId)).filter(Boolean)
+    if (!nodes.length) return undefined
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
+      if (visible[0]) setActiveJump(visible[0].target.id)
+    }, { root, rootMargin: '-96px 0px -58% 0px', threshold: [0, 1] })
+    for (const node of nodes) observer.observe(node)
+    return () => observer.disconnect()
+  }, [id, data])
   if (!id) return h(EmptyState, { icon: 'inbox', title: pt(t, 'thread.noSelection'), hint: pt(t, 'thread.noSelectionHint') })
   // P0 §3.6.6: a missing Ticket (404) is an empty state — "找不到该工单" — not a broken connection with a retry that
   // can never succeed. Any other failure keeps the URL and offers a retry.
@@ -7412,6 +7493,9 @@ Object.assign(PAGE_TEXT, {
   'st.octoTokenSave': ['保存令牌', 'Save token'],
   'st.octoTokenSaved': ['Octo token 已保存', 'Octo token saved'],
   'st.octoTokenCleared': ['已清除 Octo token', 'Octo token cleared'],
+  'st.octoTokenClearTitle': ['清除 Octo token？', 'Clear the Octo token?'],
+  'st.octoTokenClearMessage': ['清除后引擎无法读取群消息，监听、评估与派工都会停止；需要重新粘贴 token 才能恢复。已合并的工单不受影响。',
+    'After clearing, the engine cannot read group messages; intake, Eval and dispatch stop until a token is pasted again. Already merged Tickets are not affected.'],
   'st.octoTokenEnv': ['环境变量', 'Env var'],
   'st.octoTokenEnvHint': ['当前使用 OCTO_TOKEN 环境变量；要改为本机保存，请移除该环境变量后再保存令牌。',
     'Using the OCTO_TOKEN environment variable; remove it before saving a local token file.'],
@@ -8288,8 +8372,9 @@ function LiveSettingsPage({ route }) {
               onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
             octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
             configured
-              ? h(Button, { variant: 'ghost', size: 'sm', disabled: octoTokenBusy,
-                onClick: () => { void saveOctoTokenFor('') } }, pt(t, 'repos.tokenClear'))
+              ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'st.octoTokenClearTitle'),
+                message: pt(t, 'st.octoTokenClearMessage'),
+                onConfirm: async () => { if (!octoTokenBusy) await saveOctoTokenFor('') } })
               : null),
           h(Hint, null, pt(t, 'st.octoTokenHint'))))
   }
