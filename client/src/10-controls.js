@@ -59,22 +59,6 @@ function Pill({ active, onClick, children, title }) {
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
 function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
-  const [more, setMore] = useState()
-  const measure = useCallback(() => {
-    const element = list.current
-    if (!element) return
-    const start = element.scrollLeft > 1
-    const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1
-    setMore(start && end ? 'both' : start ? 'start' : end ? 'end' : undefined)
-  }, [])
-  useEffect(() => {
-    measure()
-    if (!list.current || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(list.current)
-    for (const tab of list.current.children) observer.observe(tab)
-    return () => observer.disconnect()
-  }, [measure, items.length])
   const walk = (event) => {
     const index = items.findIndex(item => item.value === value)
     const steps = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: items.length - 1 }
@@ -87,8 +71,8 @@ function SegmentedTabs({ items, value, onChange, label, className }) {
     // (which is now tabindex=-1 and unselected).
     list.current?.querySelector(`button[data-value="${target.value}"]`)?.focus()
   }
-  return h('div', { ref: list, role: 'tablist', 'aria-label': label, className: cx('sa-tabs', className), 'data-more': more,
-    onScroll: measure, onKeyDown: walk }, items.map(item => h('button', { key: item.value, type: 'button', role: 'tab', id: item.id,
+  return h('div', { ref: list, role: 'tablist', 'aria-label': label, className: cx('sa-tabs', className),
+    onKeyDown: walk }, items.map(item => h('button', { key: item.value, type: 'button', role: 'tab', id: item.id,
       'aria-controls': item.panelId, 'aria-selected': item.value === value, 'data-value': String(item.value),
       tabIndex: item.value === value ? 0 : -1,
       title: item.title, 'aria-keyshortcuts': item.shortcut,

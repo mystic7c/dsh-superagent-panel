@@ -502,7 +502,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 @container (max-width: 480px) {
   /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */
   .sa-settings-nav { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
-  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; }
+  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; min-height: 40px; }
 }
 
 /* ---------- cards ---------- */
@@ -553,7 +553,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
-.sa-settings-body { min-width: 0; max-width: 680px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+.sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
 .sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
@@ -818,6 +818,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* Two columns when the PANEL is wide enough, not when the viewport is: the DSH sidebar/right rail decide the usable
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
+  /* Keep the settings rail and its form as one centered unit instead of leaving a 400px dead column on the right. */
+  .sa-settings { grid-template-columns: 140px minmax(0, 760px); justify-content: center; }
   /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
   .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
@@ -887,10 +889,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-toolbar-switch { margin-left: 0; }
   .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+@container (max-width: 480px) {
+  .sa-settings-nav .sa-settings-group { min-height: 40px; }
+}
 @container (max-width: 600px) {
   .sa-head-tools > .sa-icon-btn { display: none; }
   .sa-mobile-tools { display: inline-flex; }
-  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 36px; height: 36px; }
+  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 40px; height: 40px; }
   .sa-tabs .sa-tab { min-height: 40px; }
 }
 `
@@ -1613,22 +1618,6 @@ function Pill({ active, onClick, children, title }) {
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
 function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
-  const [more, setMore] = useState()
-  const measure = useCallback(() => {
-    const element = list.current
-    if (!element) return
-    const start = element.scrollLeft > 1
-    const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1
-    setMore(start && end ? 'both' : start ? 'start' : end ? 'end' : undefined)
-  }, [])
-  useEffect(() => {
-    measure()
-    if (!list.current || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(measure)
-    observer.observe(list.current)
-    for (const tab of list.current.children) observer.observe(tab)
-    return () => observer.disconnect()
-  }, [measure, items.length])
   const walk = (event) => {
     const index = items.findIndex(item => item.value === value)
     const steps = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: items.length - 1 }
@@ -1641,8 +1630,8 @@ function SegmentedTabs({ items, value, onChange, label, className }) {
     // (which is now tabindex=-1 and unselected).
     list.current?.querySelector(`button[data-value="${target.value}"]`)?.focus()
   }
-  return h('div', { ref: list, role: 'tablist', 'aria-label': label, className: cx('sa-tabs', className), 'data-more': more,
-    onScroll: measure, onKeyDown: walk }, items.map(item => h('button', { key: item.value, type: 'button', role: 'tab', id: item.id,
+  return h('div', { ref: list, role: 'tablist', 'aria-label': label, className: cx('sa-tabs', className),
+    onKeyDown: walk }, items.map(item => h('button', { key: item.value, type: 'button', role: 'tab', id: item.id,
       'aria-controls': item.panelId, 'aria-selected': item.value === value, 'data-value': String(item.value),
       tabIndex: item.value === value ? 0 : -1,
       title: item.title, 'aria-keyshortcuts': item.shortcut,
@@ -5000,8 +4989,7 @@ function LiveSourcePage() {
 
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
-      meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
+    h('p', { className: 'sa-hint', role: 'status' }, summary),
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
         onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })

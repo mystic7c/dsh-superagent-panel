@@ -364,8 +364,7 @@ function LiveSourcePage() {
 
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h(PageHead, { showBack: false, title: pt(t, 'tab.source'),
-      meta: h('p', { className: 'sa-hint', role: 'status' }, summary) }),
+    h('p', { className: 'sa-hint', role: 'status' }, summary),
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
         onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })

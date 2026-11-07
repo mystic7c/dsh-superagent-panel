@@ -379,7 +379,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 @container (max-width: 480px) {
   /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */
   .sa-settings-nav { flex-wrap: wrap; overflow-x: visible; row-gap: 0; }
-  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; }
+  .sa-settings-nav .sa-settings-group { flex: 0 1 auto; min-height: 40px; }
 }
 
 /* ---------- cards ---------- */
@@ -430,7 +430,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
-.sa-settings-body { min-width: 0; max-width: 680px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+.sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
 .sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
@@ -695,6 +695,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* Two columns when the PANEL is wide enough, not when the viewport is: the DSH sidebar/right rail decide the usable
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
+  /* Keep the settings rail and its form as one centered unit instead of leaving a 400px dead column on the right. */
+  .sa-settings { grid-template-columns: 140px minmax(0, 760px); justify-content: center; }
   /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
   .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
@@ -764,10 +766,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-toolbar-switch { margin-left: 0; }
   .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+@container (max-width: 480px) {
+  .sa-settings-nav .sa-settings-group { min-height: 40px; }
+}
 @container (max-width: 600px) {
   .sa-head-tools > .sa-icon-btn { display: none; }
   .sa-mobile-tools { display: inline-flex; }
-  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 36px; height: 36px; }
+  .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 40px; height: 40px; }
   .sa-tabs .sa-tab { min-height: 40px; }
 }
 `
