@@ -125,6 +125,15 @@ window.fetch = global.fetch = async (input, init = {}) => {
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
   if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
   if (method === 'GET' && p === 'engine/signals') return json({ items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
+  if (method === 'GET' && p === 'engine/metrics') return json({
+    window: '24h', generatedAt: new Date().toISOString(),
+    runs: { total: 1, succeeded: 1, failed: 0, stopped: 0, interrupted: 0, parked: 0, running: 1, repaired: 0, repairSucceeded: 0, repairExhausted: 0 },
+    duration: { avgMs: 120000, p50Ms: 120000, p95Ms: 120000, totalMs: 120000 }, triggers: { manual: 1 },
+    stopReasons: { done: 1 }, failureReasons: [], byRepo: [],
+    acceptance: { rounds: 0, delivered: 0, failed: 0, errored: 0, accepted: 0, rejected: 0, avgRoundsToAccept: 0 },
+    signals: { total: 0, processed: 0, ignored: 0, skipped: 0, failed: 0, labels: { correct: 0, false_wake: 0, missed_wake: 0, cleared: 0 } },
+    cost: { available: false, note: 'not available in this check' },
+  })
   const readItem = /^engine\/inbox\/([^/]+)\/read$/.exec(p)
   if (method === 'POST' && readItem) {
     const item = fixtures.inbox.items.find(candidate => candidate.id === decodeURIComponent(readItem[1]))

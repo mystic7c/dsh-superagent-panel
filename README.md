@@ -11,7 +11,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 
 | 页 | 内容 |
 |---|---|
-| 概览 | 值班摘要：**待办箱**（闸门/验收/失败/来源/引擎，可已读）→ 正在执行 → 系统问题 → 24 小时漏斗、策略规则与系统脉搏；首次使用时显示四步配置清单 |
+| 概览 | 值班摘要：**待办箱**（闸门/验收/失败/来源/引擎，可已读）→ 正在执行 → 系统问题 → 24 小时漏斗、**运行质量**（成功率/平均耗时/自动修复/Top 失败原因）、策略规则与系统脉搏；首次使用时显示四步配置清单 |
 | 来源 | Octo 消息源与每个仓库的执行面：24h 到达/过滤/接单、被过滤消息、**原始信号（含跳过/忽略/失败，可重放，可人工标注正确/误报/漏报）**、健康检查、检查新消息 |
 | 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细 |
 | 评估 | 决定列表（接单/忽略）与命中规则；只读 |
@@ -73,6 +73,7 @@ plugin_manager install_bundle target=<本仓库目录>
 GitLab 观察升级（MR headSha、只采用匹配 head 的 pipeline、不匹配写 `pipeline.stale` 不覆盖结论、draft/WIP 跳过、自动巡检 3 次/headSha 上限）、
 signal 人工标注（correct/false_wake/missed_wake/cleared + 来源页标注菜单与计数）；
 **P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry/publish 不自动修。设置→运行新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
+**P2 第三批**：`GET engine/metrics?window=24h|7d|all` 聚合运行质量（成功/失败/停止/中断/等待、时长 avg/p50/p95、触发方式、停止原因、Top 失败原因、按仓库、验收轮次/通过率、信号与标注）；概览「运行质量」卡片。token/成本数据宿主尚未提供（`cost.available=false`）。
 失败原因结构化（`run.stopReason/errorCode`）、worker 执行事件轨迹（`run.trace`，≤80 条）、
 闸门失败暂停并由人「放行/重试该闸门/终止」、插件重载把中断运行标为 `interrupted` 并可「继续执行」（checkpoint：gates/commit/push/MR 阶段复用 worktree）、
 待办箱（gate/accept/failure/source/engine，已读/已解决）、注意力成本排序与验收/阶段解耦；

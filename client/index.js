@@ -3935,6 +3935,18 @@ Object.assign(PAGE_TEXT, {
   // ---- actionable inbox (P0-5): the desk is the host's own blocking items, not a client-side status filter --------
   'ov.inboxGoTicket': ['去工单', 'Open Ticket'],
   'ov.inboxGoSource': ['去来源', 'Open Source'],
+
+  // ---- P2-9 run quality (GET engine/metrics) ---------------------------------------------------------------------
+  'ov.q.title': ['运行质量', 'Run quality'],
+  'ov.q.empty': ['过去 24 小时没有运行。', 'No runs in the last 24 hours.'],
+  'ov.q.kpi': ['运行 {runs} 次 · 成功率 {rate}% · 平均耗时 {avg}s · 自动修复 {repaired} 次',
+    '{runs} runs · {rate}% succeeded · {avg}s avg · {repaired} auto-repairs'],
+  'ov.q.failures': ['主要失败原因', 'Top failure causes'],
+  'ov.q.failureCount': ['{count} 次', '{count}×'],
+  'ov.q.triggers': ['触发：手动 {manual} · 自动 {auto} · 定时 {timed}',
+    'Triggers: {manual} manual · {auto} automatic · {timed} timed'],
+  'ov.q.acceptance': ['验收：{rounds} 轮 · 通过 {rate}%', 'Acceptance: {rounds} rounds · {rate}% passed'],
+  'ov.q.openExecution': ['去执行页', 'Open Execution'],
 })
 
 const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
@@ -4023,20 +4035,60 @@ function ovErrorLabel(t, error) {
   return ovClip(text, 64)
 }
 
+/**
+ * P2-9 run quality view model from `GET engine/metrics`: every field degrades to 0/[] so an older or partially filled
+ * payload cannot break the page. Returns undefined when the payload has no runs block at all (older hosts).
+ */
+function ovQualityOf(t, metrics) {
+  if (!metrics || typeof metrics !== 'object') return undefined
+  const runs = metrics.runs && typeof metrics.runs === 'object' ? metrics.runs : undefined
+  if (!runs) return undefined
+  const count = value => Math.max(0, Number(value) || 0)
+  const total = count(runs.total)
+  const succeeded = count(runs.succeeded)
+  const repaired = count(runs.repaired)
+  const duration = metrics.duration && typeof metrics.duration === 'object' ? metrics.duration : {}
+  const avgMs = count(duration.avgMs)
+  const rate = total > 0 ? Math.round((succeeded / total) * 100) : 0
+  const failures = (Array.isArray(metrics.failureReasons) ? metrics.failureReasons : [])
+    .filter(item => item && typeof item === 'object' && count(item.count) > 0)
+    .slice(0, 3)
+    .map(item => ({ reason: String(item.reason ?? ''), count: count(item.count) }))
+  const triggers = metrics.triggers && typeof metrics.triggers === 'object' ? metrics.triggers : {}
+  const manual = count(triggers.manual)
+  const automatic = count(triggers.auto)
+  const timed = count(triggers.heartbeat) + count(triggers.schedule)
+  const triggerText = manual + automatic + timed > 0
+    ? pt(t, 'ov.q.triggers', { manual, auto: automatic, timed }) : ''
+  const acceptance = metrics.acceptance && typeof metrics.acceptance === 'object' ? metrics.acceptance : {}
+  const rounds = count(acceptance.rounds)
+  const delivered = count(acceptance.delivered)
+  const failedRounds = count(acceptance.failed) + count(acceptance.errored)
+  const acceptanceRate = rounds > 0 ? Math.round((delivered / Math.max(1, delivered + failedRounds)) * 100) : 0
+  const acceptanceText = rounds > 0 ? pt(t, 'ov.q.acceptance', { rounds, rate: acceptanceRate }) : ''
+  return { total, rate, avgText: avgMs > 0 ? String(Math.round(avgMs / 100) / 10) : '0', repaired,
+    failures, triggerText, acceptanceText }
+}
+
 /** Drift the calm page owes the operator: failed runs, tickets dismissed after a failure, a failing Source, a stale poll. */
-function ovWatchItems(t, data, now) {
+function ovWatchItems(t, data, now, options = {}) {
   const out = []
   const runs = Array.isArray(data.runs) ? data.runs : []
   const failed = runs.filter(run => run.status === 'failed' && Date.parse(run.startedAt ?? '') >= now - OV_DAY_MS)
-  if (failed.length) {
+  // P2-9 fallback: the status poll only carries the last ten runs, so the host's own 24h counter is the floor when the
+  // metrics endpoint is unavailable. With metrics present the quality card is the authoritative reading.
+  const hostFailed = Number(data.runs24hFailed)
+  const failedCount = !options.metricsAvailable && Number.isFinite(hostFailed) && hostFailed > failed.length
+    ? Math.floor(hostFailed) : failed.length
+  if (failedCount > 0) {
     const causes = new Map()
     for (const run of failed) {
       const key = ovClip(run.error ?? '', 64) || pt(t, 'shell.unknown')
       causes.set(key, (causes.get(key) ?? 0) + 1)
     }
-    const [reason, count] = [...causes.entries()].sort((left, right) => right[1] - left[1])[0]
+    const [reason, count] = [...causes.entries()].sort((left, right) => right[1] - left[1])[0] ?? []
     out.push({ key: 'runs', state: 'error', page: 'execution',
-      title: pt(t, 'ov.watchRuns', { count: failed.length })
+      title: pt(t, 'ov.watchRuns', { count: failedCount })
         + (count > 1 ? pt(t, 'ov.watchSameCause', { count, reason: ovErrorLabel(t, reason) }) : '') })
   }
   const dismissed = (Array.isArray(data.tickets) ? data.tickets : []).filter(ticket => ticket.status === 'dismissed'
@@ -4093,6 +4145,9 @@ function LiveOverviewPage({ route }) {
   // P0 inbox (contract §3.6.5): the host derives the actionable items, the desk lists them verbatim. An older host
   // has no `inbox` field, so the resource stays disabled (no 404 polling) and every surface falls back to needsHuman.
   const inbox = useLiveResource('engine/inbox', {}, 30000, { enabled: Boolean(data?.inbox) })
+  // P2-9 run quality: the aggregate lives behind GET engine/metrics. Without data (older host or a failed fetch) the
+  // whole section stays hidden, and the existing 24h failure hint remains the fallback.
+  const metricsResource = useLiveResource('engine/metrics', { window: '24h' }, 30000, { enabled: Boolean(data) })
 
   // A ticket id on the overview route is a deep link: the full detail replaces the desk, as on every other tab.
   if (route?.id) return h(TicketDetail, { id: route.id, page: 'overview' })
@@ -4180,6 +4235,9 @@ function LiveOverviewPage({ route }) {
   const hasFlow = Boolean(flow) && ['received', 'filtered', 'judged', 'accepted', 'dropped']
     .some(name => Number(flow[name] ?? 0) > 0)
 
+  // P2-9: the run-quality view model; undefined hides the section (old host / no metrics payload).
+  const quality = ovQualityOf(t, metricsResource.data)
+
   // ---- system pulse: engine heartbeat, source ratio, executor load, lifetime selectivity, work in flight -------
   const pollSecondCount = Number(config.pollSeconds) || 10
   const lastPollMs = Date.parse(engine.lastPollAt ?? '')
@@ -4222,8 +4280,35 @@ function LiveOverviewPage({ route }) {
     ? { total: Number(data.rules24h.judged ?? 0), rows: data.rules24h.rules.map(rule => ({ name: rule.name,
       hits: Number(rule.hits ?? 0), blocked: Number(rule.blocked ?? 0) })) }
     : ovRuleHits(data.decisions, now)
-  const watch = ovWatchItems(t, data, now)
+  const watch = ovWatchItems(t, data, now, { metricsAvailable: Boolean(quality) })
   const since = lastSeen ? ovSince(t, data, lastSeen) : undefined
+
+  // P2-9 run quality card: KPI line, at most three failure causes (each jumps to Execution) and one small metric line.
+  const qualitySection = quality
+    ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title') },
+      quality.total > 0
+        ? h(Fragment, null,
+          h('p', { style: { margin: '0 0 var(--sa-sp-8)', fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
+            pt(t, 'ov.q.kpi', { runs: quality.total, rate: quality.rate, avg: quality.avgText, repaired: quality.repaired })),
+          quality.failures.length
+            ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } },
+              h('p', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
+              h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
+                h(StatusIcon, { state: 'error', size: 14, spin: false }),
+                h('div', { className: 'sa-row-main' },
+                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, item.reason || '—')),
+                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count })))),
+                h('div', { className: 'sa-row-actions' },
+                  h(Button, { variant: 'ghost', size: 'sm',
+                    onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.q.openExecution')))))))
+            : null,
+          (quality.triggerText || quality.acceptanceText)
+            ? h('p', { className: 'sa-hint' }, [quality.triggerText, quality.acceptanceText].filter(Boolean).join(' · '))
+            : null)
+        : h('div', { className: 'sa-actions', style: { padding: 'var(--sa-sp-4) 0' } },
+          h(StatusIcon, { state: 'done', size: 16 }),
+          h('span', { className: 'sa-hint' }, pt(t, 'ov.q.empty'))))
+    : null
 
   const runtimeRows = [
     [pt(t, 'ov.runState'), h(StatusText, { state: health.state }, pt(t, health.labelKey))],
@@ -4349,6 +4434,9 @@ function LiveOverviewPage({ route }) {
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
                   pt(t, 'ov.ruleValue', { name: row.name, blocked: row.blocked, hits: row.hits }))))
               : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty'))))),
+
+        // P2-9: run quality sits directly under the 24h funnel it summarises; hidden when metrics are unavailable.
+        qualitySection,
 
       h('div', { className: 'sa-brief-col' },
         // Pulse: every fact is a rollup. The in-flight row deliberately says one sentence, never a TicketRow.
