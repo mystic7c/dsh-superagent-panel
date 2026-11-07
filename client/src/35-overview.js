@@ -549,7 +549,7 @@ function LiveOverviewPage({ route }) {
     // paused banner and the setup card (which otherwise repeated the same engine step in two places).
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy })
+        onCheck: () => { void poll.run() }, checkBusy: poll.busy, progress: setup })
       : paused ? h('div', { className: 'sa-banner',
         style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(StatusIcon, { state: 'warning', size: 14 }),
@@ -601,10 +601,10 @@ function LiveOverviewPage({ route }) {
               ? h('div', { className: 'sa-ledger' }, ruleLedger.rows.map(row =>
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
                   pt(t, 'ov.ruleValue', { name: row.name, blocked: row.blocked, hits: row.hits }))))
-              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty'))))),
+              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty')))),
 
         // P2-9: run quality sits directly under the 24h funnel it summarises; hidden when metrics are unavailable.
-        qualitySection,
+        qualitySection),
 
       h('div', { className: 'sa-brief-col' },
         // Pulse: every fact is a rollup. The in-flight row deliberately says one sentence, never a TicketRow.

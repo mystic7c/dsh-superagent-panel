@@ -123,6 +123,9 @@ Object.assign(PAGE_TEXT, {
   'st.octoTokenSave': ['保存令牌', 'Save token'],
   'st.octoTokenSaved': ['Octo token 已保存', 'Octo token saved'],
   'st.octoTokenCleared': ['已清除 Octo token', 'Octo token cleared'],
+  'st.octoTokenClearTitle': ['清除 Octo token？', 'Clear the Octo token?'],
+  'st.octoTokenClearMessage': ['清除后引擎无法读取群消息，监听、评估与派工都会停止；需要重新粘贴 token 才能恢复。已合并的工单不受影响。',
+    'After clearing, the engine cannot read group messages; intake, Eval and dispatch stop until a token is pasted again. Already merged Tickets are not affected.'],
   'st.octoTokenEnv': ['环境变量', 'Env var'],
   'st.octoTokenEnvHint': ['当前使用 OCTO_TOKEN 环境变量；要改为本机保存，请移除该环境变量后再保存令牌。',
     'Using the OCTO_TOKEN environment variable; remove it before saving a local token file.'],
@@ -999,8 +1002,9 @@ function LiveSettingsPage({ route }) {
               onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
             octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
             configured
-              ? h(Button, { variant: 'ghost', size: 'sm', disabled: octoTokenBusy,
-                onClick: () => { void saveOctoTokenFor('') } }, pt(t, 'repos.tokenClear'))
+              ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'st.octoTokenClearTitle'),
+                message: pt(t, 'st.octoTokenClearMessage'),
+                onConfirm: async () => { if (!octoTokenBusy) await saveOctoTokenFor('') } })
               : null),
           h(Hint, null, pt(t, 'st.octoTokenHint'))))
   }

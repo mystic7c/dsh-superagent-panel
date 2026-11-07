@@ -784,6 +784,9 @@ function AutomationCard({ ticket, onSaved }) {
  * Full ticket detail. `id` is the engine ticket id; `page` says which tab hosts it so a row click on another tab
  * keeps the same route page.
  */
+const DETAIL_JUMP_IDS = ['sa-ticket-changes', 'sa-acceptance', 'sa-ticket-stages', 'sa-ticket-gates',
+  'sa-ticket-runs', 'sa-ticket-activities', 'sa-ticket-timeline']
+
 function TicketDetail({ id, page = 'execution' }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
@@ -871,6 +874,21 @@ function TicketDetail({ id, page = 'execution' }) {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [back])
 
+  // Keep the section link row honest while the page scrolls; a click-only active state went stale after one scroll.
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return undefined
+    const root = document.querySelector('.sa-scroll')
+    if (!root) return undefined
+    const nodes = DETAIL_JUMP_IDS.map(jumpId => document.getElementById(jumpId)).filter(Boolean)
+    if (!nodes.length) return undefined
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries.filter(entry => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
+      if (visible[0]) setActiveJump(visible[0].target.id)
+    }, { root, rootMargin: '-96px 0px -58% 0px', threshold: [0, 1] })
+    for (const node of nodes) observer.observe(node)
+    return () => observer.disconnect()
+  }, [id, data])
   if (!id) return h(EmptyState, { icon: 'inbox', title: pt(t, 'thread.noSelection'), hint: pt(t, 'thread.noSelectionHint') })
   // P0 §3.6.6: a missing Ticket (404) is an empty state — "找不到该工单" — not a broken connection with a retry that
   // can never succeed. Any other failure keeps the URL and offers a retry.
