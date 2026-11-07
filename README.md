@@ -7,6 +7,11 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
+**当前版本：0.2.0**（首个产品化版本，变更见 [CHANGELOG.md](CHANGELOG.md)）。0.2 的核心是让面板"不说谎、可运营"：
+运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
+[LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
+不随插件分发）。
+
 ## 功能
 
 | 页 | 内容 |
@@ -65,7 +70,13 @@ plugin_manager install_bundle target=<本仓库目录>
   `executor.maxRepairRounds` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
 - 手动 `live.json` 修改后，使用设置页「重载配置」让引擎重新读取。
 
-## 能力边界
+## 功能成熟度
+
+| 级别 | 含义 |
+| --- | --- |
+| **稳定** | 有单测/渲染回归与真实跑通记录（下面"真实可用"） |
+| **可用但未生产验证** | 代码与单测存在，本机尚无生产运行记录（如 CLI worker） |
+| **部分/未实现** | 明确列出，不在面板里假装可用 |
 
 **真实可用**：Octo 群轮询（sync）、规则评估 R1–R3、工单生命周期、DSH 进程内 worker、GitLab MR/CI/部署/UAT
 观测、多仓库与群→仓库绑定、人工验收/忽略/重试、搜索、术语表、配置原子写；
@@ -113,17 +124,23 @@ client/index.js     构建产物（单文件 ModuleLoader bundle）
 scripts/            构建与验收脚本（build-client / verify-panel / render-check …）
 locale/             插件清单文案（中/英）
 cordis.patch.yml    插件注册（insert 行）
+CHANGELOG.md        版本与能力变更记录
 ```
 
-## 开发
+## 开发与验证
 
 ```bash
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 305 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 90/90）
+node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
+
+`npm run test` 等价于 Host 测试，`npm run verify` 等价于构建产物与 i18n 校验。`spec/` 与 `verification/` 是本地
+设计/验收材料（gitignore），不随插件分发。
 
 改客户端后刷新页面；改 Host 半（`index.js`/`lib`）后在 Plugin Manager 里禁用→启用该插件（或重启 DSH）。
 

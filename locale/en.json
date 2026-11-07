@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Superagent",
-    "description": "Management panel for the proactive coding agent: tickets needing a person, sources, triggers, evaluations, executors and deployment settings."
+    "description": "Management panel for the proactive coding agent: inbox, Tickets, run quality, automation, acceptance, signals and deployment settings."
   }
 }

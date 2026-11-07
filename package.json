@@ -1,9 +1,9 @@
 {
   "name": "@mystic7c/dsh-superagent-panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Superagent 管理面板：左侧栏入口，总览/来源/触发/评估/执行/设置六个管理页，工单与线程详情、全局搜索、术语表、设置保存历史。",
+  "description": "Superagent 管理面板：待办/工单/运行观测/自动化/验收/来源与部署设置（DSH 插件）。",
   "license": "MIT",
   "exports": {
     ".": "./index.js",
@@ -21,7 +21,8 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "dsh": {
     "bundle": {
@@ -33,9 +34,23 @@
   },
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "check": "node --check index.js && node scripts/build-client.mjs --check"
+    "check": "node --check index.js && node scripts/build-client.mjs --check",
+    "test": "node --test lib/store.test.js lib/live/*.test.js",
+    "verify": "node scripts/build-client.mjs --check && node scripts/check-keys.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "*"
-  }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "superagent",
+    "agent",
+    "ticket",
+    "operations"
+  ]
 }
