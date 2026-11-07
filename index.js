@@ -1,13 +1,11 @@
 /**
  * Host half of the Superagent management panel.
  *
- * Owns the durable management state (~/.dsh/superagent by default, override with DSH_SUPERAGENT_STATE_DIR),
- * serves it to the panel over same-origin `/superagent/api` routes on the Harness Web server, and implements
- * the panel's actions: settings/prompt saves with revisions, ticket retry/stop, decision dismiss, trigger
- * requeue, thread unsubscribe, executor pause, and a real deployment check of the configured GitHub CLI.
- *
- * It does not run the research prototype's engine (GitHub/Feishu polling, LLM assessment, worker Sessions);
- * `README.md` states exactly which capabilities are live and which are represented by the seeded demo state.
+ * Owns the durable state directory (~/.dsh/superagent by default, override with DSH_SUPERAGENT_STATE_DIR), serves
+ * the live engine's status and actions over same-origin `/superagent/api` routes, and hosts the legacy management
+ * endpoints kept for older callers. The live engine (lib/live) does the real work: Octo intake, rule evaluation,
+ * Ticket state, DSH/Codex/Claude workers, GitLab MR/CI/UAT and human acceptance. `README.md` is the capability
+ * contract; this file should not claim more than that.
  */
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -18,7 +16,8 @@ import { saveSettings, syncSource, setPaused, retryTicket, stopTicket, dismissDe
   savePrompts, previewPromptsFor, setupCheck, resetDemo, ActionError } from './lib/actions.js'
 import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken } from './lib/live/live-json.js'
-import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket } from './lib/live/executor.js'
+import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
+  resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
 
 export const inject = ['webServer']
 const PREFIX = '/superagent/api'
@@ -200,8 +199,118 @@ export function apply(ctx, config = {}) {
       // Live-engine control and observation surface (separate from the demo management API).
       if (first === 'engine') {
         if (!engine) throw new ActionError(503, 'live engine is not ready')
-        if (method === 'GET' && second === 'status') { send(res, 200, engine.status()); return }
+        if (method === 'GET' && second === 'status') {
+          // P0: the status poll is the panel's clock, so derive the actionable inbox here (cheap, writes only on change).
+          try { await engine.refreshInbox?.() } catch (error) {
+            ctx.logger?.warn?.('superagent inbox refresh failed: %s', error instanceof Error ? error.message : String(error))
+          }
+          send(res, 200, engine.status())
+          return
+        }
+        // Actionable inbox (P0-5): persistent "needs you" items derived from tickets/runs/sources.
+        if (method === 'GET' && second === 'inbox') {
+          await engine.refreshInbox?.()
+          send(res, 200, engine.inboxView?.() ?? { items: [], counts: { blocking: 0, system: 0, unread: 0 } })
+          return
+        }
+        if (method === 'POST' && second === 'inbox' && third && segments[3] === 'read') {
+          const item = await engine.readInbox?.(third)
+          if (!item) throw new ActionError(404, `未知待办：${third}`)
+          send(res, 200, { item })
+          return
+        }
+        if (method === 'POST' && second === 'inbox' && third && segments[3] === 'resolve') {
+          const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+          try {
+            const item = await engine.resolveInbox?.(third, { action: body?.action, note })
+            if (!item) throw new ActionError(404, `未知待办：${third}`)
+            send(res, 200, { item })
+            return
+          } catch (error) {
+            // A blocking item can only be settled by its real action (gate release/retry/stop, accept, dismiss).
+            if (error && error.code === 'inbox-blocking') throw new ActionError(409, '这是必须由动作解决的待办：请处理对应闸门或验收')
+            throw error
+          }
+        }
+        // P1-1: raw signals (including filtered/skipped events) and their decisions.
+        if (method === 'GET' && second === 'signals') {
+          send(res, 200, engine.signalsView?.({
+            status: url.searchParams.get('status') ?? undefined,
+            source: url.searchParams.get('source') ?? undefined,
+            offset: Number(url.searchParams.get('offset') ?? 0),
+            limit: Number(url.searchParams.get('limit') ?? 50),
+          }) ?? { items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
+          return
+        }
+        if (method === 'GET' && second === 'signal' && third) {
+          const value = engine.signalView?.(third)
+          if (!value) throw new ActionError(404, `未知信号：${third}`)
+          send(res, 200, value)
+          return
+        }
+        if (method === 'POST' && second === 'signal' && third && segments[3] === 'replay') {
+          const result = await engine.replaySignal?.(third)
+          if (!result) throw new ActionError(503, '信号重放不可用')
+          if (result.missing) throw new ActionError(404, `未知信号：${third}`)
+          if (result.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, result)
+          return
+        }
+        // P2-8: append a human quality label to one signal (correct / false wake / missed wake / cleared).
+        if (method === 'POST' && second === 'signal' && third && segments[3] === 'label') {
+          const result = await engine.labelSignal?.(third, {
+            label: body?.label,
+            note: typeof body?.note === 'string' ? body.note.trim().slice(0, 300) : undefined,
+          })
+          if (!result) throw new ActionError(503, '信号标注不可用')
+          if (result.missing) throw new ActionError(404, `未知信号：${third}`)
+          if (result.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { signal: result.signal })
+          return
+        }
+        // P1-2: the full operation ledger (the status payload keeps only small index rows).
+        if (method === 'GET' && second === 'operations') {
+          send(res, 200, engine.operationsView?.({
+            ticketId: url.searchParams.get('ticketId') ?? undefined,
+            limit: Number(url.searchParams.get('limit') ?? 20),
+          }) ?? { items: [] })
+          return
+        }
+        if (method === 'GET' && second === 'operation' && third) {
+          const value = engine.operationView?.(third)
+          if (!value) throw new ActionError(404, `未知运行：${third}`)
+          send(res, 200, value)
+          return
+        }
         if (method === 'GET' && second === 'config') { send(res, 200, engine.configView()); return }
+        // Read-only group list for the settings picker; writes nothing and never polls messages.
+        if (method === 'GET' && second === 'octo' && third === 'groups') {
+          try { send(res, 200, await engine.listGroups()); return }
+          catch (error) {
+            throw new ActionError(400, `无法读取 Octo 群列表：${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+        // Add one repository definition; token values still go through the per-repo token route.
+        if (method === 'POST' && second === 'repos') {
+          try {
+            const result = await engine.addRepo(body?.repo, { makeDefault: body?.makeDefault === true })
+            send(res, 200, { ...result, config: engine.configView() })
+            return
+          } catch (error) {
+            throw new ActionError(400, `保存仓库失败：${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+        // Store the Octo bot token in the configured token file (mode 600, never echoed back).
+        if (method === 'POST' && second === 'octo' && third === 'token') {
+          if (typeof body?.token !== 'string') throw new ActionError(400, 'token 必须是字符串')
+          try {
+            const saved = await engine.setOctoToken(body.token)
+            send(res, 200, { octo: { tokenConfigured: saved.configured, tokenSource: saved.configured ? 'file' : null } })
+            return
+          } catch (error) {
+            throw new ActionError(400, `保存 Octo token 失败：${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
         if (method === 'POST' && second === 'uat-check') {
           const config = engine.readConfig().config
           const repoId = body?.repoId ?? url.searchParams.get('repo')
@@ -210,6 +319,22 @@ export function apply(ctx, config = {}) {
           if (!repo?.gitlab.uatUrl) throw new ActionError(400, `${repo?.name ?? '该仓库'} 没有配置 UAT 地址`)
           send(res, 200, { uat: await checkUat(repo.gitlab.uatUrl) })
           return
+        }
+        // Saved live.json versions and one-click rollback (tokens are separate files and are not in history).
+        if (method === 'GET' && second === 'settings' && third === 'history') {
+          send(res, 200, { entries: await engine.settingsHistory() })
+          return
+        }
+        if (method === 'POST' && second === 'settings' && third === 'history' && segments[4] === 'restore') {
+          const id = segments[3]
+          if (!id) throw new ActionError(400, '缺少历史版本 id')
+          try {
+            const restored = await engine.restoreSettings(id)
+            send(res, 200, { restored, config: engine.configView() })
+            return
+          } catch (error) {
+            throw new ActionError(400, `恢复配置失败：${error instanceof Error ? error.message : String(error)}`)
+          }
         }
         if (method === 'POST' && second === 'settings') {
           const patch = body ?? {}
@@ -270,11 +395,60 @@ export function apply(ctx, config = {}) {
           return
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'ci') {
-          send(res, 200, await refreshTicketCi({ engine, ticketId: third }))
+          const result = await refreshTicketCi({ engine, ticketId: third })
+          if (result?.status === 'deployed' || result?.status === 'merged') await engine.markAcceptanceDelivered?.(third)
+          send(res, 200, result)
           return
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'verify') {
-          send(res, 200, await verifyTicket({ engine, ticketId: third }))
+          const result = await verifyTicket({ engine, ticketId: third })
+          // P1 §4.2: a successful deployment/merge completes the latest verifying acceptance round.
+          if (result?.status === 'deployed' || result?.status === 'merged') await engine.markAcceptanceDelivered?.(third)
+          send(res, 200, result)
+          return
+        }
+        // Human decision on a parked gate (P0-3): release = skip this gate and deliver, retry = re-run the gates,
+        // stop = fail the Ticket. The worktree and the failing evidence stay on disk for all three.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'gate') {
+          const action = body?.action
+          if (!['release', 'retry', 'stop'].includes(action)) {
+            throw new ActionError(400, 'action 必须是 release / retry / stop')
+          }
+          const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+          const result = await resumeTicket({ engine, ticketId: third, action, note,
+            log: line => ctx.logger?.info?.('superagent gate: %s', line) })
+          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result?.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { run: result.run, ticket: result.ticket })
+          return
+        }
+        // P1-5: continue an interrupted run from its checkpoint (gates/commit/push/MR phase) or re-run the whole Ticket.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'resume') {
+          const result = await resumeInterruptedTicket({ engine, ticketId: third,
+            log: line => ctx.logger?.info?.('superagent resume: %s', line) })
+          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result?.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { run: result.run, ticket: result.ticket })
+          return
+        }
+        // P1-4: answer a worker's parked question; the Ticket re-runs with the answer in context.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'answer') {
+          const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, 4000) : ''
+          if (!answer) throw new ActionError(400, 'answer 不能为空')
+          const result = await answerTicket({ engine, ticketId: third, answer,
+            log: line => ctx.logger?.info?.('superagent answer: %s', line) })
+          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result?.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { run: result.run, ticket: result.ticket })
+          return
+        }
+        // P2-1: per-Ticket automation (fixed interval / daily time), stored on the Ticket itself.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'automation') {
+          const result = await engine.setTicketAutomation?.(third, body ?? {})
+          if (!result) throw new ActionError(503, 'Ticket 自动化不可用')
+          if (result.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { ticket: result.ticket, automation: result.automation })
           return
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'publish') {
@@ -283,7 +457,10 @@ export function apply(ctx, config = {}) {
         }
         // Human acceptance of a deployed UAT build: records the sign-off so the Ticket leaves "needs you".
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'accept') {
-          const result = await engine.acceptTicket({ ticketId: third, ok: body?.ok !== false, note: body?.note })
+          const intents = Array.isArray(body?.intents)
+            ? body.intents.filter(value => ['unmet', 'new-idea', 'no-evidence'].includes(value)).slice(0, 5)
+            : undefined
+          const result = await engine.acceptTicket({ ticketId: third, ok: body?.ok !== false, note: body?.note, intents })
           if (result.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result.invalid) throw new ActionError(409, result.invalid)
           if (result.cleanupFailed) throw new ActionError(409, result.cleanupFailed)

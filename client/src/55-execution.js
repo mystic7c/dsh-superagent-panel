@@ -5,13 +5,33 @@
    the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared status
    model for the executor load and the paused flag. */
 
-const EXEC_STAGES = ['all', 'queued', 'working', 'waiting', 'failed', 'done']
+// Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
+const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
 const EXEC_DONE_RECENT = 10
+// P1-8: the execution list's view state survives a page switch inside the same browser session.
+const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
+const EXEC_VIEW_DEFAULTS = { groupBy: 'stage', sort: 'updated', showDone: true }
+function execReadView() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(EXEC_VIEW_KEY) ?? 'null') ?? {}
+    return { groupBy: parsed.groupBy === 'repo' ? 'repo' : 'stage',
+      sort: parsed.sort === 'created' ? 'created' : 'updated', showDone: parsed.showDone !== false }
+  } catch { return { ...EXEC_VIEW_DEFAULTS } }
+}
+function execSaveView(view) {
+  try { sessionStorage.setItem(EXEC_VIEW_KEY, JSON.stringify(view)) } catch { /* private mode keeps the in-memory view */ }
+}
+/** Newest-first by the chosen timestamp; a Ticket without the field falls back to the other one, never to "now". */
+function execSortTickets(tickets, sort) {
+  const field = sort === 'created' ? 'createdAt' : 'updatedAt'
+  return [...tickets].sort((left, right) => String(right?.[field] ?? right?.createdAt ?? '')
+    .localeCompare(String(left?.[field] ?? left?.createdAt ?? '')))
+}
 
 Object.assign(PAGE_TEXT, {
   'ex.executor': ['执行器', 'Executor'],
-  'ex.executorDisabled': ['执行器未启用（live.json 的 executor.enabled 为 false），新工单只会排队。',
-    'The executor is off (executor.enabled is false in live.json); new Tickets only queue up.'],
+  'ex.executorDisabled': ['执行器未启用：到设置→运行打开「启用执行器」并保存，新工单才会执行。',
+    'The executor is off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'ex.pauseTitle': ['暂停处理？', 'Pause processing?'],
   'ex.pauseConfirm': ['暂停后不再开始新的评估、派工或回复；正在运行的执行器会完成当前一轮。',
     'Pausing stops new Evals, dispatches and replies; a running executor finishes its current turn.'],
@@ -28,6 +48,7 @@ Object.assign(PAGE_TEXT, {
   'ex.recentLabel': ['最近一次执行', 'Last run'],
   'ex.recentOk': ['运行成功', 'Run succeeded'],
   'ex.recentFailed': ['运行失败', 'Run failed'],
+  'ex.recentWaiting': ['闸门等待你处理', 'A gate needs you'],
   'ex.recentTicket': ['查看工单', 'Open Ticket'],
   'ex.runs24hFailed': ['24 小时运行失败 {count} 次', '{count} failed runs in 24h'],
   'ex.runs24hLink': ['去看概览', 'View overview'],
@@ -49,6 +70,19 @@ Object.assign(PAGE_TEXT, {
   'ex.emptyTitle': ['还没有工单。', 'No Ticket yet.'],
   'ex.emptyHint': ['在群里发一条需求，或在这里手工建单测试链路。',
     'Send a request in the group, or create a Ticket right here to test the pipeline.'],
+  // ---- P1-8: view options (persisted in sessionStorage) ----------------------------------------------------------
+  'ex.groupByLabel': ['分组方式', 'Group by'],
+  'ex.groupByStage': ['按阶段', 'By stage'],
+  'ex.groupByRepo': ['按仓库', 'By repository'],
+  'ex.sortLabel': ['排序', 'Sort'],
+  'ex.sortUpdated': ['最近更新', 'Last updated'],
+  'ex.sortCreated': ['最近创建', 'Newest'],
+  'ex.showDone': ['显示已结束', 'Show ended'],
+  'ex.showDoneGroup': ['展开已结束（{count}）', 'Show ended ({count})'],
+  'ex.clearFilters': ['清除筛选', 'Clear filters'],
+  'ex.filterEmptyTitle': ['没有符合当前筛选的工单。', 'No Tickets match the current filter.'],
+  'ex.noRepo': ['（未指定仓库）', '(No repository)'],
+  'ex.toolbarLabel': ['列表视图选项', 'List view options'],
 })
 
 /** The finished group's one line: accepted sign-offs, dismissed Tickets, and Tickets that completed after a failed
@@ -73,6 +107,12 @@ function ExecutionQueuePage() {
   const [stage, setStage] = useState('all')
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
+  const [execView, setExecView] = useState(execReadView)
+  const updateView = patch => setExecView(previous => {
+    const next = { ...previous, ...patch }
+    execSaveView(next)
+    return next
+  })
   const status = model.data
   const paused = Boolean(status && (status.paused === true || status.config?.paused === true || status.engine?.paused === true))
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
@@ -91,6 +131,10 @@ function ExecutionQueuePage() {
     ? [...status.runs].sort((left, right) => String(right.startedAt ?? right.at ?? '').localeCompare(String(left.startedAt ?? left.at ?? '')))[0]
     : null
   const recentRunFailed = recentRun?.status === 'failed'
+  // A run parked on a failing gate is neither success nor failure: say what it waits for (P0-3).
+  const recentRunWaiting = recentRun?.status === 'waiting_for_human'
+  const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : 'success'
+  const recentRunKey = recentRunFailed ? 'ex.recentFailed' : recentRunWaiting ? 'ex.recentWaiting' : 'ex.recentOk'
   const counts = list.data?.counts ?? {}
   const countOf = group => Number.isFinite(counts[group]) ? counts[group]
     : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
@@ -101,8 +145,13 @@ function ExecutionQueuePage() {
     label: `${pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])} ${countOf(group)}`,
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
-  const inStage = stage === 'all' ? tickets : tickets.filter(ticket => ticketStatus(ticket).group === stage)
-  const doneTickets = inStage.filter(ticket => ticketStatus(ticket).group === 'done')
+  const sorted = execSortTickets(tickets, execView.sort)
+  const inStageBase = stage === 'all' ? sorted : sorted.filter(ticket => ticketStatus(ticket).group === stage)
+  // P1-8: "show ended" hides the finished group but an explicit stage filter for it always wins, and the group keeps a
+  // reveal entry below the list so history is never unreachable.
+  const doneAllowed = execView.showDone || stage === 'done'
+  const inStage = doneAllowed ? inStageBase : inStageBase.filter(ticket => ticketStatus(ticket).group !== 'done')
+  const doneTickets = inStageBase.filter(ticket => ticketStatus(ticket).group === 'done')
   const recentDone = doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
   const shownTickets = doneTickets.length > recentDone.length
     ? [...inStage.filter(ticket => ticketStatus(ticket).group !== 'done'), ...recentDone]
@@ -122,10 +171,55 @@ function ExecutionQueuePage() {
     h(EmptyState, { icon: 'inbox', title: pt(t, 'ex.emptyTitle'), hint: pt(t, 'ex.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
         pt(t, 'ex.createTicket')) }))
-  const stageEmptyState = h(Section, { title: pt(t, `group.${stage}`), count: 0 },
-    h(EmptyState, { icon: 'filter', title: pt(t, 'ex.stageEmptyTitle'),
-      action: h(Button, { variant: 'outline', size: 'sm', onClick: () => setStage('all') },
-        pt(t, 'ex.stageEmptyAction')) }))
+  const clearFilters = () => { setStage('all'); updateView({ showDone: true }) }
+  const stageEmptyState = h(Section, { title: pt(t, 'ex.tickets'), count: 0 },
+    h(EmptyState, { icon: 'filter', title: pt(t, 'ex.filterEmptyTitle'),
+      action: h(Button, { variant: 'outline', size: 'sm', onClick: clearFilters }, pt(t, 'ex.clearFilters')) }))
+  // Repository grouping (P1-8): the same rows, batched by the repository a Ticket belongs to. Groups follow the
+  // sorted ticket order, so the newest work still leads inside each repository.
+  const repoGroupsOf = list => {
+    const groups = []
+    const byKey = new Map()
+    for (const ticket of list) {
+      const repoId = ticket.repoId ?? ''
+      const key = repoId || '__none'
+      if (!byKey.has(key)) {
+        const name = ticket.repoName ?? panelRepoOf(status, ticket.repoId)?.name ?? repoId ?? pt(t, 'ex.noRepo')
+        const group = { key, name: String(name || pt(t, 'ex.noRepo')), tickets: [] }
+        byKey.set(key, group)
+        groups.push(group)
+      }
+      byKey.get(key).tickets.push(ticket)
+    }
+    return groups
+  }
+  const viewToolbar = tickets.length
+    ? h('div', { className: 'sa-filters', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
+      h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
+        { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
+        onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') }),
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
+      h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
+        { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
+        onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') }),
+      h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }), label: pt(t, 'ex.showDone') }),
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone')))
+    : null
+  // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
+  const stagePills = h('div', { className: 'sa-filters' },
+    h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+      className: 'sa-segmented-wide' }))
+  const queueBody = execView.groupBy === 'repo'
+    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+      repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+        h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
+    : h(Fragment, null,
+      h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
+        className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
+      doneOverflow ? h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
+          pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null)
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
     title: paused ? pt(t, 'ex.resumeTitle') : pt(t, 'ex.pauseTitle'),
@@ -152,8 +246,9 @@ function ExecutionQueuePage() {
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
             h(When, { at: recentRun.startedAt }),
-            h(Tag, { tone: recentRunFailed ? 'danger' : 'success' },
-              pt(t, recentRunFailed ? 'ex.recentFailed' : 'ex.recentOk')),
+            h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
+            // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
+            runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
             recentRun.error
               ? h('span', { className: 'sa-hint', title: String(recentRun.error) },
                 pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) }))
@@ -173,23 +268,21 @@ function ExecutionQueuePage() {
         h('span', { className: 'sa-hint' }, pt(t, 'ex.createHint'))),
       status.engine?.lastError ? h(ErrorState, { error: status.engine.lastError, onRetry: () => { void poll.run() } }) : null),
     list.error ? h(ErrorState, { error: list.error, onRetry: list.reload }) : null,
-    tickets.length
-      ? h('div', { className: 'sa-filters' },
-        // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
-        // tuned for the two-or-three-pill filters elsewhere.
-        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
-          className: 'sa-segmented-wide' }))
-      : null,
+    viewToolbar,
+    // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
+    // tuned for the two-or-three-pill filters elsewhere.
+    tickets.length ? stagePills : null,
     loadingList ? h(Skeleton, { rows: 5 })
       : !list.data ? null
         : !tickets.length ? emptyState
           : !inStage.length ? stageEmptyState
             : h(Fragment, null,
-              h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
-                className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
-              doneOverflow ? h('div', { className: 'sa-actions' },
-                h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
-                  pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null),
+              queueBody,
+              !execView.showDone && stage !== 'done' && doneTickets.length
+                ? h('div', { className: 'sa-actions' },
+                  h(Button, { variant: 'outline', size: 'sm', onClick: () => updateView({ showDone: true }) },
+                    pt(t, 'ex.showDoneGroup', { count: doneTickets.length })))
+                : null),
     h(Modal, { open: manualOpen, onClose: () => setManualOpen(false), title: pt(t, 'ex.createTicket'),
       closeLabel: t('close'), description: pt(t, 'ex.createHint') },
       h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() } })))

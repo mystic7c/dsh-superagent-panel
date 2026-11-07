@@ -18,13 +18,13 @@ Object.assign(PAGE_TEXT, {
   'src.stat.mrOpen': ['待合并 MR', 'Open MRs'],
   'src.lastMessage': ['最近消息', 'Last message'],
   'src.groupIm': ['IM 消息源', 'IM sources'],
-  'src.groupCode': ['GitLab / GitHub 仓库', 'GitLab / GitHub repositories'],
+  'src.groupCode': ['GitLab 仓库', 'GitLab repositories'],
   'src.stat.deployed': ['UAT 已部署', 'Deployed to UAT'],
   'src.stat.failed': ['失败', 'Failed'],
   'src.action.filtered': ['查看被过滤', 'See filtered'],
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
-  'src.disabled': ['已禁用：在 live.json 中启用后重载配置。', 'Disabled: enable it in live.json, then reload the config.'],
+  'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -35,9 +35,29 @@ Object.assign(PAGE_TEXT, {
   'src.reason.senderNotAllowed': ['发送者不在允许名单', 'Sender is not in the allow list'],
   'src.reason.notText': ['不是文本消息', 'Not a text message'],
   'src.emptyTitle': ['还没有来源', 'No Source yet'],
-  'src.emptyHint': ['在 ~/.dsh/superagent/live.json 配置一个 Octo 群后，消息会在这里出现。',
-    'Configure an Octo group in ~/.dsh/superagent/live.json and its messages will show up here.'],
+  'src.emptyHint': ['先配置 Octo token 并添加一个监听群，消息会在这里出现。',
+    'Connect the Octo token and add a watched group; its messages will show up here.'],
   'src.openSettings': ['打开设置', 'Open settings'],
+  // ---- P1-1: the raw signal log (every candidate, including the filtered ones) -----------------------------------
+  'src.signals': ['原始信号（最近）', 'Raw signals (recent)'],
+  'src.signalsEmpty': ['最近没有原始信号。', 'No recent raw signals.'],
+  'src.signalStatus.pending': ['待处理', 'Pending'], 'src.signalStatus.processed': ['已处理', 'Processed'],
+  'src.signalStatus.ignored': ['已忽略', 'Ignored'], 'src.signalStatus.skipped': ['被过滤', 'Skipped'],
+  'src.signalStatus.failed': ['失败', 'Failed'],
+  'src.signalReplay': ['重放', 'Replay'],
+  'src.signalReplayed': ['已重放（{status}）', 'Replayed ({status})'],
+  'src.signalReplayTicket': ['已重放并新建工单', 'Replayed and created a Ticket'],
+  'src.signalReason': ['原因：{reason}', 'Reason: {reason}'],
+  'src.signalTicket': ['查看工单', 'Open Ticket'],
+  'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
+  'src.signalsRefresh': ['刷新', 'Refresh'],
+  // ---- P2-8: human quality labels on raw signals ----------------------------------------------------------------
+  'src.labelsSummary': ['正确 {correct} · 误报 {falseWake} · 漏报 {missedWake}',
+    '{correct} correct · {falseWake} false wake · {missedWake} missed'],
+  'src.labelMenu': ['标注判定', 'Label this signal'],
+  'src.labelSaved': ['已标注：{label}', 'Labelled: {label}'],
+  'signalLabel.correct': ['正确', 'Correct'], 'signalLabel.false_wake': ['误报', 'False wake'],
+  'signalLabel.missed_wake': ['漏报', 'Missed wake'], 'signalLabel.cleared': ['已清理', 'Cleared'],
 })
 
 /** Source health → the shared shape vocabulary: a healthy source reads as done (✓), a broken one as error (×), and
@@ -130,8 +150,74 @@ function FilteredMessages({ source, items }) {
         h(ClampText, { text: item.text, limit: 480, lines: 8 })) : null))))
 }
 
-function LiveSourcePage() {
+/** Signal status → the shared shape vocabulary; the label always comes from `src.signalStatus.*`. */
+const SIGNAL_SHAPE = { pending: 'ongoing', processed: 'done', ignored: 'idle', skipped: 'warning', failed: 'error' }
+const SIGNAL_TONE = { pending: 'info', processed: 'success', ignored: 'neutral', skipped: 'warning', failed: 'danger' }
+/** Host skip codes → the same human reasons the filtered-message list already uses; an unknown code stays raw. */
+const SIGNAL_REASON_KEYS = { 'chat-not-watched': 'src.reason.sourceNotWatched', sender: 'src.reason.senderNotAllowed',
+  'sender-not-allowed': 'src.reason.senderNotAllowed', 'not-text': 'src.reason.notText', 'high-risk': 'src.reason.highRisk' }
+function signalReasonText(t, item) {
+  const code = item?.skipReason
+  if (!code) return ''
+  const key = SIGNAL_REASON_KEYS[String(code)]
+  return key ? pt(t, key) : String(code)
+}
+/** A replayable signal is one the rules did not deliver (P1 §2.2): skipped, ignored or failed. */
+const signalReplayable = item => ['skipped', 'ignored', 'failed'].includes(item?.status)
+/** P2-8 label vocabulary: tone for the tag, label key for the text; unknown labels stay raw. */
+const SIGNAL_LABEL_TONE = { correct: 'success', false_wake: 'warning', missed_wake: 'danger', cleared: 'neutral' }
+const SIGNAL_LABEL_KEYS = { correct: 'signalLabel.correct', false_wake: 'signalLabel.false_wake',
+  missed_wake: 'signalLabel.missed_wake', cleared: 'signalLabel.cleared' }
+const SIGNAL_LABEL_ORDER = ['correct', 'false_wake', 'missed_wake', 'cleared']
+const signalLabelText = (t, label) => {
+  const key = SIGNAL_LABEL_KEYS[String(label ?? '')]
+  return key ? pt(t, key) : String(label ?? '')
+}
+
+/** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
+function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
   const { t, navigate } = usePanel()
+  return h('ul', { className: 'sa-list' }, items.map(item => {
+    const status = String(item?.status ?? '')
+    const reason = signalReasonText(t, item)
+    const at = item?.receivedAt ?? item?.occurredAt
+    const statusKey = `src.signalStatus.${status}`
+    const statusLabel = pt(t, statusKey)
+    const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
+    return h('li', { key: item.id, className: 'sa-row' },
+      h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
+      h('div', { className: 'sa-row-main' },
+        h('div', { className: 'sa-row-title' },
+          h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel),
+          h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
+        (item?.source || reason || at)
+          ? h('div', { className: 'sa-row-meta' },
+            item?.source ? h('span', { className: 'sa-mono' }, String(item.source)) : null,
+            reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
+            at ? h(When, { at }) : null,
+            labels.length
+              ? h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-4)' } },
+                labels.map((entry, index) => h(Tag, { key: entry.id ?? index,
+                  tone: SIGNAL_LABEL_TONE[String(entry.label)] ?? 'outline', title: entry.note ? String(entry.note) : undefined },
+                signalLabelText(t, entry.label))))
+              : null)
+          : null),
+      h('div', { className: 'sa-row-actions' },
+        item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
+          onClick: () => navigate({ page: 'execution', id: item.ticketId }) }, pt(t, 'src.signalTicket')) : null,
+        signalReplayable(item) ? h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: busy,
+          onClick: () => onReplay(item) }, pt(t, 'src.signalReplay')) : null,
+        // A host that returns `labels` supports the P2-8 endpoint; an older one gets no dead menu entry.
+        Array.isArray(item?.labels) && typeof onLabel === 'function'
+          ? h(Menu, { label: pt(t, 'src.labelMenu'), align: 'end',
+            items: SIGNAL_LABEL_ORDER.map(label => ({ key: label, label: signalLabelText(t, label), disabled: labelBusy,
+              onSelect: () => onLabel(item, label) })) })
+          : null))
+  }))
+}
+
+function LiveSourcePage() {
+  const { t, navigate, notify } = usePanel()
   const { data, error, reload, actions } = usePanelData()
   const [uat, setUat] = useState()
   const [uatBusy, setUatBusy] = useState(false)
@@ -144,6 +230,25 @@ function LiveSourcePage() {
     finally { setUatBusy(false) }
   }
   const focusFiltered = () => filteredRef.current?.scrollIntoView({ block: 'start' })
+  // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
+  // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
+  const [signalsOff, setSignalsOff] = useState(false)
+  const signals = useLiveResource('engine/signals', { limit: 20 }, 30000, { enabled: !signalsOff })
+  useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
+  const label = useAction(async (signal, labelId) => {
+    await actions.labelSignal(signal.id, labelId)
+    notify(pt(t, 'src.labelSaved', { label: signalLabelText(t, labelId) }))
+  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
+  const replay = useAction(async signal => {
+    const result = await actions.replaySignal(signal.id)
+    const ticket = result?.ticket
+    if (ticket?.id) {
+      notify(pt(t, 'src.signalReplayTicket'))
+      navigate({ page: 'execution', id: ticket.id })
+      return
+    }
+    notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
+  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
 
   if (!data) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 
@@ -156,7 +261,7 @@ function LiveSourcePage() {
   if (sources.length === 0 || octoUnconfigured) {
     return h(EmptyState, { icon: 'inbox', title: pt(t, 'src.emptyTitle'), hint: pt(t, 'src.emptyHint'),
       action: h(Button, { variant: 'primary', icon: h(Icon, { name: 'settings', size: 14 }),
-        onClick: () => navigate({ page: 'settings' }) }, pt(t, 'src.openSettings')) })
+        onClick: () => navigate({ page: 'settings', group: 'source' }) }, pt(t, 'src.openSettings')) })
   }
 
   const enabled = sources.filter(source => source.enabled).length
@@ -166,6 +271,9 @@ function LiveSourcePage() {
     ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
     : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
   const filtered = Array.isArray(octo?.filtered) ? octo.filtered : []
+  const signalItems = Array.isArray(signals.data?.items) ? signals.data.items : []
+  const labelCounts = signals.data?.counts?.labels ?? {}
+  const labelTotal = SIGNAL_LABEL_ORDER.reduce((sum, label) => sum + (Number(labelCounts[label]) || 0), 0)
   // Two source classes (IM vs code repositories); each class renders its own section with a two-up card grid.
   const imSources = sources.filter(source => !isExecutionSource(source))
   const codeSources = sources.filter(isExecutionSource)
@@ -250,5 +358,19 @@ function LiveSourcePage() {
     octo ? h('div', { ref: filteredRef },
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
+      : null,
+    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
+    signals.data
+      ? h(Section, { title: pt(t, 'src.signals'), count: signalItems.length,
+        badge: labelTotal > 0
+          ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
+            correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
+            missedWake: Number(labelCounts.missed_wake) || 0 }))
+          : null,
+        action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
+          pt(t, 'src.signalsRefresh')) },
+        signalItems.length ? h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+          onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy })
+          : h(Hint, null, pt(t, 'src.signalsEmpty')))
       : null)
 }

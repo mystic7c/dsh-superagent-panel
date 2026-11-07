@@ -427,6 +427,35 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-loadbar-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 
+/* ---------- first-run setup (overview card + header chip + quiet banner) ---------- */
+.sa-setup { display: flex; flex-direction: column; gap: var(--sa-sp-12); padding: var(--sa-sp-16);
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-lg);
+  background: var(--dsw-alias-bg-layer-1, transparent); }
+.sa-setup-head { display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
+.sa-setup-heading { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
+.sa-setup-title { margin: 0; font-size: var(--sa-fs-title); line-height: 1.35; font-weight: 600;
+  color: var(--dsw-alias-label-primary); }
+.sa-setup-lead { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.sa-setup-title-row { display: flex; align-items: baseline; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-setup-count { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--sa-label-tertiary); }
+.sa-setup-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sa-sp-8) var(--sa-sp-24); margin: 0; padding: 0; list-style: none; }
+.sa-setup-step { display: flex; align-items: flex-start; gap: var(--sa-sp-8); min-width: 0; }
+.sa-setup-step-main { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; flex: 1 1 auto; }
+.sa-setup-step-title { font-size: var(--sa-fs-body); line-height: 1.4; font-weight: 500;
+  color: var(--dsw-alias-label-primary); }
+.sa-setup-step-hint { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--sa-label-tertiary); }
+.sa-setup-step .sa-btn { flex: none; }
+.sa-setup-step[data-done] .sa-setup-step-title { color: var(--dsw-alias-label-secondary); }
+.sa-setup-banner { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap;
+  padding: var(--sa-sp-8) var(--sa-sp-12); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); }
+.sa-setup-chip { border: 0; background: none; padding: 0; font: inherit; font-size: var(--sa-fs-meta);
+  line-height: 1.4; color: var(--sa-link-text); cursor: pointer; }
+.sa-setup-chip:hover { text-decoration: underline; }
+.sa-setup-chip:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
+@container (max-width: 760px) { .sa-setup-steps { grid-template-columns: minmax(0, 1fr); } }
+
 /* ---------- cards ---------- */
 .sa-card-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
 .sa-card-row-main { flex: 1 1 320px; min-width: 0; }
@@ -476,6 +505,49 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
 .sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+
+/* ---------- settings intro + Octo group picker ---------- */
+.sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
+.sa-settings-intro .sa-hint { flex: 1 1 320px; }
+.sa-group-picker { display: flex; flex-direction: column; gap: var(--sa-sp-8); min-width: 0;
+  padding: var(--sa-sp-8) 0; }
+.sa-group-picker-head { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-group-picker-head .sa-input { flex: 1 1 240px; }
+.sa-group-option { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-8);
+  width: 100%; min-height: 36px; padding: var(--sa-sp-8); border: 0; border-radius: var(--sa-r-sm);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sa-group-option:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-group-option:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+.sa-group-option:disabled { cursor: default; opacity: 0.72; }
+.sa-group-option-main { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
+.sa-group-option-name { font-size: var(--sa-fs-body); line-height: 1.4; color: var(--dsw-alias-label-primary); }
+
+/* ---------- configuration history ---------- */
+.sa-history-modal .sa-modal-body { max-height: 62vh; overflow-y: auto; }
+.sa-history-list { display: flex; flex-direction: column; }
+.sa-history-row { display: flex; align-items: center; gap: var(--sa-sp-12); padding: var(--sa-sp-12) 0;
+  border-top: 0.5px solid var(--sa-line); }
+.sa-history-row:first-child { border-top: 0; }
+.sa-history-main { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
+.sa-history-label { font-size: var(--sa-fs-body); color: var(--dsw-alias-label-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- repository add form ---------- */
+.sa-repo-modal { width: min(760px, 100%); }
+.sa-repo-modal .sa-modal-body { max-height: 62vh; overflow-y: auto; }
+.sa-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-16); }
+@container (max-width: 700px) { .sa-form-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- sender allowlist chips ---------- */
+.sa-sender-list { display: flex; flex-wrap: wrap; gap: var(--sa-sp-4) var(--sa-sp-8); min-width: 0; }
+.sa-sender-chip { display: inline-flex; align-items: center; gap: var(--sa-sp-4); max-width: 100%;
+  padding: 2px var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-pill);
+  font-size: var(--sa-fs-meta); line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+.sa-sender-chip .sa-mono { font-size: var(--sa-fs-meta); color: var(--dsw-alias-label-primary); }
+.sa-sender-remove { border: 0; background: none; padding: 0; margin: 0; color: var(--sa-label-tertiary);
+  font: inherit; line-height: 1; cursor: pointer; }
+.sa-sender-remove:hover { color: var(--dsw-alias-state-error-primary); }
+.sa-sender-remove:focus-visible { outline: var(--sa-focus); outline-offset: 1px; border-radius: 2px; }
 
 /* ---------- forms ---------- */
 .sa-form { display: flex; flex-direction: column; gap: var(--sa-sp-24); min-width: 0; }
@@ -782,7 +854,7 @@ const TEXT = {
   searchLabel: ['搜索', 'Search'],
   searchFound: ['找到 {tickets} 个工单、{threads} 个线程、{items} 条触发', 'Found {tickets} tickets, {threads} threads and {items} triggers'],
   searchFoundCapped: ['找到 {tickets} 个工单、{threads} 个线程，前 {items} 条触发（请缩小范围）', 'Found {tickets} tickets, {threads} threads and the first {items} triggers (narrow the search)'],
-  searchNone: ['没有找到。可以输入触发文字、GitHub Issue 或 PR 链接、#编号或飞书消息链接。', 'Nothing found. Try trigger text, a GitHub issue or PR link, #number, or a Feishu message link.'],
+  searchNone: ['没有找到。可以输入工单标题、线程名或消息片段。', 'Nothing found. Try a Ticket title, a Thread name, or a message snippet.'],
   searchFiltered: ['被来源过滤：{reason}', 'Filtered by its Source: {reason}'],
   inThread: ['在 {thread}', 'in {thread}'],
   glossary: ['术语表', 'Glossary'],
@@ -846,8 +918,8 @@ const TEXT = {
     agent: ['在这个仓库上主动工作的编码智能体：监听来源、判断请求、开立工单并执行。', 'The coding agent that works proactively on this repository: it watches Sources, judges requests, opens Tickets and executes them.'],
     mainSession: ['负责路由与评估的 DSH Session，把触发变成决定。', 'The DSH Session that routes and evaluates, turning Triggers into Decisions.'],
     executorSession: ['执行一个工单的 DSH Session，拥有独立的目录与分支。', 'The DSH Session that executes one Ticket, with its own directory and branch.'],
-    source: ['消息来源，例如 GitHub 仓库或飞书机器人。', 'A place messages arrive from, such as a GitHub repository or a Feishu bot.'],
-    channel: ['来源内的一个可回复地址，例如某个 Issue。', 'One replyable address inside a Source, such as an Issue.'],
+    source: ['消息来源，例如一个 Octo 群。', 'A place messages arrive from, such as an Octo group.'],
+    channel: ['来源内的一个可回复地址，例如某个群。', 'One replyable address inside a Source, such as a group.'],
     trigger: ['来源中的一条不可变消息。', 'One immutable message from a Source.'],
     thread: ['一段可以被订阅的对话，触发按它归组。', 'A conversation that can be subscribed to; Triggers are grouped by it.'],
     correlation: ['和同一触发相关的其它线程，仅作上下文。', 'Other Threads related to the same Trigger, used as context only.'],
@@ -2182,7 +2254,7 @@ function globalHealth(data) {
 
 /** `运行中 · 需要你处理 2 件 · 数据更新于 12:31`; the only "data updated" line in the panel (title = full time). */
 function GlobalStatus() {
-  const { t } = usePanel()
+  const { t, navigate } = usePanel()
   const { data, error, reload, updatedAt } = usePanelData()
   if (!data) {
     return h('div', { className: 'sa-global-status', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)',
@@ -2192,8 +2264,10 @@ function GlobalStatus() {
       error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
   }
   const health = globalHealth(data)
-  const pending = needsYouCount(data)
+  // P0: the header count follows the derived inbox when the host exposes it; older hosts keep the status-derived count.
+  const pending = data.inbox ? Number(data.inbox.blocking ?? 0) : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
+  const setup = setupStateOf(data)
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
   const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
@@ -2209,6 +2283,12 @@ function GlobalStatus() {
     active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
+    setup.done < setup.total
+      ? h(Fragment, null,
+        h('span', { 'aria-hidden': 'true' }, '·'),
+        h('button', { type: 'button', className: 'sa-setup-chip', onClick: () => navigate({ page: 'overview' }) },
+          pt(t, 'shell.setupChip', { done: setup.done, total: setup.total })))
+      : null,
     error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
 }
 
@@ -2442,13 +2522,46 @@ function useEngineActions(call) {
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
     refreshCi: (id) => call('POST engine/ticket/:id/ci', { id }),
     verifyTicket: (id) => call('POST engine/ticket/:id/verify', { id }),
-    // Human acceptance of a deployed UAT build: records the sign-off so the ticket leaves "needs you".
-    acceptTicket: (id, { ok = true, note } = {}) => call('POST engine/ticket/:id/accept', { id, body: { ok, note } }),
+    // Human acceptance of a deployed UAT build: records the sign-off so the ticket leaves "needs you". P1 adds
+    // `intents` (unmet / new-idea / no-evidence) to a rejection so the executor knows why the round was sent back.
+    acceptTicket: (id, { ok = true, note, intents } = {}) => call('POST engine/ticket/:id/accept',
+      { id, body: { ok, note, ...(Array.isArray(intents) && intents.length ? { intents } : {}) } }),
+    // P1 (§9): replay one filtered/failed raw signal through the current rules.
+    replaySignal: (id) => call('POST engine/signal/:id/replay', { id }),
+    // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
+    resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
+    // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
+    answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),
+    // P1 (§8.1): recent raw signals, read by the Source page (status/source/limit are optional filters).
+    loadSignals: ({ status, source, limit } = {}) => call('GET engine/signals', { query: { status, source, limit } }),
+    // P2-1: one Ticket's automation config (mode/enabled/intervalMinutes/at/maxExecutions patch; the host normalises).
+    setAutomation: (id, patch) => call('POST engine/ticket/:id/automation', { id, body: patch ?? {} }),
+    // P2-8: human quality label on one raw signal (correct | false_wake | missed_wake | cleared).
+    labelSignal: (id, label, note) => call('POST engine/signal/:id/label',
+      { id, body: { label, ...(note === undefined ? {} : { note }) } }),
+    // Actionable inbox (P0 contract §2): read one item, resolve a non-blocking one, and fetch the list for the
+    // overview. A blocking item can only be settled by its real action (gate/accept), never by resolveInbox.
+    readInbox: (id) => call('POST engine/inbox/:id/read', { id }),
+    resolveInbox: (id, { action, note } = {}) => call('POST engine/inbox/:id/resolve', { id, body: { action, note } }),
+    loadInbox: () => call('GET engine/inbox'),
+    // The three human decisions on a parked gate (P0-3): release skips the gate and delivers, retry re-runs the
+    // gates, stop fails the Ticket. The host answers { run, ticket }.
+    gateAction: (id, action, note) => call('POST engine/ticket/:id/gate',
+      { id, body: { action, ...(note === undefined ? {} : { note }) } }),
     // Hide a failed/unused Ticket and clean its local worktree + branch (host does the cleanup before dismissing).
     dismissTicket: (id, note) => call('POST engine/ticket/:id/dismiss', { id, body: note ? { note } : {} }),
     patchSettings: (patch) => call('POST engine/settings', { body: patch }),
     // Store one repository's GitLab token in the token file live.json declares for it (never echoed back).
     saveRepoToken: (repoId, token) => call('POST engine/repo/:id/token', { id: repoId, body: { token } }),
+    // Store the Octo bot token in the file live.json declares; same no-echo contract as the repo token.
+    saveOctoToken: (token) => call('POST engine/octo/token', { body: { token } }),
+    // Read-only list of the bot's Octo groups, used by the settings picker.
+    listOctoGroups: () => call('GET engine/octo/groups'),
+    // Add one repository definition to live.json; the token is saved separately on the repo card.
+    addRepo: (repo, { makeDefault = false } = {}) => call('POST engine/repos', { body: { repo, makeDefault } }),
+    // Saved live.json versions and rollback; entries are configuration-only (no token values).
+    settingsHistory: () => call('GET engine/settings/history'),
+    restoreSettings: id => call(`POST engine/settings/history/${encodeURIComponent(id)}/restore`),
     pause: (paused) => call('POST engine/settings', { body: { paused } }),
     // Kept for callers of the old single-key setter; new code should use patchSettings.
     updateSetting: (key, value) => call('POST engine/settings', { body: { [key]: value } }),
@@ -2473,20 +2586,122 @@ function usePanelModel(intervalMs = 30000) {
  * Generic read-only resource poller for lists and details: GET `route` with `params`.
  * `params` fills both the `:placeholders` and the query string (an unknown query key is ignored by the host), so
  * a page can pass `{ filter }`, `{ kind, window }`, `{ id }` or `{ key }` uniformly.
+ * `options.enabled` (default true) keeps a hook unconditionally mounted while the endpoint is optional: a disabled
+ * resource resolves `undefined` without a request, so an older host without `engine/inbox` is never 404-polled.
  * → { data, error, loading, reload }; a failed refresh keeps the last good data so the view does not flash.
  */
-function useLiveResource(route, params, intervalMs = 30000) {
+function useLiveResource(route, params, intervalMs = 30000, options = {}) {
   const { call } = usePanel()
+  const enabled = options.enabled !== false
   const request = params ?? {}
   const key = `${route}|${JSON.stringify(request)}`
   const load = useCallback(() => {
+    if (!enabled) return Promise.resolve(undefined)
     const pathNames = [...route.matchAll(/:(\w+)/g)].map(match => match[1])
     const query = Object.fromEntries(Object.entries(request).filter(([name]) => !pathNames.includes(name)))
     return call(`GET ${route}`, { ...request, query })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` is the stable identity of params
-  }, [call, route, key])
+  }, [call, route, key, enabled])
   const { data, error, reload } = usePoll(load, [load], intervalMs)
   return { data, error, loading: data === undefined && !error, reload }
+}
+
+
+// ---- 33-setup.js ----
+/* First-run setup: a four-step checklist derived from the status document every page already receives.
+   It is deliberately a client-only projection: the host does not need a new "onboarding" endpoint, and the card
+   disappears as soon as the four prerequisites are true. The copy names the operator's next action, not a file. */
+
+Object.assign(PAGE_TEXT, {
+  'setup.title': ['开始使用', 'Get started'],
+  'setup.lead': ['完成下面几步，群里的一条请求就会变成可执行的工单。', 'A few steps turn a group message into a runnable Ticket.'],
+  'setup.progress': ['已完成 {done}/{total}', '{done}/{total} done'],
+  'setup.continue': ['继续配置', 'Continue setup'],
+  'setup.open': ['去配置', 'Open settings'],
+  'setup.done': ['完成', 'Done'],
+  'setup.footer': ['完成后用顶部「检查新消息」做一次试运行；试运行不会写入状态。',
+    'When the steps are done, use “Check for new messages” at the top for a dry run; it writes no state.'],
+  'setup.banner': ['配置未完成 · {done}/{total}', 'Setup incomplete · {done}/{total}'],
+  'setup.token.title': ['配置 Octo token', 'Connect Octo'],
+  'setup.token.hint': ['让面板能读取群消息；保存在本机 token 文件，不会回显。',
+    'Lets the panel read group messages; stored in a local token file and never echoed.'],
+  'setup.groups.title': ['添加监听群', 'Add a watched group'],
+  'setup.groups.hint': ['从群列表选择，并设置允许的触发人（或开启任意人类）。',
+    'Pick a group and set who may trigger it (or accept any human).'],
+  'setup.repo.title': ['绑定仓库', 'Bind a repository'],
+  'setup.repo.hint': ['执行器在哪个仓库改代码；还没有仓库时先在设置里复制配置路径。',
+    'Where the executor changes code; if none exists, copy the config path under Settings first.'],
+  'setup.engine.title': ['打开引擎', 'Turn on the engine'],
+  'setup.engine.hint': ['在设置→来源打开「启用引擎」并保存；开启后才会自动轮询。',
+    'Turn on “Engine enabled” under Settings → Source and save; polling starts after that.'],
+})
+
+/** The four prerequisites, in the order a first-time installer should satisfy them. */
+const SETUP_STEPS = [
+  { key: 'token', group: 'source', focus: 'octo-token' },
+  { key: 'groups', group: 'source', focus: 'bindings' },
+  { key: 'repo', group: 'repos' },
+  { key: 'engine', group: 'source' },
+]
+
+/** Pure projection of the status document; missing fields count as not done. */
+function setupStateOf(data) {
+  const config = data?.config ?? {}
+  const octo = config.octo ?? {}
+  const repos = Array.isArray(config.repos) ? config.repos : []
+  const steps = SETUP_STEPS.map(step => ({
+    key: step.key,
+    group: step.group,
+    focus: step.focus,
+    done: step.key === 'token' ? octo.tokenConfigured === true
+      : step.key === 'groups' ? Array.isArray(octo.watchChatIds) && octo.watchChatIds.length > 0
+        : step.key === 'repo' ? repos.length > 0
+          : config.enabled === true,
+  }))
+  // The group step also carries the trigger-people rule: a watched group with no allowed sender (and "any human"
+  // off) is a configured-looking intake the engine will refuse.
+  const triggerRule = octo.allowAnyHuman === true
+    || (Array.isArray(octo.allowSenderIds) && octo.allowSenderIds.length > 0)
+  if (steps[1]) steps[1].done = steps[1].done && triggerRule
+  const done = steps.filter(step => step.done).length
+  return { steps, done, total: steps.length, complete: done === steps.length,
+    next: steps.find(step => !step.done) ?? steps[steps.length - 1] }
+}
+
+/** Full card: shown when the desk is quiet (the first-run case), so it replaces empty space with the next action. */
+function SetupChecklist({ setup, onNavigate }) {
+  const { t } = usePanel()
+  if (!setup || setup.complete) return null
+  return h('section', { className: 'sa-setup', 'aria-labelledby': 'sa-setup-title' },
+    h('div', { className: 'sa-setup-head' },
+      h('div', { className: 'sa-setup-heading' },
+        h('div', { className: 'sa-setup-title-row' },
+          h('h2', { className: 'sa-setup-title', id: 'sa-setup-title' }, pt(t, 'setup.title')),
+          h('span', { className: 'sa-setup-count', role: 'status' }, pt(t, 'setup.progress', { done: setup.done, total: setup.total }))),
+        h('p', { className: 'sa-setup-lead' }, pt(t, 'setup.lead'))),
+      h(Button, { variant: 'primary', size: 'sm', onClick: () => onNavigate({ page: 'settings', group: setup.next.group, focus: setup.next.focus }) },
+        pt(t, 'setup.continue'))),
+    h('ol', { className: 'sa-setup-steps' }, setup.steps.map(step => h('li', {
+      key: step.key, className: 'sa-setup-step', 'data-done': step.done || undefined },
+      h(StatusIcon, { state: step.done ? 'done' : 'idle', size: 16 }),
+      h('div', { className: 'sa-setup-step-main' },
+        h('span', { className: 'sa-setup-step-title' }, pt(t, `setup.${step.key}.title`)),
+        h('span', { className: 'sa-setup-step-hint' }, pt(t, `setup.${step.key}.hint`))),
+      step.done ? h(Tag, { tone: 'success' }, pt(t, 'setup.done'))
+        : h(Button, { variant: 'ghost', size: 'sm', onClick: () => onNavigate({ page: 'settings', group: step.group, focus: step.focus }) },
+          pt(t, 'setup.open'))))),
+    h('p', { className: 'sa-hint' }, pt(t, 'setup.footer')))
+}
+
+/** One-line banner: shown when there is live work, so setup never pushes urgent Tickets down the page. */
+function SetupBanner({ setup, onNavigate }) {
+  const { t } = usePanel()
+  if (!setup || setup.complete) return null
+  return h('div', { className: 'sa-setup-banner' },
+    h(StatusIcon, { state: 'idle', size: 14 }),
+    h('span', { className: 'sa-hint' }, pt(t, 'setup.banner', { done: setup.done, total: setup.total })),
+    h(Button, { variant: 'ghost', size: 'sm', onClick: () => onNavigate({ page: 'settings', group: setup.next.group, focus: setup.next.focus }) },
+      pt(t, 'setup.continue')))
 }
 
 
@@ -2523,12 +2738,18 @@ Object.assign(PAGE_TEXT, {
     'deploy-pending': ['部署 UAT 中', 'Deploying to UAT'], 'deploy-failed': ['部署失败', 'Deploy failed'],
     closed: ['MR 已关闭', 'MR closed'], dismissed: ['已忽略', 'Dismissed'], failed: ['失败', 'Failed'], unknown: ['状态未知', 'Unknown state'],
     'dry-run': ['干跑完成', 'Dry run finished'], running: ['运行中', 'Running'],
+    // P0: a run parked on a failing gate is a state of its own; the Ticket keeps the phase label it reached.
+    'gate-blocked': ['闸门待处理', 'Gate needs you'],
+    // P1-4: the worker asked a question; the run is parked until a person answers (group waiting, primary 'answer').
+    'awaiting-answer': ['等待回答', 'Awaiting your answer'],
+    waiting_for_human: ['等待人工', 'Waiting for you'], interrupted: ['已中断', 'Interrupted'],
     accepted: ['已验收', 'Accepted'],
   },
   group: { queued: ['待排', 'Queued'], working: ['执行中', 'Working'], waiting: ['等待人', 'Waiting for you'],
     failed: ['失败', 'Failed'], done: ['已结束', 'Ended'] },
   primary: { accept: ['去验收', 'Review UAT'], merge: ['去合并 MR', 'Merge MR'], deploy: ['刷新部署', 'Refresh deploy'],
-    diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'] },
+    diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'],
+    gate: ['去处理闸门', 'Handle the gate'], answer: ['去回答', 'Answer the question'] },
   disposition: { queued: ['排队', 'Queued'], evaluating: ['评估中', 'Evaluating'], delivered: ['已送达', 'Delivered'],
     fanout: ['扇出', 'Fanned out'], filtered: ['被过滤', 'Filtered'] },
   rail: { trigger: ['触发', 'Trigger'], eval: ['评估', 'Eval'], ticket: ['工单', 'Ticket'], execution: ['执行', 'Execution'],
@@ -2541,19 +2762,34 @@ Object.assign(PAGE_TEXT, {
   shell: { running: ['运行中', 'Running'], paused: ['已暂停', 'Paused'], stopped: ['已停止', 'Stopped'],
     error: ['异常', 'Error'], blocked: ['被阻塞', 'Blocked'], unknown: ['状态未知', 'Status unknown'],
     loading: ['读取中…', 'Loading…'], pending: ['需要你处理 {count} 件', '{count} need you'],
-    active: ['执行中 {count}', '{count} running'] },
+    active: ['执行中 {count}', '{count} running'],
+    setupChip: ['配置 {done}/{total}', 'Set up {done}/{total}'] },
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
     evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
-    evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'] },
+    evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
+    evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
+    acceptanceAccepted: ['已验收', 'Accepted'], acceptanceRejected: ['已打回', 'Rejected'],
+    interrupted: ['已中断', 'Interrupted'] },
+  // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
+  runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
+    publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
+    other: ['触发方式：{trigger}', 'Trigger: {trigger}'] },
+  runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
+    worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
+    gate_failed: ['闸门未通过', 'Gate failed'], prepare_failed: ['准备工作区失败', 'Worktree preparation failed'],
+    bootstrap_failed: ['依赖安装失败', 'Dependency install failed'], guard_failed: ['改动校验失败', 'Change guard failed'],
+    commit_failed: ['提交失败', 'Commit failed'], push_failed: ['推送失败', 'Push failed'],
+    mr_failed: ['MR 创建失败', 'MR creation failed'], interrupted: ['已中断', 'Interrupted'],
+    stopped: ['人工终止', 'Stopped by a person'], other: ['其他原因（{reason}）', 'Other ({reason})'] },
   problem: { engineError: ['引擎报告异常', 'The engine reported an error'], paused: ['处理已暂停', 'Processing is paused'],
     engineOff: ['自动触发未开启', 'Automatic intake is off'], sourceError: ['{name} 异常', '{name} is failing'],
     octoToken: ['Octo token 未配置', 'Octo token is missing'], gitlabToken: ['GitLab token 未配置', 'GitLab token is missing'],
     pausedDetail: ['恢复前不会开始新的评估、派工或回复。', 'No new Eval, dispatch or reply runs until you resume.'],
-    engineOffDetail: ['改 ~/.dsh/superagent/live.json 并重载配置后，引擎才会自动轮询群消息。',
-      'Set enabled in ~/.dsh/superagent/live.json and reload the config to poll the group automatically.'],
+    engineOffDetail: ['在设置→来源打开「启用引擎」并保存后，引擎才会自动轮询群消息。',
+      'Turn on “Engine enabled” under Settings → Source and save; the engine then polls the group automatically.'],
     octoTokenDetail: ['没有 Octo token，引擎读不到群消息。', 'Without an Octo token the engine cannot read the group.'],
     gitlabTokenDetail: ['没有 GitLab token 时无法观测 CI 与部署，只能做无 token 的核对。',
       'Without a GitLab token CI and deploy results cannot be observed; only token-free verification runs.'] },
@@ -2667,6 +2903,24 @@ Object.assign(PAGE_TEXT, {
     viewHandled: ['查看已处理工单', 'View handled tickets'],
   },
   dismissedAfterFailure: ['失败后忽略', 'Dismissed after failure'],
+  // P2-1: a Ticket can run itself; the same summary wording serves the row chip and the automation card.
+  'auto.everyMinutes': ['每 {minutes} 分钟', 'Every {minutes} min'],
+  'auto.everyHours': ['每 {hours} 小时', 'Every {hours} h'],
+  'auto.daily': ['每天 {time}', 'Daily {time}'],
+  'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
+  'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
+  'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
+  'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
+  'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
+  // P2-7: GitLab observation upgrades shown on the MR card.
+  'mr.draft': ['草稿', 'Draft'],
+  'mr.draftHint': ['这个 MR 仍是草稿/WIP：自动巡检会跳过合并与 UAT 判定。',
+    'This MR is still a draft/WIP; auto-verification skips merge and UAT checks.'],
+  'mr.stale': ['过期 CI', 'Stale CI'],
+  'mr.staleHint': ['最新流水线属于另一个提交（当前 {head}，最新 {latest}），CI 结论不覆盖工单状态。',
+    'The newest pipeline belongs to another commit (current {head}, latest {latest}); the CI result does not change the Ticket.'],
   // 24h funnel: 过滤 is a branch of 到达, and `dropped` means outbound replies that failed to send — neither is a stage.
   funnelBranch: ['其中 {count} 条仅作上下文', '{count} context-only'],
   funnelSummary2: ['{received} 到达 · {judged} 评估 · {accepted} 接单 · {dropped} 出站失败',
@@ -2688,7 +2942,8 @@ Object.assign(PAGE_TEXT, {
 
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
-  'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast']
+  'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
+  'runTrigger', 'runStop']
 for (const group of TEXT_GROUPS) {
   const nested = PAGE_TEXT[group]
   if (!nested || Array.isArray(nested)) continue
@@ -2750,6 +3005,38 @@ function repoAcceptanceText(t, acceptance) {
   return key ? pt(t, key) : pt(t, 'repo.unknownMode', { mode: acceptance })
 }
 
+/** Automation summary in the operator's language: mirrors lib/live/schedule.js `describeAutomation` on the client. */
+function automationSummaryText(t, automation) {
+  if (!automation || automation.enabled !== true || automation.mode === 'off') return ''
+  if (automation.mode === 'heartbeat') {
+    const raw = Number(automation.intervalMinutes)
+    const minutes = Number.isFinite(raw) && raw > 0 ? raw : 60
+    return minutes % 60 === 0 ? pt(t, 'auto.everyHours', { hours: minutes / 60 })
+      : pt(t, 'auto.everyMinutes', { minutes })
+  }
+  if (automation.mode === 'schedule') return pt(t, 'auto.daily', { time: String(automation.at || '09:00') })
+  return ''
+}
+
+/** The row chip for a self-running Ticket; the tooltip carries the next run when the host computed one. */
+function automationChip(t, ticket) {
+  const automation = ticket?.automation
+  if (!automation || automation.enabled !== true || automation.mode === 'off') return null
+  const label = automationSummaryText(t, automation)
+  if (!label) return null
+  return h(Tag, { key: 'automation', tone: 'info',
+    title: automation.nextAt ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) }) : undefined },
+  label)
+}
+
+/** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+function autoSkipReasonText(t, reason) {
+  const key = AUTO_SKIP_KEYS[String(reason ?? '')]
+  return key ? pt(t, key) : String(reason ?? '')
+}
+
 // ---- status model ---------------------------------------------------------------------------------------------
 
 /** Engine ticket status → shape, tag tone, group, whether a person has to act, and the one row action. */
@@ -2770,30 +3057,112 @@ const TICKET_VIEW = {
   dismissed: { state: 'idle', tone: 'neutral', group: 'done', needsHuman: false, primary: 'none' },
   'dry-run': { state: 'done', tone: 'info', group: 'done', needsHuman: false, primary: 'none' },
   running: { state: 'ongoing', tone: 'info', group: 'working', needsHuman: false, primary: 'none' },
+  // A parked gate is non-terminal and belongs to the person (P0-3): the row says so and its one action opens the detail.
+  'gate-blocked': { state: 'warning', tone: 'warning', group: 'waiting', needsHuman: true, primary: 'gate' },
+  // P1-4: the worker asked a question; the Ticket waits in the same shape as a gate park, with the answer as its action.
+  'awaiting-answer': { state: 'warning', tone: 'warning', group: 'waiting', needsHuman: true, primary: 'answer' },
+  // Run-level statuses (runs never reach the waiting/failed ticket groups; they only borrow the label and shape).
+  waiting_for_human: { state: 'warning', tone: 'warning', group: 'working', needsHuman: false, primary: 'none' },
+  interrupted: { state: 'warning', tone: 'warning', group: 'failed', needsHuman: false, primary: 'none' },
   failed: { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
   'ci-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
   'deploy-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
 }
 
 /**
- * One Ticket status → the view every page renders.
- * → { key, state, tone, group, needsHuman, primary, labelKey } (label key is read through `pt`).
+ * A Ticket's raw engine status → the phase view, before the human sign-off is applied.
+ * Repositories accepted after the merge (no CI/UAT, contract §12) keep `merged` waiting for a person.
  */
-function ticketStatus(ticket) {
+function ticketBaseView(ticket) {
   const key = ticket?.status ?? ticket?.stage
-  // A person's UAT sign-off is a property of the ticket, not of the engine status: the deployment record stays
-  // `deployed`, but the Ticket is done waiting for a human.
-  if (ticket?.links?.acceptance?.ok === true) {
-    return { key: 'accepted', state: 'done', tone: 'success', group: 'done', needsHuman: false, primary: 'none', labelKey: 'ticketState.accepted' }
-  }
-  // Repositories that are accepted after the merge (no CI/UAT, contract §12): a merged Ticket still waits for a
-  // person, so it groups under "needs you" with acceptance as its one action.
   if (ticket?.repoAcceptance === 'merged' && ticket?.status === 'merged') {
-    return { key: 'merged', state: 'idle', tone: 'success', group: 'waiting', needsHuman: true, primary: 'accept', labelKey: 'ticketState.merged' }
+    return { key: 'merged', state: 'idle', tone: 'success', group: 'waiting', needsHuman: true, primary: 'accept',
+      labelKey: 'ticketState.merged' }
   }
   const view = TICKET_VIEW[key] ? { key, ...TICKET_VIEW[key] } : { key: 'unknown', ...TICKET_VIEW.queued, state: 'idle', group: 'queued', primary: 'none' }
   view.labelKey = `ticketState.${view.key}`
   return view
+}
+
+/**
+ * The person's sign-off on a Ticket (spec §3.6.1), orthogonal to the engine status.
+ * → { state: 'accepted'|'rejected'|'pending'|'none', at?, note? }.
+ * A Ticket only has a *pending* sign-off while its phase view waits for a person with accept/merge as the one action;
+ * every other status owns no acceptance duty.
+ */
+function ticketAcceptanceOf(ticket) {
+  const acceptance = ticket?.links?.acceptance
+  if (acceptance?.ok === true) return { state: 'accepted', at: acceptance.at, note: acceptance.note }
+  if (acceptance?.ok === false) return { state: 'rejected', at: acceptance.at, note: acceptance.note }
+  const base = ticketBaseView(ticket)
+  if (base.group === 'waiting' && (base.primary === 'accept' || base.primary === 'merge')) return { state: 'pending' }
+  return { state: 'none' }
+}
+
+/**
+ * One Ticket status → the view every page renders.
+ * → { key, state, tone, group, needsHuman, primary, acceptance, labelKey } (label key is read through `pt`).
+ * The sign-off is a property of the Ticket, not of the engine status: an accepted Ticket keeps its phase key/state/tone
+ * (the row still says “已部署 UAT”) but leaves the attention groups and owns no primary action.
+ */
+function ticketStatus(ticket) {
+  const view = ticketBaseView(ticket)
+  const acceptance = ticketAcceptanceOf(ticket)
+  if (acceptance.state === 'accepted') {
+    return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  return { ...view, acceptance }
+}
+
+/**
+ * The middle row chip for a Ticket with an acceptance duty: the sign-off fact, or the wait the person owns. A pending
+ * sign-off borrows the shared wait wording (验收 vs 合并) so the same fact is never printed twice on one row.
+ */
+function rowAcceptanceChip(t, view) {
+  const acceptance = view?.acceptance
+  if (!acceptance || acceptance.state === 'none') return null
+  if (acceptance.state === 'accepted') return h(Tag, { key: 'acceptance', tone: 'success' }, pt(t, 'row.acceptanceAccepted'))
+  if (acceptance.state === 'rejected') return h(Tag, { key: 'acceptance', tone: 'danger' }, pt(t, 'row.acceptanceRejected'))
+  return h(Tag, { key: 'acceptance', tone: 'warning' }, pt(t, view.primary === 'merge' ? 'row.evidenceMerge' : 'row.evidenceReview'))
+}
+
+/** Latest run of one Ticket: the detail payload carries `ticket.runs`; list rows rely on the status document's index. */
+function latestRunFor(ticket, runs) {
+  const inline = Array.isArray(ticket?.runs) ? ticket.runs.filter(Boolean) : []
+  const pool = inline.length ? inline : (Array.isArray(runs) ? runs.filter(run => run && run.ticketId === ticket?.id) : [])
+  return [...pool].sort((left, right) => String(right?.startedAt ?? '').localeCompare(String(left?.startedAt ?? '')))[0]
+}
+
+/** True when the newest run of the Ticket was interrupted by a plugin reload / host restart (P1-5). */
+function ticketRunInterrupted(ticket, runs) {
+  return latestRunFor(ticket, runs)?.status === 'interrupted'
+}
+
+/** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
+const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
+  publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
+function runTriggerLabel(t, run) {
+  const trigger = run?.trigger
+  if (!trigger) return null
+  const key = RUN_TRIGGER_KEYS[String(trigger)]
+  return key ? pt(t, key) : pt(t, 'runTrigger.other', { trigger: String(trigger) })
+}
+
+/** Why a run stopped (P0 `run.stopReason`/`errorCode`) → label + tone; an unknown reason stays visible. */
+const RUN_STOP_REASON_KEYS = { done: 'runStop.done', error: 'runStop.error', timeout: 'runStop.timeout',
+  worker_failed: 'runStop.worker_failed', no_changes: 'runStop.no_changes', gate_failed: 'runStop.gate_failed',
+  prepare_failed: 'runStop.prepare_failed', bootstrap_failed: 'runStop.bootstrap_failed', guard_failed: 'runStop.guard_failed',
+  commit_failed: 'runStop.commit_failed', push_failed: 'runStop.push_failed', mr_failed: 'runStop.mr_failed',
+  interrupted: 'runStop.interrupted', stopped: 'runStop.stopped' }
+const RUN_STOP_TONE = { done: 'success', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
+  interrupted: 'warning', stopped: 'neutral', error: 'danger', timeout: 'danger', worker_failed: 'danger',
+  prepare_failed: 'danger', bootstrap_failed: 'danger', guard_failed: 'danger', commit_failed: 'danger', push_failed: 'danger' }
+function runStopLabel(t, run) {
+  const reason = run?.stopReason ?? run?.errorCode
+  if (!reason) return null
+  const key = RUN_STOP_REASON_KEYS[String(reason)]
+  return { tone: RUN_STOP_TONE[String(reason)] ?? 'outline',
+    label: key ? pt(t, key) : pt(t, 'runStop.other', { reason: String(reason) }) }
 }
 
 /** Old public seam: status string → tag tone. Kept because pages may still import it. */
@@ -2902,20 +3271,28 @@ function problemsOf(data) {
   }
   if (config.enabled === false) {
     out.push({ key: 'engine-off', severity: 'warning', title: liveText('自动触发未开启', 'Automatic intake is off'),
-      detail: liveText('改 ~/.dsh/superagent/live.json 并重载配置后，引擎才会自动轮询群消息。',
-        'Enable it in ~/.dsh/superagent/live.json and reload the config to poll the group automatically.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→来源打开「启用引擎」并保存后，引擎才会自动轮询群消息。',
+        'Turn on “Engine enabled” under Settings → Source and save; the engine then polls the groups automatically.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
   }
   if (config.octo && config.octo.tokenConfigured === false) {
     out.push({ key: 'octo-token', severity: 'warning', title: liveText('Octo token 未配置', 'Octo token is missing'),
-      detail: liveText('没有 Octo token，引擎读不到群消息。', 'Without an Octo token the engine cannot read the group.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→来源保存 Octo token 后，引擎才能读取群消息。',
+        'Save the Octo token under Settings → Source so the engine can read group messages.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
+  }
+  if (config.octo && config.octo.allowAnyHuman !== true
+    && !(Array.isArray(config.octo.allowSenderIds) && config.octo.allowSenderIds.length > 0)) {
+    out.push({ key: 'octo-senders', severity: 'warning', title: liveText('没有允许的触发人', 'No allowed sender'),
+      detail: liveText('在设置→来源开启「允许任意人类」或添加发送者；否则真实轮询会被引擎拒绝。',
+        'Turn on “accept any human” or add allowed senders under Settings → Source; otherwise a live poll is refused.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
   }
   if (config.gitlab && config.gitlab.tokenConfigured === false) {
     out.push({ key: 'gitlab-token', severity: 'warning', title: liveText('GitLab token 未配置', 'GitLab token is missing'),
-      detail: liveText('没有 GitLab token 时无法观测 CI 与部署，只能做无 token 的核对。',
-        'Without a GitLab token CI and deploy results cannot be observed; only token-free verification runs.'),
-      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings' } } })
+      detail: liveText('在设置→仓库为对应仓库保存 GitLab token 后，才能观测 CI 与部署。',
+        'Save a GitLab token for the repository under Settings → Repositories to observe CI and deployment.'),
+      action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'repos' } } })
   }
   const sources = Array.isArray(data.sources) ? data.sources : []
   for (const source of sources) {
@@ -2951,6 +3328,10 @@ function primaryActionOf(ticket, view) {
     case 'openMr': return external ? { labelKey: 'primary.openMr', kind: 'external', href: external } : { labelKey: 'primary.openMr', kind: 'detail' }
     case 'deploy': return { labelKey: 'primary.deploy', kind: 'refreshCi' }
     case 'diagnose': return { labelKey: 'primary.diagnose', kind: 'detail' }
+    // A parked gate needs the three-way human decision that only the detail can state; the row opens it. A parked
+    // question is the same contract: the answer form lives in the detail banner.
+    case 'gate': return { labelKey: 'primary.gate', kind: 'detail' }
+    case 'answer': return { labelKey: 'primary.answer', kind: 'detail' }
     case 'progress': return { labelKey: 'primary.progress', kind: 'dryRun' }
     default: return null
   }
@@ -2978,28 +3359,32 @@ function failureLabel(t, error) {
 }
 
 /**
- * The one piece of physical evidence the execution ledger shows on the right: the MR that shipped it, the Chinese
- * cause of a failed run, the wait a person owns, or the current run's age. Deliberately never repeats a status that a
- * Tag already states (state/result stay in the meta line), and it stays empty for Tickets that have no evidence yet.
+ * The one piece of physical evidence the execution ledger shows on the right: the gate that parked the run, the MR that
+ * shipped it, the Chinese cause of a failed run, or the current run's age — exactly one of those, never a status or a
+ * result a chip already states (P0 §3.6.4: state + acceptance/result + time are the row's whole information budget).
  */
 function ticketEvidence(t, ticket, view) {
-  const links = ticket.links ?? {}
-  const assignments = Array.isArray(ticket.assignments) ? ticket.assignments : []
+  const links = ticket?.links ?? {}
+  const assignments = Array.isArray(ticket?.assignments) ? ticket.assignments : []
+  // A parked gate: the gate's name is the evidence a person needs; the state and the wait are on the chips.
+  if (ticket?.status === 'gate-blocked') {
+    const name = ticket.pendingGate?.name
+    return name ? pt(t, 'row.evidenceGate', { name }) : pt(t, 'row.evidenceGateWait')
+  }
   const failed = [...assignments].reverse().find(assignment => assignment?.report?.state === 'failed')
+  const recovered = view?.group === 'done' || ['merged', 'deployed'].includes(ticket?.status)
+  if (failed && !recovered) {
+    const raw = String(failed.report?.text ?? '')
+    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
+  }
   const mr = links.mergeRequest ?? {}
-  const delivered = ['merged', 'deployed'].includes(ticket.status) || links.acceptance?.ok === true
-  if (mr.iid && (!failed || delivered)) {
+  if (mr.iid) {
     const label = pt(t, 'row.evidenceMr', { iid: mr.iid })
     return mr.webUrl
       ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
         title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
-  if (failed) {
-    const raw = String(failed.report?.text ?? '')
-    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
-  }
-  if (view?.group === 'waiting') return pt(t, ticket.status === 'deployed' ? 'row.evidenceReview' : 'row.evidenceMerge')
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
     const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
@@ -3095,9 +3480,21 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const failedBeforeDismiss = view.key === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed')
   if (failedBeforeDismiss) chips.push(h(Tag, { key: 'dismissed-after-failure', tone: 'warning' }, pt(t, 'dismissedAfterFailure')))
+  // P1-5: a run interrupted by a plugin reload / host restart is resumable — the row says so before the phase label
+  // (which still reads "排队中" after reconcile) can be mistaken for a healthy queue entry.
+  const interrupted = ticketRunInterrupted(ticket, data?.runs)
+  if (interrupted) chips.push(h(Tag, { key: 'interrupted', tone: 'warning' }, pt(t, 'row.interrupted')))
+  // The middle slot is the person's sign-off when the Ticket has one, otherwise the one result worth a second tag
+  // (P0 §3.6.4: 状态 + 验收/结果, never both). Time is the third chip and only where the row has room; the overview
+  // (compact) keeps exactly two. The repository name stays a plain hint, outside the tag budget.
+  const acceptanceChip = rowAcceptanceChip(t, view)
+  // P2-1: a self-running Ticket says so in the middle slot (state + automation/result + time stays within the budget).
+  const scheduleChip = automationChip(t, ticket)
+  if (acceptanceChip) chips.push(acceptanceChip)
+  else if (scheduleChip) chips.push(scheduleChip)
+  else if (result) chips.push(h(Tag, { key: 'result', tone: result.tone }, pt(t, result.labelKey)))
+  if (!compact && !interrupted) chips.push(h(When, { key: 'at', at: ticket.updatedAt ?? ticket.createdAt }))
   if (showRepo) chips.push(h('span', { key: 'repo', className: 'sa-hint' }, String(repoName)))
-  chips.push(h(When, { key: 'at', at: ticket.updatedAt ?? ticket.createdAt }))
-  if (result && !compact) chips.push(h(Tag, { key: 'result', tone: result.tone }, pt(t, result.labelKey)))
   if (extra) chips.push(h('span', { key: 'extra', className: 'sa-hint' }, extra))
 
   // The row itself is a plain div (mouse convenience); the title is a real <button> so keyboard users get one focus
@@ -3142,7 +3539,9 @@ function TicketList({ tickets, page = 'execution', actions, reload }) {
     h(TicketRow, { key: ticket.id, ticket, page, actions, reload })))
 }
 
-const TICKET_GROUP_ORDER = ['queued', 'working', 'waiting', 'failed', 'done']
+// Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
+// the settled history. The same order drives the execution stage filter (55-execution EXEC_STAGES).
+const TICKET_GROUP_ORDER = ['waiting', 'failed', 'working', 'queued', 'done']
 
 /** Execution tab: one Section per non-empty stage group, stage order fixed. `groupNotes` adds a one-line summary
     (e.g. the done group's accepted/dismissed/retried split) as the section badge; `className` wraps the groups so a
@@ -3375,8 +3774,21 @@ function MergeRequestCard({ ticket }) {
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
+  // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
+  const draft = mr.draft === true || mr.workInProgress === true
+  const stale = pipeline.stale && typeof pipeline.stale === 'object' ? pipeline.stale : undefined
+  const badges = [
+    draft ? h(Tag, { key: 'draft', tone: 'warning' }, pt(t, 'mr.draft')) : null,
+    stale ? h(Tag, { key: 'stale', tone: 'warning' }, pt(t, 'mr.stale')) : null,
+  ].filter(Boolean)
   return h('div', { className: 'sa-card' },
     h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'ticket.mrCard'))),
+    badges.length ? h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } }, badges) : null,
+    draft ? h(Folded, { summary: pt(t, 'mr.draft') }, h('p', { className: 'sa-hint' }, pt(t, 'mr.draftHint'))) : null,
+    stale
+      ? h(Folded, { summary: pt(t, 'mr.stale') }, h('p', { className: 'sa-hint' },
+        pt(t, 'mr.staleHint', { head: liveShortId(stale.headSha, 8) || '—', latest: liveShortId(stale.latestSha, 8) || '—' })))
+      : null,
     mr.iid || pipeline.status || autoMerge.state
       ? h(KeyValues, { rows })
       : h(Hint, null, liveText('还没有合并请求。', 'No merge request yet.')))
@@ -3448,6 +3860,7 @@ function LiveStatusTags({ engine, config }) {
 
 Object.assign(PAGE_TEXT, {
   'ov.needsYou': ['需要你处理', 'Needs you'],
+  'ov.inboxError': ['待办列表加载失败，概览计数可能滞后；可重试。', 'The inbox failed to load; the desk count may be stale. Retry.'],
   'ov.activeProgress': ['{step} · 已运行 {elapsed}', '{step} · running {elapsed}'],
   'ov.elapsedLess': ['不到 1 分钟', '< 1 min'],
   'ov.elapsedMinutes': ['{count} 分钟', '{count} min'],
@@ -3480,6 +3893,7 @@ Object.assign(PAGE_TEXT, {
   'ov.pulseSources': ['来源', 'Sources'],
   'ov.pulseExecutor': ['执行器', 'Executor'],
   'ov.pulseLifetime': ['累计', 'Lifetime'],
+  'ov.running': ['正在执行', 'Running now'],
   'ov.pulseInFlight': ['在飞', 'In flight'],
   'ov.pulseNext': ['每 {seconds} 秒轮询 · 下次轮询 {remain} 秒后', 'Polls every {seconds}s · next in {remain}s'],
   'ov.pulseDue': ['每 {seconds} 秒轮询 · 正在轮询', 'Polls every {seconds}s · polling now'],
@@ -3517,6 +3931,10 @@ Object.assign(PAGE_TEXT, {
   'ov.since': ['上次查看 {time} · 之后 {decisions} 次评估 · {tickets} 张新工单 · {failures} 次执行失败',
     'Last look {time} · since then {decisions} Evals · {tickets} new Tickets · {failures} failed runs'],
   'ov.sinceNone': ['上次查看 {time} · 之后没有新的变化', 'Last look {time} · nothing new since'],
+
+  // ---- actionable inbox (P0-5): the desk is the host's own blocking items, not a client-side status filter --------
+  'ov.inboxGoTicket': ['去工单', 'Open Ticket'],
+  'ov.inboxGoSource': ['去来源', 'Open Source'],
 })
 
 const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
@@ -3554,6 +3972,24 @@ const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en'
 const ovClip = (value, limit = 64) => {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
+/** Inbox kind → the row's shape icon (the same icon family the other list rows use). Unknown kinds fall back to inbox. */
+const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', failure: 'alert-triangle', source: 'inbox', engine: 'shield' }
+const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
+/** Where one inbox item lives: its Ticket when it names one, else its Source, else the execution queue. */
+function ovInboxTarget(item) {
+  const refs = item?.refs ?? {}
+  if (refs.ticketId) return { page: 'execution', id: refs.ticketId }
+  if (refs.sourceId) return { page: 'source' }
+  return { page: 'execution' }
+}
+/** The row's one button says where it goes; a gate/accept item always names its Ticket. */
+function ovInboxActionKey(item) {
+  const refs = item?.refs ?? {}
+  if (refs.ticketId) return 'ov.inboxGoTicket'
+  if (refs.sourceId) return 'ov.inboxGoSource'
+  return 'ov.watchOpen'
 }
 
 /** Policy ledger fallback for payloads without `rules24h`: per rule, how often it blocked vs passed in the last 24h.
@@ -3654,6 +4090,9 @@ function LiveOverviewPage({ route }) {
   // the new value and every visit would claim "nothing new".
   const [lastSeen] = useState(ovReadLastSeen)
   useEffect(() => { ovSaveLastSeen(Date.now()) }, [])
+  // P0 inbox (contract §3.6.5): the host derives the actionable items, the desk lists them verbatim. An older host
+  // has no `inbox` field, so the resource stays disabled (no 404 polling) and every surface falls back to needsHuman.
+  const inbox = useLiveResource('engine/inbox', {}, 30000, { enabled: Boolean(data?.inbox) })
 
   // A ticket id on the overview route is a deep link: the full detail replaces the desk, as on every other tab.
   if (route?.id) return h(TicketDetail, { id: route.id, page: 'overview' })
@@ -3663,12 +4102,31 @@ function LiveOverviewPage({ route }) {
   const engine = data.engine ?? {}
   const config = data.config ?? {}
   const counts = data.counts ?? {}
+  const setup = setupStateOf(data)
   const health = globalHealth(data)
   const paused = data.paused === true || config.paused === true || engine.paused === true
   // The header count and this block share one source (#19); the rows are the latest 20 Tickets, so the count can be
   // larger than the list — that difference is said explicitly instead of showing a contradiction.
-  const humanCount = needsYouCount(data)
-  const tickets = needsHuman(data)
+  const legacyHumanCount = needsYouCount(data)
+  const legacyTickets = needsHuman(data)
+  // Actionable inbox (P0): when the host exposes `inbox`, the desk is its blocking items — one row per item, count =
+  // rendered rows. Without the field the old status-derived needsHuman logic still runs unchanged.
+  const inboxSupported = Boolean(data.inbox)
+  const inboxItems = (Array.isArray(inbox.data?.items) ? inbox.data.items : [])
+    .filter(item => item && typeof item === 'object' && !item.resolvedAt)
+  const blockingItems = inboxItems.filter(item => item.blocking === true)
+  const systemInboxItems = inboxItems.filter(item => item.blocking !== true)
+  const humanCount = inboxSupported ? (blockingItems.length || Math.max(0, Number(data.inbox?.blocking ?? 0))) : legacyHumanCount
+  // Best effort on read: marking one item read must never stop the navigation the person asked for.
+  const readInboxItem = item => {
+    if (!item?.id) return
+    void Promise.resolve(actions.readInbox?.(item.id)).then(() => inbox.reload?.()).catch(() => {})
+  }
+  const openInboxItem = item => {
+    if (!item) return
+    readInboxItem(item)
+    navigate(ovInboxTarget(item))
+  }
   // Work that is actually moving stays visible as one pulse sentence; the Ticket rows, queue bar and pause control
   // belong to the Execution page (contract §6.1, critique O3).
   const runs = Array.isArray(data.runs) ? data.runs : []
@@ -3701,11 +4159,23 @@ function LiveOverviewPage({ route }) {
 
   // The engine error and the paused switch are also derivable through `problemsOf`, but this page renders both as
   // their own state block right above the desk; listing them twice would say the same thing in two places (§4.2).
-  const problems = problemsOf(data).filter(problem => {
+  const baseProblems = problemsOf(data).filter(problem => {
     if (engine.lastError && problem.key === 'engine-error') return false
     if (paused && problem.key === 'paused') return false
     return true
   })
+  // P0 §3.6.5: the system-problems block merges the derived problems with the inbox's non-blocking items, deduped by
+  // title so one failure is never reported twice (the inbox row keeps its own destination).
+  const problems = [...baseProblems]
+  const problemTitles = new Set(problems.map(problem => problem.title))
+  for (const item of systemInboxItems) {
+    const title = String(item.title ?? '')
+    if (!title || problemTitles.has(title)) continue
+    problemTitles.add(title)
+    problems.push({ key: `inbox-${item.id}`, severity: item.priority === 'urgent' ? 'error' : 'warning',
+      title, detail: item.summary ? String(item.summary) : '',
+      action: { labelKey: ovInboxActionKey(item), kind: 'navigate', payload: ovInboxTarget(item) }, inbox: item })
+  }
   const flow = data.flow24h
   const hasFlow = Boolean(flow) && ['received', 'filtered', 'judged', 'accepted', 'dropped']
     .some(name => Number(flow[name] ?? 0) > 0)
@@ -3768,6 +4238,8 @@ function LiveOverviewPage({ route }) {
 
   // `problemsOf` actions are already vocabulary-mapped; the page only wires the three kinds to their transport.
   const runProblem = (problem) => {
+    // An inbox-backed problem is read the moment its destination is opened (best effort, never blocking).
+    if (problem.inbox) readInboxItem(problem.inbox)
     const action = problem.action ?? {}
     if (action.kind === 'poll') { void poll.run(); return }
     if (action.kind === 'reloadConfig') { void reloadConfig.run(); return }
@@ -3785,15 +4257,32 @@ function LiveOverviewPage({ route }) {
       onClick: () => navigate(handled > 0 ? { page: 'execution' } : { page: 'source' }) },
     pt(t, handled > 0 ? 'actions.viewHandled' : 'actions.openSource')))
 
-  const moreCount = humanCount - tickets.length
-  const needsBody = tickets.length
+  // Legacy desk (hosts without `inbox`): the latest 20 status-derived Ticket rows; the count may exceed the list.
+  const moreCount = legacyHumanCount - legacyTickets.length
+  const legacyNeedsBody = legacyTickets.length
     ? h(Fragment, null,
-      h('ul', { className: 'sa-list' }, tickets.map(ticket =>
+      h('ul', { className: 'sa-list' }, legacyTickets.map(ticket =>
         h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true }))),
-      moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount })) : null)
+      moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount })) : null)
+    : legacyHumanCount > 0
+      ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount }))
+      : null
+  // Inbox desk (P0): one row per blocking item — kind icon, title, summary and the one step that settles it (open the
+  // Ticket or the Source). Count = rendered rows; a count without rows (list still loading) says so instead of lying.
+  const inboxRows = blockingItems.length
+    ? h('ul', { className: 'sa-list' }, blockingItems.map(item => h('li', { key: item.id },
+      h('div', { className: 'sa-row sa-row-openable', onClick: () => openInboxItem(item) },
+        h(Icon, { name: ovInboxIcon(item), size: 16 }),
+        h('div', { className: 'sa-row-main' },
+          h('div', { className: 'sa-row-title' }, h('span', null, String(item.title ?? ''))),
+          item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
+        h('div', { className: 'sa-row-actions' },
+          h(Button, { variant: 'outline', size: 'sm',
+            onClick: event => { event.stopPropagation(); openInboxItem(item) } }, pt(t, ovInboxActionKey(item))))))))
     : humanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount }))
-      : idleRow
+      : null
+  const needsBody = inboxSupported ? (inboxRows ?? idleRow) : (legacyNeedsBody ?? idleRow)
   // When the desk says "nothing needs you" while the right column reports failures, name the split once.
   const deskScope = watch.length
     ? h('p', { className: 'sa-hint', role: 'note' }, pt(t, 'ov.deskScope')) : null
@@ -3802,16 +4291,37 @@ function LiveOverviewPage({ route }) {
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
     engine.lastError ? h(ErrorState, { error: String(engine.lastError), onRetry: () => { void poll.run() } }) : null,
+    // P0-8: a failed inbox fetch is not allowed to silently empty the desk; say so and offer a retry.
+    inbox.error && !inbox.data ? h('div', { className: 'sa-banner', role: 'alert',
+      style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+      h(StatusIcon, { state: 'warning', size: 14 }),
+      h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.inboxError')),
+      h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void inbox.reload() } }, t('reload'))) : null,
     paused ? h('div', { className: 'sa-banner',
       style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
       h(StatusIcon, { state: 'warning', size: 14 }),
       h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
       h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
 
+    // First-run setup. With no live work it replaces the empty desk; if Tickets exist it stays one line so urgent
+    // work is never pushed below a tutorial. The card hides itself once all four prerequisites are true.
+    setup.done < setup.total
+      ? humanCount === 0 && activeTickets.length === 0
+        ? h(SetupChecklist, { setup, onNavigate: navigate })
+        : h(SetupBanner, { setup, onNavigate: navigate })
+      : null,
+
     // 1. The desk. The global "check for new messages" action lives in the header, not in this section (#3).
     h(Section, { title: pt(t, 'ov.needsYou'), count: humanCount || undefined }, needsBodyWithScope),
 
-    // 2. System problems: each row keeps its own next step; an empty list hides the whole block.
+    // 2. Work in flight: the pulse row only rolls up a count; the operator still needs the Ticket itself (title,
+    //    repository, current step, age) without leaving Overview. Full queue stays on Execution.
+    activeTickets.length ? h(Section, { title: pt(t, 'ov.running'), count: activeTickets.length,
+      action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
+        pt(t, 'actions.openExecution')) },
+      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload })) : null,
+
+    // 3. System problems: each row keeps its own next step; an empty list hides the whole block.
     problems.length ? h(Section, { title: pt(t, 'ov.problems'), count: problems.length },
       h('ul', { className: 'sa-list' }, problems.map(problem => h('li', { key: problem.key },
         h('div', { className: 'sa-row' },
@@ -3823,7 +4333,7 @@ function LiveOverviewPage({ route }) {
             problem.action ? h(Button, { variant: 'outline', size: 'sm',
               onClick: () => runProblem(problem) }, pt(t, problem.action.labelKey)) : null)))))) : null,
 
-    // 3. The shift brief: what changed (funnel, policy ledger, since last look) on the left; what is true now
+    // 4. The shift brief: what changed (funnel, policy ledger, since last look) on the left; what is true now
     //    (pulse, watchlist) on the right. One column below 1024 px.
     h('div', { className: 'sa-brief-grid' },
       h('div', { className: 'sa-brief-col' },
@@ -3856,7 +4366,7 @@ function LiveOverviewPage({ route }) {
               h(StatusIcon, { state: 'done', size: 16 }),
               h('span', { className: 'sa-hint' }, pt(t, 'ov.watchEmpty')))))),
 
-    // 4. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
+    // 5. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
     h(DisclosureRow, { title: pt(t, 'ov.runtime'), open: runtimeOpen,
       onToggle: () => setRuntimeOpen(open => !open),
       collapsedContent: h('span', { className: 'sa-hint' }, pt(t, 'ov.summary', {
@@ -3886,13 +4396,13 @@ Object.assign(PAGE_TEXT, {
   'src.stat.mrOpen': ['待合并 MR', 'Open MRs'],
   'src.lastMessage': ['最近消息', 'Last message'],
   'src.groupIm': ['IM 消息源', 'IM sources'],
-  'src.groupCode': ['GitLab / GitHub 仓库', 'GitLab / GitHub repositories'],
+  'src.groupCode': ['GitLab 仓库', 'GitLab repositories'],
   'src.stat.deployed': ['UAT 已部署', 'Deployed to UAT'],
   'src.stat.failed': ['失败', 'Failed'],
   'src.action.filtered': ['查看被过滤', 'See filtered'],
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
-  'src.disabled': ['已禁用：在 live.json 中启用后重载配置。', 'Disabled: enable it in live.json, then reload the config.'],
+  'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -3903,9 +4413,29 @@ Object.assign(PAGE_TEXT, {
   'src.reason.senderNotAllowed': ['发送者不在允许名单', 'Sender is not in the allow list'],
   'src.reason.notText': ['不是文本消息', 'Not a text message'],
   'src.emptyTitle': ['还没有来源', 'No Source yet'],
-  'src.emptyHint': ['在 ~/.dsh/superagent/live.json 配置一个 Octo 群后，消息会在这里出现。',
-    'Configure an Octo group in ~/.dsh/superagent/live.json and its messages will show up here.'],
+  'src.emptyHint': ['先配置 Octo token 并添加一个监听群，消息会在这里出现。',
+    'Connect the Octo token and add a watched group; its messages will show up here.'],
   'src.openSettings': ['打开设置', 'Open settings'],
+  // ---- P1-1: the raw signal log (every candidate, including the filtered ones) -----------------------------------
+  'src.signals': ['原始信号（最近）', 'Raw signals (recent)'],
+  'src.signalsEmpty': ['最近没有原始信号。', 'No recent raw signals.'],
+  'src.signalStatus.pending': ['待处理', 'Pending'], 'src.signalStatus.processed': ['已处理', 'Processed'],
+  'src.signalStatus.ignored': ['已忽略', 'Ignored'], 'src.signalStatus.skipped': ['被过滤', 'Skipped'],
+  'src.signalStatus.failed': ['失败', 'Failed'],
+  'src.signalReplay': ['重放', 'Replay'],
+  'src.signalReplayed': ['已重放（{status}）', 'Replayed ({status})'],
+  'src.signalReplayTicket': ['已重放并新建工单', 'Replayed and created a Ticket'],
+  'src.signalReason': ['原因：{reason}', 'Reason: {reason}'],
+  'src.signalTicket': ['查看工单', 'Open Ticket'],
+  'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
+  'src.signalsRefresh': ['刷新', 'Refresh'],
+  // ---- P2-8: human quality labels on raw signals ----------------------------------------------------------------
+  'src.labelsSummary': ['正确 {correct} · 误报 {falseWake} · 漏报 {missedWake}',
+    '{correct} correct · {falseWake} false wake · {missedWake} missed'],
+  'src.labelMenu': ['标注判定', 'Label this signal'],
+  'src.labelSaved': ['已标注：{label}', 'Labelled: {label}'],
+  'signalLabel.correct': ['正确', 'Correct'], 'signalLabel.false_wake': ['误报', 'False wake'],
+  'signalLabel.missed_wake': ['漏报', 'Missed wake'], 'signalLabel.cleared': ['已清理', 'Cleared'],
 })
 
 /** Source health → the shared shape vocabulary: a healthy source reads as done (✓), a broken one as error (×), and
@@ -3998,8 +4528,74 @@ function FilteredMessages({ source, items }) {
         h(ClampText, { text: item.text, limit: 480, lines: 8 })) : null))))
 }
 
-function LiveSourcePage() {
+/** Signal status → the shared shape vocabulary; the label always comes from `src.signalStatus.*`. */
+const SIGNAL_SHAPE = { pending: 'ongoing', processed: 'done', ignored: 'idle', skipped: 'warning', failed: 'error' }
+const SIGNAL_TONE = { pending: 'info', processed: 'success', ignored: 'neutral', skipped: 'warning', failed: 'danger' }
+/** Host skip codes → the same human reasons the filtered-message list already uses; an unknown code stays raw. */
+const SIGNAL_REASON_KEYS = { 'chat-not-watched': 'src.reason.sourceNotWatched', sender: 'src.reason.senderNotAllowed',
+  'sender-not-allowed': 'src.reason.senderNotAllowed', 'not-text': 'src.reason.notText', 'high-risk': 'src.reason.highRisk' }
+function signalReasonText(t, item) {
+  const code = item?.skipReason
+  if (!code) return ''
+  const key = SIGNAL_REASON_KEYS[String(code)]
+  return key ? pt(t, key) : String(code)
+}
+/** A replayable signal is one the rules did not deliver (P1 §2.2): skipped, ignored or failed. */
+const signalReplayable = item => ['skipped', 'ignored', 'failed'].includes(item?.status)
+/** P2-8 label vocabulary: tone for the tag, label key for the text; unknown labels stay raw. */
+const SIGNAL_LABEL_TONE = { correct: 'success', false_wake: 'warning', missed_wake: 'danger', cleared: 'neutral' }
+const SIGNAL_LABEL_KEYS = { correct: 'signalLabel.correct', false_wake: 'signalLabel.false_wake',
+  missed_wake: 'signalLabel.missed_wake', cleared: 'signalLabel.cleared' }
+const SIGNAL_LABEL_ORDER = ['correct', 'false_wake', 'missed_wake', 'cleared']
+const signalLabelText = (t, label) => {
+  const key = SIGNAL_LABEL_KEYS[String(label ?? '')]
+  return key ? pt(t, key) : String(label ?? '')
+}
+
+/** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
+function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
   const { t, navigate } = usePanel()
+  return h('ul', { className: 'sa-list' }, items.map(item => {
+    const status = String(item?.status ?? '')
+    const reason = signalReasonText(t, item)
+    const at = item?.receivedAt ?? item?.occurredAt
+    const statusKey = `src.signalStatus.${status}`
+    const statusLabel = pt(t, statusKey)
+    const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
+    return h('li', { key: item.id, className: 'sa-row' },
+      h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
+      h('div', { className: 'sa-row-main' },
+        h('div', { className: 'sa-row-title' },
+          h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel),
+          h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
+        (item?.source || reason || at)
+          ? h('div', { className: 'sa-row-meta' },
+            item?.source ? h('span', { className: 'sa-mono' }, String(item.source)) : null,
+            reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
+            at ? h(When, { at }) : null,
+            labels.length
+              ? h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-4)' } },
+                labels.map((entry, index) => h(Tag, { key: entry.id ?? index,
+                  tone: SIGNAL_LABEL_TONE[String(entry.label)] ?? 'outline', title: entry.note ? String(entry.note) : undefined },
+                signalLabelText(t, entry.label))))
+              : null)
+          : null),
+      h('div', { className: 'sa-row-actions' },
+        item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
+          onClick: () => navigate({ page: 'execution', id: item.ticketId }) }, pt(t, 'src.signalTicket')) : null,
+        signalReplayable(item) ? h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: busy,
+          onClick: () => onReplay(item) }, pt(t, 'src.signalReplay')) : null,
+        // A host that returns `labels` supports the P2-8 endpoint; an older one gets no dead menu entry.
+        Array.isArray(item?.labels) && typeof onLabel === 'function'
+          ? h(Menu, { label: pt(t, 'src.labelMenu'), align: 'end',
+            items: SIGNAL_LABEL_ORDER.map(label => ({ key: label, label: signalLabelText(t, label), disabled: labelBusy,
+              onSelect: () => onLabel(item, label) })) })
+          : null))
+  }))
+}
+
+function LiveSourcePage() {
+  const { t, navigate, notify } = usePanel()
   const { data, error, reload, actions } = usePanelData()
   const [uat, setUat] = useState()
   const [uatBusy, setUatBusy] = useState(false)
@@ -4012,6 +4608,25 @@ function LiveSourcePage() {
     finally { setUatBusy(false) }
   }
   const focusFiltered = () => filteredRef.current?.scrollIntoView({ block: 'start' })
+  // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
+  // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
+  const [signalsOff, setSignalsOff] = useState(false)
+  const signals = useLiveResource('engine/signals', { limit: 20 }, 30000, { enabled: !signalsOff })
+  useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
+  const label = useAction(async (signal, labelId) => {
+    await actions.labelSignal(signal.id, labelId)
+    notify(pt(t, 'src.labelSaved', { label: signalLabelText(t, labelId) }))
+  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
+  const replay = useAction(async signal => {
+    const result = await actions.replaySignal(signal.id)
+    const ticket = result?.ticket
+    if (ticket?.id) {
+      notify(pt(t, 'src.signalReplayTicket'))
+      navigate({ page: 'execution', id: ticket.id })
+      return
+    }
+    notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
+  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
 
   if (!data) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 
@@ -4024,7 +4639,7 @@ function LiveSourcePage() {
   if (sources.length === 0 || octoUnconfigured) {
     return h(EmptyState, { icon: 'inbox', title: pt(t, 'src.emptyTitle'), hint: pt(t, 'src.emptyHint'),
       action: h(Button, { variant: 'primary', icon: h(Icon, { name: 'settings', size: 14 }),
-        onClick: () => navigate({ page: 'settings' }) }, pt(t, 'src.openSettings')) })
+        onClick: () => navigate({ page: 'settings', group: 'source' }) }, pt(t, 'src.openSettings')) })
   }
 
   const enabled = sources.filter(source => source.enabled).length
@@ -4034,6 +4649,9 @@ function LiveSourcePage() {
     ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
     : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
   const filtered = Array.isArray(octo?.filtered) ? octo.filtered : []
+  const signalItems = Array.isArray(signals.data?.items) ? signals.data.items : []
+  const labelCounts = signals.data?.counts?.labels ?? {}
+  const labelTotal = SIGNAL_LABEL_ORDER.reduce((sum, label) => sum + (Number(labelCounts[label]) || 0), 0)
   // Two source classes (IM vs code repositories); each class renders its own section with a two-up card grid.
   const imSources = sources.filter(source => !isExecutionSource(source))
   const codeSources = sources.filter(isExecutionSource)
@@ -4118,6 +4736,20 @@ function LiveSourcePage() {
     octo ? h('div', { ref: filteredRef },
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
+      : null,
+    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
+    signals.data
+      ? h(Section, { title: pt(t, 'src.signals'), count: signalItems.length,
+        badge: labelTotal > 0
+          ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
+            correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
+            missedWake: Number(labelCounts.missed_wake) || 0 }))
+          : null,
+        action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
+          pt(t, 'src.signalsRefresh')) },
+        signalItems.length ? h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+          onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy })
+          : h(Hint, null, pt(t, 'src.signalsEmpty')))
       : null)
 }
 
@@ -4854,13 +5486,33 @@ function LiveEvalPage() {
    the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared status
    model for the executor load and the paused flag. */
 
-const EXEC_STAGES = ['all', 'queued', 'working', 'waiting', 'failed', 'done']
+// Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
+const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
 const EXEC_DONE_RECENT = 10
+// P1-8: the execution list's view state survives a page switch inside the same browser session.
+const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
+const EXEC_VIEW_DEFAULTS = { groupBy: 'stage', sort: 'updated', showDone: true }
+function execReadView() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(EXEC_VIEW_KEY) ?? 'null') ?? {}
+    return { groupBy: parsed.groupBy === 'repo' ? 'repo' : 'stage',
+      sort: parsed.sort === 'created' ? 'created' : 'updated', showDone: parsed.showDone !== false }
+  } catch { return { ...EXEC_VIEW_DEFAULTS } }
+}
+function execSaveView(view) {
+  try { sessionStorage.setItem(EXEC_VIEW_KEY, JSON.stringify(view)) } catch { /* private mode keeps the in-memory view */ }
+}
+/** Newest-first by the chosen timestamp; a Ticket without the field falls back to the other one, never to "now". */
+function execSortTickets(tickets, sort) {
+  const field = sort === 'created' ? 'createdAt' : 'updatedAt'
+  return [...tickets].sort((left, right) => String(right?.[field] ?? right?.createdAt ?? '')
+    .localeCompare(String(left?.[field] ?? left?.createdAt ?? '')))
+}
 
 Object.assign(PAGE_TEXT, {
   'ex.executor': ['执行器', 'Executor'],
-  'ex.executorDisabled': ['执行器未启用（live.json 的 executor.enabled 为 false），新工单只会排队。',
-    'The executor is off (executor.enabled is false in live.json); new Tickets only queue up.'],
+  'ex.executorDisabled': ['执行器未启用：到设置→运行打开「启用执行器」并保存，新工单才会执行。',
+    'The executor is off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'ex.pauseTitle': ['暂停处理？', 'Pause processing?'],
   'ex.pauseConfirm': ['暂停后不再开始新的评估、派工或回复；正在运行的执行器会完成当前一轮。',
     'Pausing stops new Evals, dispatches and replies; a running executor finishes its current turn.'],
@@ -4877,6 +5529,7 @@ Object.assign(PAGE_TEXT, {
   'ex.recentLabel': ['最近一次执行', 'Last run'],
   'ex.recentOk': ['运行成功', 'Run succeeded'],
   'ex.recentFailed': ['运行失败', 'Run failed'],
+  'ex.recentWaiting': ['闸门等待你处理', 'A gate needs you'],
   'ex.recentTicket': ['查看工单', 'Open Ticket'],
   'ex.runs24hFailed': ['24 小时运行失败 {count} 次', '{count} failed runs in 24h'],
   'ex.runs24hLink': ['去看概览', 'View overview'],
@@ -4898,6 +5551,19 @@ Object.assign(PAGE_TEXT, {
   'ex.emptyTitle': ['还没有工单。', 'No Ticket yet.'],
   'ex.emptyHint': ['在群里发一条需求，或在这里手工建单测试链路。',
     'Send a request in the group, or create a Ticket right here to test the pipeline.'],
+  // ---- P1-8: view options (persisted in sessionStorage) ----------------------------------------------------------
+  'ex.groupByLabel': ['分组方式', 'Group by'],
+  'ex.groupByStage': ['按阶段', 'By stage'],
+  'ex.groupByRepo': ['按仓库', 'By repository'],
+  'ex.sortLabel': ['排序', 'Sort'],
+  'ex.sortUpdated': ['最近更新', 'Last updated'],
+  'ex.sortCreated': ['最近创建', 'Newest'],
+  'ex.showDone': ['显示已结束', 'Show ended'],
+  'ex.showDoneGroup': ['展开已结束（{count}）', 'Show ended ({count})'],
+  'ex.clearFilters': ['清除筛选', 'Clear filters'],
+  'ex.filterEmptyTitle': ['没有符合当前筛选的工单。', 'No Tickets match the current filter.'],
+  'ex.noRepo': ['（未指定仓库）', '(No repository)'],
+  'ex.toolbarLabel': ['列表视图选项', 'List view options'],
 })
 
 /** The finished group's one line: accepted sign-offs, dismissed Tickets, and Tickets that completed after a failed
@@ -4922,6 +5588,12 @@ function ExecutionQueuePage() {
   const [stage, setStage] = useState('all')
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
+  const [execView, setExecView] = useState(execReadView)
+  const updateView = patch => setExecView(previous => {
+    const next = { ...previous, ...patch }
+    execSaveView(next)
+    return next
+  })
   const status = model.data
   const paused = Boolean(status && (status.paused === true || status.config?.paused === true || status.engine?.paused === true))
   const reloadBoth = useCallback(async () => { await Promise.all([model.reload(), list.reload()]) }, [model.reload, list.reload])
@@ -4940,6 +5612,10 @@ function ExecutionQueuePage() {
     ? [...status.runs].sort((left, right) => String(right.startedAt ?? right.at ?? '').localeCompare(String(left.startedAt ?? left.at ?? '')))[0]
     : null
   const recentRunFailed = recentRun?.status === 'failed'
+  // A run parked on a failing gate is neither success nor failure: say what it waits for (P0-3).
+  const recentRunWaiting = recentRun?.status === 'waiting_for_human'
+  const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : 'success'
+  const recentRunKey = recentRunFailed ? 'ex.recentFailed' : recentRunWaiting ? 'ex.recentWaiting' : 'ex.recentOk'
   const counts = list.data?.counts ?? {}
   const countOf = group => Number.isFinite(counts[group]) ? counts[group]
     : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
@@ -4950,8 +5626,13 @@ function ExecutionQueuePage() {
     label: `${pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])} ${countOf(group)}`,
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
-  const inStage = stage === 'all' ? tickets : tickets.filter(ticket => ticketStatus(ticket).group === stage)
-  const doneTickets = inStage.filter(ticket => ticketStatus(ticket).group === 'done')
+  const sorted = execSortTickets(tickets, execView.sort)
+  const inStageBase = stage === 'all' ? sorted : sorted.filter(ticket => ticketStatus(ticket).group === stage)
+  // P1-8: "show ended" hides the finished group but an explicit stage filter for it always wins, and the group keeps a
+  // reveal entry below the list so history is never unreachable.
+  const doneAllowed = execView.showDone || stage === 'done'
+  const inStage = doneAllowed ? inStageBase : inStageBase.filter(ticket => ticketStatus(ticket).group !== 'done')
+  const doneTickets = inStageBase.filter(ticket => ticketStatus(ticket).group === 'done')
   const recentDone = doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
   const shownTickets = doneTickets.length > recentDone.length
     ? [...inStage.filter(ticket => ticketStatus(ticket).group !== 'done'), ...recentDone]
@@ -4971,10 +5652,55 @@ function ExecutionQueuePage() {
     h(EmptyState, { icon: 'inbox', title: pt(t, 'ex.emptyTitle'), hint: pt(t, 'ex.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
         pt(t, 'ex.createTicket')) }))
-  const stageEmptyState = h(Section, { title: pt(t, `group.${stage}`), count: 0 },
-    h(EmptyState, { icon: 'filter', title: pt(t, 'ex.stageEmptyTitle'),
-      action: h(Button, { variant: 'outline', size: 'sm', onClick: () => setStage('all') },
-        pt(t, 'ex.stageEmptyAction')) }))
+  const clearFilters = () => { setStage('all'); updateView({ showDone: true }) }
+  const stageEmptyState = h(Section, { title: pt(t, 'ex.tickets'), count: 0 },
+    h(EmptyState, { icon: 'filter', title: pt(t, 'ex.filterEmptyTitle'),
+      action: h(Button, { variant: 'outline', size: 'sm', onClick: clearFilters }, pt(t, 'ex.clearFilters')) }))
+  // Repository grouping (P1-8): the same rows, batched by the repository a Ticket belongs to. Groups follow the
+  // sorted ticket order, so the newest work still leads inside each repository.
+  const repoGroupsOf = list => {
+    const groups = []
+    const byKey = new Map()
+    for (const ticket of list) {
+      const repoId = ticket.repoId ?? ''
+      const key = repoId || '__none'
+      if (!byKey.has(key)) {
+        const name = ticket.repoName ?? panelRepoOf(status, ticket.repoId)?.name ?? repoId ?? pt(t, 'ex.noRepo')
+        const group = { key, name: String(name || pt(t, 'ex.noRepo')), tickets: [] }
+        byKey.set(key, group)
+        groups.push(group)
+      }
+      byKey.get(key).tickets.push(ticket)
+    }
+    return groups
+  }
+  const viewToolbar = tickets.length
+    ? h('div', { className: 'sa-filters', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
+      h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
+        { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
+        onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') }),
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
+      h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
+        { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
+        onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') }),
+      h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }), label: pt(t, 'ex.showDone') }),
+      h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone')))
+    : null
+  // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
+  const stagePills = h('div', { className: 'sa-filters' },
+    h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+      className: 'sa-segmented-wide' }))
+  const queueBody = execView.groupBy === 'repo'
+    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+      repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+        h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
+    : h(Fragment, null,
+      h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
+        className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
+      doneOverflow ? h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
+          pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null)
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
     title: paused ? pt(t, 'ex.resumeTitle') : pt(t, 'ex.pauseTitle'),
@@ -5001,8 +5727,9 @@ function ExecutionQueuePage() {
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
             h(When, { at: recentRun.startedAt }),
-            h(Tag, { tone: recentRunFailed ? 'danger' : 'success' },
-              pt(t, recentRunFailed ? 'ex.recentFailed' : 'ex.recentOk')),
+            h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
+            // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
+            runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
             recentRun.error
               ? h('span', { className: 'sa-hint', title: String(recentRun.error) },
                 pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) }))
@@ -5022,23 +5749,21 @@ function ExecutionQueuePage() {
         h('span', { className: 'sa-hint' }, pt(t, 'ex.createHint'))),
       status.engine?.lastError ? h(ErrorState, { error: status.engine.lastError, onRetry: () => { void poll.run() } }) : null),
     list.error ? h(ErrorState, { error: list.error, onRetry: list.reload }) : null,
-    tickets.length
-      ? h('div', { className: 'sa-filters' },
-        // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
-        // tuned for the two-or-three-pill filters elsewhere.
-        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
-          className: 'sa-segmented-wide' }))
-      : null,
+    viewToolbar,
+    // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
+    // tuned for the two-or-three-pill filters elsewhere.
+    tickets.length ? stagePills : null,
     loadingList ? h(Skeleton, { rows: 5 })
       : !list.data ? null
         : !tickets.length ? emptyState
           : !inStage.length ? stageEmptyState
             : h(Fragment, null,
-              h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
-                className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
-              doneOverflow ? h('div', { className: 'sa-actions' },
-                h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
-                  pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null),
+              queueBody,
+              !execView.showDone && stage !== 'done' && doneTickets.length
+                ? h('div', { className: 'sa-actions' },
+                  h(Button, { variant: 'outline', size: 'sm', onClick: () => updateView({ showDone: true }) },
+                    pt(t, 'ex.showDoneGroup', { count: doneTickets.length })))
+                : null),
     h(Modal, { open: manualOpen, onClose: () => setManualOpen(false), title: pt(t, 'ex.createTicket'),
       closeLabel: t('close'), description: pt(t, 'ex.createHint') },
       h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() } })))
@@ -5091,6 +5816,154 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptCleanupFailed': ['验收已记录，但本地工作区清理失败：{reason}', 'Accepted; local cleanup failed: {reason}'],
   'detail.rejectedOn': ['验收不通过于 {time}', 'Rejected at {time}'],
   'ticket.dryRunUnavailable': ['执行器未启用，干跑不可用。', 'The executor is disabled; dry run is unavailable.'],
+
+  // ---- P0: a run parked on a failing gate (contract §1.1/§3.2) ---------------------------------------------------
+  'detail.gateTitle': ['闸门「{name}」未通过，执行已暂停', 'Gate “{name}” failed and the run is parked'],
+  'detail.gateIntro': ['放行会跳过这个闸门并继续提交、推送与创建 MR；重试只重跑闸门；终止会以失败结束这张工单。失败证据保留在运行记录里。',
+    'Release skips this gate and continues commit, push and MR; Retry re-runs the gates; Stop ends the Ticket as failed. The failing evidence stays on the run.'],
+  'detail.gateExit': ['退出码', 'Exit code'],
+  'detail.gateTimedOut': ['是否超时', 'Timed out'],
+  'detail.gateChanged': ['改动文件', 'Changed files'],
+  'detail.gateOutput': ['失败输出（末尾）', 'Failing output (tail)'],
+  'detail.gateNoOutput': ['没有捕获到输出。', 'No captured output.'],
+  'detail.gateRelease': ['放行并继续', 'Release and continue'],
+  'detail.gateRetry': ['重试该闸门', 'Retry the gates'],
+  'detail.gateStop': ['终止工单', 'Stop the Ticket'],
+  'detail.gateReleaseTitle': ['放行这个闸门？', 'Release this gate?'],
+  'detail.gateReleaseConfirm': ['会跳过闸门「{name}」并继续提交、推送与创建 MR；失败证据保留在运行记录里。只有当失败可以接受时才放行：{title}',
+    'Skips gate “{name}” and continues commit, push and MR. The failing evidence stays on the run. Release only when the failure is acceptable: {title}'],
+  'detail.gateStopTitle': ['终止这个工单？', 'Stop this Ticket?'],
+  'detail.gateStopConfirm': ['工单会以「人工终止」结束，工作树与失败证据保留：{title}',
+    'The Ticket ends as stopped by a person; the worktree and the failing evidence stay: {title}'],
+  'detail.gateReleased': ['闸门已放行，继续执行。', 'Gate released; the run continues.'],
+  'detail.gateRetried': ['闸门重跑完成，结果见运行记录。', 'Gates re-run; see Run records.'],
+  'detail.gateStopped': ['工单已终止。', 'Ticket stopped.'],
+  'detail.gateYes': ['是', 'Yes'],
+  'detail.gateNo': ['否', 'No'],
+
+  // ---- P0: independent acceptance line under the header ----------------------------------------------------------
+  'detail.acceptLinePending': ['验收：待你验收', 'Acceptance: waiting for you'],
+  'detail.acceptLineAccepted': ['验收：已验收于 {time}', 'Acceptance: accepted at {time}'],
+  'detail.acceptLineRejected': ['验收：已打回于 {time}', 'Acceptance: rejected at {time}'],
+  'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
+  'detail.acceptLineView': ['查看验收', 'View acceptance'],
+
+  // ---- P0: run stop reasons and the worker trace -----------------------------------------------------------------
+  'ticket.trace': ['执行轨迹', 'Execution trace'],
+  'ticket.traceAssistant': ['助手消息', 'Assistant message'],
+  'ticket.traceToolCall': ['工具调用', 'Tool call'],
+  'ticket.traceToolResult': ['工具结果', 'Tool result'],
+  'ticket.traceTurnEnd': ['回合结束', 'Turn end'],
+  'ticket.traceError': ['错误事件', 'Error event'],
+  'ticket.traceCount': ['执行轨迹（{count} 条）', 'Execution trace ({count})'],
+
+  // ---- P0: a missing Ticket is not a broken connection -----------------------------------------------------------
+  'detail.ticketMissing': ['找不到该工单', 'Ticket not found'],
+  'detail.ticketMissingHint': ['它可能已被删除，或链接里的 ID 不正确。返回列表看看现有工单。',
+    'It may have been removed, or the id in the link is wrong. Go back to the list to see the current Tickets.'],
+
+  // ---- P1-2: operation detail (trigger, handoff, worker report) -------------------------------------------------
+  'detail.handoff': ['交接摘要', 'Handoff'],
+  'detail.handoffNext': ['下一步：{next}', 'Next: {next}'],
+  'detail.report': ['执行报告', 'Worker report'],
+  'detail.reportProgress': ['进度（{count}）', 'Progress ({count})'],
+  'detail.reportArtifacts': ['产物（{count}）', 'Artifacts ({count})'],
+  'detail.reportVerify': ['验证项（{count}）', 'Verify ({count})'],
+  'detail.reportExpected': ['期望输出：{text}', 'Expected: {text}'],
+
+  // ---- P1-3: acceptance rounds -----------------------------------------------------------------------------------
+  'detail.acceptRecord': ['验收轮次', 'Acceptance rounds'],
+  'detail.acceptStatus.unverified': ['未验收', 'Not verified'], 'detail.acceptStatus.verifying': ['验收中', 'Verifying'],
+  'detail.acceptStatus.delivered': ['已送达', 'Delivered'], 'detail.acceptStatus.accepted': ['已验收', 'Accepted'],
+  'detail.acceptStatus.rejected': ['已打回', 'Rejected'], 'detail.acceptStatus.closed': ['已关闭', 'Closed'],
+  'detail.acceptStatus.errored': ['验收异常', 'Errored'],
+  'detail.acceptRound': ['第 {round} 轮 · {status}', 'Round {round} · {status}'],
+  'detail.acceptChecks': ['逐项检查（{count}）', 'Checks ({count})'],
+  'detail.acceptNoChecks': ['这一轮还没有检查结果。', 'This round has no check results yet.'],
+  'detail.acceptCheck.pending': ['待检查', 'Pending'], 'detail.acceptCheck.passed': ['通过', 'Passed'],
+  'detail.acceptCheck.failed': ['失败', 'Failed'], 'detail.acceptCheck.errored': ['异常', 'Errored'],
+  'detail.acceptCheck.skipped': ['跳过', 'Skipped'],
+  'detail.acceptCheckOutput': ['输出（末尾）', 'Output (tail)'],
+  'detail.acceptRequirement': ['验收要求：{text}', 'Requirement: {text}'],
+  'detail.acceptIntents': ['打回原因', 'Rejection reasons'],
+  'detail.acceptIntentsHint': ['勾选打回原因（可选），执行器会在下一轮据此修正。',
+    'Tick the rejection reasons (optional); the executor uses them in the next round.'],
+  'detail.intentUnmet': ['未满足需求', 'Requirement unmet'],
+  'detail.intentNewIdea': ['有新想法', 'New idea'],
+  'detail.intentNoEvidence': ['缺少证据', 'Missing evidence'],
+  'detail.userDecision.accepted': ['已验收', 'Accepted'],
+  'detail.userDecision.rejected': ['已打回', 'Rejected'],
+  'detail.userDecision.overridden': ['已放行', 'Overridden'],
+
+  // ---- P1-7: ticket activities -----------------------------------------------------------------------------------
+  'ticket.activities': ['活动', 'Activity'],
+  'ticket.activityEmpty': ['还没有活动记录。', 'No activity yet.'],
+  'ticket.activityMore': ['共 {total} 条，显示最近 {shown} 条', '{total} total, showing the latest {shown}'],
+  'activity.created': ['创建工单', 'Ticket created'], 'activity.status': ['状态变化', 'Status changed'],
+  'activity.trigger': ['触发', 'Triggered'], 'activity.run': ['执行', 'Run'], 'activity.gate': ['闸门', 'Gate'],
+  'activity.acceptance': ['验收', 'Acceptance'], 'activity.reply': ['回复来源', 'Replied to the Source'],
+  'activity.dismiss': ['忽略', 'Dismissed'], 'activity.comment': ['评论', 'Comment'], 'activity.resume': ['恢复', 'Resumed'],
+
+  // ---- P1-4 / P1-5: parked question and interrupted resume ------------------------------------------------------
+  'detail.answerTitle': ['执行在等你回答', 'The run is waiting for your answer'],
+  'detail.answerHint': ['回答后会以新的运行重新执行整张工单，之前的工作区与改动会复用。',
+    'The Ticket re-runs as a new run with this answer in context; the worktree and changes are reused.'],
+  'detail.answerQuestion': ['问题：{text}', 'Question: {text}'],
+  'detail.answerOptions': ['可选回答', 'Suggested answers'],
+  'detail.answerPlaceholder': ['输入回答…', 'Type an answer…'],
+  'detail.answerSubmit': ['提交回答', 'Submit answer'],
+  'detail.answerRequired': ['请先填写回答。', 'Type an answer first.'],
+  'detail.answerSent': ['回答已提交，执行将继续。', 'Answer submitted; the run continues.'],
+  'detail.answerHistory': ['此前的回答（{count}）', 'Previous answers ({count})'],
+  'detail.resume': ['继续执行', 'Resume run'],
+  'detail.resumeBusy': ['正在继续…', 'Resuming…'],
+  'detail.resumed': ['已继续执行。', 'Run resumed.'],
+  'detail.resumeTitle': ['继续这个中断的运行？', 'Resume this interrupted run?'],
+  'detail.resumeConfirm': ['会从中断的检查点继续；没有检查点时重跑整单：{title}',
+    'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
+  'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
+    'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
+
+  // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
+  'auto.section': ['自动化', 'Automation'],
+  'auto.enabled': ['自动运行', 'Run automatically'],
+  'auto.mode': ['模式', 'Mode'],
+  'auto.modeOff': ['关闭', 'Off'],
+  'auto.modeHeartbeat': ['固定间隔', 'Fixed interval'],
+  'auto.modeSchedule': ['每天', 'Daily'],
+  'auto.interval': ['间隔（分钟）', 'Interval (minutes)'],
+  'auto.intervalHint': ['10–1440 分钟；固定间隔每次到点自动跑一轮。', '10–1440 minutes; each heartbeat runs one automatic round.'],
+  'auto.at': ['每天时间', 'Time of day'],
+  'auto.atHint': ['本机本地时间，格式 HH:mm。', 'Local machine time, HH:mm.'],
+  'auto.maxExecutions': ['执行次数上限', 'Execution limit'],
+  'auto.maxExecutionsPlaceholder': ['不限', 'Unlimited'],
+  'auto.maxExecutionsHint': ['留空表示不限；只统计自动触发的次数。', 'Leave empty for unlimited; only automatic runs are counted.'],
+  'auto.save': ['保存自动化', 'Save automation'],
+  'auto.saved': ['自动化已保存。', 'Automation saved.'],
+  'auto.disabledNote': ['保存后生效；仍受「执行器启用」、推送权限与暂停开关约束。',
+    'Takes effect on save; still bounded by “executor enabled”, push permission and the pause switch.'],
+  'auto.nextRun': ['下次运行', 'Next run'],
+  'auto.executions': ['自动执行', 'Auto executions'],
+  'auto.executionsValue': ['{count} 次', '{count}×'],
+  'auto.executionsLimit': ['{count} / {max} 次', '{count} / {max}'],
+  'auto.lastRun': ['上次运行', 'Last run'],
+  'auto.lastSkip': ['上次跳过原因', 'Last skip reason'],
+  'auto.lastTrigger': ['上次触发方式', 'Last trigger'],
+  'auto.triggerHeartbeat': ['固定间隔', 'Heartbeat'],
+  'auto.triggerSchedule': ['每天定时', 'Daily schedule'],
+
+  // ---- P2-2: gate onFail policy + automatic repair rounds --------------------------------------------------------
+  'gate.onFailAutoRepair': ['自动修复', 'Auto-repair'],
+  'gate.onFailManual': ['人工', 'Manual'],
+  'gate.onFailHintAutoRepair': ['失败时先尝试自动修复，仍失败才停下等人。', 'On failure the executor first tries an automatic repair, then parks for a person.'],
+  'gate.onFailHintManual': ['失败时直接停下等人处理。', 'On failure the run parks for a person immediately.'],
+  'detail.repairRun': ['自动修复 {attempts}/{max} 轮', 'Auto-repair {attempts}/{max}'],
+  'detail.repairRunHint': ['这一轮执行里自动修复的轮数与结果（maxRepairRounds 控制上限）。',
+    'Automatic repair rounds in this run and their outcome (bounded by maxRepairRounds).'],
+  'detail.repairSucceeded': ['成功', 'Succeeded'],
+  'detail.repairFailed': ['失败', 'Failed'],
+  'detail.repairExhausted': ['已用尽', 'Exhausted'],
+  'detail.repairNone': ['未触发', 'Not triggered'],
 })
 
 /** Run step name → PAGE_TEXT key suffix; gate steps are labelled with their gate name. */
@@ -5114,6 +5987,13 @@ function ticketStepLabel(t, name) {
   if (text.startsWith('gate:')) return `${pt(t, 'ticket.step.gate')}：${pt(t, `gate.${text.slice(5)}`)}`
   const key = TICKET_STEP_KEYS[text]
   return key ? pt(t, `ticket.step.${key}`) : text
+}
+
+/** Gate names with a translated label (standards/backend/frontend); an unknown gate keeps its raw name. */
+const TICKET_GATE_NAMES = ['standards', 'backend', 'frontend']
+function ticketGateLabel(t, name) {
+  const text = String(name ?? '')
+  return TICKET_GATE_NAMES.includes(text) ? pt(t, `gate.${text}`) : (text || '—')
 }
 
 /** run step state → status shape. */
@@ -5222,18 +6102,271 @@ function TicketTimeline({ ticket, runs }) {
       : null)
 }
 
-/** Run records, newest first: status, start time, branch/commit and the failure cause in plain words (the raw text is on
-    hover; gates live in their own section). */
+/** worker event type (P0 §1.1 trace) → icon, label and the shape its row gets. */
+const TRACE_KINDS = {
+  assistant: { icon: 'message', state: 'ongoing', labelKey: 'ticket.traceAssistant' },
+  tool_call: { icon: 'settings', state: 'ongoing', labelKey: 'ticket.traceToolCall' },
+  tool_result: { icon: 'check', state: 'done', labelKey: 'ticket.traceToolResult' },
+  turn_end: { icon: 'circle-check', state: 'done', labelKey: 'ticket.traceTurnEnd' },
+  error: { icon: 'alert-triangle', state: 'error', labelKey: 'ticket.traceError' },
+}
+const TRACE_LIMIT = 80
+
+/** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
+function RunTrace({ run }) {
+  const { t } = usePanel()
+  const trace = Array.isArray(run?.trace) ? run.trace.filter(event => event && typeof event === 'object') : []
+  if (!trace.length) return null
+  const shown = trace.slice(-TRACE_LIMIT)
+  return h(Folded, { summary: pt(t, 'ticket.traceCount', { count: shown.length }) },
+    h('ol', { className: 'sa-timeline' }, shown.map((event, index) => {
+      const kind = TRACE_KINDS[event.type] ?? { icon: 'circle', state: 'idle', labelKey: 'ticket.traceAssistant' }
+      const summary = typeof event.summary === 'string' ? event.summary.slice(0, 300) : ''
+      return h('li', { key: index, className: 'sa-event' },
+        h('div', { className: 'sa-event-actor' },
+          h(StatusIcon, { state: kind.state, size: 13, spin: false }),
+          typeof event.at === 'string' && event.at ? h(TicketStamp, { at: event.at }) : null,
+          h('span', null, pt(t, kind.labelKey)),
+          event.name ? h('span', { className: 'sa-mono sa-hint' }, String(event.name)) : null),
+        summary ? h('p', { className: 'sa-event-text' }, summary) : null)
+    })))
+}
+
+/** P1-2: the handoff an executor leaves behind (what is done, what comes next), folded under its run. */
+function RunHandoff({ run }) {
+  const { t } = usePanel()
+  const handoff = run?.handoff
+  const summary = typeof handoff?.summary === 'string' ? handoff.summary.trim() : ''
+  const nextAction = typeof handoff?.nextAction === 'string' ? handoff.nextAction.trim() : ''
+  const changed = Array.isArray(handoff?.changedPaths) ? handoff.changedPaths.filter(path => typeof path === 'string') : []
+  if (!summary && !nextAction && !changed.length) return null
+  return h(Folded, { summary: pt(t, 'detail.handoff') },
+    summary ? h('p', { className: 'sa-event-text' }, summary) : null,
+    changed.length ? h('p', { className: 'sa-hint' }, h('span', { className: 'sa-mono' }, changed.join(' · '))) : null,
+    nextAction ? h('p', { className: 'sa-hint' }, pt(t, 'detail.handoffNext', { next: nextAction })) : null)
+}
+
+/** P1-4: the worker's own report (progress / artifacts / verify). A parked question is handled by the answer banner. */
+function RunReport({ run }) {
+  const { t } = usePanel()
+  const report = run?.report
+  if (!report || typeof report !== 'object') return null
+  const progress = Array.isArray(report.progress) ? report.progress.filter(entry => entry && typeof entry === 'object') : []
+  const artifacts = Array.isArray(report.artifacts) ? report.artifacts.filter(entry => entry && typeof entry === 'object') : []
+  const verify = Array.isArray(report.verify) ? report.verify.filter(entry => entry && typeof entry === 'object') : []
+  if (!progress.length && !artifacts.length && !verify.length) return null
+  return h(Folded, { summary: pt(t, 'detail.report') },
+    progress.length
+      ? h('div', null,
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportProgress', { count: progress.length })),
+        h('ul', { className: 'sa-list' }, progress.map((entry, index) => h('li', { key: index, className: 'sa-row' },
+          h('div', { className: 'sa-row-main' },
+            h('div', { className: 'sa-row-title' }, h('span', null, String(entry.text ?? ''))),
+            entry.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: entry.at })) : null)))))
+      : null,
+    artifacts.length
+      ? h('div', null,
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportArtifacts', { count: artifacts.length })),
+        h('ul', { className: 'sa-list' }, artifacts.map((entry, index) => h('li', { key: index, className: 'sa-row' },
+          h('div', { className: 'sa-row-main' },
+            h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-mono' }, String(entry.path ?? ''))),
+            entry.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(entry.note))) : null)))))
+      : null,
+    verify.length
+      ? h('div', null,
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportVerify', { count: verify.length })),
+        h('ul', { className: 'sa-list' }, verify.map((entry, index) => h('li', { key: index, className: 'sa-row' },
+          h('div', { className: 'sa-row-main' },
+            h('div', { className: 'sa-row-title' }, h('span', null, String(entry.name ?? ''))),
+            h('div', { className: 'sa-row-meta' },
+              entry.command ? h('span', { className: 'sa-mono' }, String(entry.command)) : null,
+              entry.expectedOutput
+                ? h('span', { className: 'sa-hint' }, pt(t, 'detail.reportExpected', { text: String(entry.expectedOutput) }))
+                : null))))))
+      : null)
+}
+
+/** P2-2: gate failure policy labels (contract §1.1); a missing field always means `manual`. */
+const GATE_ONFAIL_KEYS = { auto_repair: 'gate.onFailAutoRepair', manual: 'gate.onFailManual' }
+const gateOnFail = value => (value === 'auto_repair' ? 'auto_repair' : 'manual')
+/** The acceptance record already carries each gate's policy on its plan/checks; the run gate entry may too. */
+function gateOnFailOf(gate, record) {
+  const direct = gate?.onFail
+  if (direct === 'auto_repair' || direct === 'manual') return direct
+  const round = latestAcceptanceRound(record)
+  const entries = [...(Array.isArray(round?.checks) ? round.checks : []), ...(Array.isArray(round?.plan) ? round.plan : [])]
+  const entry = entries.find(item => item && (item.id === gate?.name || item.name === gate?.name))
+  return gateOnFail(entry?.onFail)
+}
+/** Repair status → label key/tone (run.repair and round.repair share the vocabulary). */
+const REPAIR_STATUS_KEYS = { succeeded: 'detail.repairSucceeded', failed: 'detail.repairFailed', exhausted: 'detail.repairExhausted' }
+const REPAIR_STATUS_TONE = { succeeded: 'success', failed: 'danger', exhausted: 'warning' }
+const repairLabel = (t, repair) => {
+  const status = String(repair?.status ?? '')
+  const key = REPAIR_STATUS_KEYS[status]
+  return key ? pt(t, key) : String(status || '')
+}
+
+/**
+ * P2-2 gate results: the same three gates as the shared GateSummary, plus each gate's failure policy. The policy comes
+ * from the run gate entry, the acceptance plan/checks, or (older payloads) defaults to manual — never throws.
+ */
+function TicketGateResults({ ticket, record }) {
+  const { t } = usePanel()
+  const { gates } = latestGatesOf(ticket)
+  if (!gates.length) return h(Hint, null, pt(t, 'gate.none'))
+  return h('div', { className: 'sa-gates' },
+    ['standards', 'backend', 'frontend'].map(name => {
+      const gate = gates.find(entry => entry.name === name)
+      if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+      const ok = gate.exitCode === 0 && !gate.timedOut
+      const policy = gateOnFailOf(gate, record)
+      return h('span', { key: name, className: 'sa-gate' },
+        h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)),
+        h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline', title: pt(t, policy === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
+          pt(t, GATE_ONFAIL_KEYS[policy])))
+    }))
+}
+
+/** Acceptance record status → label key (P1-3). Unknown values stay visible instead of being hidden. */
+const ACCEPTANCE_STATUS_KEYS = { unverified: 'detail.acceptStatus.unverified', verifying: 'detail.acceptStatus.verifying',
+  delivered: 'detail.acceptStatus.delivered', accepted: 'detail.acceptStatus.accepted',
+  rejected: 'detail.acceptStatus.rejected', closed: 'detail.acceptStatus.closed', errored: 'detail.acceptStatus.errored' }
+const ACCEPTANCE_TONE = { unverified: 'outline', verifying: 'info', delivered: 'success', accepted: 'success',
+  rejected: 'danger', closed: 'neutral', errored: 'danger' }
+const ACCEPTANCE_CHECK_KEYS = { pending: 'detail.acceptCheck.pending', passed: 'detail.acceptCheck.passed',
+  failed: 'detail.acceptCheck.failed', errored: 'detail.acceptCheck.errored', skipped: 'detail.acceptCheck.skipped' }
+const ACCEPTANCE_CHECK_TONE = { pending: 'outline', passed: 'success', failed: 'danger', errored: 'danger', skipped: 'neutral' }
+const ACCEPTANCE_CHECK_STATE = { pending: 'ongoing', passed: 'done', failed: 'error', errored: 'error', skipped: 'idle' }
+const ACCEPTANCE_INTENTS = ['unmet', 'new-idea', 'no-evidence']
+const ACCEPTANCE_INTENT_KEYS = { unmet: 'detail.intentUnmet', 'new-idea': 'detail.intentNewIdea', 'no-evidence': 'detail.intentNoEvidence' }
+const acceptanceStatusLabel = (t, status) => {
+  const key = ACCEPTANCE_STATUS_KEYS[String(status ?? '')]
+  return key ? pt(t, key) : String(status ?? '—')
+}
+/** The latest round of an acceptance record; a record without rounds is still shown (status + requirement). */
+function latestAcceptanceRound(record) {
+  const rounds = Array.isArray(record?.rounds) ? record.rounds.filter(round => round && typeof round === 'object') : []
+  return rounds.length ? rounds[rounds.length - 1] : null
+}
+
+/** P1-3: one acceptance record — status, newest round, its checks and the person's last decision. */
+function AcceptanceRecordCard({ record }) {
+  const { t } = usePanel()
+  if (!record || typeof record !== 'object') return null
+  const status = String(record.status ?? '')
+  const round = latestAcceptanceRound(record)
+  const checks = Array.isArray(round?.checks) ? round.checks.filter(check => check && typeof check === 'object') : []
+  const plan = Array.isArray(round?.plan) ? round.plan.filter(item => item && typeof item === 'object') : []
+  const repair = round?.repair && typeof round.repair === 'object' ? round.repair : undefined
+  const onFailOfCheck = check => gateOnFail(check?.onFail
+    ?? plan.find(item => item.id === check?.id || item.name === check?.name)?.onFail)
+  const decision = round?.userDecision && typeof round.userDecision === 'object' ? round.userDecision : undefined
+  const intents = Array.isArray(decision?.intents) ? decision.intents.filter(intent => typeof intent === 'string') : []
+  return h('div', { className: 'sa-card' },
+    h('div', { className: 'sa-card-head' },
+      h('span', { className: 'sa-card-title' }, pt(t, 'detail.acceptRecord')),
+      h('span', { className: 'sa-actions' },
+        h(Tag, { tone: ACCEPTANCE_TONE[status] ?? 'outline' }, acceptanceStatusLabel(t, status)),
+        round ? h('span', { className: 'sa-hint' },
+          pt(t, 'detail.acceptRound', { round: round.roundIndex ?? '—', status: acceptanceStatusLabel(t, round.status) })) : null,
+        // P2-2: a round that needed automatic repair says how many rounds it used and how it ended.
+        repair && repair.status && repair.status !== 'none'
+          ? h(Tag, { tone: REPAIR_STATUS_TONE[String(repair.status)] ?? 'outline',
+            title: pt(t, 'detail.repairRunHint') },
+          `${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`)
+          : null)),
+    record.requirement ? h('p', { className: 'sa-hint' }, pt(t, 'detail.acceptRequirement', { text: String(record.requirement) })) : null,
+    checks.length
+      ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.acceptChecks', { count: checks.length })),
+        h('ul', { className: 'sa-list' }, checks.map((check, index) => {
+          const checkStatus = String(check.status ?? '')
+          const outputTail = typeof check.outputTail === 'string' ? check.outputTail : ''
+          return h('li', { key: check.id ?? index, className: 'sa-row' },
+            h(StatusIcon, { state: ACCEPTANCE_CHECK_STATE[checkStatus] ?? 'idle', size: 14, spin: false }),
+            h('div', { className: 'sa-row-main' },
+              h('div', { className: 'sa-row-title' },
+                h('span', null, String(check.name ?? check.id ?? '—')),
+                h(Tag, { tone: ACCEPTANCE_CHECK_TONE[checkStatus] ?? 'outline' },
+                  pt(t, ACCEPTANCE_CHECK_KEYS[checkStatus] ?? 'detail.acceptCheck.pending')),
+                // P2-2: each check states whether its gate is auto-repaired or waits for a person (missing = manual).
+                h(Tag, { tone: onFailOfCheck(check) === 'auto_repair' ? 'info' : 'outline',
+                  title: pt(t, onFailOfCheck(check) === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
+                pt(t, GATE_ONFAIL_KEYS[onFailOfCheck(check)])),
+                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, `exit ${check.exitCode}`) : null,
+                check.timedOut ? h(Tag, { tone: 'warning' }, pt(t, 'runStop.timeout')) : null),
+              check.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(check.note))) : null,
+              outputTail
+                ? h(Folded, { summary: pt(t, 'detail.acceptCheckOutput') },
+                  h('div', { className: 'sa-actions' }, h(CopyButton, { value: outputTail })),
+                  h('pre', { className: 'sa-pre' }, outputTail))
+                : null))
+        })))
+      : h(Hint, null, pt(t, 'detail.acceptNoChecks')),
+    decision
+      ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+        h(Tag, { tone: decision.decision === 'rejected' ? 'danger' : 'success' },
+          pt(t, `detail.userDecision.${decision.decision === 'rejected' ? 'rejected' : decision.decision === 'overridden' ? 'overridden' : 'accepted'}`)),
+        decision.at ? h(When, { at: decision.at }) : null,
+        decision.note ? h('span', { className: 'sa-hint' }, String(decision.note)) : null,
+        intents.length
+          ? h('span', { className: 'sa-hint' },
+            `${pt(t, 'detail.acceptIntents')}：${intents.map(intent => pt(t, ACCEPTANCE_INTENT_KEYS[intent] ?? intent)).join('、')}`)
+          : null)
+      : null)
+}
+
+/** P1-7 activity row labels; an unknown kind stays raw so a new host event is never swallowed. */
+const ACTIVITY_KIND_KEYS = { created: 'activity.created', status: 'activity.status', trigger: 'activity.trigger',
+  run: 'activity.run', gate: 'activity.gate', acceptance: 'activity.acceptance', reply: 'activity.reply',
+  dismiss: 'activity.dismiss', comment: 'activity.comment', resume: 'activity.resume' }
+const ACTIVITY_ICON = { agent: 'robot', system: 'shield', user: 'user' }
+
+/** P1-7: the ticket's own activity stream, newest first; the page shows the latest 20 and says how many remain. */
+function TicketActivities({ activities }) {
+  const { t } = usePanel()
+  const list = Array.isArray(activities) ? activities.filter(entry => entry && typeof entry === 'object') : []
+  const shown = list.slice(0, 20)
+  return h(Fragment, null,
+    h('ol', { className: 'sa-timeline' }, shown.map((entry, index) => {
+      const kind = String(entry.kind ?? '')
+      const actor = String(entry.actorKind ?? 'system')
+      const transition = entry.from || entry.to ? `${entry.from ?? '—'} → ${entry.to ?? '—'}` : ''
+      return h('li', { key: entry.id ?? index, className: 'sa-event' },
+        h('div', { className: 'sa-event-actor' },
+          h(Icon, { name: ACTIVITY_ICON[actor] ?? 'circle', size: 13 }),
+          entry.at ? h(TicketStamp, { at: entry.at }) : null,
+          h('span', null, pt(t, ACTIVITY_KIND_KEYS[kind] ?? kind)),
+          transition ? h('span', { className: 'sa-hint' }, transition) : null),
+        entry.detail ? h('p', { className: 'sa-event-text' }, String(entry.detail)) : null)
+    })),
+    list.length > shown.length ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.activityMore', { total: list.length, shown: shown.length })) : null)
+}
+
+/** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
+    text is on hover; gates live in their own section; a worker trace folds out under its run). */
 function TicketRunRows({ runs }) {
   const { t } = usePanel()
   return h('ul', { className: 'sa-list' }, runs.map(run => {
     const view = ticketStatus({ status: run.status })
+    const stop = runStopLabel(t, run)
+    const trigger = runTriggerLabel(t, run)
+    const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
+    const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
     return h('li', { key: run.id, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
           h('span', null, pt(t, view.labelKey)),
+          trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
+          stop ? h(Tag, { tone: stop.tone }, stop.label) : null,
+          // P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched.
+          repair && repairStatus !== 'none'
+            ? h(Tag, { tone: REPAIR_STATUS_TONE[repairStatus] ?? 'outline', title: pt(t, 'detail.repairRunHint') },
+              `${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`)
+            : null,
           run.dryRun ? h(Tag, { tone: 'outline' }, pt(t, 'ticket.dryTag')) : null,
           run.startedAt ? h(When, { at: run.startedAt }) : null,
           h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
@@ -5241,7 +6374,10 @@ function TicketRunRows({ runs }) {
           run.branch ? h('span', { className: 'sa-mono' }, run.branch) : null,
           commit ? h('span', { className: 'sa-mono' }, liveShortId(commit, 8)) : null,
           Array.isArray(run.steps) ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.stepsCount', { count: run.steps.length })) : null),
-        run.error ? h('p', { className: 'sa-error', title: String(run.error) }, failureLabel(t, run.error)) : null))
+        run.error ? h('p', { className: 'sa-error', title: String(run.error) }, failureLabel(t, run.error)) : null,
+        h(RunHandoff, { run }),
+        h(RunReport, { run }),
+        h(RunTrace, { run })))
   }))
 }
 
@@ -5307,6 +6443,121 @@ function failureHint(t, error, steps) {
   return pt(t, 'detail.failedGeneric')
 }
 
+/** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
+const AUTOMATION_MODES = ['off', 'heartbeat', 'schedule']
+
+/** Form snapshot of one stored automation: numbers stay strings until save so a half-typed field is never coerced. */
+function automationFormOf(automation) {
+  const value = automation && typeof automation === 'object' ? automation : {}
+  const mode = AUTOMATION_MODES.includes(value.mode) ? value.mode : 'off'
+  const interval = Number(value.intervalMinutes)
+  return {
+    enabled: value.enabled === true && mode !== 'off',
+    mode,
+    intervalMinutes: Number.isFinite(interval) && interval > 0 ? String(interval) : '60',
+    at: /^\d{2}:\d{2}$/.test(String(value.at ?? '')) ? String(value.at) : '09:00',
+    maxExecutions: value.maxExecutions === null || value.maxExecutions === undefined ? '' : String(value.maxExecutions),
+  }
+}
+
+/**
+ * P2-1 automation card: the operator sets how a Ticket runs itself. The block only exists for a Ticket that already
+ * carries an automation config (an older host, or a Ticket that never opted in, renders nothing).
+ */
+function AutomationCard({ ticket, onSaved }) {
+  const { t, notify } = usePanel()
+  const model = usePanelData()
+  const act = model?.actions
+  const automation = ticket?.automation && typeof ticket.automation === 'object' ? ticket.automation : undefined
+  const signature = JSON.stringify(automation ?? null)
+  const [form, setForm] = useState(() => automationFormOf(automation))
+  const [saving, setSaving] = useState(false)
+  const [failure, setFailure] = useState(undefined)
+  // Re-sync only when the stored config actually changed (a poll of unchanged data never wipes a half-typed form).
+  useEffect(() => { setForm(automationFormOf(automation)) }, [signature])
+  // A Ticket without a stored config still needs an entry point to opt in; only the terminal "put away" states hide
+  // the card (a dismissed/closed Ticket will never run again by schedule).
+  const update = patch => setForm(previous => ({ ...previous, ...patch }))
+  const setMode = mode => setForm(previous => ({ ...previous, mode,
+    enabled: mode === 'off' ? false : (previous.mode === mode ? previous.enabled : true) }))
+  const save = async () => {
+    if (saving || !act?.setAutomation) return
+    setSaving(true)
+    setFailure(undefined)
+    try {
+      const patch = { mode: form.mode, enabled: form.enabled }
+      if (form.mode === 'heartbeat') patch.intervalMinutes = Number(form.intervalMinutes)
+      if (form.mode === 'schedule') patch.at = form.at
+      const limit = String(form.maxExecutions ?? '').trim()
+      patch.maxExecutions = limit === '' ? null : Number(limit)
+      await act.setAutomation(ticket.id, patch)
+      notify(pt(t, 'auto.saved'))
+      await onSaved?.()
+    } catch (error) {
+      setFailure(error)
+    } finally {
+      setSaving(false)
+    }
+  }
+  const heartbeat = form.mode === 'heartbeat'
+  const schedule = form.mode === 'schedule'
+  // A Ticket without a stored config still gets the card (off state); every fact reads the empty object, never crashes.
+  const stored = automation ?? {}
+  const executions = Math.max(0, Number(stored.executions) || 0)
+  const maxExecutions = Number.isFinite(Number(stored.maxExecutions)) ? Number(stored.maxExecutions) : undefined
+  const facts = [
+    [pt(t, 'auto.nextRun'), stored.nextAt ? h(When, { at: stored.nextAt }) : '—'],
+    [pt(t, 'auto.executions'), maxExecutions !== undefined
+      ? pt(t, 'auto.executionsLimit', { count: executions, max: maxExecutions })
+      : pt(t, 'auto.executionsValue', { count: executions })],
+  ]
+  if (stored.lastRunAt) facts.push([pt(t, 'auto.lastRun'), h(When, { at: stored.lastRunAt })])
+  if (stored.lastTrigger) {
+    facts.push([pt(t, 'auto.lastTrigger'),
+      pt(t, stored.lastTrigger === 'schedule' ? 'auto.triggerSchedule' : 'auto.triggerHeartbeat')])
+  }
+  if (stored.lastSkipReason) facts.push([pt(t, 'auto.lastSkip'), autoSkipReasonText(t, stored.lastSkipReason)])
+  return h(Section, { id: 'sa-automation', title: pt(t, 'auto.section') },
+    h('div', { className: 'sa-card' },
+      h('div', { className: 'sa-card-head' },
+        h('span', { className: 'sa-card-title' }, automationSummaryText(t, stored) || pt(t, 'auto.modeOff')),
+        h('span', { className: 'sa-actions' },
+          h('span', { className: 'sa-hint' }, pt(t, 'auto.enabled')),
+          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }), label: pt(t, 'auto.enabled') }))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'auto.mode')),
+        h(SegmentedControl, { value: form.mode, onChange: setMode, label: pt(t, 'auto.mode'),
+          options: [{ value: 'off', label: pt(t, 'auto.modeOff') },
+            { value: 'heartbeat', label: pt(t, 'auto.modeHeartbeat') },
+            { value: 'schedule', label: pt(t, 'auto.modeSchedule') }] })),
+      heartbeat
+        ? h('div', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'auto.interval')),
+          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes,
+            'aria-label': pt(t, 'auto.interval'), onChange: event => update({ intervalMinutes: event.target.value }) }),
+          h('small', null, pt(t, 'auto.intervalHint')))
+        : null,
+      schedule
+        ? h('div', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'auto.at')),
+          h(Input, { type: 'time', value: form.at, 'aria-label': pt(t, 'auto.at'),
+            onChange: event => update({ at: event.target.value }) }),
+          h('small', null, pt(t, 'auto.atHint')))
+        : null,
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'auto.maxExecutions')),
+        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions,
+          placeholder: pt(t, 'auto.maxExecutionsPlaceholder'), 'aria-label': pt(t, 'auto.maxExecutions'),
+          onChange: event => update({ maxExecutions: event.target.value }) }),
+        h('small', null, pt(t, 'auto.maxExecutionsHint'))),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !act?.setAutomation,
+          onClick: () => { void save() } }, pt(t, 'auto.save')),
+        h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
+      failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null,
+      h('div', { style: { marginTop: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: facts }))))
+}
+
 /**
  * Full ticket detail. `id` is the engine ticket id; `page` says which tab hosts it so a row click on another tab
  * keeps the same route page.
@@ -5351,13 +6602,36 @@ function TicketDetail({ id, page = 'execution' }) {
     notify(pt(t, cleanup ? (cleanup.failed ? 'detail.acceptCleanupFailedShort' : 'detail.acceptCleanupDone') : 'ticket.acceptRecorded'))
     return cleanup
   }, { reload: refreshAll })
-  const acceptFail = useAction(async () => { await act.acceptTicket(id, { ok: false }); notify(pt(t, 'ticket.rejectRecorded')) },
-    { reload: refreshAll })
+  const acceptFail = useAction(async intents => {
+    await act.acceptTicket(id, { ok: false, intents: Array.isArray(intents) ? intents : undefined })
+    notify(pt(t, 'ticket.rejectRecorded'))
+  }, { reload: refreshAll })
   const dismiss = useAction(async () => {
     const result = await act.dismissTicket(id, '手动忽略')
     const cleanup = result?.cleanup ?? result?.ticket?.links?.cleanup
     notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
     return cleanup
+  }, { reload: refreshAll })
+  // P0 gate decisions (contract §3.2): release skips the gate and delivers, retry re-runs the gates, stop fails the
+  // Ticket. Each one reloads both the detail and the shared status model, so the parked state never lingers on screen.
+  const gateRelease = useAction(async () => { await act.gateAction(id, 'release'); notify(pt(t, 'detail.gateReleased')) },
+    { reload: refreshAll })
+  const gateRetry = useAction(async () => { await act.gateAction(id, 'retry'); notify(pt(t, 'detail.gateRetried')) },
+    { reload: refreshAll })
+  const gateStop = useAction(async () => { await act.gateAction(id, 'stop'); notify(pt(t, 'detail.gateStopped')) },
+    { reload: refreshAll })
+  // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
+  const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
+  const [answerText, setAnswerText] = useState('')
+  // P1-3: rejection intents are optional checkboxes next to the reject button.
+  const [rejectIntents, setRejectIntents] = useState([])
+  const answer = useAction(async () => {
+    const text = String(answerText ?? '').trim()
+    if (!text) { notify(pt(t, 'detail.answerRequired')); return }
+    await act.answerTicket(id, text)
+    setAnswerText('')
+    notify(pt(t, 'detail.answerSent'))
   }, { reload: refreshAll })
   // Which confirmation dialog the ⋯ menu opened (`publish` / `retry`); mirrors TicketRow's menu behavior (critique #4).
   const [pending, setPending] = useState(null)
@@ -5374,6 +6648,10 @@ function TicketDetail({ id, page = 'execution' }) {
   }, [back])
 
   if (!id) return h(EmptyState, { icon: 'inbox', title: pt(t, 'thread.noSelection'), hint: pt(t, 'thread.noSelectionHint') })
+  // P0 §3.6.6: a missing Ticket (404) is an empty state — "找不到该工单" — not a broken connection with a retry that
+  // can never succeed. Any other failure keeps the URL and offers a retry.
+  if (error?.missing && !data) return h(EmptyState, { icon: 'inbox', title: pt(t, 'detail.ticketMissing'), hint: pt(t, 'detail.ticketMissingHint'),
+    action: h(Button, { variant: 'outline', size: 'sm', onClick: back }, t('back')) })
   if (error && !data) return h(ErrorState, { error, onRetry: reload })
   if (loading) return h(Skeleton, { rows: 5 })
 
@@ -5384,6 +6662,22 @@ function TicketDetail({ id, page = 'execution' }) {
   const thread = data?.thread
   const config = model?.data?.config ?? {}
   const view = ticketStatus(ticket)
+  const acceptanceView = ticketAcceptanceOf(ticket)
+  // The parked gate lives on the Ticket (decorate passes it through) with the run as the fallback source of truth.
+  const pendingGate = ticket.pendingGate
+    ?? runs.find(run => run && run.id === ticket.runId && run.pendingGate)?.pendingGate
+    ?? runs.find(run => run && run.pendingGate)?.pendingGate
+  const gateBlocked = ticket.status === 'gate-blocked'
+  // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
+  const latestRun = latestRunFor(ticket, runs)
+  const interrupted = latestRun?.status === 'interrupted'
+  const awaitingAnswer = ticket.status === 'awaiting-answer'
+  const pendingQuestion = ticket.pendingQuestion ?? latestRun?.pendingQuestion
+  const answerOptions = Array.isArray(pendingQuestion?.options) ? pendingQuestion.options.filter(option => typeof option === 'string') : []
+  const previousAnswers = Array.isArray(ticket.answers) ? ticket.answers.filter(entry => entry && typeof entry === 'object') : []
+  // P1-3 / P1-7 payloads are part of the ticket view; an older host simply has neither and the blocks stay hidden.
+  const acceptanceRecord = data?.acceptance && typeof data.acceptance === 'object' ? data.acceptance : null
+  const activities = Array.isArray(data?.activities) ? data.activities.filter(entry => entry && typeof entry === 'object') : []
   const failedRun = view.state === 'error' ? runs.find(run => run.status === 'failed') : undefined
   const failedSteps = (failedRun?.steps ?? [])
     .filter(step => step.state === 'failed' && step.name !== 'error').map(step => ticketStepLabel(t, step.name))
@@ -5438,7 +6732,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const failed = view.state === 'error'
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   const mrUrl = ticket.links?.mergeRequest?.webUrl
-  const primaryAction = failed
+  const primaryAction = awaitingAnswer
+    // A parked question owns the primary slot: the answer form is the banner right below the header.
+    ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
+      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.answer'))
+    : failed
     ? canRun
       ? h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
         message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
@@ -5452,9 +6750,18 @@ function TicketDetail({ id, page = 'execution' }) {
         ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
           document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) },
         pt(t, 'primary.accept'))
-        : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
-          title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
-          onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
+        // A parked gate owns the primary slot: the three decisions live in the banner right below the header.
+        : gateBlocked
+          ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
+            document.getElementById('sa-gate')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.gate'))
+          // P1-5: an interrupted run is resumable, so it outranks the generic dry-run action.
+          : interrupted
+            ? h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
+              title: canRun ? undefined : pt(t, 'ticket.retryUnavailable'),
+              onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume'))
+            : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
+            title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
+            onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
   const menuItems = [
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
@@ -5509,12 +6816,85 @@ function TicketDetail({ id, page = 'execution' }) {
           : null,
         h('p', { className: 'sa-hint' }, failureHint(t, failedRun.error, failedSteps))))
     : null
+  // P0 gate banner: what parked the run and the three human decisions; the failing output is folded and copyable.
+  const gateBanner = gateBlocked
+    ? h('div', { id: 'sa-gate', className: 'sa-banner', role: 'alert',
+      style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
+      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
+      h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
+        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
+          pt(t, 'detail.gateTitle', { name: ticketGateLabel(t, pendingGate?.name) })),
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.gateIntro')),
+        h(KeyValues, { rows: [
+          [pt(t, 'detail.gateExit'), pendingGate?.exitCode === undefined ? '—' : String(pendingGate.exitCode)],
+          [pt(t, 'detail.gateTimedOut'), pendingGate?.timedOut ? pt(t, 'detail.gateYes') : pt(t, 'detail.gateNo')],
+          ...(Array.isArray(pendingGate?.changedPaths) && pendingGate.changedPaths.length
+            ? [[pt(t, 'detail.gateChanged'), h('span', { className: 'sa-mono' }, pendingGate.changedPaths.join(' · '))]] : []),
+        ] }),
+        pendingGate?.outputTail
+          ? h(Folded, { summary: pt(t, 'detail.gateOutput') },
+            h('div', { className: 'sa-actions' }, h(CopyButton, { value: String(pendingGate.outputTail) })),
+            h('pre', { className: 'sa-pre' }, String(pendingGate.outputTail)))
+          : h(Hint, null, pt(t, 'detail.gateNoOutput')),
+        h('div', { className: 'sa-actions' },
+          h(ConfirmButton, { label: pt(t, 'detail.gateRelease'), title: pt(t, 'detail.gateReleaseTitle'),
+            message: pt(t, 'detail.gateReleaseConfirm', { name: ticketGateLabel(t, pendingGate?.name),
+              title: ticket.title ?? ticket.id }),
+            variant: 'primary', icon: 'play', onConfirm: async () => { await gateRelease.run() } }),
+          h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: gateRetry.busy,
+            onClick: () => { void gateRetry.run() } }, pt(t, 'detail.gateRetry')),
+          h(ConfirmButton, { label: pt(t, 'detail.gateStop'), title: pt(t, 'detail.gateStopTitle'),
+            message: pt(t, 'detail.gateStopConfirm', { title: ticket.title ?? ticket.id }),
+            variant: 'danger', icon: 'stop', onConfirm: async () => { await gateStop.run() } }))))
+    : null
+  // P1-4 answer banner: the worker asked a question, so the one thing on screen is the question and the answer box.
+  const answerQuestion = typeof pendingQuestion?.question === 'string' ? pendingQuestion.question : ''
+  const answerBanner = awaitingAnswer
+    ? h('div', { id: 'sa-answer', className: 'sa-banner', role: 'alert',
+      style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
+      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
+      h('div', { style: { minWidth: 0, flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
+        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } }, pt(t, 'detail.answerTitle')),
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.answerHint')),
+        answerQuestion ? h('p', null, pt(t, 'detail.answerQuestion', { text: answerQuestion })) : null,
+        answerOptions.length
+          ? h('div', { className: 'sa-actions' },
+            h('span', { className: 'sa-hint' }, pt(t, 'detail.answerOptions')),
+            answerOptions.map((option, index) => h(Button, { key: index, variant: 'outline', size: 'sm',
+              onClick: () => setAnswerText(option) }, option)))
+          : null,
+        h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
+          h('textarea', { className: 'sa-textarea', rows: 2, value: answerText,
+            placeholder: pt(t, 'detail.answerPlaceholder'), 'aria-label': pt(t, 'detail.answerPlaceholder'),
+            onChange: event => setAnswerText(event.target.value) }),
+          h(Button, { variant: 'primary', size: 'sm', icon: 'message',
+            disabled: answer.busy || !String(answerText ?? '').trim(),
+            onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit'))),
+        previousAnswers.length
+          ? h(Folded, { summary: pt(t, 'detail.answerHistory', { count: previousAnswers.length }) },
+            h('ul', { className: 'sa-list' }, previousAnswers.map((entry, index) => h('li', { key: index, className: 'sa-row' },
+              h('div', { className: 'sa-row-main' },
+                h('div', { className: 'sa-row-title' }, h('span', null, String(entry.answer ?? ''))),
+                entry.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: entry.at })) : null)))))
+          : null))
+    : null
+  // P1-5 interrupted banner: the reason the resume action exists, so the phase label is never read as a healthy queue.
+  const interruptedStop = interrupted ? runStopLabel(t, latestRun) : null
+  const interruptedBanner = interrupted
+    ? h('div', { className: 'sa-banner', style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
+      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
+      h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
+        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
+          interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
+        h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
+    : null
   const jumps = [
     { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
     { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
     { id: 'sa-ticket-stages', labelKey: 'ticket.stages' },
     { id: 'sa-ticket-gates', labelKey: 'ticket.gates' },
     { id: 'sa-ticket-runs', labelKey: 'ticket.runs' },
+    { id: 'sa-ticket-activities', labelKey: 'ticket.activities' },
     { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
   ]
   const jumpTo = id => {
@@ -5522,6 +6902,18 @@ function TicketDetail({ id, page = 'execution' }) {
     const node = document.getElementById(id)
     if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start' })
   }
+
+  // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it gets its own line under the header instead of being
+  // discoverable only by scrolling into the acceptance card. The jump lands on that card (`#sa-acceptance` exists).
+  const acceptanceLine = acceptanceView.state === 'none'
+    ? null
+    : h('p', { className: 'sa-hint', style: { margin: 'var(--sa-sp-4) 0', display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)' } },
+      h('span', null, acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
+        : acceptanceView.state === 'accepted'
+          ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
+          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at) || '—' })),
+      h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
+        pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
 
   return h(Fragment, null,
     h(PageHead, { headRef, title: ticket.title ?? pt(t, 'ticket.loading'),
@@ -5531,8 +6923,12 @@ function TicketDetail({ id, page = 'execution' }) {
         ticket.id ? h(CopyButton, { value: ticket.id, label: pt(t, 'detail.copyTicketId') }) : null,
         ticket.updatedAt ? h(When, { at: ticket.updatedAt }) : null,
         repoName ? h('span', { className: 'sa-hint' }, `${pt(t, 'repo.label')}：${repoName}`) : null) }),
+    acceptanceLine,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
+    answerBanner,
+    interruptedBanner,
     failureBanner,
+    gateBanner,
     actionRow,
     h('nav', { className: 'sa-detail-nav', 'aria-label': pt(t, 'ticket.sectionNav') },
       headStuck ? h('div', { className: 'sa-detail-context' },
@@ -5572,6 +6968,10 @@ function TicketDetail({ id, page = 'execution' }) {
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
     h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
+      // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
+      acceptanceRecord
+        ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
+        : null,
       h('div', { className: 'sa-card-grid', style: { marginBottom: 'var(--sa-sp-8)' } },
         h(MergeRequestCard, { ticket }), h(UatCard, { ticket })),
       h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } },
@@ -5596,22 +6996,39 @@ function TicketDetail({ id, page = 'execution' }) {
       canAccept && !accepted
         ? h(Fragment, null,
           h(Hint, null, pt(t, acceptMode === 'merged' ? 'ticket.acceptHintMerged' : 'ticket.acceptHint')),
+          // P1-3: rejection intents are optional; they ride on the accept POST only when at least one is ticked.
+          h('div', { className: 'sa-actions', style: { flexWrap: 'wrap', alignItems: 'center' } },
+            h('span', { className: 'sa-hint' }, pt(t, 'detail.acceptIntentsHint')),
+            ...ACCEPTANCE_INTENTS.map(intent => h('label', { key: intent,
+              style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-4)', fontSize: 'var(--sa-fs-meta)' } },
+            h('input', { type: 'checkbox', checked: rejectIntents.includes(intent),
+              onChange: event => setRejectIntents(previous => event.target.checked
+                ? [...previous, intent] : previous.filter(item => item !== intent)) }),
+            h('span', null, pt(t, ACCEPTANCE_INTENT_KEYS[intent]))))),
           h('div', { className: 'sa-actions' },
             h(ConfirmButton, { label: pt(t, 'ticket.acceptPass'), title: pt(t, 'ticket.acceptPassTitle'),
               message: pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id }),
               variant: 'primary', icon: 'decision', onConfirm: async () => { await acceptPass.run() } }),
             h(ConfirmButton, { label: pt(t, 'ticket.acceptFail'), title: pt(t, 'ticket.acceptFailTitle'),
               message: pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id }),
-              variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run() } })))
+              variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run(rejectIntents) } })))
         : !canAccept && !accepted
           ? h(Hint, null, pt(t, acceptMode === 'merged' ? 'ticket.acceptOnlyMerged' : 'ticket.acceptOnlyDeployed'))
           : null),
 
+    // P2-1: the Ticket's own automation config (a Ticket without config renders the card in the off state so the
+    // operator can opt in; dismissed/closed Tickets do not offer scheduling).
+    ['dismissed', 'closed'].includes(ticket.status) ? null : h(AutomationCard, { ticket, onSaved: refreshAll }),
+
     // 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default).
     h(Section, { id: 'sa-ticket-stages', title: pt(t, 'ticket.stages') }, h(StageRail, { ticket: { ...ticket, runs }, detail: true })),
-    h(Section, { id: 'sa-ticket-gates', title: pt(t, 'ticket.gates') }, h(GateSummary, { ticket: { ...ticket, runs } })),
+    h(Section, { id: 'sa-ticket-gates', title: pt(t, 'ticket.gates') },
+      h(TicketGateResults, { ticket: { ...ticket, runs }, record: acceptanceRecord })),
     h(Section, { id: 'sa-ticket-runs', title: pt(t, 'ticket.runs'), count: runs.length },
       runs.length ? h(TicketRunRows, { runs }) : h(Hint, null, pt(t, 'ticket.noRuns'))),
+    // P1-7: the host's own activity stream (newest first) sits between the run records and the derived timeline.
+    h(Section, { id: 'sa-ticket-activities', title: pt(t, 'ticket.activities'), count: activities.length },
+      activities.length ? h(TicketActivities, { activities }) : h(Hint, null, pt(t, 'ticket.activityEmpty'))),
     h(Section, { id: 'sa-ticket-timeline', title: pt(t, 'ticket.timeline'), count: events.length },
       h(TicketTimeline, { ticket, runs })),
 
@@ -5631,11 +7048,70 @@ function TicketDetail({ id, page = 'execution' }) {
    state where the value comes from (live.json / built-in prompts) and never render a fake switch. */
 
 Object.assign(PAGE_TEXT, {
-  'repos.intro': ['执行器使用的 GitLab / GitHub 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
-    'Repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one GitLab token per repository.'],
+  'repos.intro': ['执行器使用的 GitLab 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
+    'GitLab repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one GitLab token per repository.'],
   'repos.summary': ['{count} 个仓库 · 默认仓库 {default}', '{count} repositories · default {default}'],
-  'repos.empty': ['live.json 里没有 repos；旧版单仓库字段会自动合成一个仓库。',
-    'No repos in live.json; a legacy single-repository file is synthesised into one repository.'],
+  'repos.empty': ['live.json 里还没有仓库；先用示例补一条仓库定义，再回到这里保存 token。',
+    'No repository in live.json yet; add one from the example, then come back to save its token.'],
+  'repos.emptyAction': ['查看示例', 'View example'],
+  'repos.sampleTitle': ['仓库配置示例', 'Repository configuration example'],
+  'repos.sampleHint': ['把绝对路径、GitLab 项目与 tokenFile 换成你的值；保存后点「重载配置」。token 值不要写在这里。',
+    'Replace the absolute path, GitLab project and tokenFile with yours; save, then “Reload config”. Never put the token value here.'],
+  'repos.sampleCopy': ['复制示例', 'Copy example'],
+
+  // ---- P2-5: read-only worker backend capability matrix (static, mirrors the actual implementation) --------------
+  'st.capTitle': ['运行后端能力', 'Worker capability matrix'],
+  'st.capHint': ['当前实现能力，不是产品承诺；后端能力来自各自 CLI/宿主的实际实现，新增后端时需同步更新 README 与本表。',
+    'What the current implementation can do — not a product promise. Capabilities come from each CLI/host implementation; update the README and this table when adding a backend.'],
+  'st.capCurrent': ['当前', 'Current'],
+  'st.capBackend': ['后端', 'Backend'],
+  'st.capStream': ['流式事件', 'Streaming events'],
+  'st.capApproval': ['工具调用审批', 'Tool-call approval'],
+  'st.capResume': ['会话恢复', 'Session resume'],
+  'st.capDiff': ['文件 diff', 'File diff'],
+  'st.capReport': ['报告工具', 'Report tools'],
+  'st.capYes': ['是', 'Yes'],
+  'st.capNo': ['否', 'No'],
+  'st.capDsh': ['DSH（进程内）', 'DSH (in-process)'],
+  'st.capCodex': ['Codex CLI', 'Codex CLI'],
+  'st.capClaude': ['Claude Code CLI', 'Claude Code CLI'],
+  'st.capDshApproval': ['worker approval=never', 'worker approval=never'],
+  'st.capDshResume': ['每个 run 新建 session', 'new session per run'],
+  'st.capDshReport': ['P1 四个报告工具', 'P1 four report tools'],
+  'st.capCodexStream': ['解析 codex --json', 'codex --json parsing'],
+  'st.capCodexApproval': ['approval_policy=never', 'approval_policy=never'],
+  'st.capCodexResume': ['--ephemeral', '--ephemeral'],
+  'st.capClaudeStream': ['stream-json', 'stream-json'],
+  'st.capClaudeApproval': ['permission-mode acceptEdits + 工具白名单', 'permission-mode acceptEdits + tool allow-list'],
+  'st.capClaudeResume': ['-p 一次性会话', '-p one-shot session'],
+  'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
+  'repos.add': ['添加仓库', 'Add repository'],
+  'repos.addTitle': ['添加仓库', 'Add repository'],
+  'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
+    'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
+  'repos.saved': ['仓库已添加', 'Repository added'],
+  'repos.field.id': ['仓库 id', 'Repository id'],
+  'repos.field.idHint': ['小写字母、数字、点、下划线或短横线；创建后不可改。', 'Lowercase letters, digits, dots, underscores or dashes; immutable after creation.'],
+  'repos.field.name': ['显示名称', 'Display name'],
+  'repos.field.kind': ['仓库类型', 'Repository kind'],
+  'repos.field.repo': ['本地路径', 'Local path'],
+  'repos.field.repoHint': ['必须是已存在的本地仓库目录。', 'Must be an existing local repository directory.'],
+  'repos.field.baseBranch': ['基础分支', 'Base branch'],
+  'repos.field.targetBranch': ['目标分支', 'Target branch'],
+  'repos.field.baseUrl': ['GitLab 地址', 'GitLab base URL'],
+  'repos.field.project': ['GitLab 项目', 'GitLab project'],
+  'repos.field.verifyMode': ['验证方式', 'Verification mode'],
+  'repos.field.acceptance': ['验收方式', 'Acceptance'],
+  'repos.field.uatUrl': ['UAT 地址（可选）', 'UAT URL (optional)'],
+  'repos.field.healthUrl': ['健康检查地址（可选）', 'Health URL (optional)'],
+  'repos.field.makeDefault': ['设为默认仓库', 'Make default repository'],
+  'repos.field.makeDefaultHint': ['手工建单和未绑定群会使用默认仓库。', 'Manual Tickets and unbound groups use the default repository.'],
+  'repos.kindWeb': ['Web / 常规', 'Web'],
+  'repos.kindEbs': ['Oracle EBS', 'Oracle EBS'],
+  'repos.verifyWebUat': ['Web UAT', 'Web UAT'],
+  'repos.verifyManual': ['人工验证（只观察合并）', 'Manual (observe merge only)'],
+  'repos.acceptDeployed': ['部署后验收', 'Accept after deploy'],
+  'repos.acceptMerged': ['合并后验收', 'Accept after merge'],
   'repos.manageHint': ['自动接单群 → 仓库的绑定在「设置 → 来源」里管理；手工建单在「设置 → 运行」里选择仓库。',
     'Group → repository bindings live under Settings → Source; manual tickets pick a repository under Settings → Runtime.'],
   'repos.gates': ['闸门', 'Gates'],
@@ -5653,8 +7129,8 @@ Object.assign(PAGE_TEXT, {
   'repos.tokenHint': ['写入该仓库在 live.json 里声明的 tokenFile（权限 600），不会回显。',
     'Written to the tokenFile declared for this repository in live.json (mode 600); never echoed back.'],
   // ---- page chrome / navigation ----
-  'st.pageIntro': ['设置会写回 ~/.dsh/superagent/live.json。只有改动的分组才会出现保存条，保存后立即生效。',
-    'Settings are written to ~/.dsh/superagent/live.json. Only a changed group shows a save bar, and saving applies immediately.'],
+  'st.pageIntro': ['设置会写回 ~/.dsh/superagent/live.json；开关类改动点保存后生效，令牌类项目保存即生效。',
+    'Settings are written to ~/.dsh/superagent/live.json; switch changes apply after saving, token fields apply on save.'],
   'st.navLabel': ['设置分组', 'Settings groups'],
   // Reference groups (评估 / 提示词) are read-only: they sit below a divider in the rail and never show a save bar.
   'st.reference': ['参考', 'Reference'],
@@ -5664,8 +7140,8 @@ Object.assign(PAGE_TEXT, {
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
-  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群需要填 Octo 群的 chatId（可在群信息里查看），保存后引擎开始监听。',
-    'Bind one repository to each watched group. A new group needs its Octo chat id (visible in the group info); the engine starts watching it after saving.'],
+  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写 chatId，保存后按引擎开关状态开始监听。',
+    'Bind one repository to each watched group. Add a group from the list or paste a chat id; the engine watches it once enabled and saved.'],
   'st.bindingChat': ['群 chatId', 'Group chat id'],
   'st.bindingTitle': ['群名称（可选）', 'Group name (optional)'],
   'st.bindingRepo': ['接单仓库', 'Repository'],
@@ -5675,10 +7151,40 @@ Object.assign(PAGE_TEXT, {
     'No bound group yet. Existing groups fall back to the default repository.'],
   'st.bindingSaved': ['群绑定已保存', 'Group bindings saved'],
   'st.bindingChatRequired': ['请填写群 chatId。', 'Enter the group chat id.'],
+  'st.groupsPick': ['从群列表选择', 'Pick from group list'],
+  'st.groupsLoading': ['读取群列表…', 'Loading groups…'],
+  'st.groupsSearch': ['搜索群名或 chatId…', 'Search group name or chat id…'],
+  'st.groupsCount': ['{count} 个群', '{count} groups'],
+  'st.groupsEmpty': ['没有可用的群。确认机器人已在群里，或直接填写 chatId。',
+    'No group available. Make sure the bot is in a group, or paste a chat id.'],
+  'st.groupsWatched': ['已监听', 'Watched'],
+  'st.groupsClose': ['收起', 'Collapse'],
+  'st.groupsNoToken': ['先保存 Octo token，再读取群列表。', 'Save the Octo token before loading groups.'],
+  'st.octoTokenHint': ['保存在本机 token 文件（权限 600），不会回显；读取群列表可验证 token 是否有效。',
+    'Stored in the local token file (mode 600) and never echoed; load the group list to verify it.'],
+  'st.octoTokenPlaceholder': ['粘贴 Octo token', 'Paste the Octo token'],
+  'st.octoTokenSave': ['保存令牌', 'Save token'],
+  'st.octoTokenSaved': ['Octo token 已保存', 'Octo token saved'],
+  'st.octoTokenCleared': ['已清除 Octo token', 'Octo token cleared'],
+  'st.octoTokenEnv': ['环境变量', 'Env var'],
+  'st.octoTokenEnvHint': ['当前使用 OCTO_TOKEN 环境变量；要改为本机保存，请移除该环境变量后再保存令牌。',
+    'Using the OCTO_TOKEN environment variable; remove it before saving a local token file.'],
+  'st.copyConfigPath': ['复制路径', 'Copy path'],
+  'st.history': ['变更历史', 'Change history'],
+  'st.historyTitle': ['配置变更历史', 'Configuration history'],
+  'st.historyHint': ['每次保存 live.json 前会自动留一份；恢复也会先备份当前版本。token 文件不进入历史。',
+    'A copy is saved before every live.json write; restoring backs up the current version first. Token files are not included.'],
+  'st.historyEmpty': ['还没有历史版本。保存一次设置后就会出现。', 'No saved version yet. Save a setting once to create one.'],
+  'st.historyRestore': ['恢复', 'Restore'],
+  'st.historyRestored': ['配置已恢复', 'Configuration restored'],
+  'st.historyLoading': ['读取历史…', 'Loading history…'],
+  'st.historySettings': ['设置变更', 'Settings change'],
+  'st.historyAddRepo': ['添加仓库', 'Add repository'],
+  'st.historyBeforeRestore': ['恢复前的备份', 'Backup before restore'],
 
   // ---- one-line intro hints of the groups (the group name itself lives in the left nav) ----
-  'st.sourceHint': ['输入通道：监听哪些群、谁能触发，以及多久轮询一次。只读项直接来自 live.json。',
-    'Intake: which groups are watched, who may trigger work, and the poll interval. Read-only items come straight from live.json.'],
+  'st.sourceHint': ['输入通道：先连接 Octo，再选择监听群、触发人范围与轮询间隔；只读项由宿主状态提供。',
+    'Intake: connect Octo first, then choose watched groups, who may trigger work, and the poll interval; read-only values come from the host.'],
   'st.evalHint': ['评估方式与规则目录由代码和 eval.mode 决定，这里只读展示。',
     'The evaluation mode and rule catalog come from code and eval.mode; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式与 worker 配置。改完保存后立即生效；写权限在「写权限」分组单独管理。',
@@ -5696,8 +7202,16 @@ Object.assign(PAGE_TEXT, {
   'st.pollSecondsHint': ['最小 2 秒；暂停期间不会自动轮询。', 'At least 2 seconds; nothing polls automatically while paused.'],
   'st.pollInvalid': ['轮询间隔必须是不小于 2 的整数秒。', 'The poll interval must be a whole number of seconds, at least 2.'],
   'st.allowAnyHuman': ['允许任意人类触发', 'Accept any human'],
-  'st.allowAnyHumanHint': ['关闭时只接受“允许发送者”名单里的消息。',
-    'When off, only messages from the allowed-senders list are accepted.'],
+  'st.allowAnyHumanHint': ['开启后任何人类发送的文本消息都能触发；关闭时只接受下方名单里的发送者。',
+    'When on, any human text message can trigger; when off, only senders in the list below are accepted.'],
+  'st.sendersHint': ['填写发送者的 Octo UID；关闭「允许任意人类」时只接受名单中的发送者。',
+    'Enter the sender Octo UID; when “accept any human” is off, only listed senders are accepted.'],
+  'st.sendersEmpty': ['还没有允许的发送者。', 'No allowed sender yet.'],
+  'st.senderPlaceholder': ['发送者 UID', 'Sender UID'],
+  'st.addSender': ['添加', 'Add'],
+  'st.removeSender': ['移除发送者 {sender}', 'Remove sender {sender}'],
+  'st.anyHumanSendersHint': ['「允许任意人类」已开启，名单暂不参与判断；关闭后可继续编辑名单。',
+    '“Accept any human” is on; the list is ignored until you turn it off.'],
   'st.watchChats': ['监听群', 'Watched groups'],
   'st.senders': ['允许发送者', 'Allowed senders'],
   'st.allHumans': ['任意人类', 'Any human'],
@@ -5708,8 +7222,8 @@ Object.assign(PAGE_TEXT, {
   'st.lastPoll': ['最近轮询', 'Last poll'],
   'st.noSenders': ['没有允许发送者，也没有“允许任意人类”：轮询会被引擎拒绝。',
     'No allowed senders and "accept any human" is off, so the engine rejects polling.'],
-  'st.noChats': ['还没有监听群。在 live.json 的 octo.watchChatIds 填入群 ID，然后重载配置。',
-    'No watched groups yet. Put group ids in octo.watchChatIds in live.json, then reload the config.'],
+  'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写 chatId。',
+    'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
   'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
     '"Check for new messages" is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
   'st.probeAt': ['检查于 {time}', 'Checked {time}'],
@@ -5719,7 +7233,7 @@ Object.assign(PAGE_TEXT, {
   'st.errBusy': ['已有一次轮询在进行中，请稍后再试。', 'A poll is already running; try again shortly.'],
   'st.errPaused': ['引擎已暂停：非干跑轮询会被拒绝。', 'The engine is paused: a non-dry-run poll is rejected.'],
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
-  'st.errDisabled': ['live.json 里引擎未启用（enabled=false）。', 'The engine is disabled in live.json (enabled=false).'],
+  'st.errDisabled': ['引擎未启用，请先在设置→来源打开「启用引擎」。', 'The engine is disabled; turn on “Engine enabled” under Settings → Source first.'],
   'st.errNoToken': ['Octo token 未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
   'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and "accept any human" is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
@@ -5831,6 +7345,30 @@ Object.assign(PAGE_TEXT, {
   'st.httpStatus': ['HTTP {status}', 'HTTP {status}'],
 })
 
+/** A copyable, secret-free example of the file-only repository block. */
+const REPO_CONFIG_SAMPLE = `{
+  "repos": [
+    {
+      "id": "my-repo",
+      "name": "my-repo",
+      "repo": "/absolute/path/to/my-repo",
+      "baseBranch": "dev",
+      "gitlab": {
+        "baseUrl": "https://gitlab.example.com",
+        "project": "group/my-repo",
+        "tokenFile": "/home/you/.dsh/superagent/gitlab-my-repo.token"
+      }
+    }
+  ],
+  "defaultRepo": "my-repo"
+}
+`
+/** Blank repository form; values map to the fields accepted by POST engine/repos. */
+const emptyRepoForm = () => ({
+  id: '', name: '', kind: 'web', path: '', baseBranch: 'dev', featurePrefix: 'feature/', verifyMode: 'web-uat',
+  acceptance: 'deployed', baseUrl: '', project: '', targetBranch: 'dev', uatUrl: '', healthUrl: '', makeDefault: false,
+})
+
 /** Group order of the left column; labels come from the shared settingsGroup dictionary in 06-i18n.js, except the
     two executor groups whose labels are page-local overrides (settingsGroup.run / settingsGroup.write above).
     `reference: true` marks a read-only group: the rail lists the groups that can be changed first, then a divider and
@@ -5868,6 +7406,10 @@ function settingsPatchOf(group, draft) {
     if ('enabled' in draft) patch.enabled = draft.enabled === true
     if ('pollSeconds' in draft) patch.pollSeconds = Number(draft.pollSeconds)
     if ('octo.allowAnyHuman' in draft) patch['octo.allowAnyHuman'] = draft['octo.allowAnyHuman'] === true
+    if ('octo.allowSenderIds' in draft) {
+      const list = Array.isArray(draft['octo.allowSenderIds']) ? draft['octo.allowSenderIds'] : []
+      patch['octo.allowSenderIds'] = list.map(value => String(value).trim()).filter(Boolean)
+    }
   } else if (group === 'run' || group === 'write') {
     // `run` and `write` are two views of the same executor block: the union below patches every draft key either group
     // can hold, so a field moved between the two groups keeps saving through the same `executor.*` allow-list.
@@ -5966,6 +7508,66 @@ function repoGateLabel(t, gate) {
 /** One repository card: read-only facts plus its own write-only token editor. Saving a token is the reversible edit;
     clearing one stops what the executor can observe for this repository, so it goes through a confirmation that names
     the consequence (C6) — a plain button here used to clear on a single click. */
+/** P2-5 capability table: static data describing what each backend actually does today (contract §2). */
+const WORKER_CAP_COLUMNS = [
+  { key: 'stream', labelKey: 'st.capStream' },
+  { key: 'approval', labelKey: 'st.capApproval' },
+  { key: 'resume', labelKey: 'st.capResume' },
+  { key: 'diff', labelKey: 'st.capDiff' },
+  { key: 'report', labelKey: 'st.capReport' },
+]
+const WORKER_CAPABILITIES = [
+  { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
+    stream: { yes: true },
+    approval: { yes: false, noteKey: 'st.capDshApproval' },
+    resume: { yes: false, noteKey: 'st.capDshResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: true, noteKey: 'st.capDshReport' },
+  } },
+  { backend: 'codex', nameKey: 'st.capCodex', capabilities: {
+    stream: { yes: true, noteKey: 'st.capCodexStream' },
+    approval: { yes: false, noteKey: 'st.capCodexApproval' },
+    resume: { yes: false, noteKey: 'st.capCodexResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: false },
+  } },
+  { backend: 'claude', nameKey: 'st.capClaude', capabilities: {
+    stream: { yes: true, noteKey: 'st.capClaudeStream' },
+    approval: { yes: false, noteKey: 'st.capClaudeApproval' },
+    resume: { yes: false, noteKey: 'st.capClaudeResume' },
+    diff: { yes: true, noteKey: 'st.capChangedPaths' },
+    report: { yes: false },
+  } },
+]
+
+/** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
+function WorkerCapabilityCard({ currentBackend }) {
+  const { t } = usePanel()
+  const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
+  return h('div', { className: 'sa-field' },
+    h('span', { className: 'sa-field-head' }, pt(t, 'st.capTitle')),
+    h(Hint, null, pt(t, 'st.capHint')),
+    h('table', { className: 'sa-glossary sa-capabilities' },
+      h('thead', null, h('tr', null,
+        h('th', null, pt(t, 'st.capBackend')),
+        WORKER_CAP_COLUMNS.map(column => h('th', { key: column.key }, pt(t, column.labelKey))))),
+      h('tbody', null, WORKER_CAPABILITIES.map(entry => {
+        const active = entry.backend === current
+        return h('tr', { key: entry.backend, 'data-current': active ? 'true' : undefined,
+          style: active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined },
+          h('th', { scope: 'row' },
+            h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-4)' } },
+              h('span', null, pt(t, entry.nameKey)),
+              active ? h(Tag, { tone: 'info' }, pt(t, 'st.capCurrent')) : null)),
+          WORKER_CAP_COLUMNS.map(column => {
+            const cell = entry.capabilities[column.key] ?? { yes: false }
+            return h('td', { key: column.key },
+              h(Tag, { tone: cell.yes ? 'success' : 'neutral' }, pt(t, cell.yes ? 'st.capYes' : 'st.capNo')),
+              cell.noteKey ? h('div', { className: 'sa-hint' }, pt(t, cell.noteKey)) : null)
+          }))
+      }))))
+}
+
 function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
   const { t } = usePanel()
   const [token, setToken] = useState('')
@@ -6013,10 +7615,11 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
       h(Hint, null, pt(t, 'repos.tokenHint'))))
 }
 
-function LiveSettingsPage() {
+function LiveSettingsPage({ route }) {
   const { t, notify } = usePanel()
   const { data, error, reload, actions } = usePanelData()
-  const [active, setActive] = useState('source')
+  const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
+  const [active, setActive] = useState(requestedGroup)
   const [drafts, setDrafts] = useState({})
   const [savingGroup, setSavingGroup] = useState(null)
   const [saveErrors, setSaveErrors] = useState({})
@@ -6026,11 +7629,38 @@ function LiveSettingsPage() {
   const [probe, setProbe] = useState({ busy: false })
   const [uatState, setUatState] = useState({ busy: false })
   const [tokenSaving, setTokenSaving] = useState(null)
+  const [octoTokenDraft, setOctoTokenDraft] = useState('')
+  const [octoTokenBusy, setOctoTokenBusy] = useState(false)
+  const [octoGroups, setOctoGroups] = useState({ open: false, busy: false, error: undefined, items: [] })
+  const [octoGroupQuery, setOctoGroupQuery] = useState('')
+  const [configSampleOpen, setConfigSampleOpen] = useState(false)
+  const [repoModalOpen, setRepoModalOpen] = useState(false)
+  const [repoForm, setRepoForm] = useState(emptyRepoForm)
+  const [repoSaving, setRepoSaving] = useState(false)
+  const [repoError, setRepoError] = useState(undefined)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyEntries, setHistoryEntries] = useState([])
+  const [historyBusy, setHistoryBusy] = useState(false)
+  const [historyError, setHistoryError] = useState(undefined)
+  const [senderDraft, setSenderDraft] = useState('')
   const [bindingForm, setBindingForm] = useState({ chatId: '', title: '', repoId: '' })
   const [bindingBusy, setBindingBusy] = useState(false)
   useEffect(() => () => {
     for (const timer of Object.values(savedTimers.current)) clearTimeout(timer)
   }, [])
+  // Deep links from the setup checklist and system problems select the matching group. The effect only depends on
+  // the requested group, so clicking the left rail afterwards is never overridden by an old route.
+  useEffect(() => {
+    if (route?.group && SETTINGS_GROUPS.some(group => group.id === route.group)) setActive(route.group)
+  }, [route?.group])
+  // A setup step can point at one field inside a group; scroll it into view after the pane switched.
+  useEffect(() => {
+    if (!route?.focus) return undefined
+    const timer = setTimeout(() => {
+      document.getElementById(`sa-settings-${route.focus}`)?.scrollIntoView({ block: 'center' })
+    }, 120)
+    return () => clearTimeout(timer)
+  }, [route?.focus, active])
   if (!data) {
     return error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : h(Skeleton, { rows: 6 })
   }
@@ -6060,6 +7690,128 @@ function LiveSettingsPage() {
     } finally { setTokenSaving(null) }
   }
 
+  /** Save/clear the Octo bot token; the value is write-only and the host never echoes it back. */
+  const saveOctoTokenFor = async (value) => {
+    if (octoTokenBusy) return false
+    setOctoTokenBusy(true)
+    try {
+      await actions.saveOctoToken(value)
+      await reload()
+      setOctoTokenDraft('')
+      notify(pt(t, value ? 'st.octoTokenSaved' : 'st.octoTokenCleared'))
+      return true
+    } catch (failure) {
+      notify(errorText(failure))
+      return false
+    } finally { setOctoTokenBusy(false) }
+  }
+
+  /** Load the bot's group list through the host; this is a read-only query, not a poll. */
+  const loadOctoGroups = async () => {
+    if (octo.tokenConfigured !== true) { notify(pt(t, 'st.groupsNoToken')); return }
+    setOctoGroups(previous => ({ ...previous, open: true, busy: true, error: undefined }))
+    try {
+      const result = await actions.listOctoGroups()
+      setOctoGroups({ open: true, busy: false, error: undefined, items: Array.isArray(result?.groups) ? result.groups : [] })
+    } catch (failure) {
+      setOctoGroups({ open: true, busy: false, error: errorText(failure), items: [] })
+    }
+  }
+
+  /** Selecting a group only fills the binding form; the operator still confirms the repository and saves. */
+  const chooseGroup = (group) => {
+    setBindingForm(previous => ({ ...previous, chatId: String(group.id ?? ''), title: group.name ?? '' }))
+    setOctoGroups(previous => ({ ...previous, open: false }))
+  }
+
+  /** Add/remove one sender UID in the source-group draft; saving uses the existing group save bar. */
+  const senderValuesOf = (draft) => {
+    const value = draft && 'octo.allowSenderIds' in draft ? draft['octo.allowSenderIds'] : octo.allowSenderIds
+    return Array.isArray(value) ? value.filter(item => typeof item === 'string' && item.trim()) : []
+  }
+  const addSender = () => {
+    const value = senderDraft.trim()
+    if (!value) return
+    const current = senderValuesOf(drafts.source)
+    if (!current.includes(value)) {
+      editField('source', 'octo.allowSenderIds', [...current, value],
+        Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
+    }
+    setSenderDraft('')
+  }
+  const removeSender = value => {
+    const current = senderValuesOf(drafts.source)
+    editField('source', 'octo.allowSenderIds', current.filter(item => item !== value),
+      Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
+  }
+
+  /** Add one repository definition; the token is a separate write on the new card. */
+  const submitRepo = async () => {
+    if (repoSaving) return
+    const form = repoForm
+    const repo = {
+      id: form.id.trim(),
+      name: form.name.trim() || form.id.trim(),
+      kind: form.kind,
+      repo: form.path.trim(),
+      baseBranch: form.baseBranch.trim(),
+      featurePrefix: form.featurePrefix.trim(),
+      verifyMode: form.verifyMode,
+      acceptance: form.acceptance,
+      gitlab: {
+        baseUrl: form.baseUrl.trim(),
+        project: form.project.trim(),
+        targetBranch: form.targetBranch.trim(),
+        ...(form.uatUrl.trim() ? { uatUrl: form.uatUrl.trim() } : {}),
+        ...(form.healthUrl.trim() ? { healthUrl: form.healthUrl.trim() } : {}),
+      },
+    }
+    setRepoSaving(true)
+    setRepoError(undefined)
+    try {
+      await actions.addRepo(repo, { makeDefault: form.makeDefault === true })
+      await reload()
+      setRepoModalOpen(false)
+      setRepoForm(emptyRepoForm())
+      notify(pt(t, 'repos.saved'))
+    } catch (failure) {
+      setRepoError(errorText(failure))
+    } finally { setRepoSaving(false) }
+  }
+
+  /** Load saved live.json versions; the list contains configuration only, never tokens. */
+  const openHistory = async () => {
+    setHistoryOpen(true)
+    setHistoryBusy(true)
+    setHistoryError(undefined)
+    try {
+      const response = await actions.settingsHistory()
+      setHistoryEntries(Array.isArray(response?.entries) ? response.entries : [])
+    } catch (failure) {
+      setHistoryError(errorText(failure))
+    } finally { setHistoryBusy(false) }
+  }
+  const historyLabel = entry => {
+    const label = entry.label ?? ''
+    if (label.startsWith('settings:')) return `${pt(t, 'st.historySettings')} · ${label.slice('settings:'.length).trim()}`
+    if (label.startsWith('add repository ')) return `${pt(t, 'st.historyAddRepo')} · ${label.slice('add repository '.length)}`
+    if (label.startsWith('before restore')) return pt(t, 'st.historyBeforeRestore')
+    return label || entry.id
+  }
+  const restoreHistory = async (id) => {
+    if (historyBusy) return
+    setHistoryBusy(true)
+    setHistoryError(undefined)
+    try {
+      await actions.restoreSettings(id)
+      await reload()
+      setHistoryOpen(false)
+      notify(pt(t, 'st.historyRestored'))
+    } catch (failure) {
+      setHistoryError(errorText(failure))
+    } finally { setHistoryBusy(false) }
+  }
+
   // ---- group heading (O18) ----------------------------------------------------------------------------------
   // Each content group opens with a real H2 mirroring its left-nav label; `.sa-settings-title` owns the typography
   // (05-style.js), so the element here carries no inline styles.
@@ -6084,12 +7836,23 @@ function LiveSettingsPage() {
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
       h(Hint, null, pt(t, 'repos.intro')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'primary', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
+          onClick: () => { setRepoForm(emptyRepoForm()); setRepoError(undefined); setRepoModalOpen(true) } },
+        pt(t, 'repos.add')),
+        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
+        h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(true) },
+          pt(t, 'repos.emptyAction'))),
       repos.length
         ? h(Fragment, null,
           h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
           h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
             isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id }))))
-        : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty') }),
+        : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
+          action: h('div', { className: 'sa-actions' },
+            config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
+            h(Button, { variant: 'outline', size: 'sm',
+              onClick: () => setConfigSampleOpen(true) }, pt(t, 'repos.emptyAction'))) }),
       h('p', { className: 'sa-hint' }, pt(t, 'repos.manageHint')),
       h('h3', { className: 'sa-ledger-title' }, pt(t, 'st.deployTitle')),
       h(Hint, null, pt(t, 'st.deployHint')),
@@ -6256,6 +8019,89 @@ function LiveSettingsPage() {
   const reloadButton = () => h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
     disabled: reloadState.busy, onClick: () => { void reloadEngineConfig() } }, pt(t, 'st.reloadConfig'))
 
+  /** Write-only Octo token editor. An env-provided token is shown as read-only, because the file cannot override it. */
+  const renderOctoToken = () => {
+    const configured = octo.tokenConfigured === true
+    const tokenSource = octo.tokenSource
+    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token' },
+      h('span', { className: 'sa-field-head' }, pt(t, 'st.octoToken'),
+        configured
+          ? h(Tag, { tone: tokenSource === 'env' ? 'info' : 'success' },
+            tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk'))
+          : h(Tag, { tone: 'outline' }, pt(t, 'st.tokenMissing'))),
+      tokenSource === 'env'
+        ? h(Hint, null, pt(t, 'st.octoTokenEnvHint'))
+        : h(Fragment, null,
+          h('div', { style: { display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
+            h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
+              h(Input, { className: 'sa-input-full', type: 'password', value: octoTokenDraft, autoComplete: 'off',
+                placeholder: pt(t, 'st.octoTokenPlaceholder'), 'aria-label': pt(t, 'st.octoTokenPlaceholder'),
+                disabled: octoTokenBusy,
+                onChange: event => setOctoTokenDraft(event.target.value) })),
+            h(Button, { variant: 'outline', size: 'sm', disabled: octoTokenBusy || !octoTokenDraft.trim(),
+              onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
+            octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
+            configured
+              ? h(Button, { variant: 'ghost', size: 'sm', disabled: octoTokenBusy,
+                onClick: () => { void saveOctoTokenFor('') } }, pt(t, 'repos.tokenClear'))
+              : null),
+          h(Hint, null, pt(t, 'st.octoTokenHint'))))
+  }
+
+  /** Searchable group picker: fills the binding form, never writes a binding by itself. */
+  const renderGroupPicker = () => {
+    const watched = new Set(Array.isArray(octo.watchChatIds) ? octo.watchChatIds : [])
+    const query = octoGroupQuery.trim().toLowerCase()
+    const items = (octoGroups.items ?? []).filter(group => !query
+      || String(group.name ?? '').toLowerCase().includes(query) || String(group.id ?? '').toLowerCase().includes(query))
+    return h('div', { className: 'sa-group-picker' },
+      h('div', { className: 'sa-group-picker-head' },
+        h(Input, { value: octoGroupQuery, placeholder: pt(t, 'st.groupsSearch'), 'aria-label': pt(t, 'st.groupsSearch'),
+          onChange: event => setOctoGroupQuery(event.target.value) }),
+        h('span', { className: 'sa-hint' }, pt(t, 'st.groupsCount', { count: items.length }))),
+      octoGroups.busy
+        ? h(Hint, null, pt(t, 'st.groupsLoading'))
+        : octoGroups.error
+          ? h('p', { className: 'sa-error', role: 'alert' }, octoGroups.error)
+          : items.length
+            ? h('ul', { className: 'sa-list' }, items.map(group => h('li', { key: String(group.id) },
+              h('button', { type: 'button', className: 'sa-group-option', disabled: watched.has(String(group.id)),
+                onClick: () => chooseGroup(group) },
+              h('span', { className: 'sa-group-option-main' },
+                h('span', { className: 'sa-group-option-name' }, group.name || String(group.id)),
+                h('span', { className: 'sa-mono sa-hint' }, String(group.id))),
+              watched.has(String(group.id))
+                ? h(Tag, { tone: 'success' }, pt(t, 'st.groupsWatched'))
+                : h(Icon, { name: 'plus', size: 14 })))))
+            : h(Hint, null, pt(t, 'st.groupsEmpty')))
+  }
+
+  /** Sender allowlist: editable when "accept any human" is off; ignored (and explained) while it is on. */
+  const renderSenders = () => {
+    const draft = drafts.source ?? {}
+    const allowAnyHuman = 'octo.allowAnyHuman' in draft ? draft['octo.allowAnyHuman'] : octo.allowAnyHuman === true
+    const senders = senderValuesOf(draft)
+    const list = senders.length
+      ? h('div', { className: 'sa-sender-list' }, senders.map(sender => h('span', { key: sender, className: 'sa-sender-chip' },
+        h('span', { className: 'sa-mono' }, sender),
+        h('button', { type: 'button', className: 'sa-sender-remove', 'aria-label': pt(t, 'st.removeSender', { sender }),
+          onClick: () => removeSender(sender) }, '×'))))
+      : h(Hint, null, pt(t, 'st.sendersEmpty'))
+    const add = h('div', { className: 'sa-actions' },
+      h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
+        h(Input, { className: 'sa-input-full', value: senderDraft, placeholder: pt(t, 'st.senderPlaceholder'),
+          'aria-label': pt(t, 'st.senderPlaceholder'), disabled: savingGroup === 'source',
+          onChange: event => setSenderDraft(event.target.value),
+          onKeyDown: event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } } })),
+      h(Button, { variant: 'outline', size: 'sm', disabled: savingGroup === 'source' || !senderDraft.trim(),
+        onClick: addSender }, pt(t, 'st.addSender')))
+    return h('div', { className: 'sa-field' },
+      h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'),
+        allowAnyHuman ? h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')) : null),
+      allowAnyHuman ? h(Hint, null, pt(t, 'st.anyHumanSendersHint')) : h(Fragment, null, list, add),
+      allowAnyHuman ? null : h(Hint, null, pt(t, 'st.sendersHint')))
+  }
+
   // ---- source group -----------------------------------------------------------------------------------------
   const renderSource = () => {
     const draft = drafts.source ?? {}
@@ -6264,26 +8110,25 @@ function LiveSettingsPage() {
     const pollSeconds = 'pollSeconds' in draft ? draft.pollSeconds : String(config.pollSeconds ?? '')
     const chatIds = Array.isArray(octo.watchChatIds) ? octo.watchChatIds : []
     const chatNames = chatIds.map(id => octo.chatTitles?.[id] ?? id)
-    const senders = Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : []
+    const senders = senderValuesOf(draft)
     const cursors = engine.channelCursors ?? {}
     const cursorRows = Object.entries(cursors).map(([chat, seq]) => `${octo.chatTitles?.[chat] ?? chat} · ${seq}`)
     const rows = [
       [pt(t, 'st.watchChats'), chatNames.length ? chatNames.join(t('listSeparator')) : t('empty')],
-      [pt(t, 'st.senders'), allowAnyHuman ? pt(t, 'st.allHumans')
-        : (senders.length ? senders.join(t('listSeparator')) : t('empty'))],
-      [pt(t, 'st.octoToken'), octo.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
       [pt(t, 'st.cursors'), cursorRows.length ? cursorRows.join(t('listSeparator')) : t('empty')],
       [pt(t, 'st.lastPoll'), engine.lastPollAt ? h(When, { at: engine.lastPollAt }) : t('empty')],
     ]
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
       h(Hint, null, pt(t, 'st.sourceHint')),
+      renderOctoToken(),
       h(SettingsSwitchRow, { label: pt(t, 'st.enabled'), hint: pt(t, 'st.enabledHint'), checked: enabled,
         disabled: savingGroup === 'source',
         onChange: next => editField('source', 'enabled', next, config.enabled === true) }),
       h(SettingsSwitchRow, { label: pt(t, 'st.allowAnyHuman'), hint: pt(t, 'st.allowAnyHumanHint'), checked: allowAnyHuman,
         disabled: savingGroup === 'source',
         onChange: next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true) }),
+      renderSenders(),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.pollSeconds')),
         // The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18).
@@ -6303,9 +8148,18 @@ function LiveSettingsPage() {
       h(SettingsStatusLine, { view: probe.view,
         note: probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined }),
       h(SettingsStatusLine, { view: reloadView }),
-      h('div', { className: 'sa-field' },
+      h('div', { className: 'sa-field', id: 'sa-settings-bindings' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.bindings')),
         h(Hint, null, pt(t, 'st.bindingsHint')),
+        h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
+          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+            disabled: octoGroups.busy || bindingBusy, onClick: () => { void loadOctoGroups() } },
+          octoGroups.busy ? pt(t, 'st.groupsLoading') : pt(t, 'st.groupsPick')),
+          octoGroups.open
+            ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => setOctoGroups(previous => ({ ...previous, open: false, error: undefined })) },
+              pt(t, 'st.groupsClose'))
+            : null),
+        octoGroups.open ? renderGroupPicker() : null,
         chatIds.length
           ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
             chatIds.map(chatId => h('div', { key: chatId, className: 'sa-switch-row' },
@@ -6423,6 +8277,8 @@ function LiveSettingsPage() {
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
       h(ManualTicketForm, { onDone: () => { void reload() } }),
+      // P2-5: static capability matrix, read-only; highlights the saved executor.workerBackend (defaults to DSH).
+      h(WorkerCapabilityCard, { currentBackend: executor.workerBackend ?? 'dsh' }),
       saveBarFor('run'))
   }
 
@@ -6495,7 +8351,12 @@ function LiveSettingsPage() {
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
 
   return h(Fragment, null,
-    h(Hint, null, pt(t, 'st.pageIntro')),
+    h('div', { className: 'sa-settings-intro' },
+      h(Hint, null, pt(t, 'st.pageIntro')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'history', size: 14 }),
+          onClick: () => { void openHistory() } }, pt(t, 'st.history')),
+        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null)),
     h('div', { className: 'sa-settings' },
       h('nav', { className: 'sa-settings-nav', 'aria-label': pt(t, 'st.navLabel') },
         writableGroups.map(settingsNavButton),
@@ -6507,7 +8368,103 @@ function LiveSettingsPage() {
           : null),
       h('div', { className: 'sa-settings-body' },
         error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
-        renderGroup())))
+        renderGroup())),
+    historyOpen ? h(Modal, { open: true, onClose: () => { if (!historyBusy) setHistoryOpen(false) },
+      title: pt(t, 'st.historyTitle'), closeLabel: t('close'), className: 'sa-history-modal',
+      footer: h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
+        onClick: () => setHistoryOpen(false) }, t('close')) },
+      h('p', { className: 'sa-hint' }, pt(t, 'st.historyHint')),
+      historyError ? h('p', { className: 'sa-error', role: 'alert' }, historyError) : null,
+      historyBusy && !historyEntries.length ? h(Hint, null, pt(t, 'st.historyLoading')) : null,
+      historyEntries.length
+        ? h('div', { className: 'sa-history-list' }, historyEntries.map(entry => h('div', { key: entry.id, className: 'sa-history-row' },
+          h('div', { className: 'sa-history-main' },
+            h('span', { className: 'sa-history-label' }, historyLabel(entry)),
+            h('span', { className: 'sa-hint' }, h(When, { at: entry.at }))),
+          h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
+            onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
+        : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
+    repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
+      title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
+      footer: h(Fragment, null,
+        h(Button, { variant: 'ghost', disabled: repoSaving, onClick: () => setRepoModalOpen(false) }, t('cancel')),
+        h(Button, { variant: 'primary', disabled: repoSaving, onClick: () => { void submitRepo() } },
+          repoSaving ? t('saving') : pt(t, 'repos.add'))) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.addHint')),
+      h('div', { className: 'sa-form-grid' },
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.id')),
+          h(Input, { className: 'sa-input-full', value: repoForm.id, 'aria-label': pt(t, 'repos.field.id'),
+            onChange: event => setRepoForm(previous => ({ ...previous, id: event.target.value })) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint'))),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
+          h(Input, { className: 'sa-input-full', value: repoForm.name, 'aria-label': pt(t, 'repos.field.name'),
+            onChange: event => setRepoForm(previous => ({ ...previous, name: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.kind')),
+          h(Select, { label: pt(t, 'repos.field.kind'), value: repoForm.kind,
+            options: [{ value: 'web', label: pt(t, 'repos.kindWeb') }, { value: 'oracle-ebs', label: pt(t, 'repos.kindEbs') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, kind: next,
+              verifyMode: next === 'oracle-ebs' ? 'manual' : 'web-uat',
+              acceptance: next === 'oracle-ebs' ? 'merged' : 'deployed' })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
+          h(Input, { className: 'sa-input-full', value: repoForm.path, 'aria-label': pt(t, 'repos.field.repo'),
+            placeholder: '/Users/you/work/my-repo',
+            onChange: event => setRepoForm(previous => ({ ...previous, path: event.target.value })) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint'))),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseBranch')),
+          h(Input, { className: 'sa-input-full', value: repoForm.baseBranch, 'aria-label': pt(t, 'repos.field.baseBranch'),
+            onChange: event => setRepoForm(previous => ({ ...previous, baseBranch: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.targetBranch')),
+          h(Input, { className: 'sa-input-full', value: repoForm.targetBranch, 'aria-label': pt(t, 'repos.field.targetBranch'),
+            onChange: event => setRepoForm(previous => ({ ...previous, targetBranch: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.baseUrl, 'aria-label': pt(t, 'repos.field.baseUrl'),
+            placeholder: 'https://gitlab.example.com',
+            onChange: event => setRepoForm(previous => ({ ...previous, baseUrl: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.project')),
+          h(Input, { className: 'sa-input-full', value: repoForm.project, 'aria-label': pt(t, 'repos.field.project'),
+            placeholder: 'group/project',
+            onChange: event => setRepoForm(previous => ({ ...previous, project: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.verifyMode')),
+          h(Select, { label: pt(t, 'repos.field.verifyMode'), value: repoForm.verifyMode,
+            options: [{ value: 'web-uat', label: pt(t, 'repos.verifyWebUat') }, { value: 'manual', label: pt(t, 'repos.verifyManual') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, verifyMode: next })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.acceptance')),
+          h(Select, { label: pt(t, 'repos.field.acceptance'), value: repoForm.acceptance,
+            options: [{ value: 'deployed', label: pt(t, 'repos.acceptDeployed') }, { value: 'merged', label: pt(t, 'repos.acceptMerged') }],
+            onChange: next => setRepoForm(previous => ({ ...previous, acceptance: next })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.uatUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.uatUrl, 'aria-label': pt(t, 'repos.field.uatUrl'),
+            placeholder: 'https://uat.example.com',
+            onChange: event => setRepoForm(previous => ({ ...previous, uatUrl: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.healthUrl')),
+          h(Input, { className: 'sa-input-full', value: repoForm.healthUrl, 'aria-label': pt(t, 'repos.field.healthUrl'),
+            placeholder: 'https://uat.example.com/health',
+            onChange: event => setRepoForm(previous => ({ ...previous, healthUrl: event.target.value })) }))),
+      h(SettingsSwitchRow, { label: pt(t, 'repos.field.makeDefault'), hint: pt(t, 'repos.field.makeDefaultHint'),
+        checked: repoForm.makeDefault, disabled: repoSaving,
+        onChange: next => setRepoForm(previous => ({ ...previous, makeDefault: next })) }),
+      repoError ? h('p', { className: 'sa-error', role: 'alert' }, repoError) : null) : null,
+    configSampleOpen ? h(Modal, { open: true, onClose: () => setConfigSampleOpen(false),
+      title: pt(t, 'repos.sampleTitle'), closeLabel: t('close'), className: 'sa-glossary-modal',
+      footer: h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(false) }, t('close')) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.sampleHint')),
+      h('div', { className: 'sa-md-code' },
+        h('div', { className: 'sa-md-code-head' },
+          h('span', { className: 'sa-md-code-lang' }, 'live.json'),
+          h(CopyButton, { value: REPO_CONFIG_SAMPLE, label: pt(t, 'repos.sampleCopy') })),
+        h('pre', { className: 'sa-md-pre' }, REPO_CONFIG_SAMPLE))) : null)
 }
 
 
