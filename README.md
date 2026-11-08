@@ -7,9 +7,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.3.2**（0.3.2 落地决策模型 shadow：规则照旧接单，模型意见只记录在 `decision.shadow`，
-并可用 `scripts/shadow-collect.mjs` 批量取样做规则×模型对比，见「决策模型 shadow」一节；0.3.1 起工单详情
-可查看该次运行工作树的 diff）。0.2 的核心是让面板"不说谎、可运营"：
+**当前版本：0.3.3**（0.3.3 把 shadow 问题集换成 `ticket-v1` 五类 choice，抽样回归集 24/25、真实标注
+精确率 100%；0.3.2 落地决策模型 shadow，规则照旧接单，模型意见只记录在 `decision.shadow`，可用
+`scripts/shadow-collect.mjs` 批量取样做规则×模型对比；0.3.1 起工单详情可查看该次运行工作树的 diff）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -101,8 +101,13 @@ TypeSafe Jev、Kev/Von 等同一协议实现）对每条候选消息再判一次
 - **批量取样（建议先做这个）**：`node scripts/shadow-collect.mjs --limit 100` 读取每个监听群最新 100 条消息，
   用与接单完全相同的过滤与规则评估，再逐条问模型；结果写 `<stateDir>/shadow-samples.json`（600）。
   它**不写 live-state、不建工单**；默认复用上次答案，`--refresh` 全部重问，`--json` 打印全量样本。
-- **state 只能是纯文本**：pilot 实测把消息包进 `{text, channel, threadTitle}` 会让一条明确请求的 `isRequest`
-  从 0.97 掉到 0.09；`request-v2` 起 judge 只发纯文本消息（需要上下文时也只以文本前缀拼接，不序列化成对象）。
+- **state 只能是纯文本**：pilot 实测把消息包进 `{text, channel, threadTitle}` 会让一条明确请求的概率
+  从 0.97 掉到 0.09；judge 只发纯文本消息（需要上下文时也只以文本前缀拼接，不序列化成对象）。
+- **问题集 `ticket-v1`**：一个 `choice` 五选一 —— `repo_task`（仓库/工作区/数据库任务）/ `octo_platform`
+  （Octo 平台内事务）/ `chat` / `context` / `risky`。`p = P(repo_task)`（开单候选），`riskP = P(risky)`（高风险），
+  其余归"不开"。选项描述文字是问题集契约的一部分（实测同义改写会让召回从 80% 掉到 60%），改文字必须升版本。
+  人工回归集（25 条）与真实标注（23 条）上：`ticket-v1` 完全正确 24/25 与 21/23，开单精确率均为 100%。
+- **标签会保留**：`shadow-collect.mjs` 重判时会保留已有人工 `label`，换问题集不会清空标注集。
 - **记录什么**：每条 decision 的 `shadow` 字段：`status`、`p`（isRequest 概率）、`riskP`、`verdict`
   （accept / reject / uncertain）、`ruleKind`（规则当时的结果）、`latencyMs`、`questions` 版本；失败是
   `status:'error'` + `error`。模型答案不改变 kind、reason、工单。
