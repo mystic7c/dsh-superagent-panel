@@ -497,6 +497,19 @@ export function apply(ctx, config = {}) {
           send(res, 200, { ticket: result.ticket, cleanup: result.cleanup })
           return
         }
+        // Append a human revision and rerun the Ticket as a dry run on the same worktree. The panel's "add a
+        // requirement and rerun": validation lives in the engine, the run starts asynchronously like a manual run.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'revision') {
+          const result = await engine.addRevision(third, body?.text)
+          if (result.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result.invalid) throw new ActionError(409, result.invalid)
+          void executeTicket({ ctx, engine, ticketId: third, dryRun: true, trigger: 'revise',
+            log: line => ctx.logger?.info?.('superagent revision: %s', line) })
+            .catch(error => ctx.logger?.warn?.('superagent revision failed: %s',
+              error instanceof Error ? error.message : String(error)))
+          send(res, 202, { started: true, dryRun: true, ticket: result.ticket, revision: result.revision })
+          return
+        }
         // Read-only collections for the redesigned pages (contract §4): raw records, details and filters.
         if (method === 'GET' && second === 'tickets') {
           send(res, 200, engine.ticketsView({ stage: url.searchParams.get('stage') ?? 'all' }))

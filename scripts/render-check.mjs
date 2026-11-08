@@ -57,6 +57,7 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
     body: 'UC-DEMO-001：检查验收按钮把工单移出待处理。\n\nSELECT Gcc.Segment1 公司, Hou.Name 公司名称, Gjh.Period_Name 期间\nFROM Gl_Je_Headers Gjh, Gl_Je_Batches Gbh, Gl_Je_Lines Gjl\nWHERE Gjh.Je_Batch_Id = Gbh.Je_Batch_Id AND Gjh.Je_Header_Id = Gjl.Je_Header_Id;',
     status: 'deployed', repoId: primaryRepoId, createdAt: nowIso, updatedAt: nowIso, assignments: [],
     origin: { threadKey: 'octo:demo', actor: 'demo' },
+    revisions: [{ id: 'rev_demo', at: nowIso, text: '演示：BI 表改到 CUX schema' }],
     links: { branch: 'feature/tkt_demo_accept', commit: 'demo1234', worktree: '/tmp/demo',
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
       mergeRequest: { iid: 1, webUrl: 'https://example.test/mr/1', state: 'merged' },
@@ -85,6 +86,21 @@ engine.state.runs.unshift({ id: 'run_demo_working', ticketId: demoWorkId, status
   startedAt: new Date(Date.now() - 5 * 60_000).toISOString(),
   steps: [{ name: 'prepare-worktree', state: 'ok', at: new Date(Date.now() - 5 * 60_000).toISOString() },
     { name: 'export-repo', state: 'running', at: new Date(Date.now() - 2 * 60_000).toISOString() }] })
+
+// A finished dry run: ready to publish, so the detail page must lead with 发布 MR (rerun stays in the ⋯ menu).
+const demoReadyId = 'tkt_demo_ready'
+engine.state.tickets[demoReadyId] = {
+  id: demoReadyId, title: '演示：干跑完成待发布', body: 'UC-DEMO-003：干跑完成，等待确认发布。',
+  status: 'ready', repoId: primaryRepoId, createdAt: nowIso, updatedAt: nowIso, runId: 'run_demo_ready', assignments: [],
+  origin: { threadKey: 'octo:demo', actor: 'demo' },
+  links: { branch: 'feature/tkt_demo_ready', worktree: '/tmp/demo-ready' },
+}
+engine.state.state.ticketOrder.push(demoReadyId)
+engine.state.runs.unshift({ id: 'run_demo_ready', ticketId: demoReadyId, status: 'dry-run', dryRun: true,
+  startedAt: nowIso, completedAt: nowIso,
+  steps: [{ name: 'prepare-worktree', state: 'ok', at: nowIso }, { name: 'worker', state: 'ok', at: nowIso },
+    { name: 'changed-paths', state: 'ok', at: nowIso }, { name: 'gate:standards', state: 'ok', at: nowIso },
+    { name: 'finish', state: 'ok', at: nowIso }] })
 
 engine.lastStatus = { phase: 'ok', mode: 'sync', at: new Date().toISOString() }
 engine.started = true
@@ -171,6 +187,8 @@ window.fetch = global.fetch = async (input, init = {}) => {
     const triggers = (fixtures.status.triggers ?? []).filter(trigger => has(trigger.text)).slice(0, 8)
     return json({ query: q, tickets, threads, triggers, total: tickets.length + threads.length + triggers.length })
   }
+  const revisionRoute = /^engine\/ticket\/([^/]+)\/revision$/.exec(p)
+  if (method === 'POST' && revisionRoute) return json({ started: true, dryRun: true })
   const accept = /^engine\/ticket\/([^/]+)\/accept$/.exec(p)
   if (method === 'POST' && accept) {
     const id = decodeURIComponent(accept[1])
@@ -337,7 +355,7 @@ check('sign-off note and the action cluster ride on the title row',
   && Boolean(rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')),
   rootElement.querySelector('.sa-page-head-actions')?.textContent?.slice(0, 120) ?? 'no head actions')
 const filesToggle = [...rootElement.querySelectorAll('.sa-changes-side button')].find(node => /显示更多/.test(node.textContent ?? ''))
-const fileRows = () => rootElement.querySelectorAll('.sa-changes-side .sa-list li').length
+const fileRows = () => rootElement.querySelectorAll('.sa-changes-side .sa-file-diff').length
 check('a long changed-file list starts compact with a show-more control', Boolean(filesToggle) && fileRows() === 5, `rows=${fileRows()}`)
 filesToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
@@ -371,6 +389,34 @@ check('the patch dialog summarises files, counts and the run',
 rootElement.querySelector('.sa-diff-modal .sa-modal-close')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(200)
 check('the patch dialog closes again', !rootElement.querySelector('.sa-diff-modal'), 'dialog still open')
+  // P2: append a requirement and rerun. The form is part of the changes section, the history stays readable, and a
+  // submit posts the revision (the host starts the dry run from there).
+  const revisionInput = rootElement.querySelector('#sa-ticket-changes .sa-revision-input')
+  check('detail offers an add-requirement form', Boolean(revisionInput), revisionInput ? 'present' : 'missing')
+  check('revision history renders the earlier requirement', /修订历史（1）/.test(rootElement.querySelector('#sa-ticket-changes')?.textContent ?? ''),
+    rootElement.querySelector('#sa-ticket-changes')?.textContent?.slice(-200) ?? 'no changes section')
+  if (revisionInput) {
+    // jsdom cannot type; call the controlled handler directly (identified by React's props key) so the form sees the
+    // same onChange a person would trigger.
+    const propsKey = Object.keys(revisionInput).find(key => key.startsWith('__reactProps$'))
+    if (propsKey) revisionInput[propsKey].onChange?.({ target: { value: 'BI 表改到 CUX schema' } })
+    else {
+      const nativeValue = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set
+      nativeValue?.call(revisionInput, 'BI 表改到 CUX schema')
+      revisionInput.dispatchEvent(new window.Event('input', { bubbles: true }))
+    }
+  }
+  await sleep(200)
+  const rerunButton = [...rootElement.querySelectorAll('#sa-ticket-changes button')]
+    .find(node => (node.textContent ?? '').trim() === '追加并重跑')
+  check('the rerun button enables once a requirement is typed', Boolean(rerunButton) && rerunButton.disabled !== true,
+    String(rerunButton?.disabled))
+  rerunButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(400)
+  check('adding a requirement posts the revision',
+    calls.some(call => call === 'POST /superagent/api/engine/ticket/tkt_demo_accept/revision'),
+    calls.filter(call => call.includes('/revision')).join(','))
+  check('the rerun is announced in the toast', /已追加要求，开始干跑重跑/.test(text()), text().slice(-200))
 check('ticket id is copyable from the detail head', Boolean(rootElement.querySelector('.sa-page-head-meta .sa-copy-btn')),
     rootElement.querySelector('.sa-page-head-meta')?.textContent?.slice(0, 120) ?? '')
   check('repository name is not duplicated with its id', !/仓库名称[\s\S]{0,80}仓库 ID/.test(detailText), 'repo block')
@@ -546,6 +592,24 @@ check('view pickers open a menu with the other choice', viewPickers.every(node =
 const doneBadge = [...rootElement.querySelectorAll('.sa-exec-queue .sa-section-title .sa-hint')]
   .map(node => (node.textContent ?? '').trim()).find(label => /已验收/.test(label))
 check('done group states its accepted/dismissed split', /已验收.*已忽略/.test(doneBadge ?? ''), String(doneBadge))
+// A finished dry run publishes from the primary slot; the rerun it used to lead with stays in the ⋯ menu.
+const readyRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
+  .find(row => (row.textContent ?? '').includes('演示：干跑完成待发布'))
+check('the execution queue lists the finished dry run', Boolean(readyRow),
+  [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
+readyRow?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(1200)
+const readyPrimary = [...rootElement.querySelectorAll('.sa-page-head-actions .sa-btn-primary')].map(node => (node.textContent ?? '').trim())
+check('a finished dry run makes 发布 MR the primary action', readyPrimary.includes('发布 MR'), JSON.stringify(readyPrimary))
+rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(300)
+const readyMenu = rootElement.querySelector('[role="menu"]')?.textContent ?? ''
+check('the rerun stays available in the ··· menu', readyMenu.includes('干跑执行') && !readyMenu.includes('发布 MR'),
+  readyMenu.slice(0, 200))
+rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+await sleep(300)
+clickByText('执行')
+await sleep(1000)
 clickByText('手工建单')
 await sleep(800)
 const manualModal = rootElement.querySelector('.sa-modal')

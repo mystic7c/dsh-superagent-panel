@@ -610,6 +610,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-file-diff:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
 .sa-file-diff svg { flex: 0 0 auto; color: var(--dsw-alias-label-secondary); }
 .sa-file-diff .sa-mono { min-width: 0; overflow-wrap: anywhere; }
+/* Add a requirement: the side column is narrow, so the box spans it and the action sits underneath. */
+.sa-revision { display: flex; flex-direction: column; gap: var(--sa-sp-4); }
+.sa-revision .sa-revision-input { width: 100%; min-width: 0; box-sizing: border-box; }
 
 /* ---------- markdown / text ---------- */
 .sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;

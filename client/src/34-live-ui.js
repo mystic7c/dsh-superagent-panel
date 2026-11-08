@@ -67,7 +67,7 @@ Object.assign(PAGE_TEXT, {
     interrupted: ['已中断', 'Interrupted'] },
   // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
   runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
-    publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
+    revise: ['追加要求', 'Revision'], publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
     other: ['触发方式：{trigger}', 'Trigger: {trigger}'] },
   runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
     worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
@@ -452,7 +452,7 @@ function ticketRunInterrupted(ticket, runs) {
 
 /** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
 const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
-  publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
+  revise: 'runTrigger.revise', publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
 function runTriggerLabel(t, run) {
   const trigger = run?.trigger
   if (!trigger) return null
