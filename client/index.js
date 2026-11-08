@@ -734,6 +734,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-file-diff:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
 .sa-file-diff svg { flex: 0 0 auto; color: var(--dsw-alias-label-secondary); }
 .sa-file-diff .sa-mono { min-width: 0; overflow-wrap: anywhere; }
+/* Add a requirement: the side column is narrow, so the box spans it and the action sits underneath. */
+.sa-revision { display: flex; flex-direction: column; gap: var(--sa-sp-4); }
+.sa-revision .sa-revision-input { width: 100%; min-width: 0; box-sizing: border-box; }
 
 /* ---------- markdown / text ---------- */
 .sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;
@@ -2695,6 +2698,8 @@ function useEngineActions(call) {
     // P1 §3.2: the on-demand worktree diff behind the Ticket detail's "view diff".
     ticketDiff: (id, { runId, path } = {}) => call('GET engine/ticket/:id/diff',
       { id, query: { ...(runId ? { runId } : {}), ...(path ? { path } : {}) } }),
+    // Append one human requirement revision; the host starts a dry-run rerun on the same worktree.
+    addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
@@ -2942,7 +2947,7 @@ Object.assign(PAGE_TEXT, {
     interrupted: ['已中断', 'Interrupted'] },
   // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
   runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
-    publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
+    revise: ['追加要求', 'Revision'], publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
     other: ['触发方式：{trigger}', 'Trigger: {trigger}'] },
   runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
     worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
@@ -3327,7 +3332,7 @@ function ticketRunInterrupted(ticket, runs) {
 
 /** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
 const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
-  publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
+  revise: 'runTrigger.revise', publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
 function runTriggerLabel(t, run) {
   const trigger = run?.trigger
   if (!trigger) return null
@@ -4219,7 +4224,8 @@ const ovClip = (value, limit = 64) => {
 }
 
 /** Inbox kind → the row's shape icon (the same icon family the other list rows use). Unknown kinds fall back to inbox. */
-const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', failure: 'alert-triangle', source: 'inbox', engine: 'shield' }
+const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', publish: 'play', failure: 'alert-triangle', source: 'inbox',
+  engine: 'shield' }
 const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
 /** Where one inbox item lives: its Ticket when it names one, else its Source, else the execution queue. */
 function ovInboxTarget(item) {
@@ -6279,6 +6285,20 @@ Object.assign(PAGE_TEXT, {
     'The diff is larger than {limit}; only its first part is shown and {omitted} files are omitted.'],
   'ticket.diffOmitted': ['{count} 个文件未显示（过大或属于敏感路径）。', '{count} files are omitted (too large or sensitive paths).'],
 
+  // ---- P2: append requirements and rerun on the same worktree ---------------------------------------------------
+  'ticket.revisionTitle': ['追加要求（重跑）', 'Add a requirement (rerun)'],
+  'ticket.revisionHint': ['会保留当前工作树的改动，按追加要求重跑一遍干跑；跑完再看新 diff，确认后再发布。',
+    'Keeps the current worktree changes and reruns the Ticket as a dry run; review the new diff, then publish.'],
+  'ticket.revisionPlaceholder': ['哪里不对、要改成什么、验收标准…', 'What is wrong, what to change, how it will be accepted…'],
+  'ticket.revisionSubmit': ['追加并重跑', 'Add and rerun'],
+  'ticket.revisionRequired': ['先写要追加的要求', 'Write the requirement first'],
+  'ticket.revisionStarted': ['已追加要求，开始干跑重跑', 'Requirement added; dry run started'],
+  'ticket.revisionHistory': ['修订历史（{count}）', 'Revisions ({count})'],
+  'ticket.revisionWorking': ['工单正在执行，等这一轮结束再追加要求。', 'The Ticket is running; add the requirement after this run.'],
+  'ticket.revisionAwaitingAnswer': ['工单在等你回答 worker 的问题，请先用「回答」再追加要求。',
+    'The Ticket is waiting for your answer; answer it first.'],
+  'ticket.revisionEnded': ['工单已结束或已验收，不能再追加要求。', 'The Ticket ended or was accepted; no further requirements.'],
+
   // ---- P0: a run parked on a failing gate (contract §1.1/§3.2) ---------------------------------------------------
   'detail.gateTitle': ['闸门「{name}」未通过，执行已暂停', 'Gate “{name}” failed and the run is parked'],
   'detail.gateIntro': ['放行会跳过这个闸门并继续提交、推送与创建 MR；重试只重跑闸门；终止会以失败结束这张工单。失败证据保留在运行记录里。',
@@ -6371,6 +6391,7 @@ Object.assign(PAGE_TEXT, {
   'activity.trigger': ['触发', 'Triggered'], 'activity.run': ['执行', 'Run'], 'activity.gate': ['闸门', 'Gate'],
   'activity.acceptance': ['验收', 'Acceptance'], 'activity.reply': ['回复来源', 'Replied to the Source'],
   'activity.dismiss': ['忽略', 'Dismissed'], 'activity.comment': ['评论', 'Comment'], 'activity.resume': ['恢复', 'Resumed'],
+  'activity.revision': ['追加要求', 'Revision'],
 
   // ---- P1-4 / P1-5: parked question and interrupted resume ------------------------------------------------------
   'detail.answerTitle': ['执行在等你回答', 'The run is waiting for your answer'],
@@ -6812,7 +6833,7 @@ function AcceptanceRecordCard({ record }) {
 /** P1-7 activity row labels; an unknown kind stays raw so a new host event is never swallowed. */
 const ACTIVITY_KIND_KEYS = { created: 'activity.created', status: 'activity.status', trigger: 'activity.trigger',
   run: 'activity.run', gate: 'activity.gate', acceptance: 'activity.acceptance', reply: 'activity.reply',
-  dismiss: 'activity.dismiss', comment: 'activity.comment', resume: 'activity.resume' }
+  dismiss: 'activity.dismiss', comment: 'activity.comment', resume: 'activity.resume', revision: 'activity.revision' }
 const ACTIVITY_ICON = { agent: 'robot', system: 'shield', user: 'user' }
 
 /** P1-7: the ticket's own activity stream, newest first; the page shows the latest 20 and says how many remain. */
@@ -7147,6 +7168,9 @@ function TicketDetail({ id, page = 'execution' }) {
   const [diffOpen, setDiffOpen] = useState(false)
   const [diff, setDiff] = useState({})
   useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
+  // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
+  // the dry run, so the page only clears it and lets the existing poll show the new run.
+  const [revisionText, setRevisionText] = useState('')
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
@@ -7179,6 +7203,13 @@ function TicketDetail({ id, page = 'execution' }) {
     setDiffOpen(true)
     if (path) void loadDiff(path)
   }
+  const revision = useAction(async () => {
+    const text = String(revisionText ?? '').trim()
+    if (!text) { notify(pt(t, 'ticket.revisionRequired')); return }
+    await act.addRevision(id, text)
+    setRevisionText('')
+    notify(pt(t, 'ticket.revisionStarted'))
+  }, { reload: refreshAll })
   const dryRun = useAction(() => act.runTicket(id, { dryRun: true, wait: false }), { reload: refreshAll })
   const retry = useAction(() => act.runTicket(id, { dryRun: false, wait: false }), { reload: refreshAll })
   const publish = useAction(() => act.publishTicket(id), { reload: refreshAll })
@@ -7342,12 +7373,19 @@ function TicketDetail({ id, page = 'execution' }) {
     ? (ticket.status === 'merged' || ticket.links?.verification?.merged === true)
     : ticket.status === 'deployed'
   const manualVerify = repoVerifyMode === 'manual'
+  // Revision: a person can append requirements and rerun; the form hides while a run or a question owns the Ticket.
+  const revisions = Array.isArray(ticket.revisions) ? ticket.revisions : []
+  const revisionBlocked = ticket.status === 'working' ? 'working'
+    : ticket.status === 'awaiting-answer' ? 'answer'
+      : ['dismissed', 'closed'].includes(ticket.status) || accepted ? 'ended' : undefined
   const uatUrl = manualVerify ? undefined : (repo?.uatUrl ?? config.gitlab?.uatUrl)
   const busy = { dryRun: dryRun.busy, retry: retry.busy, publish: publish.busy, refreshCi: refreshCi.busy, verify: verify.busy }
-  // One state-following primary action (retry a failed run, review a pending acceptance, open the merged MR once
-  // accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
+  // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
+  // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
   const failed = view.state === 'error'
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
+  // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
+  const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
   const mrUrl = ticket.links?.mergeRequest?.webUrl
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
@@ -7377,17 +7415,23 @@ function TicketDetail({ id, page = 'execution' }) {
             ? h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
               title: canRun ? undefined : pt(t, 'ticket.retryUnavailable'),
               onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume'))
-            : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
-            title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
-            onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
+            : dryRunReady
+              ? h(Button, { variant: 'primary', size: 'sm', icon: 'external',
+                disabled: busy.publish || !canPush, title: canPush ? undefined : pt(t, 'ticket.publishUnavailable'),
+                onClick: () => setPending('publish') }, pt(t, 'menu.publish'))
+              : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
+                title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
+                onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
   const menuItems = [
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
       disabled: busy.refreshCi || !hasMr },
     { key: 'dryRun', label: pt(t, 'ticket.dryRun'), icon: 'play', onSelect: () => { void dryRun.run() },
       disabled: busy.dryRun || !canRun, title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
-    { key: 'publish', label: pt(t, 'menu.publish'), icon: 'external', onSelect: () => setPending('publish'),
-      disabled: busy.publish || !canPush, title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') },
+    // The publish entry only lives here when it is not already the primary action.
+    ...(dryRunReady ? [] : [{ key: 'publish', label: pt(t, 'menu.publish'), icon: 'external',
+      onSelect: () => setPending('publish'), disabled: busy.publish || !canPush,
+      title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
       disabled: busy.retry || !canRun, title: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
     { key: 'stop', label: pt(t, 'menu.stop'), icon: 'stop', onSelect: () => {}, disabled: true, title: pt(t, 'ticket.stopUnavailable') },
@@ -7605,7 +7649,30 @@ function TicketDetail({ id, page = 'execution' }) {
           ticket.body
             ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
               h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
-            : null))),
+            : null,
+          h('div', { className: 'sa-revision', style: { marginTop: 'var(--sa-sp-8)' } },
+            h('div', { className: 'sa-actions' }, h('span', { className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
+            revisionBlocked
+              ? h(Hint, null, pt(t, revisionBlocked === 'answer' ? 'ticket.revisionAwaitingAnswer'
+                : revisionBlocked === 'working' ? 'ticket.revisionWorking' : 'ticket.revisionEnded'))
+              : h(Fragment, null,
+                h('textarea', { className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
+                  placeholder: pt(t, 'ticket.revisionPlaceholder'), 'aria-label': pt(t, 'ticket.revisionTitle'),
+                  disabled: revision.busy, onChange: event => setRevisionText(event.target.value) }),
+                h('div', { className: 'sa-actions' },
+                  h(Button, { variant: 'primary', size: 'sm', icon: 'play',
+                    disabled: revision.busy || !String(revisionText ?? '').trim(),
+                    onClick: () => { void revision.run() } }, pt(t, 'ticket.revisionSubmit'))),
+                h(Hint, null, pt(t, 'ticket.revisionHint'))),
+            revisions.length
+              ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
+                h(Folded, { summary: pt(t, 'ticket.revisionHistory', { count: revisions.length }) },
+                  h('ul', { className: 'sa-list' }, revisions.map((entry, index) => h('li',
+                    { key: entry.id ?? entry.at ?? index, className: 'sa-row' },
+                    h('div', { className: 'sa-row-main' },
+                      entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null,
+                      h('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, String(entry.text ?? ''))))))))
+              : null)))),
 
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).

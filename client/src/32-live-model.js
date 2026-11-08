@@ -23,6 +23,8 @@ function useEngineActions(call) {
     // P1 §3.2: the on-demand worktree diff behind the Ticket detail's "view diff".
     ticketDiff: (id, { runId, path } = {}) => call('GET engine/ticket/:id/diff',
       { id, query: { ...(runId ? { runId } : {}), ...(path ? { path } : {}) } }),
+    // Append one human requirement revision; the host starts a dry-run rerun on the same worktree.
+    addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.

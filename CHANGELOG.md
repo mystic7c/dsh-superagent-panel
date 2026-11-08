@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.5] — 2026-11-08
+
+工单详情支持「追加要求并自动重跑」：干跑结果不对时，操作员不必重新开单，也不用手工改 `live-state.json`。
+
+- 新增 `POST /superagent/api/engine/ticket/:id/revision`（body `{text}`）：把要求追加到工单 `revisions[]` 并记一条
+  `revision` 活动，随后**自动以干跑方式重跑**（`trigger=revise`，复用同一 worktree，不提交/推送）
+- `Engine.addRevision` 校验：空内容 / 超 4000 字、执行中、等待回答、已结束或已忽略、已验收的工单拒绝；未知工单 404
+- worker task 按顺序携带最近 10 条追加要求，并提示"上一轮改动在 worktree 中，保留并在此基础上修改"
+- 面板：工单详情「改动内容 → 追加要求」输入框 + 「追加并重跑」，并展示修订历史（时间 + 原文）；运行记录新增
+  `runTrigger.revise`（追加要求）标签
+- 概览：新增第 6 类待办 `publish` —— 干跑已完成、还没发布的工单现在会出现在「需要你处理」里
+  （标题「工单「…」干跑完成，等待你确认发布」，`blocking:true`、`priority:normal`，点「去工单」进入详情）；
+  发布或开始下一轮后条件消失，条目自动 resolve。之前 `ready` 状态在概览上完全不可见，只有执行页能看到
+- 工单详情：`ready`（干跑完成）的主行动从「干跑执行」改为「发布 MR」（仍走确认弹窗），「干跑执行」与其余动作
+  留在 ⋯ 菜单——发布才是这一状态的下一步，而不是再跑一遍
+- 回归：`Engine.addRevision` 状态矩阵、workerTask 修订注入、路由校验、`publish` 待办推导/自动 resolve、
+  render-check 表单/历史/提交与 ready 主行动
+
+### 验证
+- `node --test` 353/353
+- `render-check` 123/123
+- `npm run verify`：client 产物最新；722 literal keys / 513 shared / 1061 page-local 通过
+
 ## [0.3.4] — 2026-11-08
 
 hybrid 接单试点：规则仍是第一道门，模型 `ticket-v1` 参与 R1 的"要不要开单"。

@@ -135,7 +135,8 @@ const ovClip = (value, limit = 64) => {
 }
 
 /** Inbox kind → the row's shape icon (the same icon family the other list rows use). Unknown kinds fall back to inbox. */
-const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', failure: 'alert-triangle', source: 'inbox', engine: 'shield' }
+const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', publish: 'play', failure: 'alert-triangle', source: 'inbox',
+  engine: 'shield' }
 const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
 /** Where one inbox item lives: its Ticket when it names one, else its Source, else the execution queue. */
 function ovInboxTarget(item) {
