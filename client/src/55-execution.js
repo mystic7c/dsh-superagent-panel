@@ -1,9 +1,11 @@
 /* Execution page (contract §6.5): executor load, the pause/resume confirmation that states the consequence, a
    manual Ticket entry that opens a dialog in place, and Tickets grouped by stage. Round 4 gives the finished history
    its history shape: a stage filter fed by the host's own per-stage counts, a one-line summary on the "ended" group,
-   and a "recent 10 / show all" cap so a long history cannot become an unbounded wall. A deep-linked Ticket id renders
-   the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared status
-   model for the executor load and the paused flag. */
+   and a "recent 10 / show all" cap so a long history cannot become an unbounded wall. Round 8 (2026-11-08) folds the
+   filters and the view options into one control row: stage chips carry their counts, grouping and ordering are two
+   labelled pickers that state the current choice, and the include-ended switch closes the row. A deep-linked Ticket id
+   renders the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared
+   status model for the executor load and the paused flag. */
 
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
 const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
@@ -72,9 +74,12 @@ Object.assign(PAGE_TEXT, {
     'Send a request in the group, or create a Ticket right here to test the pipeline.'],
   // ---- P1-8: view options (persisted in sessionStorage) ----------------------------------------------------------
   'ex.groupByLabel': ['分组方式', 'Group by'],
+  'ex.groupByShort': ['分组', 'Group by'],
+  'ex.groupByStageShort': ['按阶段', 'Stage'],
+  'ex.groupByRepoShort': ['按仓库', 'Repository'],
   'ex.groupByStage': ['按阶段', 'By stage'],
   'ex.groupByRepo': ['按仓库', 'By repository'],
-  'ex.sortLabel': ['排序', 'Sort'],
+  'ex.sortLabel': ['排序', 'Sort by'],
   'ex.sortUpdated': ['最近更新', 'Last updated'],
   'ex.sortCreated': ['最近创建', 'Newest'],
   'ex.showDone': ['显示已结束', 'Show ended'],
@@ -152,9 +157,13 @@ function ExecutionQueuePage() {
     : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
   const EXEC_STAGE_LABEL = { queued: 'ex.stageQueued', working: 'ex.stageWorking', waiting: 'ex.stageWaiting',
     failed: 'ex.stageFailed', done: 'ex.stageDone' }
+  // Each chip carries its own count: the filter row is the one place that answers "how much of the queue is in this
+  // slice", so the number never has to be repeated by a section heading.
   const stageOptions = EXEC_STAGES.map(group => ({
     value: group,
-    label: `${pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])} ${countOf(group)}`,
+    label: h(Fragment, null,
+      h('span', null, pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])),
+      h('span', { className: 'sa-chip-count', 'data-zero': countOf(group) === 0 ? 'true' : undefined }, countOf(group))),
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
   const sorted = execSortTickets(tickets, execView.sort)
@@ -205,27 +214,42 @@ function ExecutionQueuePage() {
     }
     return groups
   }
-  const viewToolbar = tickets.length
-    ? h('div', { className: 'sa-exec-toolbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
-      h('div', { className: 'sa-toolbar-field' },
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
-        h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
-          { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
-          onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') })),
-      h('div', { className: 'sa-toolbar-field' },
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
-        h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
-          { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
-          onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') })),
-      h('div', { className: 'sa-toolbar-switch' },
-        h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
-          label: pt(t, 'ex.showDone') }),
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone'))))
+  // One control row for the queue. The stage filter leads because it is how the queue is read; grouping, ordering and
+  // the include-ended switch are chrome on top of it, so they close the row behind a divider. Everything the bar does
+  // is spelled out on the controls themselves (count in the chip, current choice on the picker) instead of as form
+  // labels floating before a control, which is what made the old two-row toolbar read as a settings form.
+  const listBar = tickets.length
+    ? h('div', { className: 'sa-list-bar' },
+      h('div', { className: 'sa-list-stage' },
+        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+          className: 'sa-segmented-chips' })),
+      h('div', { className: 'sa-viewbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+        h(Menu, { label: pt(t, 'ex.groupByLabel'),
+          text: h(Fragment, null,
+            h('span', { className: 'sa-menu-picker-label' }, pt(t, 'ex.groupByShort')),
+            pt(t, execView.groupBy === 'repo' ? 'ex.groupByRepoShort' : 'ex.groupByStageShort')),
+          items: [
+            { key: 'stage', label: pt(t, 'ex.groupByStage'), checked: execView.groupBy === 'stage',
+              onSelect: () => updateView({ groupBy: 'stage' }) },
+            { key: 'repo', label: pt(t, 'ex.groupByRepo'), checked: execView.groupBy === 'repo',
+              onSelect: () => updateView({ groupBy: 'repo' }) },
+          ] }),
+        h(Menu, { label: pt(t, 'ex.sortLabel'),
+          text: h(Fragment, null,
+            h('span', { className: 'sa-menu-picker-label' }, pt(t, 'ex.sortLabel')),
+            pt(t, execView.sort === 'created' ? 'ex.sortCreated' : 'ex.sortUpdated')),
+          items: [
+            { key: 'updated', label: pt(t, 'ex.sortUpdated'), checked: execView.sort === 'updated',
+              onSelect: () => updateView({ sort: 'updated' }) },
+            { key: 'created', label: pt(t, 'ex.sortCreated'), checked: execView.sort === 'created',
+              onSelect: () => updateView({ sort: 'created' }) },
+          ] }),
+        h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
+        h('span', { className: 'sa-switch-field' },
+          h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),
+          h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
+            label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
-  // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
-  const stagePills = h('div', { className: 'sa-filters' },
-    h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
-      className: 'sa-segmented-wide' }))
   const queueBody = execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' }, queueHeader,
       repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
@@ -288,10 +312,7 @@ function ExecutionQueuePage() {
         h('span', { className: 'sa-hint' }, pt(t, 'ex.createHint'))),
       status.engine?.lastError ? h(ErrorState, { error: status.engine.lastError, onRetry: () => { void poll.run() } }) : null),
     list.error ? h(ErrorState, { error: list.error, onRetry: list.reload }) : null,
-    viewToolbar,
-    // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
-    // tuned for the two-or-three-pill filters elsewhere.
-    tickets.length ? stagePills : null,
+    listBar,
     loadingList ? h(Skeleton, { rows: 5 })
       : !list.data ? null
         : !tickets.length ? emptyState

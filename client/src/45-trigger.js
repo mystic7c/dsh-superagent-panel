@@ -231,7 +231,8 @@ function LiveTriggerPage({ route }) {
     h(Section, { title: pt(t, 'trg.title'), count: items.length,
       action: h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'trg.refresh'),
         onClick: () => { void reload() } }) },
-      h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter') }),
+      h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter'),
+        className: 'sa-segmented-chips' }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
         ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
