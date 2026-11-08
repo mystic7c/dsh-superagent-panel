@@ -197,11 +197,14 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
-/* Execution's view controls: label and control stay one unit, and at compact widths each becomes a full row. */
-.sa-exec-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-8) var(--sa-sp-20); min-width: 0; }
-.sa-toolbar-field { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
-.sa-toolbar-field .sa-segmented { flex: none; width: 260px; max-width: 320px; }
-.sa-toolbar-switch { display: flex; align-items: center; gap: var(--sa-sp-8); margin-left: auto; }
+/* The queue's control row: stage filter chips lead, view chrome closes it behind a hairline divider. */
+.sa-list-bar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between;
+  gap: var(--sa-sp-8) var(--sa-sp-16); min-width: 0; }
+.sa-list-stage { min-width: 0; flex: 1 1 auto; }
+.sa-viewbar { display: flex; align-items: center; gap: var(--sa-sp-8); flex: none; }
+.sa-control-divider { width: 0.5px; height: var(--sa-sp-16); background: var(--sa-line); flex: none; }
+.sa-switch-field { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-switch-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); white-space: nowrap; }
 
 /* ---------- page head / global status ---------- */
 .sa-head { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between;
@@ -293,12 +296,6 @@ const PANEL_CSS = `
 .sa-tag[data-tone='info'] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); color: var(--sa-info-text); }
 .sa-tag[data-tone='warning'] { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent); color: var(--sa-warn-text); }
 .sa-tag[data-tone='danger'] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent); color: var(--sa-danger-text); }
-.sa-pill { display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 24px; padding: 0 var(--sa-sp-8);
-  border: none; border-radius: var(--sa-r-pill); background: var(--dsw-alias-bg-layer-2, transparent);
-  color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--sa-fs-meta); line-height: 1.4; cursor: pointer; }
-.sa-pill:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
-.sa-pill:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
-.sa-pill-active, .sa-pill-active:hover { color: var(--dsw-alias-label-primary); box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary); }
 .sa-segmented { width: 100%; max-width: 480px; box-sizing: border-box; display: inline-grid;
   box-shadow: inset 0 0 0 1px var(--sa-line);
   grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sa-sp-2); padding: var(--sa-sp-2);
@@ -310,6 +307,33 @@ const PANEL_CSS = `
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-segment:disabled { cursor: default; opacity: 0.4; }
+
+/* Variant: stage filter chips. Each stage is one pill and the active one is the only tinted surface, so the row reads
+   as "which slice of the queue" rather than as a second tab bar (the page tabs already own that shape). */
+.sa-segmented-chips { display: flex; flex-wrap: wrap; gap: var(--sa-sp-2); width: auto; max-width: none;
+  padding: 0; background: none; box-shadow: none; }
+.sa-segmented-chips .sa-segment { display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 28px;
+  padding: 0 var(--sa-sp-8); border-radius: var(--sa-r-sm); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-meta); line-height: 1.4; }
+.sa-segmented-chips .sa-segment:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
+.sa-segmented-chips .sa-segment[aria-checked='true'] { font-weight: 600;
+  background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
+.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 0.66;
+  font-variant-numeric: tabular-nums; }
+.sa-chip-count[data-zero='true'] { opacity: 0.42; }
+.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { opacity: 0.8; }
+
+/* View pickers: the two view settings are labelled outline buttons that open a two-option menu, so the row states
+   what each choice is ("分组 按阶段") instead of looking like a second filter row. */
+.sa-menu-picker { height: 28px; padding: 0 var(--sa-sp-8); color: var(--dsw-alias-label-primary); font-weight: 400; }
+.sa-menu-picker-text { display: inline-flex; align-items: baseline; gap: var(--sa-sp-4); min-width: 0; white-space: nowrap; }
+.sa-menu-picker-label { color: var(--sa-label-tertiary); }
+.sa-menu-picker > svg { color: var(--sa-label-tertiary); flex: none; }
+.sa-menu-picker:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-menu-picker[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-menu-item-label { flex: 1; min-width: 0; }
+.sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
 
 /* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
    selected while its detail is off-screen. */
@@ -375,8 +399,6 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-queue-head > :nth-child(2) { grid-column: 2; }
 .sa-queue-head > :nth-child(3) { grid-column: 3; }
 .sa-queue-head > :nth-child(4) { grid-column: 4; text-align: right; }
-/* Execution's six stage filters can exceed the shared 480px cap; only this wide variant lifts it. */
-.sa-segmented-wide { max-width: none; }
 /* The evidence rail is the first thing to go when the container is too narrow for four tracks; the cause remains a
    meta chip through the row's other content and the whole row still reads as one line. */
 @container (max-width: 860px) {
@@ -522,7 +544,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 @container (max-width: 900px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
-.sa-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
+.sa-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
 .sa-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sa-sp-12); }
 
 /* ---------- two-column content blocks (overview: 24h funnel + executor) ---------- */
@@ -603,6 +625,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+/* A number/time field is as wide as its value, not the card (T20). */
+.sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
 .sa-switch-row-text { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-input { box-sizing: border-box; display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 32px; min-width: 0;
@@ -630,6 +654,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--dsw-alias-label-primary-foreground); transition: left 140ms ease; }
 .sa-switch[aria-checked='true'] .sa-switch-thumb { left: 18px; }
+/* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list. */
+.sa-switch-compact { width: 30px; height: 18px; }
+.sa-switch-compact .sa-switch-thumb { width: 14px; height: 14px; }
+.sa-switch-compact[aria-checked='true'] .sa-switch-thumb { left: 14px; }
 
 /* ---------- empty / error / skeleton ---------- */
 .sa-empty { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-12); padding: var(--sa-sp-16); }
@@ -685,6 +713,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* ---------- markdown / text ---------- */
 .sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;
   font-size: var(--sa-fs-body); line-height: 1.5; overflow-wrap: anywhere; }
+/* Ticket "changes" on a wide panel: the worker summary reads on the left, its evidence (files + request) sits on the
+   right instead of leaving the other half of the row empty. Collapses to one column by DOM order. */
+.sa-changes-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-16); align-items: start; min-width: 0; }
+.sa-changes-main, .sa-changes-side { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
+@container (min-width: 1000px) {
+  .sa-changes-grid { grid-template-columns: minmax(0, 72ch) minmax(0, 1fr); gap: var(--sa-sp-32); }
+}
 .sa-md p, .sa-md ul, .sa-md ol { margin: 0; }
 .sa-md ul, .sa-md ol { padding-left: var(--sa-sp-24); }
 .sa-md ul { list-style: disc outside; }
@@ -711,6 +746,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-page-head-main { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; width: 100%; }
 .sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
 .sa-page-head-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
+/* Sign-off fact that rides on the title row: quiet meta text plus its jump link, never a full-width line. */
+.sa-page-head-note { display: inline-flex; align-items: center; gap: var(--sa-sp-8); font-size: var(--sa-fs-meta);
+  line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-page-head-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 
@@ -732,11 +770,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-event:last-child { border-bottom: 0; }
 .sa-event.sa-highlight { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2));
   border-radius: var(--sa-r-md); padding-inline: var(--sa-sp-8); margin-inline: calc(-1 * var(--sa-sp-8)); }
-.sa-event-actor { font-weight: 500; color: var(--dsw-alias-label-secondary); }
+.sa-event-actor { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-8); font-weight: 500;
+  color: var(--dsw-alias-label-secondary); }
 .sa-event-quiet .sa-event-text { color: var(--sa-label-tertiary); }
 .sa-event-foot { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); }
-.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0; }
+.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
+  margin: 0; padding: 0; list-style: none; }
+/* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
+   columns whose labels scatter across the page width. */
+.sa-rail-detail { align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); }
+.sa-rail-detail .sa-rail-step { flex: 0 0 auto; min-width: 0; flex-direction: row; align-items: center; gap: var(--sa-sp-4); }
+.sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: '›'; color: var(--sa-label-tertiary); }
+.sa-rail-detail .sa-rail-dot { min-height: 0; gap: var(--sa-sp-4); }
+.sa-rail-detail .sa-rail-result { font-size: var(--sa-fs-meta); }
 .sa-rail-step { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 76px; flex: 1 1 76px; }
 .sa-rail-dot { display: inline-flex; align-items: center; gap: var(--sa-sp-4); min-height: 16px; }
 .sa-rail-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
@@ -869,25 +916,29 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
     border-bottom-color: var(--dsw-alias-brand-primary); }
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
-  /* Keep label + control inline down to 560px; only phones turn the view controls into a full form. */
-  .sa-exec-toolbar { gap: var(--sa-sp-8) var(--sa-sp-12); }
-  .sa-toolbar-field .sa-segmented { width: 210px; max-width: 210px; }
+  .sa-list-bar { gap: var(--sa-sp-8) var(--sa-sp-12); }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
-  .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
-  .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
   .sa-tabs { gap: var(--sa-sp-16); }
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
   .sa-empty-action { margin-left: 0; }
 }
+@container (max-width: 640px) {
+  /* Phones: the metadata grid and the two evidence cards become one column; 768 keeps both two-up. */
+  .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
+  .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
+  .sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: none; }
+}
 @container (max-width: 560px) {
-  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
-  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
-  .sa-toolbar-field > .sa-hint { display: none; }
-  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
-  .sa-toolbar-switch { margin-left: 0; }
-  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sa-list-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
+  /* Phones: the two view switches share a row and the include-ended switch takes the row under them. */
+  .sa-viewbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sa-sp-8) var(--sa-sp-12); width: 100%; }
+  .sa-viewbar .sa-menu { width: 100%; }
+  .sa-viewbar .sa-menu-picker { width: 100%; justify-content: space-between; }
+  .sa-control-divider { display: none; }
+  .sa-switch-field { grid-column: 1 / -1; }
 }
 @container (max-width: 480px) {
   .sa-settings-nav .sa-settings-group { min-height: 40px; }
@@ -1610,11 +1661,6 @@ function Tag({ tone = 'outline', title, children }) {
   return h('span', { className: 'sa-tag', 'data-tone': tone, title }, children)
 }
 
-function Pill({ active, onClick, children, title }) {
-  return h('button', { type: 'button', className: cx('sa-pill', active && 'sa-pill-active'), 'aria-pressed': active,
-    onClick, title }, children)
-}
-
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
 function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
@@ -1763,8 +1809,12 @@ function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children
     open ? children : null)
 }
 
-/** ⋯ overflow menu: click outside / Escape close, ↑↓/Home/End move, Enter/Space select. */
-function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
+const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
+
+/** Overflow menu. A label + current value makes it a view picker (`text`); the default trigger is the ⋯ icon.
+    Click outside / Escape close, ↑↓/Home/End move, Enter/Space select; `item.checked` turns the item into a radio
+    choice (menuitemradio) and marks the current one. */
+function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const root = useRef(null)
@@ -1785,7 +1835,7 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
   }, [open])
   useEffect(() => {
     if (!open) return
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     nodes[0]?.focus()
   }, [open])
   const choose = (item) => {
@@ -1795,14 +1845,14 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
     if (item.onSelect) item.onSelect()
   }
   const move = (event, delta) => {
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     if (!nodes.length) return
     event.preventDefault()
     const at = nodes.indexOf(document.activeElement)
     nodes[(at + delta + nodes.length) % nodes.length]?.focus()
   }
   const edge = (event, atEnd) => {
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     if (!nodes.length) return
     event.preventDefault()
     ;(atEnd ? nodes.at(-1) : nodes[0])?.focus()
@@ -1815,15 +1865,22 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
     else if (event.key === 'Tab') setOpen(false)
   }
   return h('div', { ref: root, className: 'sa-menu' },
-    h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
-      'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
-      onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
+    text !== undefined
+      ? h('button', { ref: trigger, type: 'button', className: cx('sa-btn', 'sa-btn-outline', 'sa-btn-sm', 'sa-menu-picker'),
+        'aria-label': label ?? t('moreActions'), 'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
+        onClick: () => setOpen(value => !value) }, h('span', { className: 'sa-menu-picker-text' }, text),
+        h(Icon, { name: 'chevron-down', size: 14 }))
+      : h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
+        'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
+        onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
     open ? h('div', { ref: pop, role: 'menu', 'aria-label': label, className: 'sa-menu-pop', 'data-align': align === 'start' ? 'start' : 'end',
       onKeyDown: onPopKeyDown },
-      items.map(item => h('button', { key: item.key, type: 'button', role: 'menuitem', disabled: item.disabled,
+      items.map(item => h('button', { key: item.key, type: 'button', role: item.checked === undefined ? 'menuitem' : 'menuitemradio',
+        'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
         title: item.title, className: 'sa-menu-item', onClick: () => choose(item) },
         item.icon !== undefined ? h('span', { className: 'sa-menu-item-icon' }, controlIcon(item.icon, 14)) : null,
-        h('span', null, item.label)))) : null)
+        h('span', { className: 'sa-menu-item-label' }, item.label),
+        item.checked ? h('span', { className: 'sa-menu-item-check' }, h(Icon, { name: 'check', size: 14 })) : null))) : null)
 }
 
 /** Copy a value, then confirm with a short live "copied" state (no modal, no toast). */
@@ -2972,6 +3029,8 @@ Object.assign(PAGE_TEXT, {
     rejectedAt: ['验收不通过 {time}', 'Rejected {time}'],
     acceptRejectedHint: ['已记录验收不通过；确认问题修复后可再次验收。', 'Rejection recorded; accept again after the issue is fixed.'],
     acceptOnlyDeployed: ['只有已部署 UAT 的工单可以验收。', 'Only a Ticket deployed to UAT can be accepted.'],
+    acceptEmpty: ['还没有 MR 或 UAT 记录；构建部署到 UAT 后在这里验收。',
+      'No MR or UAT record yet; accept here once a build is deployed.'],
     acceptRecorded: ['已记录验收通过', 'Acceptance recorded'],
     rejectRecorded: ['已记录验收不通过', 'Rejection recorded'],
     uatOpenHint: ['UAT 地址来自 live.json 的 gitlab.uatUrl。', 'The UAT URL comes from gitlab.uatUrl in live.json.'],
@@ -3880,24 +3939,28 @@ function StageRail({ ticket, detail = false }) {
   const recovered = runFailed && (merged || uatOk || links.acceptance?.ok === true
     || ['merged', 'deployed'].includes(ticket.status))
   const stages = [
-    { key: 'trigger', state: origin.triggerId ? 'done' : 'idle', result: origin.triggerId ? liveShortId(origin.triggerId) : '' },
-    { key: 'eval', state: origin.decisionId ? 'done' : 'idle', result: origin.decisionId ? liveShortId(origin.decisionId) : '' },
-    { key: 'ticket', state: 'done', result: liveShortId(ticket.id) },
+    // The rail answers "where is it" in words; the ids behind the first two stages are one fold down in the
+    // authorization block, not something to print under every step (T14).
+    { key: 'trigger', state: origin.triggerId ? 'done' : 'idle', result: '' },
+    { key: 'eval', state: origin.decisionId ? 'done' : 'idle', result: '' },
+    { key: 'ticket', state: 'done', result: '' },
     { key: 'execution', state: ticket.status === 'working' ? 'ongoing' : runFailed ? (recovered ? 'warning' : 'error')
       : executed ? 'done' : 'idle',
-      result: recovered ? pt(t, 'rail.retried') : run ? pt(t, ticketStatus({ status: run.status }).labelKey)
-        : executed ? liveShortId(links.commit) : '' },
+      result: recovered ? pt(t, 'rail.retried') : run ? pt(t, ticketStatus({ status: run.status }).labelKey) : '' },
     { key: 'gate', state: gateFailed ? 'error' : gateDone ? 'done' : ticket.status === 'working' ? 'ongoing' : 'idle',
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
-      result: mergeRequest.iid ? `MR #${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}` : merged ? liveShortId(verification.sha) : '' },
+      result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}` : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
   ]
-  return h('ol', { className: 'sa-rail' }, stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
-    h('div', { className: 'sa-rail-dot' }, h(StatusIcon, { state: stage.state, size: 14 }), h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`))),
-    detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null)))
+  return h('ol', { className: detail ? 'sa-rail sa-rail-detail' : 'sa-rail' },
+    stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
+      h(detail ? 'span' : 'div', { className: 'sa-rail-dot' },
+        h(StatusIcon, { state: stage.state, size: 14 }),
+        h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`)),
+        detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null))))
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
@@ -3947,7 +4010,9 @@ function UatCard({ ticket }) {
     verification.uat.ok ? `✓ ${verification.uat.status ?? ''}`.trim() : `✗ ${verification.uat.error ?? ''}`.trim()])
   if (verification.changed !== undefined) rows.push([pt(t, 'ticket.uatChange'),
     verification.changed ? pt(t, 'ticket.uatChanged') : pt(t, 'ticket.uatSame')])
-  if (verification.at) rows.push([pt(t, 'ticket.checkedAt'), h(When, { at: verification.at })])
+  // History uses the one absolute stamp the rest of the detail page uses (T7); relative time is only for
+  // "updated at" and scheduling.
+  if (verification.at) rows.push([pt(t, 'ticket.checkedAt'), h(TicketStamp, { at: verification.at })])
   // Deploy evidence is one fact, not two rows: the job name + one shape mark + the state. The pipeline state is
   // already on the MR card, so repeating it here would show the same answer twice (critique #6).
   const deployStatusRaw = deployment.deployJob?.status ?? deployment.status
@@ -5258,7 +5323,8 @@ function LiveTriggerPage({ route }) {
     h(Section, { title: pt(t, 'trg.title'), count: items.length,
       action: h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'trg.refresh'),
         onClick: () => { void reload() } }) },
-      h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter') }),
+      h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter'),
+        className: 'sa-segmented-chips' }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
         ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
@@ -5737,10 +5803,12 @@ function LiveEvalPage() {
   return h(Fragment, null,
     h(Hint, null, pt(t, 'ev.intro')),
     h('div', { className: 'sa-filters' },
-      h(SegmentedControl, { options: kindOptions, value: kind, onChange: setKind, label: pt(t, 'ev.filterLabel') }),
+      h(SegmentedControl, { options: kindOptions, value: kind, onChange: setKind, label: pt(t, 'ev.filterLabel'),
+        className: 'sa-segmented-chips' }),
+      h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
+      h(SegmentedControl, { options: [{ value: 'all', label: pt(t, 'ev.windowAll') }, { value: '24h', label: pt(t, 'ev.window24h') }],
+        value: range, onChange: setRange, label: pt(t, 'ev.windowLabel'), className: 'sa-segmented-chips' }),
       h('div', { className: 'sa-actions' },
-        h(Pill, { active: range === 'all', onClick: () => setRange('all'), title: pt(t, 'ev.windowAll') }, pt(t, 'ev.windowAll')),
-        h(Pill, { active: range === '24h', onClick: () => setRange('24h'), title: pt(t, 'ev.window24h') }, pt(t, 'ev.window24h')),
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(Section, { title: pt(t, 'ev.title'), count: items.length },
@@ -5757,9 +5825,11 @@ function LiveEvalPage() {
 /* Execution page (contract §6.5): executor load, the pause/resume confirmation that states the consequence, a
    manual Ticket entry that opens a dialog in place, and Tickets grouped by stage. Round 4 gives the finished history
    its history shape: a stage filter fed by the host's own per-stage counts, a one-line summary on the "ended" group,
-   and a "recent 10 / show all" cap so a long history cannot become an unbounded wall. A deep-linked Ticket id renders
-   the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared status
-   model for the executor load and the paused flag. */
+   and a "recent 10 / show all" cap so a long history cannot become an unbounded wall. Round 8 (2026-11-08) folds the
+   filters and the view options into one control row: stage chips carry their counts, grouping and ordering are two
+   labelled pickers that state the current choice, and the include-ended switch closes the row. A deep-linked Ticket id
+   renders the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared
+   status model for the executor load and the paused flag. */
 
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
 const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
@@ -5828,9 +5898,12 @@ Object.assign(PAGE_TEXT, {
     'Send a request in the group, or create a Ticket right here to test the pipeline.'],
   // ---- P1-8: view options (persisted in sessionStorage) ----------------------------------------------------------
   'ex.groupByLabel': ['分组方式', 'Group by'],
+  'ex.groupByShort': ['分组', 'Group by'],
+  'ex.groupByStageShort': ['按阶段', 'Stage'],
+  'ex.groupByRepoShort': ['按仓库', 'Repository'],
   'ex.groupByStage': ['按阶段', 'By stage'],
   'ex.groupByRepo': ['按仓库', 'By repository'],
-  'ex.sortLabel': ['排序', 'Sort'],
+  'ex.sortLabel': ['排序', 'Sort by'],
   'ex.sortUpdated': ['最近更新', 'Last updated'],
   'ex.sortCreated': ['最近创建', 'Newest'],
   'ex.showDone': ['显示已结束', 'Show ended'],
@@ -5908,9 +5981,13 @@ function ExecutionQueuePage() {
     : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
   const EXEC_STAGE_LABEL = { queued: 'ex.stageQueued', working: 'ex.stageWorking', waiting: 'ex.stageWaiting',
     failed: 'ex.stageFailed', done: 'ex.stageDone' }
+  // Each chip carries its own count: the filter row is the one place that answers "how much of the queue is in this
+  // slice", so the number never has to be repeated by a section heading.
   const stageOptions = EXEC_STAGES.map(group => ({
     value: group,
-    label: `${pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])} ${countOf(group)}`,
+    label: h(Fragment, null,
+      h('span', null, pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])),
+      h('span', { className: 'sa-chip-count', 'data-zero': countOf(group) === 0 ? 'true' : undefined }, countOf(group))),
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
   const sorted = execSortTickets(tickets, execView.sort)
@@ -5961,27 +6038,42 @@ function ExecutionQueuePage() {
     }
     return groups
   }
-  const viewToolbar = tickets.length
-    ? h('div', { className: 'sa-exec-toolbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
-      h('div', { className: 'sa-toolbar-field' },
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.groupByLabel')),
-        h(SegmentedControl, { options: [{ value: 'stage', label: pt(t, 'ex.groupByStage') },
-          { value: 'repo', label: pt(t, 'ex.groupByRepo') }], value: execView.groupBy,
-          onChange: value => updateView({ groupBy: value }), label: pt(t, 'ex.groupByLabel') })),
-      h('div', { className: 'sa-toolbar-field' },
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.sortLabel')),
-        h(SegmentedControl, { options: [{ value: 'updated', label: pt(t, 'ex.sortUpdated') },
-          { value: 'created', label: pt(t, 'ex.sortCreated') }], value: execView.sort,
-          onChange: value => updateView({ sort: value }), label: pt(t, 'ex.sortLabel') })),
-      h('div', { className: 'sa-toolbar-switch' },
-        h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
-          label: pt(t, 'ex.showDone') }),
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.showDone'))))
+  // One control row for the queue. The stage filter leads because it is how the queue is read; grouping, ordering and
+  // the include-ended switch are chrome on top of it, so they close the row behind a divider. Everything the bar does
+  // is spelled out on the controls themselves (count in the chip, current choice on the picker) instead of as form
+  // labels floating before a control, which is what made the old two-row toolbar read as a settings form.
+  const listBar = tickets.length
+    ? h('div', { className: 'sa-list-bar' },
+      h('div', { className: 'sa-list-stage' },
+        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+          className: 'sa-segmented-chips' })),
+      h('div', { className: 'sa-viewbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
+        h(Menu, { label: pt(t, 'ex.groupByLabel'),
+          text: h(Fragment, null,
+            h('span', { className: 'sa-menu-picker-label' }, pt(t, 'ex.groupByShort')),
+            pt(t, execView.groupBy === 'repo' ? 'ex.groupByRepoShort' : 'ex.groupByStageShort')),
+          items: [
+            { key: 'stage', label: pt(t, 'ex.groupByStage'), checked: execView.groupBy === 'stage',
+              onSelect: () => updateView({ groupBy: 'stage' }) },
+            { key: 'repo', label: pt(t, 'ex.groupByRepo'), checked: execView.groupBy === 'repo',
+              onSelect: () => updateView({ groupBy: 'repo' }) },
+          ] }),
+        h(Menu, { label: pt(t, 'ex.sortLabel'),
+          text: h(Fragment, null,
+            h('span', { className: 'sa-menu-picker-label' }, pt(t, 'ex.sortLabel')),
+            pt(t, execView.sort === 'created' ? 'ex.sortCreated' : 'ex.sortUpdated')),
+          items: [
+            { key: 'updated', label: pt(t, 'ex.sortUpdated'), checked: execView.sort === 'updated',
+              onSelect: () => updateView({ sort: 'updated' }) },
+            { key: 'created', label: pt(t, 'ex.sortCreated'), checked: execView.sort === 'created',
+              onSelect: () => updateView({ sort: 'created' }) },
+          ] }),
+        h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
+        h('span', { className: 'sa-switch-field' },
+          h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),
+          h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
+            label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
-  // Toolbar row shared by both groupings; the stage pill row keeps its own wide variant.
-  const stagePills = h('div', { className: 'sa-filters' },
-    h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
-      className: 'sa-segmented-wide' }))
   const queueBody = execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' }, queueHeader,
       repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
@@ -6044,10 +6136,7 @@ function ExecutionQueuePage() {
         h('span', { className: 'sa-hint' }, pt(t, 'ex.createHint'))),
       status.engine?.lastError ? h(ErrorState, { error: status.engine.lastError, onRetry: () => { void poll.run() } }) : null),
     list.error ? h(ErrorState, { error: list.error, onRetry: list.reload }) : null,
-    viewToolbar,
-    // `sa-segmented-wide` lets six counted pills use the row's full width (05-style.js); the default 480px cap is
-    // tuned for the two-or-three-pill filters elsewhere.
-    tickets.length ? stagePills : null,
+    listBar,
     loadingList ? h(Skeleton, { rows: 5 })
       : !list.data ? null
         : !tickets.length ? emptyState
@@ -6105,11 +6194,9 @@ Object.assign(PAGE_TEXT, {
     'Marks this Ticket as dismissed, removes it from "needs you", and deletes local branch {branch} and worktree {worktree} (the remote branch is not touched): {title}'],
   'detail.dismissRecorded': ['工单已忽略，本地分支与工作树已删除', 'Ticket dismissed; local branch and worktree removed'],
   'detail.dismissRecordedBare': ['工单已忽略', 'Ticket dismissed'],
-  'detail.acceptedOn': ['验收于 {time}', 'Accepted at {time}'],
   'detail.acceptCleanupDone': ['本地工作区与分支已清理', 'Local worktree and branch cleaned up'],
   'detail.acceptCleanupFailedShort': ['验收已记录，但本地工作区清理失败', 'Accepted; local cleanup failed'],
   'detail.acceptCleanupFailed': ['验收已记录，但本地工作区清理失败：{reason}', 'Accepted; local cleanup failed: {reason}'],
-  'detail.rejectedOn': ['验收不通过于 {time}', 'Rejected at {time}'],
   'ticket.dryRunUnavailable': ['执行器未启用，干跑不可用。', 'The executor is disabled; dry run is unavailable.'],
 
   // ---- P0: a run parked on a failing gate (contract §1.1/§3.2) ---------------------------------------------------
@@ -6133,13 +6220,16 @@ Object.assign(PAGE_TEXT, {
   'detail.gateReleased': ['闸门已放行，继续执行。', 'Gate released; the run continues.'],
   'detail.gateRetried': ['闸门重跑完成，结果见运行记录。', 'Gates re-run; see Run records.'],
   'detail.gateStopped': ['工单已终止。', 'Ticket stopped.'],
+  'detail.gatePendingTag': ['未通过 · 待处理', 'Failed · pending'],
+  'detail.gatePolicy': ['失败策略：{policy}', 'Failure policy: {policy}'],
+  'detail.gatePolicyMixed': ['失败策略按闸门不同', 'Failure policy differs per gate'],
   'detail.gateYes': ['是', 'Yes'],
   'detail.gateNo': ['否', 'No'],
 
   // ---- P0: independent acceptance line under the header ----------------------------------------------------------
-  'detail.acceptLinePending': ['验收：待你验收', 'Acceptance: waiting for you'],
-  'detail.acceptLineAccepted': ['验收：已验收于 {time}', 'Acceptance: accepted at {time}'],
-  'detail.acceptLineRejected': ['验收：已打回于 {time}', 'Acceptance: rejected at {time}'],
+  'detail.acceptLinePending': ['待你验收', 'Waiting for your sign-off'],
+  'detail.acceptLineAccepted': ['已验收 · {time}', 'Accepted · {time}'],
+  'detail.acceptLineRejected': ['已打回 · {time}', 'Rejected · {time}'],
   'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
   'detail.acceptLineView': ['查看验收', 'View acceptance'],
 
@@ -6192,6 +6282,9 @@ Object.assign(PAGE_TEXT, {
 
   // ---- P1-7: ticket activities -----------------------------------------------------------------------------------
   'ticket.activities': ['活动', 'Activity'],
+  'ticket.activityFold': ['宿主活动记录（{count}）', 'Host activity ({count})'],
+  'ticket.filesShowAll': ['显示更多（共 {count} 个）', 'Show all ({count})'],
+  'ticket.filesCollapse': ['收起', 'Collapse'],
   'ticket.activityEmpty': ['还没有活动记录。', 'No activity yet.'],
   'ticket.activityMore': ['共 {total} 条，显示最近 {shown} 条', '{total} total, showing the latest {shown}'],
   'activity.created': ['创建工单', 'Ticket created'], 'activity.status': ['状态变化', 'Status changed'],
@@ -6366,6 +6459,8 @@ function ticketEvents(t, ticket, runs) {
 }
 
 const TIMELINE_RECENT = 8
+// A wide changes rail can hold dozens of paths; the list shows this many before the "show more" control.
+const CHANGES_FILES_RECENT = 5
 
 /** Timeline with a vertical axis, shape-coded dots and a timestamp per event; long histories collapse to the latest. */
 function TicketTimeline({ ticket, runs }) {
@@ -6457,7 +6552,7 @@ function RunReport({ run }) {
         h('ul', { className: 'sa-list' }, progress.map((entry, index) => h('li', { key: index, className: 'sa-row' },
           h('div', { className: 'sa-row-main' },
             h('div', { className: 'sa-row-title' }, h('span', null, String(entry.text ?? ''))),
-            entry.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: entry.at })) : null)))))
+            entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
       : null,
     artifacts.length
       ? h('div', null,
@@ -6508,19 +6603,41 @@ const repairLabel = (t, repair) => {
  */
 function TicketGateResults({ ticket, record }) {
   const { t } = usePanel()
-  const { gates } = latestGatesOf(ticket)
-  if (!gates.length) return h(Hint, null, pt(t, 'gate.none'))
-  return h('div', { className: 'sa-gates' },
-    ['standards', 'backend', 'frontend'].map(name => {
-      const gate = gates.find(entry => entry.name === name)
-      if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
-      const ok = gate.exitCode === 0 && !gate.timedOut
-      const policy = gateOnFailOf(gate, record)
-      return h('span', { key: name, className: 'sa-gate' },
-        h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)),
-        h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline', title: pt(t, policy === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
-          pt(t, GATE_ONFAIL_KEYS[policy])))
-    }))
+  const { run, gates } = latestGatesOf(ticket)
+  // The parked gate is not in run.gates yet (only finished gates are recorded there), so without this the section
+  // would say "还没有闸门结果" while the banner above reports a failed gate (T4). Both read the same pendingGate.
+  const pending = ticket?.pendingGate
+    ?? run?.pendingGate
+    ?? (Array.isArray(ticket?.runs) ? ticket.runs.find(entry => entry?.pendingGate)?.pendingGate : undefined)
+  if (!gates.length && !pending) return h(Hint, null, pt(t, 'gate.none'))
+  const policies = gates.map(gate => gateOnFailOf(gate, record))
+  const sharedPolicy = policies.length && policies.every(policy => policy === policies[0]) ? policies[0] : undefined
+  const gateRow = name => {
+    const gate = gates.find(entry => entry.name === name)
+    if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+    const ok = gate.exitCode === 0 && !gate.timedOut
+    const policy = gateOnFailOf(gate, record)
+    return h('span', { key: name, className: 'sa-gate' },
+      h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)),
+      // The failure policy is one fact about the Ticket's gates, so it is said once under the row; only a mixed set
+      // needs a tag per gate to tell them apart (T13).
+      sharedPolicy ? null : h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline',
+        title: pt(t, policy === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
+      pt(t, GATE_ONFAIL_KEYS[policy])))
+  }
+  return h(Fragment, null,
+    h('div', { className: 'sa-gates' },
+      pending
+        ? h('span', { className: 'sa-gate' },
+          h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
+          h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
+        : null,
+      gates.length ? ['standards', 'backend', 'frontend'].map(gateRow) : null),
+    gates.length
+      ? h('p', { className: 'sa-hint' }, sharedPolicy
+        ? pt(t, 'detail.gatePolicy', { policy: pt(t, GATE_ONFAIL_KEYS[sharedPolicy]) })
+        : pt(t, 'detail.gatePolicyMixed'))
+      : null)
 }
 
 /** Acceptance record status → label key (P1-3). Unknown values stay visible instead of being hidden. */
@@ -6603,7 +6720,7 @@ function AcceptanceRecordCard({ record }) {
       ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(Tag, { tone: decision.decision === 'rejected' ? 'danger' : 'success' },
           pt(t, `detail.userDecision.${decision.decision === 'rejected' ? 'rejected' : decision.decision === 'overridden' ? 'overridden' : 'accepted'}`)),
-        decision.at ? h(When, { at: decision.at }) : null,
+        decision.at ? h(TicketStamp, { at: decision.at }) : null,
         decision.note ? h('span', { className: 'sa-hint' }, String(decision.note)) : null,
         intents.length
           ? h('span', { className: 'sa-hint' },
@@ -6663,8 +6780,8 @@ function TicketRunRows({ runs }) {
               `${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`)
             : null,
           run.dryRun ? h(Tag, { tone: 'outline' }, pt(t, 'ticket.dryTag')) : null,
-          run.startedAt ? h(When, { at: run.startedAt }) : null,
-          h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
+          run.startedAt ? h(TicketStamp, { at: run.startedAt }) : null,
+          h(CopyButton, { value: String(run.id), label: liveShortId(run.id) })),
         h('div', { className: 'sa-row-meta' },
           run.branch ? h('span', { className: 'sa-mono' }, run.branch) : null,
           commit ? h('span', { className: 'sa-mono' }, liveShortId(commit, 8)) : null,
@@ -6682,7 +6799,7 @@ function TicketRunRows({ runs }) {
  * is dropped too because the section already says it.
  */
 const WORKER_GATE_HEADING = /^#{1,6}\s*(闸门结果|闸门|质量闸门|测试与闸门|gates?)\b/i
-const WORKER_CHANGES_HEADING = /^#{1,6}\s*改动内容\s*$/i
+const WORKER_CHANGES_HEADING = /^(改动内容|改动文件|变更内容|变更文件)/i
 function cleanWorkerSummary(text) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   const out = []
@@ -6798,6 +6915,13 @@ function AutomationCard({ ticket, onSaved }) {
   const schedule = form.mode === 'schedule'
   // A Ticket without a stored config still gets the card (off state); every fact reads the empty object, never crashes.
   const stored = automation ?? {}
+  // Saving is an edit action, not part of the page: the bar appears only while the form differs from the stored config
+  // (T12, same rule as the settings page).
+  const savedSnapshot = automationFormOf(automation)
+  const dirty = form.mode !== savedSnapshot.mode || Boolean(form.enabled) !== Boolean(savedSnapshot.enabled)
+    || (form.mode === 'heartbeat' && String(form.intervalMinutes) !== String(savedSnapshot.intervalMinutes))
+    || (form.mode === 'schedule' && String(form.at) !== String(savedSnapshot.at))
+    || String(form.maxExecutions) !== String(savedSnapshot.maxExecutions)
   const executions = Math.max(0, Number(stored.executions) || 0)
   const maxExecutions = Number.isFinite(Number(stored.maxExecutions)) ? Number(stored.maxExecutions) : undefined
   const facts = [
@@ -6812,8 +6936,11 @@ function AutomationCard({ ticket, onSaved }) {
       pt(t, stored.lastTrigger === 'schedule' ? 'auto.triggerSchedule' : 'auto.triggerHeartbeat')])
   }
   if (stored.lastSkipReason) facts.push([pt(t, 'auto.lastSkip'), autoSkipReasonText(t, stored.lastSkipReason)])
+  // Automation is a setting, not the page: it folds to a single line and expands only when the operator opens it (T11).
+  const summary = automationSummaryText(t, stored) || pt(t, 'auto.modeOff')
   return h(Section, { id: 'sa-automation', title: pt(t, 'auto.section') },
-    h('div', { className: 'sa-card' },
+    h(Folded, { summary },
+      h('div', { className: 'sa-card' },
       h('div', { className: 'sa-card-head' },
         h('span', { className: 'sa-card-title' }, automationSummaryText(t, stored) || pt(t, 'auto.modeOff')),
         h('span', { className: 'sa-actions' },
@@ -6826,39 +6953,51 @@ function AutomationCard({ ticket, onSaved }) {
             { value: 'heartbeat', label: pt(t, 'auto.modeHeartbeat') },
             { value: 'schedule', label: pt(t, 'auto.modeSchedule') }] })),
       heartbeat
-        ? h('div', { className: 'sa-field' },
+        ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.interval')),
           h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes,
             'aria-label': pt(t, 'auto.interval'), onChange: event => update({ intervalMinutes: event.target.value }) }),
           h('small', null, pt(t, 'auto.intervalHint')))
         : null,
       schedule
-        ? h('div', { className: 'sa-field' },
+        ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.at')),
           h(Input, { type: 'time', value: form.at, 'aria-label': pt(t, 'auto.at'),
             onChange: event => update({ at: event.target.value }) }),
           h('small', null, pt(t, 'auto.atHint')))
         : null,
-      h('div', { className: 'sa-field' },
+      h('div', { className: 'sa-field sa-field-narrow' },
         h('span', { className: 'sa-field-head' }, pt(t, 'auto.maxExecutions')),
         h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions,
           placeholder: pt(t, 'auto.maxExecutionsPlaceholder'), 'aria-label': pt(t, 'auto.maxExecutions'),
           onChange: event => update({ maxExecutions: event.target.value }) }),
         h('small', null, pt(t, 'auto.maxExecutionsHint'))),
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !act?.setAutomation,
-          onClick: () => { void save() } }, pt(t, 'auto.save')),
-        h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
-      failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null,
-      h('div', { style: { marginTop: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: facts }))))
+      dirty || saving || failure
+        ? h(Fragment, null,
+          h('div', { className: 'sa-actions' },
+            h(Button, { variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !act?.setAutomation,
+              onClick: () => { void save() } }, pt(t, 'auto.save')),
+            h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
+          failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
+        : null,
+      h('div', { style: { marginTop: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: facts })))))
 }
 
 /**
  * Full ticket detail. `id` is the engine ticket id; `page` says which tab hosts it so a row click on another tab
  * keeps the same route page.
  */
-const DETAIL_JUMP_IDS = ['sa-ticket-changes', 'sa-acceptance', 'sa-ticket-stages', 'sa-ticket-gates',
-  'sa-ticket-runs', 'sa-ticket-activities', 'sa-ticket-timeline']
+// One list drives both the jump row and the scroll observer, so a section can never be navigable from one and
+// invisible to the other (the automation block used to be missing from both).
+const DETAIL_JUMPS = [
+  { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
+  { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
+  { id: 'sa-automation', labelKey: 'auto.section' },
+  { id: 'sa-ticket-stages', labelKey: 'ticket.stages' },
+  { id: 'sa-ticket-gates', labelKey: 'ticket.gates' },
+  { id: 'sa-ticket-runs', labelKey: 'ticket.runs' },
+  { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
+]
 
 function TicketDetail({ id, page = 'execution' }) {
   const { t, navigate, notify, back } = usePanel()
@@ -6868,6 +7007,9 @@ function TicketDetail({ id, page = 'execution' }) {
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
   const [headStuck, setHeadStuck] = useState(false)
+  const [filesExpanded, setFilesExpanded] = useState(false)
+  // A new Ticket starts with the compact file list again (the component instance survives an id change).
+  useEffect(() => { setFilesExpanded(false) }, [id])
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
@@ -6952,7 +7094,7 @@ function TicketDetail({ id, page = 'execution' }) {
     if (typeof IntersectionObserver === 'undefined') return undefined
     const root = document.querySelector('.sa-scroll')
     if (!root) return undefined
-    const nodes = DETAIL_JUMP_IDS.map(jumpId => document.getElementById(jumpId)).filter(Boolean)
+    const nodes = DETAIL_JUMPS.map(jump => document.getElementById(jump.id)).filter(Boolean)
     if (!nodes.length) return undefined
     const observer = new IntersectionObserver(entries => {
       const visible = entries.filter(entry => entry.isIntersecting)
@@ -6983,9 +7125,15 @@ function TicketDetail({ id, page = 'execution' }) {
     ?? runs.find(run => run && run.id === ticket.runId && run.pendingGate)?.pendingGate
     ?? runs.find(run => run && run.pendingGate)?.pendingGate
   const gateBlocked = ticket.status === 'gate-blocked'
+  // Gate results are only worth a section when there is a result (or a parked gate) to show (T9).
+  const gateView = latestGatesOf({ ...ticket, runs })
+  const parkedGate = ticket.pendingGate ?? gateView.run?.pendingGate
+  const hasGateResults = gateView.gates.length > 0 || Boolean(parkedGate)
   // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
   const latestRun = latestRunFor(ticket, runs)
   const interrupted = latestRun?.status === 'interrupted'
+  // A run in flight has nothing to launch: the dry-run action belongs to the ⋯ menu, not the primary slot (T3).
+  const running = latestRun?.status === 'running' || ticket.status === 'working'
   const awaitingAnswer = ticket.status === 'awaiting-answer'
   const pendingQuestion = ticket.pendingQuestion ?? latestRun?.pendingQuestion
   const answerOptions = Array.isArray(pendingQuestion?.options) ? pendingQuestion.options.filter(option => typeof option === 'string') : []
@@ -7035,6 +7183,11 @@ function TicketDetail({ id, page = 'execution' }) {
   // after the merge, `deployed` ones after the UAT deployment.
   const acceptance = ticket.links?.acceptance
   const accepted = acceptance?.ok === true
+  // Evidence decides the shape of the acceptance block: two cards only when there is something in them, otherwise one
+  // sentence. A gate-blocked Ticket used to spend ~200px on "还没有合并请求 / 还没有 UAT 验收记录" (T10).
+  const uatEvidence = ticket.links?.verification?.uat ?? ticket.links?.deployment?.uat
+  const hasAcceptanceEvidence = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl
+    || ticket.links?.verification?.merged === true || uatEvidence)
   const acceptMode = ticket.repoAcceptance ?? 'deployed'
   const canAccept = acceptMode === 'merged'
     ? (ticket.status === 'merged' || ticket.links?.verification?.merged === true)
@@ -7065,10 +7218,11 @@ function TicketDetail({ id, page = 'execution' }) {
         ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
           document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) },
         pt(t, 'primary.accept'))
-        // A parked gate owns the primary slot: the three decisions live in the banner right below the header.
-        : gateBlocked
-          ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-            document.getElementById('sa-gate')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.gate'))
+        // A parked gate already carries all three decisions in the banner above this row, and running work has
+        // nothing to launch — both states keep only the ⋯ menu, so the page never shows a second button that either
+        // duplicates the banner or invites "start another run" (T2/T3).
+        : gateBlocked || running
+          ? null
           // P1-5: an interrupted run is resumable, so it outranks the generic dry-run action.
           : interrupted
             ? h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
@@ -7081,6 +7235,8 @@ function TicketDetail({ id, page = 'execution' }) {
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
       disabled: busy.refreshCi || !hasMr },
+    { key: 'dryRun', label: pt(t, 'ticket.dryRun'), icon: 'play', onSelect: () => { void dryRun.run() },
+      disabled: busy.dryRun || !canRun, title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
     { key: 'publish', label: pt(t, 'menu.publish'), icon: 'external', onSelect: () => setPending('publish'),
       disabled: busy.publish || !canPush, title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') },
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
@@ -7104,11 +7260,6 @@ function TicketDetail({ id, page = 'execution' }) {
         h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss : busy.publish,
           onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
     : null
-  const actionRow = h(Fragment, null,
-    h('div', { className: 'sa-actions' },
-      primaryAction,
-      h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end' })),
-    confirmDialog)
 
   const changes = changesOf(runs)
   const events = ticketEvents(t, ticket, runs)
@@ -7190,7 +7341,7 @@ function TicketDetail({ id, page = 'execution' }) {
             h('ul', { className: 'sa-list' }, previousAnswers.map((entry, index) => h('li', { key: index, className: 'sa-row' },
               h('div', { className: 'sa-row-main' },
                 h('div', { className: 'sa-row-title' }, h('span', null, String(entry.answer ?? ''))),
-                entry.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: entry.at })) : null)))))
+                entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
           : null))
     : null
   // P1-5 interrupted banner: the reason the resume action exists, so the phase label is never read as a healthy queue.
@@ -7203,26 +7354,19 @@ function TicketDetail({ id, page = 'execution' }) {
           interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
         h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
     : null
-  const jumps = [
-    { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
-    { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
-    { id: 'sa-ticket-stages', labelKey: 'ticket.stages' },
-    { id: 'sa-ticket-gates', labelKey: 'ticket.gates' },
-    { id: 'sa-ticket-runs', labelKey: 'ticket.runs' },
-    { id: 'sa-ticket-activities', labelKey: 'ticket.activities' },
-    { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
-  ]
+  const jumps = DETAIL_JUMPS
   const jumpTo = id => {
     setActiveJump(id)
     const node = document.getElementById(id)
     if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start' })
   }
 
-  // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it gets its own line under the header instead of being
-  // discoverable only by scrolling into the acceptance card. The jump lands on that card (`#sa-acceptance` exists).
-  const acceptanceLine = acceptanceView.state === 'none'
+  // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
+  // title row (right of the title, left of the actions) instead of owning a full-width line under the head; the jump
+  // still lands on the acceptance card (`#sa-acceptance`).
+  const acceptanceNote = acceptanceView.state === 'none'
     ? null
-    : h('p', { className: 'sa-hint', style: { margin: 'var(--sa-sp-4) 0', display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)' } },
+    : h('span', { className: 'sa-page-head-note' },
       h('span', null, acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
         : acceptanceView.state === 'accepted'
           ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
@@ -7230,21 +7374,28 @@ function TicketDetail({ id, page = 'execution' }) {
       h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
         pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
 
+  // The header's right corner is the Ticket's control cluster: sign-off note, the one state-following primary action,
+  // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.
+  const headActions = h(Fragment, null,
+    acceptanceNote,
+    primaryAction,
+    h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
+      text: primaryAction ? undefined : pt(t, 'menu.label') }))
+
   return h(Fragment, null,
-    h(PageHead, { headRef, title: ticket.title ?? pt(t, 'ticket.loading'),
+    h(PageHead, { headRef, title: ticket.title ?? pt(t, 'ticket.loading'), actions: headActions,
       meta: h(Fragment, null,
         h(TicketStatusTag, { ticket }),
         h('span', { className: 'sa-mono' }, liveShortId(ticket.id, 10)),
         ticket.id ? h(CopyButton, { value: ticket.id, label: pt(t, 'detail.copyTicketId') }) : null,
         ticket.updatedAt ? h(When, { at: ticket.updatedAt }) : null,
         repoName ? h('span', { className: 'sa-hint' }, `${pt(t, 'repo.label')}：${repoName}`) : null) }),
-    acceptanceLine,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     answerBanner,
     interruptedBanner,
     failureBanner,
     gateBanner,
-    actionRow,
+    confirmDialog,
     h('nav', { className: 'sa-detail-nav', 'aria-label': pt(t, 'ticket.sectionNav') },
       headStuck ? h('div', { className: 'sa-detail-context' },
         h('span', { className: 'sa-detail-context-title', title: ticket.title ?? ticket.id },
@@ -7261,24 +7412,38 @@ function TicketDetail({ id, page = 'execution' }) {
       repoRows.length
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: repoRows }))
         : null,
-      // "What changed" answers with the files and the worker's own summary first; the original request (often a long
-      // SQL paste) stays one click away so it cannot push the actual changes below the first screen (critique C24).
-      h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)' } },
-        h('span', { className: 'sa-hint' }, pt(t, 'ticket.changedFiles')),
-        h('span', { className: 'sa-count' }, String(changes.files.length))),
-      changes.files.length
-        ? h('ul', { className: 'sa-list' }, changes.files.map((file, index) =>
-          h('li', { key: index, className: 'sa-row' }, h('span', { className: 'sa-mono' }, file))))
-        : h(Hint, null, pt(t, 'ticket.noChangedFiles')),
-      changes.worker
-        ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
+      // On a wide panel the section splits the way it is read: the worker's summary (a 72ch reading column) on the
+      // left, and the evidence it talks about on the right — the changed files and the original request. On a narrow
+      // panel the grid collapses and the left column leads; the request stays folded so a long SQL paste cannot push
+      // the actual changes below the first screen (critique C24).
+      !changes.worker && !changes.files.length && !ticket.body
+        // Nothing to show at all: one sentence, not two empty columns.
+        ? h(Hint, null, pt(t, 'ticket.noChanges'))
+        : h('div', { className: 'sa-changes-grid' },
+        h('div', { className: 'sa-changes-main' },
           h('p', { className: 'sa-hint' }, pt(t, 'ticket.workerSummary')),
-          h(MarkdownLite, { text: String(changes.worker) }))
-        : h(Hint, null, pt(t, 'ticket.noChanges')),
-      ticket.body
-        ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
-          h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
-        : null),
+          changes.worker
+            ? h(MarkdownLite, { text: String(changes.worker) })
+            : h(Hint, null, pt(t, 'ticket.noChanges'))),
+        h('div', { className: 'sa-changes-side' },
+          h('div', { className: 'sa-actions' },
+            h('span', { className: 'sa-hint' }, pt(t, 'ticket.changedFiles')),
+            h('span', { className: 'sa-count' }, String(changes.files.length))),
+          changes.files.length
+            ? h(Fragment, null,
+              h('ul', { className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
+                .map((file, index) => h('li', { key: index, className: 'sa-row' }, h('span', { className: 'sa-mono' }, file)))),
+              changes.files.length > CHANGES_FILES_RECENT
+                ? h('div', { className: 'sa-actions' },
+                  h(Button, { variant: 'ghost', size: 'sm', icon: filesExpanded ? 'chevron-up' : 'chevron-down',
+                    onClick: () => setFilesExpanded(value => !value) },
+                  pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })))
+                : null)
+            : h(Hint, null, pt(t, 'ticket.noChangedFiles')),
+          ticket.body
+            ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
+              h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
+            : null))),
 
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
@@ -7287,26 +7452,24 @@ function TicketDetail({ id, page = 'execution' }) {
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
         : null,
-      h('div', { className: 'sa-card-grid', style: { marginBottom: 'var(--sa-sp-8)' } },
-        h(MergeRequestCard, { ticket }), h(UatCard, { ticket })),
-      h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } },
-        uatUrl ? h(ExternalLink, { href: uatUrl }, pt(t, 'ticket.openUat'))
-          : manualVerify ? h(Hint, null, pt(t, 'ticket.manualVerifyHint'))
-          : h(Hint, null, pt(t, 'ticket.uatOpenHint'))),
+      hasAcceptanceEvidence
+        ? h(Fragment, null,
+          h('div', { className: 'sa-card-grid', style: { marginBottom: 'var(--sa-sp-8)' } },
+            h(MergeRequestCard, { ticket }), h(UatCard, { ticket })),
+          h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } },
+            uatUrl ? h(ExternalLink, { href: uatUrl }, pt(t, 'ticket.openUat'))
+              : manualVerify ? h(Hint, null, pt(t, 'ticket.manualVerifyHint'))
+              : h(Hint, null, pt(t, 'ticket.uatOpenHint'))))
+        : h(Hint, null, pt(t, 'ticket.acceptEmpty')),
       accepted
         ? h(Fragment, null,
-          h('p', { className: 'sa-hint', title: fullTime(acceptance.at, t.lang) },
-            pt(t, 'detail.acceptedOn', { time: ticketStamp(acceptance.at) })),
           ticket.links?.cleanup
             ? h(Hint, null, ticket.links.cleanup.failed
               ? pt(t, 'detail.acceptCleanupFailed', { reason: ticket.links.cleanup.failed })
               : pt(t, 'detail.acceptCleanupDone'))
             : null)
         : acceptance?.ok === false
-          ? h(Fragment, null,
-            h('p', { className: 'sa-hint', title: fullTime(acceptance.at, t.lang) },
-              pt(t, 'detail.rejectedOn', { time: ticketStamp(acceptance.at) })),
-            h(Hint, null, pt(t, 'ticket.acceptRejectedHint')))
+          ? h(Hint, null, pt(t, 'ticket.acceptRejectedHint'))
           : null,
       canAccept && !accepted
         ? h(Fragment, null,
@@ -7327,7 +7490,8 @@ function TicketDetail({ id, page = 'execution' }) {
             h(ConfirmButton, { label: pt(t, 'ticket.acceptFail'), title: pt(t, 'ticket.acceptFailTitle'),
               message: pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id }),
               variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run(rejectIntents) } })))
-        : !canAccept && !accepted
+        : !canAccept && !accepted && hasAcceptanceEvidence
+          // Without evidence the empty-state sentence above already says what unlocks acceptance.
           ? h(Hint, null, pt(t, acceptMode === 'merged' ? 'ticket.acceptOnlyMerged' : 'ticket.acceptOnlyDeployed'))
           : null),
 
@@ -7337,14 +7501,19 @@ function TicketDetail({ id, page = 'execution' }) {
 
     // 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default).
     h(Section, { id: 'sa-ticket-stages', title: pt(t, 'ticket.stages') }, h(StageRail, { ticket: { ...ticket, runs }, detail: true })),
-    h(Section, { id: 'sa-ticket-gates', title: pt(t, 'ticket.gates') },
-      h(TicketGateResults, { ticket: { ...ticket, runs }, record: acceptanceRecord })),
+    hasGateResults
+      ? h(Section, { id: 'sa-ticket-gates', title: pt(t, 'ticket.gates') },
+        h(TicketGateResults, { ticket: { ...ticket, runs }, record: acceptanceRecord }))
+      : null,
     h(Section, { id: 'sa-ticket-runs', title: pt(t, 'ticket.runs'), count: runs.length },
       runs.length ? h(TicketRunRows, { runs }) : h(Hint, null, pt(t, 'ticket.noRuns'))),
-    // P1-7: the host's own activity stream (newest first) sits between the run records and the derived timeline.
-    h(Section, { id: 'sa-ticket-activities', title: pt(t, 'ticket.activities'), count: activities.length },
-      activities.length ? h(TicketActivities, { activities }) : h(Hint, null, pt(t, 'ticket.activityEmpty'))),
+    // P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
+    // looking timeline above it (T16).
     h(Section, { id: 'sa-ticket-timeline', title: pt(t, 'ticket.timeline'), count: events.length },
+      activities.length
+        ? h(Folded, { summary: pt(t, 'ticket.activityFold', { count: activities.length }) },
+          h(TicketActivities, { activities }))
+        : null,
       h(TicketTimeline, { ticket, runs })),
 
     // Secondary evidence and the raw escape hatch stay at the bottom.

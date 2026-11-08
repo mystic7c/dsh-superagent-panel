@@ -51,11 +51,6 @@ function Tag({ tone = 'outline', title, children }) {
   return h('span', { className: 'sa-tag', 'data-tone': tone, title }, children)
 }
 
-function Pill({ active, onClick, children, title }) {
-  return h('button', { type: 'button', className: cx('sa-pill', active && 'sa-pill-active'), 'aria-pressed': active,
-    onClick, title }, children)
-}
-
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
 function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
@@ -204,8 +199,12 @@ function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children
     open ? children : null)
 }
 
-/** ⋯ overflow menu: click outside / Escape close, ↑↓/Home/End move, Enter/Space select. */
-function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
+const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
+
+/** Overflow menu. A label + current value makes it a view picker (`text`); the default trigger is the ⋯ icon.
+    Click outside / Escape close, ↑↓/Home/End move, Enter/Space select; `item.checked` turns the item into a radio
+    choice (menuitemradio) and marks the current one. */
+function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const root = useRef(null)
@@ -226,7 +225,7 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
   }, [open])
   useEffect(() => {
     if (!open) return
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     nodes[0]?.focus()
   }, [open])
   const choose = (item) => {
@@ -236,14 +235,14 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
     if (item.onSelect) item.onSelect()
   }
   const move = (event, delta) => {
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     if (!nodes.length) return
     event.preventDefault()
     const at = nodes.indexOf(document.activeElement)
     nodes[(at + delta + nodes.length) % nodes.length]?.focus()
   }
   const edge = (event, atEnd) => {
-    const nodes = [...(pop.current?.querySelectorAll('[role="menuitem"]') ?? [])].filter(node => !node.disabled)
+    const nodes = [...(pop.current?.querySelectorAll(MENU_ITEM_SELECTOR) ?? [])].filter(node => !node.disabled)
     if (!nodes.length) return
     event.preventDefault()
     ;(atEnd ? nodes.at(-1) : nodes[0])?.focus()
@@ -256,15 +255,22 @@ function Menu({ label, items = [], iconName = 'more', align = 'end' }) {
     else if (event.key === 'Tab') setOpen(false)
   }
   return h('div', { ref: root, className: 'sa-menu' },
-    h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
-      'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
-      onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
+    text !== undefined
+      ? h('button', { ref: trigger, type: 'button', className: cx('sa-btn', 'sa-btn-outline', 'sa-btn-sm', 'sa-menu-picker'),
+        'aria-label': label ?? t('moreActions'), 'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
+        onClick: () => setOpen(value => !value) }, h('span', { className: 'sa-menu-picker-text' }, text),
+        h(Icon, { name: 'chevron-down', size: 14 }))
+      : h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
+        'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
+        onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
     open ? h('div', { ref: pop, role: 'menu', 'aria-label': label, className: 'sa-menu-pop', 'data-align': align === 'start' ? 'start' : 'end',
       onKeyDown: onPopKeyDown },
-      items.map(item => h('button', { key: item.key, type: 'button', role: 'menuitem', disabled: item.disabled,
+      items.map(item => h('button', { key: item.key, type: 'button', role: item.checked === undefined ? 'menuitem' : 'menuitemradio',
+        'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
         title: item.title, className: 'sa-menu-item', onClick: () => choose(item) },
         item.icon !== undefined ? h('span', { className: 'sa-menu-item-icon' }, controlIcon(item.icon, 14)) : null,
-        h('span', null, item.label)))) : null)
+        h('span', { className: 'sa-menu-item-label' }, item.label),
+        item.checked ? h('span', { className: 'sa-menu-item-check' }, h(Icon, { name: 'check', size: 14 })) : null))) : null)
 }
 
 /** Copy a value, then confirm with a short live "copied" state (no modal, no toast). */

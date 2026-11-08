@@ -68,7 +68,7 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
   const steps = stepNames.map((name, index) => ({ name,
     at: new Date(Date.now() - (10 - index) * 60_000).toISOString(), state: 'ok', exitCode: 0 }))
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'deployed', startedAt: nowIso, endedAt: nowIso,
-    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/File.java'],
+    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
@@ -276,14 +276,40 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('detail sections follow the requested order', positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])),
     JSON.stringify({ sectionTitles, positions }))
   check('changes section carries the changed files and worker summary', /改动文件/.test(detailText) && /执行总结/.test(detailText), detailText.slice(0, 300))
+  // Wide layout: the worker summary is the left reading column, the files/request are the right evidence column.
+  check('changes section reads summary left, files right', Boolean(rootElement.querySelector('.sa-changes-grid .sa-changes-main .sa-md'))
+    && Boolean(rootElement.querySelector('.sa-changes-grid .sa-changes-side .sa-list')),
+    String(rootElement.querySelectorAll('.sa-changes-grid > *').length))
   check('worker summary renders an ordered list', rootElement.querySelectorAll('.sa-md ol li').length >= 1,
     String(rootElement.querySelectorAll('.sa-md ol li').length))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
-  check('detail nav keeps the seven jumps in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
+  check('detail nav keeps all seven jumps (automation included, activities folded into the timeline) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
 check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
+check('jump nav names the automation block', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '自动化'),
+  [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
+// The automation block is a folded setting, and saving only appears once the form differs from the stored config.
+const automationSection = rootElement.querySelector('#sa-automation')
+check('automation is a folded setting, not an always-open card', Boolean(automationSection?.querySelector('details > summary')),
+  automationSection?.textContent?.slice(0, 80) ?? 'no section')
+check('automation save is hidden while the form matches the stored config',
+  ![...rootElement.querySelectorAll('#sa-automation button')].some(node => (node.textContent ?? '').trim() === '保存自动化'),
+  automationSection?.textContent?.slice(0, 120) ?? 'no section')
+// P1-7 activities no longer own a second timeline section; when the host sends them they fold inside the timeline.
+const timelineSection = rootElement.querySelector('#sa-ticket-timeline')
+check('activities no longer own a second timeline section', !sectionTitles.includes('活动'), JSON.stringify(sectionTitles))
+check('any activity fold lives inside the timeline',
+  [...rootElement.querySelectorAll('.sa-detail-jumps')].length === 1
+  && [...rootElement.querySelectorAll('details > summary')].filter(node => /宿主活动记录|Host activity/.test(node.textContent ?? ''))
+    .every(node => node.closest('#sa-ticket-timeline')),
+  timelineSection?.textContent?.slice(0, 120) ?? 'no timeline')
+check('empty gate results no longer own a section', !sectionTitles.includes('闸门结果') || Boolean(detailText.match(/失败策略|通过/)),
+  JSON.stringify(sectionTitles))
+check('stage rail prints results, not truncated ids',
+  !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
+  rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
 {
   const changes = rootElement.querySelector('#sa-ticket-changes')
   const changeText = changes?.textContent ?? ''
@@ -292,6 +318,22 @@ check('long ticket detail offers in-page jump navigation', rootElement.querySele
     && changeText.indexOf('改动文件') >= 0 && changeText.indexOf('改动文件') < changeText.indexOf('需求'),
     changeText.slice(0, 300))
 }
+check('sign-off note and the action cluster ride on the title row',
+  Boolean(rootElement.querySelector('.sa-page-head-actions .sa-page-head-note'))
+  && Boolean(rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')),
+  rootElement.querySelector('.sa-page-head-actions')?.textContent?.slice(0, 120) ?? 'no head actions')
+const filesToggle = [...rootElement.querySelectorAll('.sa-changes-side button')].find(node => /显示更多/.test(node.textContent ?? ''))
+const fileRows = () => rootElement.querySelectorAll('.sa-changes-side .sa-list li').length
+check('a long changed-file list starts compact with a show-more control', Boolean(filesToggle) && fileRows() === 5, `rows=${fileRows()}`)
+filesToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(300)
+check('show more reveals every changed file',
+  fileRows() === 8 && [...rootElement.querySelectorAll('.sa-changes-side button')].some(node => (node.textContent ?? '').trim() === '收起'),
+  `rows=${fileRows()}`)
+const collapseFiles = [...rootElement.querySelectorAll('.sa-changes-side button')].find(node => (node.textContent ?? '').trim() === '收起')
+collapseFiles?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(300)
+check('the changed-file list collapses again', fileRows() === 5, `rows=${fileRows()}`)
 check('ticket id is copyable from the detail head', Boolean(rootElement.querySelector('.sa-page-head-meta .sa-copy-btn')),
     rootElement.querySelector('.sa-page-head-meta')?.textContent?.slice(0, 120) ?? '')
   check('repository name is not duplicated with its id', !/仓库名称[\s\S]{0,80}仓库 ID/.test(detailText), 'repo block')
@@ -425,6 +467,12 @@ check('eval ticket short codes are links', rootElement.querySelectorAll('.sa-mai
   String(rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length))
 check('eval rows identify their thread or ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length >= 1,
   String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
+// One filter idiom on every page: kind chips + the time-window chips share the same row and the same chip look.
+check('eval filters are one row of chips (kind + time window)',
+  rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length >= 4
+  && rootElement.querySelectorAll('.sa-main .sa-filters .sa-segmented-chips').length === 2,
+  JSON.stringify({ chips: rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length,
+    groups: rootElement.querySelectorAll('.sa-main .sa-filters .sa-segmented-chips').length }))
 // Execution ledger (round 4): evidence rail, stage filters, done summary, in-place manual Ticket.
 clickByText('执行')
 await sleep(1200)
@@ -440,12 +488,22 @@ check('stage filter keeps the counts for every stage', ['排队', '执行中', '
 check('execution ledger has a column header', ['工单', '证据', '操作'].every(label => (rootElement.querySelector('.sa-queue-head')?.textContent ?? '').includes(label)),
   rootElement.querySelector('.sa-queue-head')?.textContent ?? '')
 check('executor band shows the last run', /最近一次执行/.test(execText), execText.slice(0, 400))
-// P1 adds view-option segments (group/sort) to the same toolbar; only the six stage pills carry stage words.
+// The queue's control row: stage chips carry the counts, and grouping/ordering are labelled pickers (not a second
+// filter row) with the current choice spelled out on the button.
 const stageWords = /全部|等待你|失败工单|执行中|排队|已结束/
-const stageButtons = [...rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment')]
+const stageButtons = [...rootElement.querySelectorAll('.sa-main .sa-list-bar .sa-segment')]
   .filter(button => stageWords.test(button.textContent ?? ''))
-check('execution offers six stage filters with counts', stageButtons.length === 6 && /全部/.test(stageButtons[0]?.textContent ?? ''),
+check('execution offers six stage chips with counts', stageButtons.length === 6 && /全部/.test(stageButtons[0]?.textContent ?? ''),
   JSON.stringify(stageButtons.map(button => (button.textContent ?? '').trim())))
+check('stage chips print each stage count inside the chip', /全部\s*\d+/.test(stageButtons[0]?.textContent ?? ''),
+  String(stageButtons[0]?.textContent))
+const viewPickers = [...rootElement.querySelectorAll('.sa-main .sa-list-bar .sa-menu-picker')]
+const viewText = viewPickers.map(node => (node.textContent ?? '').replace(/\s+/g, '')).join(' ')
+check('view bar states grouping and ordering as labelled pickers',
+  viewPickers.length === 2 && /分组按阶段/.test(viewText) && /排序最近更新/.test(viewText), viewText)
+check('view bar keeps the include-ended switch', Boolean(rootElement.querySelector('.sa-main .sa-list-bar .sa-switch')), '')
+check('view pickers open a menu with the other choice', viewPickers.every(node => node.getAttribute('aria-haspopup') === 'menu'),
+  JSON.stringify(viewPickers.map(node => node.getAttribute('aria-haspopup'))))
 const doneBadge = [...rootElement.querySelectorAll('.sa-exec-queue .sa-section-title .sa-hint')]
   .map(node => (node.textContent ?? '').trim()).find(label => /已验收/.test(label))
 check('done group states its accepted/dismissed split', /已验收.*已忽略/.test(doneBadge ?? ''), String(doneBadge))
@@ -461,6 +519,8 @@ check('manual Ticket modal closes with Escape', !rootElement.querySelector('.sa-
 clickByText('触发')
 await sleep(1000)
 const triggerText = text()
+check('thread filter uses the same chips', rootElement.querySelectorAll('.sa-main .sa-pane-aside .sa-segment').length === 3,
+  String(rootElement.querySelectorAll('.sa-main .sa-pane-aside .sa-segment').length))
 const threadSections = [...rootElement.querySelectorAll('.sa-main .sa-section-title')]
   .map(node => (node.textContent ?? '').trim().replace(/\d+$/, ''))
 check('thread detail no longer repeats a separate decision section',

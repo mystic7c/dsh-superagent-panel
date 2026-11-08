@@ -135,7 +135,7 @@ node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 305 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 90/90）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 107/107）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 

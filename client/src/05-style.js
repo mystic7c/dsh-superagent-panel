@@ -74,11 +74,14 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
-/* Execution's view controls: label and control stay one unit, and at compact widths each becomes a full row. */
-.sa-exec-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-8) var(--sa-sp-20); min-width: 0; }
-.sa-toolbar-field { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
-.sa-toolbar-field .sa-segmented { flex: none; width: 260px; max-width: 320px; }
-.sa-toolbar-switch { display: flex; align-items: center; gap: var(--sa-sp-8); margin-left: auto; }
+/* The queue's control row: stage filter chips lead, view chrome closes it behind a hairline divider. */
+.sa-list-bar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between;
+  gap: var(--sa-sp-8) var(--sa-sp-16); min-width: 0; }
+.sa-list-stage { min-width: 0; flex: 1 1 auto; }
+.sa-viewbar { display: flex; align-items: center; gap: var(--sa-sp-8); flex: none; }
+.sa-control-divider { width: 0.5px; height: var(--sa-sp-16); background: var(--sa-line); flex: none; }
+.sa-switch-field { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-switch-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); white-space: nowrap; }
 
 /* ---------- page head / global status ---------- */
 .sa-head { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between;
@@ -170,12 +173,6 @@ const PANEL_CSS = `
 .sa-tag[data-tone='info'] { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 12%, transparent); color: var(--sa-info-text); }
 .sa-tag[data-tone='warning'] { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 14%, transparent); color: var(--sa-warn-text); }
 .sa-tag[data-tone='danger'] { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent); color: var(--sa-danger-text); }
-.sa-pill { display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 24px; padding: 0 var(--sa-sp-8);
-  border: none; border-radius: var(--sa-r-pill); background: var(--dsw-alias-bg-layer-2, transparent);
-  color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--sa-fs-meta); line-height: 1.4; cursor: pointer; }
-.sa-pill:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
-.sa-pill:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
-.sa-pill-active, .sa-pill-active:hover { color: var(--dsw-alias-label-primary); box-shadow: inset 0 0 0 1px var(--dsw-alias-brand-primary); }
 .sa-segmented { width: 100%; max-width: 480px; box-sizing: border-box; display: inline-grid;
   box-shadow: inset 0 0 0 1px var(--sa-line);
   grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--sa-sp-2); padding: var(--sa-sp-2);
@@ -187,6 +184,33 @@ const PANEL_CSS = `
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-segment:disabled { cursor: default; opacity: 0.4; }
+
+/* Variant: stage filter chips. Each stage is one pill and the active one is the only tinted surface, so the row reads
+   as "which slice of the queue" rather than as a second tab bar (the page tabs already own that shape). */
+.sa-segmented-chips { display: flex; flex-wrap: wrap; gap: var(--sa-sp-2); width: auto; max-width: none;
+  padding: 0; background: none; box-shadow: none; }
+.sa-segmented-chips .sa-segment { display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 28px;
+  padding: 0 var(--sa-sp-8); border-radius: var(--sa-r-sm); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-meta); line-height: 1.4; }
+.sa-segmented-chips .sa-segment:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
+.sa-segmented-chips .sa-segment[aria-checked='true'] { font-weight: 600;
+  background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
+.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 0.66;
+  font-variant-numeric: tabular-nums; }
+.sa-chip-count[data-zero='true'] { opacity: 0.42; }
+.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { opacity: 0.8; }
+
+/* View pickers: the two view settings are labelled outline buttons that open a two-option menu, so the row states
+   what each choice is ("分组 按阶段") instead of looking like a second filter row. */
+.sa-menu-picker { height: 28px; padding: 0 var(--sa-sp-8); color: var(--dsw-alias-label-primary); font-weight: 400; }
+.sa-menu-picker-text { display: inline-flex; align-items: baseline; gap: var(--sa-sp-4); min-width: 0; white-space: nowrap; }
+.sa-menu-picker-label { color: var(--sa-label-tertiary); }
+.sa-menu-picker > svg { color: var(--sa-label-tertiary); flex: none; }
+.sa-menu-picker:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-menu-picker[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-menu-item-label { flex: 1; min-width: 0; }
+.sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
 
 /* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
    selected while its detail is off-screen. */
@@ -252,8 +276,6 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-queue-head > :nth-child(2) { grid-column: 2; }
 .sa-queue-head > :nth-child(3) { grid-column: 3; }
 .sa-queue-head > :nth-child(4) { grid-column: 4; text-align: right; }
-/* Execution's six stage filters can exceed the shared 480px cap; only this wide variant lifts it. */
-.sa-segmented-wide { max-width: none; }
 /* The evidence rail is the first thing to go when the container is too narrow for four tracks; the cause remains a
    meta chip through the row's other content and the whole row still reads as one line. */
 @container (max-width: 860px) {
@@ -399,7 +421,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 @container (max-width: 900px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
-.sa-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
+.sa-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
 .sa-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sa-sp-12); }
 
 /* ---------- two-column content blocks (overview: 24h funnel + executor) ---------- */
@@ -480,6 +502,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+/* A number/time field is as wide as its value, not the card (T20). */
+.sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
 .sa-switch-row-text { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-input { box-sizing: border-box; display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 32px; min-width: 0;
@@ -507,6 +531,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: var(--dsw-alias-label-primary-foreground); transition: left 140ms ease; }
 .sa-switch[aria-checked='true'] .sa-switch-thumb { left: 18px; }
+/* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list. */
+.sa-switch-compact { width: 30px; height: 18px; }
+.sa-switch-compact .sa-switch-thumb { width: 14px; height: 14px; }
+.sa-switch-compact[aria-checked='true'] .sa-switch-thumb { left: 14px; }
 
 /* ---------- empty / error / skeleton ---------- */
 .sa-empty { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-12); padding: var(--sa-sp-16); }
@@ -562,6 +590,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* ---------- markdown / text ---------- */
 .sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;
   font-size: var(--sa-fs-body); line-height: 1.5; overflow-wrap: anywhere; }
+/* Ticket "changes" on a wide panel: the worker summary reads on the left, its evidence (files + request) sits on the
+   right instead of leaving the other half of the row empty. Collapses to one column by DOM order. */
+.sa-changes-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-16); align-items: start; min-width: 0; }
+.sa-changes-main, .sa-changes-side { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
+@container (min-width: 1000px) {
+  .sa-changes-grid { grid-template-columns: minmax(0, 72ch) minmax(0, 1fr); gap: var(--sa-sp-32); }
+}
 .sa-md p, .sa-md ul, .sa-md ol { margin: 0; }
 .sa-md ul, .sa-md ol { padding-left: var(--sa-sp-24); }
 .sa-md ul { list-style: disc outside; }
@@ -588,6 +623,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-page-head-main { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; width: 100%; }
 .sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
 .sa-page-head-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
+/* Sign-off fact that rides on the title row: quiet meta text plus its jump link, never a full-width line. */
+.sa-page-head-note { display: inline-flex; align-items: center; gap: var(--sa-sp-8); font-size: var(--sa-fs-meta);
+  line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-page-head-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 
@@ -609,11 +647,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-event:last-child { border-bottom: 0; }
 .sa-event.sa-highlight { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2));
   border-radius: var(--sa-r-md); padding-inline: var(--sa-sp-8); margin-inline: calc(-1 * var(--sa-sp-8)); }
-.sa-event-actor { font-weight: 500; color: var(--dsw-alias-label-secondary); }
+.sa-event-actor { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-8); font-weight: 500;
+  color: var(--dsw-alias-label-secondary); }
 .sa-event-quiet .sa-event-text { color: var(--sa-label-tertiary); }
 .sa-event-foot { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); }
-.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0; }
+.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
+  margin: 0; padding: 0; list-style: none; }
+/* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
+   columns whose labels scatter across the page width. */
+.sa-rail-detail { align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); }
+.sa-rail-detail .sa-rail-step { flex: 0 0 auto; min-width: 0; flex-direction: row; align-items: center; gap: var(--sa-sp-4); }
+.sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: '›'; color: var(--sa-label-tertiary); }
+.sa-rail-detail .sa-rail-dot { min-height: 0; gap: var(--sa-sp-4); }
+.sa-rail-detail .sa-rail-result { font-size: var(--sa-fs-meta); }
 .sa-rail-step { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 76px; flex: 1 1 76px; }
 .sa-rail-dot { display: inline-flex; align-items: center; gap: var(--sa-sp-4); min-height: 16px; }
 .sa-rail-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
@@ -746,25 +793,29 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
     border-bottom-color: var(--dsw-alias-brand-primary); }
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
-  /* Keep label + control inline down to 560px; only phones turn the view controls into a full form. */
-  .sa-exec-toolbar { gap: var(--sa-sp-8) var(--sa-sp-12); }
-  .sa-toolbar-field .sa-segmented { width: 210px; max-width: 210px; }
+  .sa-list-bar { gap: var(--sa-sp-8) var(--sa-sp-12); }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
-  .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
-  .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
   .sa-tabs { gap: var(--sa-sp-16); }
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
   .sa-empty-action { margin-left: 0; }
 }
+@container (max-width: 640px) {
+  /* Phones: the metadata grid and the two evidence cards become one column; 768 keeps both two-up. */
+  .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
+  .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
+  .sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: none; }
+}
 @container (max-width: 560px) {
-  .sa-exec-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
-  .sa-toolbar-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-4); }
-  .sa-toolbar-field > .sa-hint { display: none; }
-  .sa-toolbar-field .sa-segmented { max-width: none; width: 100%; }
-  .sa-toolbar-switch { margin-left: 0; }
-  .sa-segmented-wide { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sa-list-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
+  /* Phones: the two view switches share a row and the include-ended switch takes the row under them. */
+  .sa-viewbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sa-sp-8) var(--sa-sp-12); width: 100%; }
+  .sa-viewbar .sa-menu { width: 100%; }
+  .sa-viewbar .sa-menu-picker { width: 100%; justify-content: space-between; }
+  .sa-control-divider { display: none; }
+  .sa-switch-field { grid-column: 1 / -1; }
 }
 @container (max-width: 480px) {
   .sa-settings-nav .sa-settings-group { min-height: 40px; }

@@ -182,6 +182,8 @@ Object.assign(PAGE_TEXT, {
     rejectedAt: ['验收不通过 {time}', 'Rejected {time}'],
     acceptRejectedHint: ['已记录验收不通过；确认问题修复后可再次验收。', 'Rejection recorded; accept again after the issue is fixed.'],
     acceptOnlyDeployed: ['只有已部署 UAT 的工单可以验收。', 'Only a Ticket deployed to UAT can be accepted.'],
+    acceptEmpty: ['还没有 MR 或 UAT 记录；构建部署到 UAT 后在这里验收。',
+      'No MR or UAT record yet; accept here once a build is deployed.'],
     acceptRecorded: ['已记录验收通过', 'Acceptance recorded'],
     rejectRecorded: ['已记录验收不通过', 'Rejection recorded'],
     uatOpenHint: ['UAT 地址来自 live.json 的 gitlab.uatUrl。', 'The UAT URL comes from gitlab.uatUrl in live.json.'],
@@ -1090,24 +1092,28 @@ function StageRail({ ticket, detail = false }) {
   const recovered = runFailed && (merged || uatOk || links.acceptance?.ok === true
     || ['merged', 'deployed'].includes(ticket.status))
   const stages = [
-    { key: 'trigger', state: origin.triggerId ? 'done' : 'idle', result: origin.triggerId ? liveShortId(origin.triggerId) : '' },
-    { key: 'eval', state: origin.decisionId ? 'done' : 'idle', result: origin.decisionId ? liveShortId(origin.decisionId) : '' },
-    { key: 'ticket', state: 'done', result: liveShortId(ticket.id) },
+    // The rail answers "where is it" in words; the ids behind the first two stages are one fold down in the
+    // authorization block, not something to print under every step (T14).
+    { key: 'trigger', state: origin.triggerId ? 'done' : 'idle', result: '' },
+    { key: 'eval', state: origin.decisionId ? 'done' : 'idle', result: '' },
+    { key: 'ticket', state: 'done', result: '' },
     { key: 'execution', state: ticket.status === 'working' ? 'ongoing' : runFailed ? (recovered ? 'warning' : 'error')
       : executed ? 'done' : 'idle',
-      result: recovered ? pt(t, 'rail.retried') : run ? pt(t, ticketStatus({ status: run.status }).labelKey)
-        : executed ? liveShortId(links.commit) : '' },
+      result: recovered ? pt(t, 'rail.retried') : run ? pt(t, ticketStatus({ status: run.status }).labelKey) : '' },
     { key: 'gate', state: gateFailed ? 'error' : gateDone ? 'done' : ticket.status === 'working' ? 'ongoing' : 'idle',
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
-      result: mergeRequest.iid ? `MR #${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}` : merged ? liveShortId(verification.sha) : '' },
+      result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}` : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
   ]
-  return h('ol', { className: 'sa-rail' }, stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
-    h('div', { className: 'sa-rail-dot' }, h(StatusIcon, { state: stage.state, size: 14 }), h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`))),
-    detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null)))
+  return h('ol', { className: detail ? 'sa-rail sa-rail-detail' : 'sa-rail' },
+    stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
+      h(detail ? 'span' : 'div', { className: 'sa-rail-dot' },
+        h(StatusIcon, { state: stage.state, size: 14 }),
+        h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`)),
+        detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null))))
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
@@ -1157,7 +1163,9 @@ function UatCard({ ticket }) {
     verification.uat.ok ? `✓ ${verification.uat.status ?? ''}`.trim() : `✗ ${verification.uat.error ?? ''}`.trim()])
   if (verification.changed !== undefined) rows.push([pt(t, 'ticket.uatChange'),
     verification.changed ? pt(t, 'ticket.uatChanged') : pt(t, 'ticket.uatSame')])
-  if (verification.at) rows.push([pt(t, 'ticket.checkedAt'), h(When, { at: verification.at })])
+  // History uses the one absolute stamp the rest of the detail page uses (T7); relative time is only for
+  // "updated at" and scheduling.
+  if (verification.at) rows.push([pt(t, 'ticket.checkedAt'), h(TicketStamp, { at: verification.at })])
   // Deploy evidence is one fact, not two rows: the job name + one shape mark + the state. The pipeline state is
   // already on the MR card, so repeating it here would show the same answer twice (critique #6).
   const deployStatusRaw = deployment.deployJob?.status ?? deployment.status
