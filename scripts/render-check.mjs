@@ -100,6 +100,13 @@ const fixtures = {
   decisions: engine.decisionsView({}),
   inbox: engine.inboxView(),
 }
+// Inject one shadow row so the Eval page's model tag is exercised even when the operator's state has no shadow data.
+// It is an in-memory fixture only; nothing is written.
+if (Array.isArray(fixtures.decisions.items) && fixtures.decisions.items.length) {
+  const shadowed = fixtures.decisions.items[0]
+  shadowed.shadow = { status: 'ok', at: nowIso, model: 'decision-model-preview', questions: 'request-v1',
+    ruleKind: shadowed.kind, p: 0.93, riskP: 0.04, verdict: 'accept', latencyMs: 12 }
+}
 const detailOf = id => engine.ticketView(id)
 const threadOf = key => engine.threadView(key)
 
@@ -497,6 +504,8 @@ check('eval ticket short codes are links', rootElement.querySelectorAll('.sa-mai
   String(rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length))
 check('eval rows identify their thread or ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length >= 1,
   String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
+check('eval rows show the shadow model opinion', evalText.includes('模型 93%') && evalText.includes('倾向接单'),
+  evalText.slice(0, 500))
 // One filter idiom on every page: kind chips + the time-window chips share the same row and the same chip look.
 check('eval filters are one row of chips (kind + time window)',
   rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length >= 4

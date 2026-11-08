@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.2] — 2026-11-08
+
+决策模型 shadow（落地第一步）：接单判断仍由规则（R1–R3）决定，但引擎可以把每条候选消息交给一个 System One
+决策模型（阿里云百炼 `decision-model-preview`、TypeSafe Jev、Kev/Von 等同协议实现）再判一次，把模型答案记录在
+`decision.shadow` 上，用于后续标注、温度拟合与 hybrid 决策。模型永远不改变接单结果。
+
+- 新增 `lib/live/judge.js`：System One 协议客户端（`POST /v1/systemone`，`state` + `questions`），固定问题集
+  `request-v1`：`isRequest`（这条消息是不是要做的活）与 `isHighRisk`（第二意见，仅记录）；带超时、HTTP 错误归一化、
+  `noul` 概率解析与 `verdictOf` / `shadowOf` / `shadowErrorOf`
+- 新增 `eval.mode='shadow'`：规则照常 accept/ignore 并建单；模型答案只写 `decision.shadow`
+  （`status`、`p`、`riskP`、`verdict`、`ruleKind`、`latencyMs`、`questions`；失败为 `status:'error'`+`error`）
+- `eval.decision` 配置：`endpoint` / `model` / `tokenFile` / `timeoutMs` / `acceptAt` / `rejectAt` / `maxPerPoll` /
+  `concurrency`；越界值 clamp；token 走独立文件 `decision.token`（600），也可用 `DECISION_TOKEN` 环境变量
+- 新增 `POST /superagent/api/engine/eval/token`（写/清 token，永不回显）；redacted 配置只回 `tokenConfigured`
+- 引擎状态新增 `eval.decision`（配置是否就绪、问题集版本）与 `eval.judge`（calls / ok / errors / skipped / lastError）
+- 每轮轮询有调用预算与并发上限；dry run（「检查新消息」）不调用模型；重放信号也会记录一次 shadow
+- 面板：评估页每行显示「模型 93% · 倾向接单」标签（hover 含模型名与风险概率）；设置 → 评估只读显示模型配置
+  与调用计数，`shadow` 模式有独立文案
+- 新增 `scripts/judge-smoke.mjs`：不进引擎、不写状态，直接按 live.json 打通一次模型调用并打印 shadow 行
+- 新增 `lib/live/shadow.js` + `scripts/shadow-collect.mjs`：批量取样（每个监听群最新 N 条消息，用同一套过滤/R2/R3
+  与规则评估，再逐条问模型），样本写 `<stateDir>/shadow-samples.json`，**不写 live-state、不建工单**；默认复用上次
+  答案，`--refresh` 全部重问；同时给出规则×模型交叉表、p 分布、风险分布、延迟分位与最值得人工标注的分歧列表
+- 问题集 `request-v1` → `request-v2`：judge 的 state 固定为纯文本。pilot 实测把消息包成
+  `{text, channel, threadTitle}` 会让「依据这个SQL，写一个视图」的 isRequest 从 0.97 掉到 0.09（同文本纯字符串
+  0.97），所以 channel/threadTitle 不再进 state；需要上下文时只以文本前缀拼接
+
+### 验证
+- `node --test` 341/341（本特性 29 条：judge 10、config +2、engine shadow +8、shadow collector +8、API token +1；
+  其余为 0.3.1 diff 回归；渲染回归 116/116）
+- `npm run verify`：client 产物最新；702 literal keys / 513 shared / 1034 page-local 通过
+
 ## [0.3.1] — 2026-11-08
 
 工单详情补上「查看 diff」：此前只列改动文件和 worker 总结，patch 本身不可见，操作员无法在面板里核对 worker
@@ -20,9 +51,9 @@
   render-check 7 条（文件行入口/单文件弹窗/请求带 path/着色/摘要/关闭）
 
 ### 验证
-- `node --test` 312/312
-- `render-check` 114/114
-- `npm run verify`：client 产物最新；700 literal keys / 513 shared / 1031 page-local 通过
+- `node --test` 333/333
+- `render-check` 115/115
+- `npm run verify`：client 产物最新；715 literal keys / 513 shared / 1047 page-local 通过
 
 ## [0.2.6] — 2026-11-08
 
