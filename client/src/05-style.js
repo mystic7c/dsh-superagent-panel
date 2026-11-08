@@ -586,6 +586,30 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; }
 .sa-pre ins { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 18%, transparent); text-decoration: none; }
 .sa-pre del { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 18%, transparent); text-decoration: none; }
+/* "View diff": the run's worktree patch, read-only and host-capped. One row per line; the first character decides the
+   colour (+ added / - removed / @@ hunk / diff --git file header). Monospace, horizontal scroll, no wrapping, so
+   indentation inside SQL and PL/SQL keeps meaning. */
+.sa-modal.sa-diff-modal { width: min(960px, 100%); max-height: min(88vh, 900px); }
+.sa-diff { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); overflow: auto;
+  background: var(--dsw-alias-bg-layer-2, transparent); max-height: min(62vh, 640px); }
+.sa-diff pre { margin: 0; padding: var(--sa-sp-8) 0; font-family: var(--ds-font-family-code, Menlo, monospace);
+  font-size: var(--sa-fs-caption); line-height: 1.55; }
+.sa-diff-line { display: block; padding: 0 var(--sa-sp-12); white-space: pre; }
+.sa-diff-add { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent); }
+.sa-diff-del { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent); }
+.sa-diff-hunk { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent); color: var(--sa-info-text); }
+.sa-diff-meta { color: var(--dsw-alias-label-tertiary); }
+.sa-diff-file { background: var(--dsw-alias-bg-layer-1, transparent); border-top: 0.5px solid var(--sa-line);
+  font-weight: 600; }
+.sa-diff-file:first-child { border-top: 0; }
+/* A changed file is a diff entry point: the whole row is the button, the icon says what a click does. */
+.sa-file-diff { display: flex; align-items: center; gap: var(--sa-sp-8); width: 100%; min-width: 0;
+  padding: var(--sa-sp-4) var(--sa-sp-8); border: 0; border-radius: var(--sa-r-sm); background: transparent;
+  color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+.sa-file-diff:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-file-diff:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
+.sa-file-diff svg { flex: 0 0 auto; color: var(--dsw-alias-label-secondary); }
+.sa-file-diff .sa-mono { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- markdown / text ---------- */
 .sa-md { display: flex; flex-direction: column; gap: var(--sa-sp-4); max-width: 72ch;

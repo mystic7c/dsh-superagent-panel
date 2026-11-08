@@ -20,6 +20,9 @@ function useEngineActions(call) {
       { id, body: { ok, note, ...(Array.isArray(intents) && intents.length ? { intents } : {}) } }),
     // P1 (§9): replay one filtered/failed raw signal through the current rules.
     replaySignal: (id) => call('POST engine/signal/:id/replay', { id }),
+    // P1 §3.2: the on-demand worktree diff behind the Ticket detail's "view diff".
+    ticketDiff: (id, { runId, path } = {}) => call('GET engine/ticket/:id/diff',
+      { id, query: { ...(runId ? { runId } : {}), ...(path ? { path } : {}) } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.

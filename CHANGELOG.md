@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.3.1] — 2026-11-08
+
+工单详情补上「查看 diff」：此前只列改动文件和 worker 总结，patch 本身不可见，操作员无法在面板里核对 worker
+到底改了什么（面板「运行后端能力」矩阵里早已写着 diff 可用）。
+
+- 新增 `lib/live/diff.js`：只读渲染一次 run 的工作树改动 —— 已跟踪修改走 `git diff <baseSha>`（工作树 vs 基线
+  提交，含执行器已提交到分支的部分），未跟踪文件用 `git diff --no-index` 补成新文件段；`execFile` 传 argv，
+  不经 shell
+- 新增 `GET /superagent/api/engine/ticket/:id/diff?runId=&path=`（`Engine.ticketDiff`）：选最近一次带工作树的
+  run；`path` 把结果收窄到单个文件（只匹配 git 自己报出的路径）。工作树/基线提交不存在时返回 `available:false` +
+  `reason`，不把"读不到"伪装成"没有改动"（基线失效时退回 HEAD 并标 `baseMissing`）
+- 上限与脱敏：总计 200 KB / 单文件 60 KB / 60 个文件，未跟踪文件超过 512 KB 不读；`.env`、`secrets/`、
+  `node_modules/` 等 `FORBIDDEN_PATH_PATTERNS` 命中的路径不渲染
+- 面板：工单详情「改动内容」里**每个改动文件名都是入口** → 点文件名只弹该文件的 patch（不是全部文件的合并
+  diff）；弹窗按行着色（新增绿 / 删除红 / hunk 蓝 / 文件头加粗），带路径、±行数、run、基线 SHA、复制 diff
+  与截断提示；工作树已清理时说明原因
+- 回归：`diff.test.js` 覆盖按文件过滤（已跟踪/未跟踪/未知路径）、API 路由 1 条（含 `?path=` 与工作树已清理）、
+  render-check 7 条（文件行入口/单文件弹窗/请求带 path/着色/摘要/关闭）
+
+### 验证
+- `node --test` 312/312
+- `render-check` 114/114
+- `npm run verify`：client 产物最新；700 literal keys / 513 shared / 1031 page-local 通过
+
+## [0.2.6] — 2026-11-08
+
+修复 R3 高风险主题的误判：`/生产|prod(uction)?/i` 做的是子串匹配，EBS 对象名 `Cux_Mtl_Sale_Products_Rpt`
+里的 `Products` 被当成"生产"拦下（2026-11-08 的 `sig_502a33836cb540b6` 因此没有成为工单）。
+
+- 风险词改成按词匹配：`/生产|(?<![A-Za-z])prod(?:uction)?(?![\w])/i` —— `生产`、`prod 环境`、`PRODUCTION 库`、
+  `eBS_prod` 仍然拦；`Products`/`PRODUCT_ID`/`PROD_ID`/`procedure` 不再命中
+- `pipelineVersion()` 前缀 `rules-v1` → `rules-v2`：重放是按 pipelineVersion 幂等的，只改规则内容不升版本时，
+  重放会直接返回旧的 ignore 而不是按新规则重判；因此规则内容变化必须同时升前缀
+- 回归测试：对象名含 `Products`/`PRODUCT_ID` 的请求 accept；`prod`/`PRODUCTION`/`生产`/`eBS_prod` 仍 highRisk；
+  版本断言改为 `rules-v2`
+
+### 验证
+- `node --test` 306/306（新增 1 条边界回归）
+- `npm run verify`：client 产物最新；687 literal keys / 513 shared / 1018 page-local 通过
+
 ## [0.2.5] — 2026-11-08
 
 工单详情页三批修正（评审 21 条：8 条 P0 / 8 条 P1 / 5 条 P2），见 `spec/critique-ticket-detail-2026-11-08.md`。

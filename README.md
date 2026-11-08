@@ -7,7 +7,8 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.2.3**（0.2.0 产品化 + 三轮操作面/响应式打磨，变更见 [CHANGELOG.md](CHANGELOG.md)）。0.2 的核心是让面板"不说谎、可运营"：
+**当前版本：0.3.1**（0.2.6 修复 R3 把对象名里的 PRODUCTS 误判成生产；0.3.1 起工单详情可查看该次运行工作树的
+逐文件 diff，变更见 [CHANGELOG.md](CHANGELOG.md)）。0.2 的核心是让面板"不说谎、可运营"：
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -20,7 +21,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 | 来源 | Octo 消息源与每个仓库的执行面：24h 到达/过滤/接单、被过滤消息、**原始信号（含跳过/忽略/失败，可重放，可人工标注正确/误报/漏报）**、健康检查、检查新消息 |
 | 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细 |
 | 评估 | 决定列表（接单/忽略）与命中规则；只读 |
-| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流；MR 卡显示「草稿」「过期 CI」提示 |
+| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**；MR 卡显示「草稿」「过期 CI」提示 |
 | 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行 / 写权限 / 仓库（token、新增仓库）/ 变更历史 可写；评估与提示词为只读参考 |
 
 首次安装后状态为空（不是演示种子）。设置 → 来源里可完成 Octo token 保存、从群列表选择监听群、
@@ -92,7 +93,9 @@ signal 人工标注（correct/false_wake/missed_wake/cleared + 来源页标注�
 运行台账（`operations.json` + trigger/handoff/usage/report/checkpoint，`live-state.json` 只留索引行）、
 验收轮次（`acceptance.json`：plan/逐项 program checks/证据/人审决定与 intents）、工单活动流、
 worker 任务工具（`superagent_report_progress/artifact/set_verify/ask_human`；`ask_human` 会暂停工单，回答后带 Q/A 重跑）、
-执行页视图选项（sessionStorage 持久化）。
+执行页视图选项（sessionStorage 持久化）、
+工单改动 diff（`GET engine/ticket/:id/diff?runId=&path=`：`git diff <base>` + 未跟踪文件，只读、带上限、跳过敏感路径；
+详情页「改动内容」点文件名看单文件 patch，工作树被清理时说明原因）。
 
 **部分可用**：Codex CLI / Claude Code CLI worker（代码与单测存在，本机尚无生产运行记录）；手动验收仓库
 只观测 MR 合入，不做 UAT 指纹；多仓库的部署健康检查以各仓库配置为准。
@@ -133,9 +136,9 @@ CHANGELOG.md        版本与能力变更记录
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 305 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 312 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 107/107）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 114/114）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 

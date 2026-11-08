@@ -140,6 +140,13 @@ window.fetch = global.fetch = async (input, init = {}) => {
     if (item) item.readAt = new Date().toISOString()
     return json({ item })
   }
+  const diffRoute = /^engine\/ticket\/([^/]+)\/diff$/.exec(p)
+  if (method === 'GET' && diffRoute) {
+    const file = url.searchParams.get('path') ?? 'demo/one/File.java'
+    return json({ ticketId: decodeURIComponent(diffRoute[1]), runId: 'run_demo', baseSha: 'abc12345', available: true,
+      path: file, bytes: 68, truncated: false, omitted: 0, files: [{ path: file, additions: 1, deletions: 0 }],
+      diff: `diff --git a/${file} b/${file}\nindex 1111111..2222222 100644\n--- a/${file}\n+++ b/${file}\n@@ -1 +1,2 @@\n old line\n+new line\n` })
+  }
   if (method === 'GET' && p.startsWith('engine/ticket/')) {
     const id = decodeURIComponent(p.slice('engine/ticket/'.length))
     return json(detailOf(id))
@@ -334,6 +341,29 @@ const collapseFiles = [...rootElement.querySelectorAll('.sa-changes-side button'
 collapseFiles?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
 check('the changed-file list collapses again', fileRows() === 5, `rows=${fileRows()}`)
+// P1 §3.2: every changed file row opens that file's own patch (one on-demand request per click).
+const fileDiffButtons = () => [...rootElement.querySelectorAll('.sa-changes-side .sa-file-diff')]
+check('every changed file row is a diff entry point', fileDiffButtons().length === 5, `rows=${fileDiffButtons().length}`)
+fileDiffButtons()[0]?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(400)
+const diffModal = rootElement.querySelector('.sa-diff-modal')
+check('clicking a file opens its own patch dialog', Boolean(diffModal?.querySelector('.sa-diff')), diffModal?.textContent?.slice(0, 160) ?? 'no dialog')
+check('the dialog is scoped to the clicked file',
+  (diffModal?.textContent ?? '').includes('demo/one/File.java') && !(diffModal?.textContent ?? '').includes('demo/two/FileTest.java'),
+  diffModal?.textContent?.slice(0, 200) ?? 'no dialog')
+check('the per-file request carries the clicked path',
+  calls.some(call => call === 'GET /superagent/api/engine/ticket/tkt_demo_accept/diff?path=demo%2Fone%2FFile.java'),
+  calls.filter(call => call.includes('/diff')).join(','))
+check('the patch colours added lines and names the file header',
+  rootElement.querySelectorAll('.sa-diff-modal .sa-diff-add').length >= 1
+  && rootElement.querySelectorAll('.sa-diff-modal .sa-diff-file').length >= 1,
+  `adds=${rootElement.querySelectorAll('.sa-diff-modal .sa-diff-add').length} files=${rootElement.querySelectorAll('.sa-diff-modal .sa-diff-file').length}`)
+check('the patch dialog summarises files, counts and the run',
+  /1 个文件/.test(diffModal?.textContent ?? '') && /\+1/.test(diffModal?.textContent ?? '') && /运行 run_demo/.test(diffModal?.textContent ?? ''),
+  diffModal?.textContent?.slice(0, 200) ?? 'no dialog')
+rootElement.querySelector('.sa-diff-modal .sa-modal-close')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(200)
+check('the patch dialog closes again', !rootElement.querySelector('.sa-diff-modal'), 'dialog still open')
 check('ticket id is copyable from the detail head', Boolean(rootElement.querySelector('.sa-page-head-meta .sa-copy-btn')),
     rootElement.querySelector('.sa-page-head-meta')?.textContent?.slice(0, 120) ?? '')
   check('repository name is not duplicated with its id', !/仓库名称[\s\S]{0,80}仓库 ID/.test(detailText), 'repo block')
