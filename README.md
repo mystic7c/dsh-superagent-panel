@@ -7,9 +7,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.3.3**（0.3.3 把 shadow 问题集换成 `ticket-v1` 五类 choice，抽样回归集 24/25、真实标注
-精确率 100%；0.3.2 落地决策模型 shadow，规则照旧接单，模型意见只记录在 `decision.shadow`，可用
-`scripts/shadow-collect.mjs` 批量取样做规则×模型对比；0.3.1 起工单详情可查看该次运行工作树的 diff）。
+**当前版本：0.3.4**（0.3.4 加入 hybrid 试点：规则硬闸不变，模型 `ticket-v1` 判定参与接单；
+0.3.3 把 shadow 问题集换成 `ticket-v1` 五类 choice，人工回归集 24/25、真实标注开单精确率 100%；
+0.3.2 落地决策模型 shadow；0.3.1 起工单详情可查看该次运行工作树的 diff）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -71,6 +71,37 @@ plugin_manager install_bundle target=<本仓库目录>
   编辑/删除已有仓库、闸门命令、超时、worktree、UAT/健康检查地址、gate `onFail/repairHint`、
   `executor.maxRepairRounds` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
 - 手动 `live.json` 修改后，使用设置页「重载配置」让引擎重新读取。
+
+## hybrid 接单试点（0.3.4）
+
+`eval.mode='hybrid'` 时，规则仍然是第一道门，模型参与 R1 的"要不要开单"：
+
+1. **R2/R3 规则硬闸不变**：来源/身份/高风险/上下文判断照旧；规则忽略的消息不会调用模型。
+2. 规则接单的消息交给 `ticket-v1` 模型：
+   - `repo_task` 且 `p ≥ eval.decision.acceptAt`（默认 0.5，按 pilot 标注校准）→ **自动开单**（后续和普通工单一样执行）；
+   - `risky` 或 `riskP ≥ eval.decision.riskAt`（默认 0.5）→ 忽略，原因 `modelRisk`（高风险转人工）；
+   - 其他类别（octo_platform / chat / context）→ 忽略，原因 `modelSkip`；
+   - `repo_task` 但概率落在中间区 → 忽略，原因 `modelUncertain`。
+3. **人工兜底**：`modelRisk / modelSkip / modelUncertain` 都会落成可重放的原始信号（来源页可见）；
+   点重放会用规则重新判定并建单——这是模型的"人工否决覆盖"通道。
+4. **失败与预算**：模型报错、或单轮 `maxPerPoll` 预算用完 → 回退到规则的 accept，不会静默丢掉工作；
+   dry run（「检查新消息」）会调用模型，预览真实行为但不写状态。
+5. 面板评估页的模型标签同时支持 shadow 和 hybrid 决策；设置 → 评估显示 `hybrid` 模式与调用/回退计数。
+6. 阈值依据：真实标注里该开单的 `P(repo_task)` 最低 0.71、不该开单的最高 0.26，因此默认 `acceptAt=0.5`
+   留出两侧余量；很短的"修复：xxx"有时只给 0.4–0.5，会进 `modelUncertain`（来源页可重放），不会静默丢单。
+
+```json
+{
+  "eval": {
+    "mode": "hybrid",
+    "decision": {
+      "endpoint": "https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/systemone",
+      "model": "decision-model-preview",
+      "acceptAt": 0.8, "rejectAt": 0.2, "riskAt": 0.5, "maxPerPoll": 10
+    }
+  }
+}
+```
 
 ## 决策模型 shadow（可选，落地第一步）
 

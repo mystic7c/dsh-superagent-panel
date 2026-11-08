@@ -5705,6 +5705,8 @@ Object.assign(PAGE_TEXT, {
   'ev.shadowRisk': ['风险 {p}', 'risk {p}'],
   'ev.shadowHint': ['shadow 模式：模型意见只记录，接单仍由规则决定。',
     'Shadow mode: the model opinion is recorded only; the rules still decide intake.'],
+  'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
+    'Hybrid mode: the model takes part in intake (repo_task opens, risky blocks, the rest goes to review).'],
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
@@ -5723,16 +5725,19 @@ function evalShadowVerdict(t, verdict) {
 }
 
 /** One tag per decision: the model's calibrated probability + the action it would have taken under the thresholds. */
-function evalShadowTag(t, shadow) {
-  if (!shadow || typeof shadow !== 'object') return null
-  const title = [pt(t, 'ev.shadowHint'), shadow.model, shadow.category, shadow.questions].filter(Boolean).join(' · ')
-  const risk = typeof shadow.riskP === 'number'
-    ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(shadow.riskP * 100)}%` })}` : ''
-  if (shadow.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))
-  const probability = typeof shadow.p === 'number' ? `${Math.round(shadow.p * 100)}%` : '?'
-  const tone = shadow.verdict === 'accept' ? 'info' : shadow.verdict === 'reject' ? 'warning' : 'quiet'
+function evalModelTag(t, decision) {
+  const shadow = decision?.shadow
+  const model = shadow ?? decision?.model
+  if (!model || typeof model !== 'object') return null
+  const title = [pt(t, shadow ? 'ev.shadowHint' : 'ev.modelHint'), model.model, model.category, model.questions]
+    .filter(Boolean).join(' · ')
+  const risk = typeof model.riskP === 'number'
+    ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(model.riskP * 100)}%` })}` : ''
+  if (model.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))
+  const probability = typeof model.p === 'number' ? `${Math.round(model.p * 100)}%` : '?'
+  const tone = model.verdict === 'accept' ? 'info' : model.verdict === 'reject' ? 'warning' : 'quiet'
   return h(Tag, { tone, title: `${title}${risk}` },
-    pt(t, 'ev.shadow', { p: probability, verdict: evalShadowVerdict(t, shadow.verdict) }))
+    pt(t, 'ev.shadow', { p: probability, verdict: evalShadowVerdict(t, model.verdict) }))
 }
 
 /** One message excerpt for the row title: the host's decision preview, or — for payloads/histories whose Trigger text
@@ -5806,7 +5811,7 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
-          evalShadowTag(t, decision.shadow),
+          evalModelTag(t, decision),
           decision.at ? h(When, { at: decision.at }) : null,
           ticketIds.length
             ? h(Fragment, null,
@@ -7888,6 +7893,7 @@ Object.assign(PAGE_TEXT, {
   'st.evalMode': ['评估方式', 'Evaluation mode'],
   'st.modeRules': ['规则引擎（rules）', 'Rule engine (rules)'],
   'st.modeShadow': ['规则兜底 + 模型 shadow（shadow）', 'Rules + model shadow (shadow)'],
+  'st.modeHybrid': ['规则硬闸 + 模型接单（hybrid）', 'Rules + model intake (hybrid)'],
   'st.modeLlm': ['模型评估（llm）', 'Model evaluation (llm)'],
   'st.modeUnknown': ['未知模式（{mode}）', 'Unknown mode ({mode})'],
   'st.judgeTitle': ['判定模型（shadow）', 'Decision model (shadow)'],
@@ -7897,8 +7903,8 @@ Object.assign(PAGE_TEXT, {
   'st.judgeCalls': ['模型调用（成功 / 失败 / 跳过）', 'Model calls (ok / failed / skipped)'],
   'st.configured': ['已配置', 'Configured'],
   'st.notConfigured': ['未配置', 'Not configured'],
-  'st.judgeHint': ['shadow 模式下模型只记录意见，接单仍由规则决定。地址与模型名在 live.json 的 eval.decision 里配置；token 通过接口写文件。',
-    'In shadow mode the model only records an opinion; rules still decide intake. Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
+  'st.judgeHint': ['shadow 模式下模型只记录意见；hybrid 下模型参与接单（repo_task 自动开单、risky 拦截、其余转人工）。地址与模型名在 live.json 的 eval.decision 里配置；token 通过接口写文件。',
+    'In shadow mode the model only records an opinion; in hybrid it takes part in intake (repo_task opens, risky blocks, the rest goes to review). Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
   'st.rules': ['规则目录', 'Rule catalog'],
   'st.noRules': ['没有可显示的规则。', 'No rules to show.'],
   'st.decisionsTotal': ['累计决定', 'Decisions so far'],
@@ -8851,6 +8857,7 @@ function LiveSettingsPage({ route }) {
     const mode = data.eval?.mode ?? config.eval?.mode
     const modeText = mode === 'rules' ? pt(t, 'st.modeRules')
       : mode === 'shadow' ? pt(t, 'st.modeShadow')
+      : mode === 'hybrid' ? pt(t, 'st.modeHybrid')
       : mode === 'llm' ? pt(t, 'st.modeLlm') : mode ? pt(t, 'st.modeUnknown', { mode }) : t('empty')
     const rules = Array.isArray(data.eval?.rules) ? data.eval.rules : []
     const decision = data.eval?.decision ?? {}
