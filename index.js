@@ -488,6 +488,14 @@ export function apply(ctx, config = {}) {
           send(res, 200, engine.ticketsView({ stage: url.searchParams.get('stage') ?? 'all' }))
           return
         }
+        // The run's worktree diff, computed on demand: the panel reads it instead of a stored patch (P1 §3.2).
+        if (method === 'GET' && second === 'ticket' && third && segments[3] === 'diff') {
+          const value = await engine.ticketDiff(third, { runId: url.searchParams.get('runId') ?? undefined,
+            path: url.searchParams.get('path') ?? undefined })
+          if (!value) throw new ActionError(404, `未知工单：${third}`)
+          send(res, 200, value)
+          return
+        }
         if (method === 'GET' && second === 'ticket' && third) {
           const value = engine.ticketView(third)
           if (!value) throw new ActionError(404, `未知工单：${third}`)

@@ -37,6 +37,23 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptCleanupFailed': ['验收已记录，但本地工作区清理失败：{reason}', 'Accepted; local cleanup failed: {reason}'],
   'ticket.dryRunUnavailable': ['执行器未启用，干跑不可用。', 'The executor is disabled; dry run is unavailable.'],
 
+  // ---- P1 §3.2: the run's worktree diff, read on demand (the executor never stores the patch) --------------------
+  'ticket.diffOpenFile': ['查看 {path} 的 diff', 'View the diff of {path}'],
+  'ticket.diffTitle': ['改动 diff', 'Change diff'],
+  'ticket.diffLoading': ['正在读取 diff…', 'Reading the diff…'],
+  'ticket.diffUnavailable': ['这个工单没有可读取的工作树（可能已被清理，或还没执行）。diff 只在该次执行的工作树还在时可用。',
+    'This Ticket has no readable worktree (it may be cleaned up or not run yet); the diff is only available while the worktree still exists.'],
+  'ticket.diffNotGit': ['工作树不是 git 工作树，读不了 diff。', 'The worktree is not a git work tree, so its diff cannot be read.'],
+  'ticket.diffFailed': ['读取 diff 失败（git 报错）。', 'Reading the diff failed (git error).'],
+  'ticket.diffEmpty': ['这次执行没有留下改动。', 'This run left no changes.'],
+  'ticket.diffSummary': ['{files} 个文件 · +{additions} −{deletions}', '{files} files · +{additions} −{deletions}'],
+  'ticket.diffRun': ['运行 {run}', 'Run {run}'],
+  'ticket.diffBase': ['基线 {sha}', 'Base {sha}'],
+  'ticket.diffCopy': ['复制 diff', 'Copy diff'],
+  'ticket.diffTruncated': ['diff 超过 {limit}，只显示前面一部分；{omitted} 个文件未显示。',
+    'The diff is larger than {limit}; only its first part is shown and {omitted} files are omitted.'],
+  'ticket.diffOmitted': ['{count} 个文件未显示（过大或属于敏感路径）。', '{count} files are omitted (too large or sensitive paths).'],
+
   // ---- P0: a run parked on a failing gate (contract §1.1/§3.2) ---------------------------------------------------
   'detail.gateTitle': ['闸门「{name}」未通过，执行已暂停', 'Gate “{name}” failed and the run is parked'],
   'detail.gateIntro': ['放行会跳过这个闸门并继续提交、推送与创建 MR；重试只重跑闸门；终止会以失败结束这张工单。失败证据保留在运行记录里。',
@@ -682,6 +699,58 @@ function changesOf(runs) {
   return { files, worker: cleanWorkerSummary(worker) }
 }
 
+/** One unified-diff line's role; the first character of the line is the whole classification. */
+function diffLineClass(line) {
+  if (line.startsWith('diff --git ')) return 'sa-diff-file'
+  if (line.startsWith('@@')) return 'sa-diff-hunk'
+  if (line.startsWith('+++ ') || line.startsWith('--- ') || line.startsWith('index ')
+    || line.startsWith('new file mode') || line.startsWith('deleted file mode') || line.startsWith('similarity index')
+    || line.startsWith('rename ') || line.startsWith('\\ No newline')) return 'sa-diff-meta'
+  if (line.startsWith('+')) return 'sa-diff-add'
+  if (line.startsWith('-')) return 'sa-diff-del'
+  return 'sa-diff-ctx'
+}
+
+/** The patch itself: one row per line, monospace and horizontally scrollable so indentation keeps meaning. */
+function DiffBody({ text }) {
+  const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
+  if (lines.length && lines.at(-1) === '') lines.pop()
+  return h('div', { className: 'sa-diff' },
+    h('pre', null, lines.map((line, index) =>
+      h('span', { key: index, className: `sa-diff-line ${diffLineClass(line)}` }, line === '' ? ' ' : line))))
+}
+
+/** Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place. */
+function DiffCard({ state = {}, onRetry }) {
+  const { t } = usePanel()
+  if (state.loading) return h(Skeleton, { rows: 4 })
+  if (state.error) return h(ErrorState, { error: state.error, onRetry })
+  const data = state.data
+  if (!data) return h(Hint, null, pt(t, 'ticket.diffLoading'))
+  if (data.available !== true) {
+    return h(Hint, null, data.reason === 'not-a-worktree' ? pt(t, 'ticket.diffNotGit')
+      : data.reason === 'git-failed' ? pt(t, 'ticket.diffFailed')
+      : pt(t, 'ticket.diffUnavailable'))
+  }
+  const files = Array.isArray(data.files) ? data.files : []
+  const additions = files.reduce((total, file) => total + (Number(file.additions) || 0), 0)
+  const deletions = files.reduce((total, file) => total + (Number(file.deletions) || 0), 0)
+  const limit = `${Math.max(1, Math.round((Number(data.bytes) || 0) / 1024))} KB`
+  const omitted = Number(data.omitted) || 0
+  const filePath = typeof data.path === 'string' && data.path ? data.path : (typeof state.path === 'string' ? state.path : '')
+  const pathRow = filePath ? h('div', { className: 'sa-mono', style: { overflowWrap: 'anywhere' } }, filePath) : null
+  const head = h('div', { className: 'sa-actions', style: { flexWrap: 'wrap' } },
+    h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffSummary', { files: files.length, additions, deletions })),
+    data.runId ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffRun', { run: shortId(data.runId, 10) })) : null,
+    data.baseSha ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffBase', { sha: String(data.baseSha).slice(0, 8) })) : null,
+    h(CopyButton, { value: String(data.diff ?? ''), label: pt(t, 'ticket.diffCopy') }))
+  const notes = data.truncated
+    ? [h(Hint, { key: 'truncated' }, pt(t, 'ticket.diffTruncated', { limit, omitted }))]
+    : omitted > 0 ? [h(Hint, { key: 'omitted' }, pt(t, 'ticket.diffOmitted', { count: omitted }))] : []
+  if (!String(data.diff ?? '').trim()) return h(Fragment, null, pathRow, head, h(Hint, null, pt(t, 'ticket.diffEmpty')))
+  return h(Fragment, null, pathRow, head, ...notes, h(DiffBody, { text: data.diff }))
+}
+
 /** One sentence explaining what a failed run means and how to recover. */
 function failureHint(t, error, steps) {
   const text = String(error ?? '')
@@ -848,6 +917,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const [filesExpanded, setFilesExpanded] = useState(false)
   // A new Ticket starts with the compact file list again (the component instance survives an id change).
   useEffect(() => { setFilesExpanded(false) }, [id])
+  // P1 §3.2: the worktree diff is read on demand (the executor does not store patches), so the dialog owns a small
+  // request state instead of the page poll.
+  const [diffOpen, setDiffOpen] = useState(false)
+  const [diff, setDiff] = useState({})
+  useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
@@ -868,6 +942,18 @@ function TicketDetail({ id, page = 'execution' }) {
   }, [id, data])
   const act = model?.actions
   const refreshAll = useCallback(async () => { await Promise.all([model?.reload?.(), reload()]) }, [model, reload])
+  // The diff dialog fetches once, on first open; a retry button re-issues the same read.
+  const loadDiff = useCallback(async (path) => {
+    if (!act?.ticketDiff) return
+    setDiff({ loading: true, path })
+    try { setDiff({ path, data: await act.ticketDiff(id, { path }) }) }
+    catch (error) { setDiff({ error, path }) }
+  }, [act, id])
+  // One file at a time: the row the operator clicked is the only thing the dialog fetches and shows.
+  const openDiff = (path) => {
+    setDiffOpen(true)
+    if (path) void loadDiff(path)
+  }
   const dryRun = useAction(() => act.runTicket(id, { dryRun: true, wait: false }), { reload: refreshAll })
   const retry = useAction(() => act.runTicket(id, { dryRun: false, wait: false }), { reload: refreshAll })
   const publish = useAction(() => act.publishTicket(id), { reload: refreshAll })
@@ -1099,6 +1185,13 @@ function TicketDetail({ id, page = 'execution' }) {
           onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
     : null
 
+  // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
+  const diffDialog = diffOpen
+    ? h(Modal, { open: true, onClose: () => setDiffOpen(false), title: pt(t, 'ticket.diffTitle'),
+      closeLabel: t('close'), className: 'sa-diff-modal' },
+      h(DiffCard, { state: diff, onRetry: () => { if (diff.path) void loadDiff(diff.path) } }))
+    : null
+
   const changes = changesOf(runs)
   const events = ticketEvents(t, ticket, runs)
   // The banner names the cause in one short sentence; the original text of a recognised failure sits one fold below it,
@@ -1234,6 +1327,7 @@ function TicketDetail({ id, page = 'execution' }) {
     failureBanner,
     gateBanner,
     confirmDialog,
+    diffDialog,
     h('nav', { className: 'sa-detail-nav', 'aria-label': pt(t, 'ticket.sectionNav') },
       headStuck ? h('div', { className: 'sa-detail-context' },
         h('span', { className: 'sa-detail-context-title', title: ticket.title ?? ticket.id },
@@ -1269,8 +1363,13 @@ function TicketDetail({ id, page = 'execution' }) {
             h('span', { className: 'sa-count' }, String(changes.files.length))),
           changes.files.length
             ? h(Fragment, null,
+              // Each file name is the entry point to its own patch (only available while the worktree exists).
               h('ul', { className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
-                .map((file, index) => h('li', { key: index, className: 'sa-row' }, h('span', { className: 'sa-mono' }, file)))),
+                .map((file, index) => h('li', { key: index, className: 'sa-row' },
+                  h('button', { type: 'button', className: 'sa-file-diff',
+                    title: pt(t, 'ticket.diffOpenFile', { path: file }),
+                    onClick: () => openDiff(file) },
+                  h(Icon, { name: 'diff', size: 13 }), h('span', { className: 'sa-mono' }, file))))),
               changes.files.length > CHANGES_FILES_RECENT
                 ? h('div', { className: 'sa-actions' },
                   h(Button, { variant: 'ghost', size: 'sm', icon: filesExpanded ? 'chevron-up' : 'chevron-down',
