@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.4] — 2026-11-08
+
+hybrid 接单试点：规则仍是第一道门，模型 `ticket-v1` 参与 R1 的"要不要开单"。
+
+- 新增 `eval.mode='hybrid'`：候选先走规则（R2/R3 硬闸不变，规则忽略的不会调用模型）；规则接单后按模型类别决定：
+  `repo_task` 且 `p ≥ acceptAt`（默认 0.5，按 pilot 标注校准）→ 自动开单；`risky` 或 `riskP ≥ riskAt`（默认 0.5）→ 忽略
+  `modelRisk`；其他类别 → `modelSkip`；中间区 → `modelUncertain`
+- 人工兜底：三种模型否决都落为可重放的原始信号（来源页），重放会用规则重新判定并建单（人工覆盖通道）
+- 失败与预算：模型报错或单轮 `maxPerPoll` 用完 → 回退规则 accept，不静默丢工作；hybrid dry run 会调用模型
+- 决策记录新增 `decision.model`（category/p/riskP/verdict/latencyMs）与 `evalMode:'hybrid'`、`actorKind:'hybrid'`；
+  面板评估页模型标签同时支持 shadow/hybrid 决策；设置→评估新增 hybrid 模式与调用/回退计数
+- 状态面 `eval.hybrid`（calls/fallbacks）、`eval.decision.riskAt`；poll 结果带 `hybrid.judged/ignored/fallbacks`
+- 验证：`node --test` 350/350；render-check 116/116；build-client --check、check-keys 通过
+
 ## [0.3.3] — 2026-11-08
 
 决策模型 shadow 的问题集从 `request-v2`（isRequest noul）换成 **`ticket-v1`**（一个 `choice` 五选一：
