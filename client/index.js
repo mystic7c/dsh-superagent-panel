@@ -5725,7 +5725,7 @@ function evalShadowVerdict(t, verdict) {
 /** One tag per decision: the model's calibrated probability + the action it would have taken under the thresholds. */
 function evalShadowTag(t, shadow) {
   if (!shadow || typeof shadow !== 'object') return null
-  const title = [pt(t, 'ev.shadowHint'), shadow.model, shadow.questions].filter(Boolean).join(' · ')
+  const title = [pt(t, 'ev.shadowHint'), shadow.model, shadow.category, shadow.questions].filter(Boolean).join(' · ')
   const risk = typeof shadow.riskP === 'number'
     ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(shadow.riskP * 100)}%` })}` : ''
   if (shadow.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))

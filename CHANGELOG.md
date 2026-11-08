@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.3] — 2026-11-08
+
+决策模型 shadow 的问题集从 `request-v2`（isRequest noul）换成 **`ticket-v1`**（一个 `choice` 五选一：
+repo_task / octo_platform / chat / context / risky）。原因：旧问题把"改 Thread.md、改 system prompt、建 thread、
+查评论、排查 webhook"这类 **Octo 平台内事务**也当成工作请求，在人工回归集上会误开 12 单；五类 choice 显式
+把"仓库/工作区/数据库任务"和"Octo 平台内事务"分开后，误开单归零。
+
+- `JUDGE_QUESTIONS_VERSION` → `ticket-v1`；`p = P(repo_task)`、`riskP = P(risky)`，映射
+  repo_task→开单候选、risky→拦、其余→不开；judge 客户端解析 `choice.probabilities`（缺 probabilities 时
+  退回选中项）
+- 选项描述文字视为契约的一部分：第一次接入时把描述改成同义表述，真实标注召回从 80% 掉到 60%，恢复原文后
+  回到 80%；因此选项文字变化必须升问题集版本
+- 人工回归集（25 条，`spec/shadow-golden-set.md`）：规则 12/25、旧问题集 18/25、`ticket-v1` **24/25**；
+  真实 23 条标注：规则 11/23、旧问题集 13/23、`ticket-v1` **21/23（开单精确率 100%、召回 80%）**
+- `shadow-collect.mjs` 重判时保留人工 `label`/`labeledAt`（此前换问题集会把 23 条标注清空，已修）
+- 面板评估页 shadow 标签的 tooltip 增加五类类别
+- 验证：`node --test` 342/342；render-check 116/116；build-client --check、check-keys 通过
+
 ## [0.3.2] — 2026-11-08
 
 决策模型 shadow（落地第一步）：接单判断仍由规则（R1–R3）决定，但引擎可以把每条候选消息交给一个 System One
