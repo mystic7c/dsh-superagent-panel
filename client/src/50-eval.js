@@ -31,6 +31,14 @@ Object.assign(PAGE_TEXT, {
   'ev.raw': ['原始决定', 'Raw decision'],
   'ev.noRules': ['这次评估没有记录规则结果。', 'This Eval recorded no rule results.'],
   'ev.more': ['共 {total} 条，只显示最近 {shown} 条。', '{total} decisions in total; showing the latest {shown}.'],
+  'ev.shadow': ['模型 {p} · {verdict}', 'Model {p} · {verdict}'],
+  'ev.shadowAccept': ['倾向接单', 'leans accept'],
+  'ev.shadowReject': ['倾向忽略', 'leans ignore'],
+  'ev.shadowUncertain': ['不确定', 'uncertain'],
+  'ev.shadowError': ['模型失败', 'model failed'],
+  'ev.shadowRisk': ['风险 {p}', 'risk {p}'],
+  'ev.shadowHint': ['shadow 模式：模型意见只记录，接单仍由规则决定。',
+    'Shadow mode: the model opinion is recorded only; the rules still decide intake.'],
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
@@ -39,6 +47,27 @@ const evalKindLabel = (t, kind) => kind === 'all' ? pt(t, 'decisionFilter.all') 
 
 /** Strength vocabulary is closed; an unknown value falls back to the raw string instead of a missing key. */
 const EVAL_STRENGTHS = ['explicit', 'inferred']
+
+/** Human label for the decision model's shadow verdict; unknown values stay visible as the raw string. */
+function evalShadowVerdict(t, verdict) {
+  if (verdict === 'accept') return pt(t, 'ev.shadowAccept')
+  if (verdict === 'reject') return pt(t, 'ev.shadowReject')
+  if (verdict === 'uncertain') return pt(t, 'ev.shadowUncertain')
+  return typeof verdict === 'string' ? verdict : ''
+}
+
+/** One tag per decision: the model's calibrated probability + the action it would have taken under the thresholds. */
+function evalShadowTag(t, shadow) {
+  if (!shadow || typeof shadow !== 'object') return null
+  const title = [pt(t, 'ev.shadowHint'), shadow.model, shadow.questions].filter(Boolean).join(' · ')
+  const risk = typeof shadow.riskP === 'number'
+    ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(shadow.riskP * 100)}%` })}` : ''
+  if (shadow.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))
+  const probability = typeof shadow.p === 'number' ? `${Math.round(shadow.p * 100)}%` : '?'
+  const tone = shadow.verdict === 'accept' ? 'info' : shadow.verdict === 'reject' ? 'warning' : 'quiet'
+  return h(Tag, { tone, title: `${title}${risk}` },
+    pt(t, 'ev.shadow', { p: probability, verdict: evalShadowVerdict(t, shadow.verdict) }))
+}
 
 /** One message excerpt for the row title: the host's decision preview, or — for payloads/histories whose Trigger text
     is gone — the request title the reason already carries. Empty only when neither exists. */
@@ -111,6 +140,7 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
+          evalShadowTag(t, decision.shadow),
           decision.at ? h(When, { at: decision.at }) : null,
           ticketIds.length
             ? h(Fragment, null,

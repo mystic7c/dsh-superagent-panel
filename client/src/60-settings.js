@@ -145,8 +145,8 @@ Object.assign(PAGE_TEXT, {
   // ---- one-line intro hints of the groups (the group name itself lives in the left nav) ----
   'st.sourceHint': ['输入通道：先连接 Octo，再选择监听群、触发人范围与轮询间隔；只读项由宿主状态提供。',
     'Intake: connect Octo first, then choose watched groups, who may trigger work, and the poll interval; read-only values come from the host.'],
-  'st.evalHint': ['评估方式与规则目录由代码和 eval.mode 决定，这里只读展示。',
-    'The evaluation mode and rule catalog come from code and eval.mode; shown read-only here.'],
+  'st.evalHint': ['评估方式、判定模型与规则目录由 live.json 和代码版本决定，这里只读展示。',
+    'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式与 worker 配置。改完保存后立即生效；写权限在「写权限」分组单独管理。',
     'The executor master switch, how work runs and the worker configuration. Changes apply after saving; write permissions are managed separately under Write access.'],
   'st.writeHint': ['执行器对 GitLab 和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
@@ -203,8 +203,18 @@ Object.assign(PAGE_TEXT, {
   // ---- eval group ----
   'st.evalMode': ['评估方式', 'Evaluation mode'],
   'st.modeRules': ['规则引擎（rules）', 'Rule engine (rules)'],
+  'st.modeShadow': ['规则兜底 + 模型 shadow（shadow）', 'Rules + model shadow (shadow)'],
   'st.modeLlm': ['模型评估（llm）', 'Model evaluation (llm)'],
   'st.modeUnknown': ['未知模式（{mode}）', 'Unknown mode ({mode})'],
+  'st.judgeTitle': ['判定模型（shadow）', 'Decision model (shadow)'],
+  'st.judgeEndpoint': ['模型地址', 'Model endpoint'],
+  'st.judgeModel': ['模型名', 'Model'],
+  'st.judgeToken': ['模型 token', 'Model token'],
+  'st.judgeCalls': ['模型调用（成功 / 失败 / 跳过）', 'Model calls (ok / failed / skipped)'],
+  'st.configured': ['已配置', 'Configured'],
+  'st.notConfigured': ['未配置', 'Not configured'],
+  'st.judgeHint': ['shadow 模式下模型只记录意见，接单仍由规则决定。地址与模型名在 live.json 的 eval.decision 里配置；token 通过接口写文件。',
+    'In shadow mode the model only records an opinion; rules still decide intake. Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
   'st.rules': ['规则目录', 'Rule catalog'],
   'st.noRules': ['没有可显示的规则。', 'No rules to show.'],
   'st.decisionsTotal': ['累计决定', 'Decisions so far'],
@@ -1156,10 +1166,18 @@ function LiveSettingsPage({ route }) {
   const renderEval = () => {
     const mode = data.eval?.mode ?? config.eval?.mode
     const modeText = mode === 'rules' ? pt(t, 'st.modeRules')
+      : mode === 'shadow' ? pt(t, 'st.modeShadow')
       : mode === 'llm' ? pt(t, 'st.modeLlm') : mode ? pt(t, 'st.modeUnknown', { mode }) : t('empty')
     const rules = Array.isArray(data.eval?.rules) ? data.eval.rules : []
+    const decision = data.eval?.decision ?? {}
+    const judge = data.eval?.judge ?? {}
+    const configured = value => value ? pt(t, 'st.configured') : pt(t, 'st.notConfigured')
     const rows = [
       [pt(t, 'st.evalMode'), modeText],
+      [pt(t, 'st.judgeEndpoint'), configured(decision.endpointConfigured)],
+      [pt(t, 'st.judgeModel'), decision.model || t('empty')],
+      [pt(t, 'st.judgeToken'), configured(decision.tokenConfigured)],
+      [pt(t, 'st.judgeCalls'), `${judge.calls ?? 0} / ${judge.ok ?? 0} / ${judge.errors ?? 0} / ${judge.skipped ?? 0}`],
       [pt(t, 'st.decisionsTotal'), String(data.counts?.decisions ?? 0)],
       [pt(t, 'st.decisions24h'), String(data.flow24h?.judged ?? 0)],
     ]
@@ -1167,6 +1185,7 @@ function LiveSettingsPage({ route }) {
       settingsHeading(),
       h(Hint, null, pt(t, 'st.evalHint')),
       h(KeyValues, { rows }),
+      h(Hint, null, pt(t, 'st.judgeHint')),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.rules')),
         rules.length

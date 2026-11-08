@@ -15,7 +15,7 @@ import { stateView, overviewView, searchView, sourcesView, settingsView, threadL
 import { saveSettings, syncSource, setPaused, retryTicket, stopTicket, dismissDecision, requeueTrigger, unsubscribeThread,
   savePrompts, previewPromptsFor, setupCheck, resetDemo, ActionError } from './lib/actions.js'
 import { createEngine } from './lib/live/engine.js'
-import { updateLiveConfig, saveRepoToken } from './lib/live/live-json.js'
+import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
 import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
   resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
 
@@ -316,6 +316,20 @@ export function apply(ctx, config = {}) {
             return
           } catch (error) {
             throw new ActionError(400, `保存 Octo token 失败：${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
+        // Store the decision-model API key in the configured token file (mode 600, never echoed back). The shadow
+        // judge reads it from there; no panel screen is needed for the pilot.
+        if (method === 'POST' && second === 'eval' && third === 'token') {
+          if (typeof body?.token !== 'string') throw new ActionError(400, 'token 必须是字符串')
+          try {
+            const decision = engine.readConfig().config.eval?.decision
+            if (!decision?.tokenFile) throw new Error('eval.decision.tokenFile 未配置')
+            const saved = await saveTokenFile(decision.tokenFile, body.token)
+            send(res, 200, { eval: { decision: { tokenConfigured: saved.configured, tokenSource: saved.configured ? 'file' : null } } })
+            return
+          } catch (error) {
+            throw new ActionError(400, `保存 decision token 失败：${error instanceof Error ? error.message : String(error)}`)
           }
         }
         if (method === 'POST' && second === 'uat-check') {
