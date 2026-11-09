@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.7] — 2026-11-09
+
+修复「发布 MR」时带 `passChangedFiles` 的闸门拿不到改动文件：发布路径直接跑 gate 的原始命令，没有像干跑那样把
+`changedPaths` 拼进去，EBS 部署闸门在参数解析阶段就退出（`未指定任何文件`，exit 2），根本没有连 UAT。
+
+- 抽出 `gateCommandFor(spec, { paths, dryRun })`，干跑与发布两条闸门路径共用：`passChangedFiles` 的闸门一律附带
+  执行器算出的改动路径（发布时用 `changedPaths(cwd, baseSha)` 重新计算）
+- 发布路径补上 `requireOutput` 证据校验：闸门 exit 0 但输出缺少必需关键字同样判失败（与干跑一致）
+- 回归：publish 把改动路径传给 `deploy_object.py`、缺证据时 `gate_failed` 且不推送；`node --test` 355/355
+- 说明：干跑路径一直正常，所以之前 dry-run 闸门都是 exit 0；该 bug 只在「发布 MR → 真跑闸门」时暴露
+
+### 验证
+- `node --test` 355/355
+- `npm run verify`：client 产物最新；723 literal keys / 513 shared / 1062 page-local 通过
+
 ## [0.3.6] — 2026-11-09
 
 修复追加要求后「执行总结」显示上一轮的问题：`changesOf` 原来取 runs 列表里最后一条 worker 文本，而 runs 按最新在前，
