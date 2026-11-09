@@ -7,10 +7,8 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.3.7**（0.3.7 修复发布 MR 时 passChangedFiles 闸门拿不到改动文件；0.3.6 修复追加要求后执行总结仍显示上一轮；0.3.5 起工单详情可「追加要求」并自动干跑重跑；
-0.3.4 加入 hybrid 试点：规则硬闸不变，模型 `ticket-v1` 判定参与接单；
-0.3.3 把 shadow 问题集换成 `ticket-v1` 五类 choice，人工回归集 24/25、真实标注开单精确率 100%；
-0.3.2 落地决策模型 shadow；0.3.1 起工单详情可查看该次运行工作树的 diff）。
+**当前版本：0.4.0**（0.4.0 多后端 Worker 路由 + 发布失败自动交给 worker 修复并重跑 + 手动仓库巡检不再受 3 次
+上限；0.3.8 设置新增 Worker 页签；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -161,9 +159,9 @@ TypeSafe Jev、Kev/Von 等同一协议实现）对每条候选消息再判一次
 **真实可用**：Octo 群轮询（sync）、规则评估 R1–R3、工单生命周期、DSH 进程内 worker、GitLab MR/CI/部署/UAT
 观测、多仓库与群→仓库绑定、人工验收/忽略/重试、搜索、术语表、配置原子写；
 **P2**：工单级自动执行（`automation`：fixed interval / 每天 HH:mm / maxExecutions / nextAt / lastSkipReason；触发原因 heartbeat|schedule）、
-GitLab 观察升级（MR headSha、只采用匹配 head 的 pipeline、不匹配写 `pipeline.stale` 不覆盖结论、draft/WIP 跳过、自动巡检 3 次/headSha 上限）、
+GitLab 观察升级（MR headSha、只采用匹配 head 的 pipeline、不匹配写 `pipeline.stale` 不覆盖结论、draft/WIP 跳过、自动巡检 3 次/headSha——仅 CI 仓库；`verifyMode=manual` 的仓库一直巡检到 MR 合并/关闭）、
 signal 人工标注（correct/false_wake/missed_wake/cleared + 来源页标注菜单与计数）；
-**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry/publish 不自动修。设置→Worker 新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
+**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry 不自动修，publish 失败会把闸门证据交给 worker 自动修复并重跑（最多 `executor.maxRepairRounds` 轮，成功才继续 commit/push/MR）。设置→Worker 新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
 **P2 第三批**：`GET engine/metrics?window=24h|7d|all` 聚合运行质量（成功/失败/停止/中断/等待、时长 avg/p50/p95、触发方式、停止原因、Top 失败原因、按仓库、验收轮次/通过率、信号与标注）；概览「运行质量」卡片。token/成本数据宿主尚未提供（`cost.available=false`）。
 失败原因结构化（`run.stopReason/errorCode`）、worker 执行事件轨迹（`run.trace`，≤80 条）、
 闸门失败暂停并由人「放行/重试该闸门/终止」、插件重载把中断运行标为 `interrupted` 并可「继续执行」（checkpoint：gates/commit/push/MR 阶段复用 worktree）、
@@ -226,9 +224,9 @@ CHANGELOG.md        版本与能力变更记录
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 355 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 374 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 125/125）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 132/132）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 

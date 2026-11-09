@@ -10,6 +10,14 @@
 - 手动改派：`POST engine/ticket/:id/run` 支持 `backend` 覆盖路由（记录为 manual）
 - 面板：设置→Worker 改为路由模式、三后端启用与模型/CLI 路径、默认/降级后端、任务类型偏好表；运行记录新增「后端 · 类型（建议）」标签
 - 回归：`lib/live/routing.test.js` 8 条 + executor/config/live-json 新增用例；`node --test` 374/374；render-check 133/133
+- **发布失败自动修复闭环**（同版本树内补记）：`publishTicket` 闸门失败后把失败闸门的 exit code/输出/repairHint 交回
+  worker，在同一 worktree 修复后重算 changedPaths、重跑全部闸门；最多 `executor.maxRepairRounds` 轮，成功继续
+  commit/push/MR，耗尽才 `failed`。修复轮 brief 允许改 `scripts/local/` 的部署/授权工具（`oracle_connect.py` 与
+  凭据仍禁止，`protectedPaths` 兜底）；发布接口改为异步 202；`run.repair`/`run.repairs`/`repair:worker:N` 可追溯。
+  实测：`tkt_640380ab550b4e54` 发布时两轮自动修复（deploy 幂等 + access 属主连接）后开 MR !11 并合并
+- **手动仓库巡检不再被上限停掉**（同版本树内补记）：`verifyMode=manual` 的仓库只观察 MR 是否合并，不再套用
+  “同一 head 3 次”上限，合并/关闭后才停；CI 仓库用尽 3 次时工单详情验收区显示「点 ⋯ → 核对合并/UAT」提示。
+  修复前该工单在 MR 合并 26 分钟后仍停在 `mr-open`
 
 ### 验证
 - `node --test` 374/374
