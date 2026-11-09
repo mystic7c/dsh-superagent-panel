@@ -7,8 +7,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.0**（0.4.0 多后端 Worker 路由 + 发布失败自动交给 worker 修复并重跑 + 手动仓库巡检不再受 3 次
-上限；0.3.8 设置新增 Worker 页签；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.1**（0.4.1 把 `repo_task` 描述扩到"具体开发/数据交付需求"，修复一条真实需求被误判
+`context` 的 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动交给 worker 修复并重跑 + 手动仓库巡检
+不再受 3 次上限；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -76,7 +77,7 @@ plugin_manager install_bundle target=<本仓库目录>
 `eval.mode='hybrid'` 时，规则仍然是第一道门，模型参与 R1 的"要不要开单"：
 
 1. **R2/R3 规则硬闸不变**：来源/身份/高风险/上下文判断照旧；规则忽略的消息不会调用模型。
-2. 规则接单的消息交给 `ticket-v1` 模型：
+2. 规则接单的消息交给 `ticket-v2` 模型（`repo_task` 的描述包含带 procedure/报表/接口、参数与定时规则的需求说明）：
    - `repo_task` 且 `p ≥ eval.decision.acceptAt`（默认 0.5，按 pilot 标注校准）→ **自动开单**（后续和普通工单一样执行）；
    - `risky` 或 `riskP ≥ eval.decision.riskAt`（默认 0.5）→ 忽略，原因 `modelRisk`（高风险转人工）；
    - 其他类别（octo_platform / chat / context）→ 忽略，原因 `modelSkip`；
@@ -133,10 +134,11 @@ TypeSafe Jev、Kev/Von 等同一协议实现）对每条候选消息再判一次
   它**不写 live-state、不建工单**；默认复用上次答案，`--refresh` 全部重问，`--json` 打印全量样本。
 - **state 只能是纯文本**：pilot 实测把消息包进 `{text, channel, threadTitle}` 会让一条明确请求的概率
   从 0.97 掉到 0.09；judge 只发纯文本消息（需要上下文时也只以文本前缀拼接，不序列化成对象）。
-- **问题集 `ticket-v1`**：一个 `choice` 五选一 —— `repo_task`（仓库/工作区/数据库任务）/ `octo_platform`
+- **问题集 `ticket-v2`**：一个 `choice` 五选一 —— `repo_task`（仓库/工作区/数据库任务）/ `octo_platform`
   （Octo 平台内事务）/ `chat` / `context` / `risky`。`p = P(repo_task)`（开单候选），`riskP = P(risky)`（高风险），
   其余归"不开"。选项描述文字是问题集契约的一部分（实测同义改写会让召回从 80% 掉到 60%），改文字必须升版本。
-  人工回归集（25 条）与真实标注（23 条）上：`ticket-v1` 完全正确 24/25 与 21/23，开单精确率均为 100%。
+  人工回归集（25 条）与真实标注（24 条）上：`ticket-v2` 完全正确 24/25 与 22/24，开单精确率均为 100%。
+  （`ticket-v2` 修复了 2026-11-09 一条真实需求被误判 `context` 的线上漏单。）
 - **标签会保留**：`shadow-collect.mjs` 重判时会保留已有人工 `label`，换问题集不会清空标注集。
 - **记录什么**：每条 decision 的 `shadow` 字段：`status`、`p`（isRequest 概率）、`riskP`、`verdict`
   （accept / reject / uncertain）、`ruleKind`（规则当时的结果）、`latencyMs`、`questions` 版本；失败是
