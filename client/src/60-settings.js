@@ -317,6 +317,9 @@ Object.assign(PAGE_TEXT, {
     'Empty auto-detects: claude from PATH; codex from the ChatGPT.app / OctoBuddy bundles first.'],
   'st.gates': ['闸门', 'Gates'],
   'st.timeout': ['执行超时', 'Run timeout'],
+  'st.timeoutHint': ['单位分钟，范围 1–1440。超时以 timeout 结束本次运行（工作树保留，可调大后重试）。',
+    'Minutes, 1–1440. A timeout ends the run with "timeout"; the worktree is kept, so retry after raising it.'],
+  'st.timeoutInvalid': ['执行超时必须是 1–1440 之间的整数分钟。', 'The run timeout must be a whole number of minutes between 1 and 1440.'],
   'st.minutes': ['{count} 分钟', '{count} min'],
   'st.repo': ['仓库', 'Repository'],
   'st.manualRepoHint': ['工单会在这个仓库上执行；默认是 {name}。',
@@ -451,6 +454,8 @@ function settingsPatchOf(group, draft) {
     }
     if ('paused' in draft) patch.paused = draft.paused === true
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
+    // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
+    if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
     for (const key of ['executor.workerBackend', 'executor.workerModel', 'executor.workerCommand']) {
       if (key in draft) patch[key] = draft[key]
     }
@@ -980,6 +985,12 @@ function LiveSettingsPage({ route }) {
       setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.pollInvalid')) } }))
       return
     }
+    if ('executor.timeoutMs' in patch
+      && (!Number.isFinite(patch['executor.timeoutMs']) || patch['executor.timeoutMs'] < 60_000
+        || patch['executor.timeoutMs'] > 86_400_000)) {
+      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.timeoutInvalid')) } }))
+      return
+    }
     if ('review.expireHours' in patch && (!Number.isInteger(patch['review.expireHours'])
       || patch['review.expireHours'] < 1 || patch['review.expireHours'] > 168)) {
       setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.reviewExpireInvalid')) } }))
@@ -1339,9 +1350,9 @@ function LiveSettingsPage({ route }) {
     const gates = Array.isArray(executor.gates) ? executor.gates : []
     const gateText = gates.length ? gates.map(gate => settingsGateLabel(t, gate)).join(t('listSeparator')) : t('empty')
     const timeout = Number(executor.timeoutMs)
+    const timeoutMinutes = Number.isFinite(timeout) ? Math.round(timeout / 60000) : 25
     const rows = [
       [pt(t, 'st.gates'), gateText],
-      [pt(t, 'st.timeout'), Number.isFinite(timeout) ? pt(t, 'st.minutes', { count: Math.round(timeout / 60000) }) : t('empty')],
       [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono' }, config.repo) : t('empty')],
       [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono' }, config.worktreeRoot) : t('empty')],
     ]
@@ -1362,6 +1373,19 @@ function LiveSettingsPage({ route }) {
           options: [{ value: 'api', label: pt(t, 'st.mrModeApi') }, { value: 'push', label: pt(t, 'st.mrModePush') }],
           onChange: next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api') }),
         h(Hint, null, pt(t, 'st.mrModeHint'))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.timeout')),
+        h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
+          h(Input, { type: 'number', min: 1, max: 1440, step: 1,
+            value: Number.isFinite(Number(field('executor.timeoutMs', timeout))) && field('executor.timeoutMs', timeout) !== ''
+              ? Math.round(Number(field('executor.timeoutMs', timeout)) / 60000) : '',
+            disabled: frozen, 'aria-label': pt(t, 'st.timeout'),
+            placeholder: String(timeoutMinutes),
+            onChange: event => {
+              const raw = event.target.value
+              editField('run', 'executor.timeoutMs', raw === '' ? '' : Number(raw) * 60000, timeout)
+            } })),
+        h(Hint, null, pt(t, 'st.timeoutHint'))),
       h(KeyValues, { rows }),
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.

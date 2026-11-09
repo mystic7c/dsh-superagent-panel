@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.5] — 2026-11-09
+
+修复「执行超时」在设置里只能看不能改：worker 超时后无法调大超时再重试。
+
+- `live.json` 白名单新增 `executor.timeoutMs`（整数毫秒，60000–86400000 校验）；设置→运行 改成分钟输入框
+  （1–1440），保存即生效
+- 保存前做范围校验，提示明确；说明文案写明「超时以 timeout 结束本次运行，工作树保留，可调大后重试」
+- 回归：live-json 增加 timeout 边界用例；render-check 增加「运行超时可编辑」断言
+
+### 验证
+- `node --test` 396/396
+- render-check 135/135
+- `npm run verify`：client 产物最新；752 literal keys / 513 shared / 1121 page-local 通过
+
 ## [0.4.4] — 2026-11-09
 
 修正 0.4.3 对 `tkt_969114d7aca74a45` 的结论：根因不是"worker 用了 subagent"，而是 **worker 在自己发起的
