@@ -7,9 +7,10 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.3**（0.4.3 修复 worker 误用异步 subagent 导致执行总结停在"等待独立复核"，并把评估确认的
-操作人名单/范围/有效期放进设置页可配置；0.4.2 加入评估确认；0.4.1 修复 hybrid 漏单；
-0.4.0 多后端 Worker 路由 + 发布失败自动修复；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.4**（0.4.4 用 `agent/turn-stopping` 边界钩子让 worker 对自己发起的 subagent run 负责：
+子代理没跑完，本轮不允许结束；0.4.3 把评估确认的操作人名单/范围/有效期放进设置页可配置；
+0.4.2 加入评估确认；0.4.1 修复 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动修复；
+发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -230,6 +231,9 @@ worker task 按序携带最近 10 条修订，保留上一轮 worktree 改动）
 - 每张工单的 `run.route` / `ticket.route` 记录 workType、backend、profile、reason（preference/default/fallback/manual）；运行记录显示「后端 · 类型」标签，建议模式同时给出本次实际后端；
 - 只读档位按适配器收紧：Codex `-s read-only`、Claude `--permission-mode plan`、DSH 工具 guard 禁止写文件；analysis/review/research/interactive 无文件改动时交付报告并结束为 `closed`，不提交、不推送；
 - 手动改派：`POST engine/ticket/:id/run` 的 body 可带 `backend: "dsh"|"codex"|"claude"`，覆盖路由并记为 manual。
+- **worker 对自己发起的 run 负责**：worker 可以起 subagent 做独立复核；harness 的 `agent/turn-stopping` 边界
+  （在 `turn/end` 提交前 await）会用 `subagents.listDescendants + waitForChildren` join 仍在运行的子代理，
+  子代理结果落回 worker inbox 后再跑下一步，直到没有 live child 才允许结束本轮——不会再把"等待复核"当最终总结。
 
 **部分可用**：Codex CLI / Claude Code CLI worker（代码与单测存在，本机尚无生产运行记录）；手动验收仓库
 只观测 MR 合入，不做 UAT 指纹；多仓库的部署健康检查以各仓库配置为准。

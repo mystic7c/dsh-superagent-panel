@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.4] — 2026-11-09
+
+修正 0.4.3 对 `tkt_969114d7aca74a45` 的结论：根因不是"worker 用了 subagent"，而是 **worker 在自己发起的
+异步 run 还没完成时就结束了本轮**；0.4.3 禁用 subagent 工具只是绕过问题，违背"worker 对自己发起的 run 负责"
+的约定。0.4.4 改为在 harness 的 turn 边界上强制等待。
+
+- worker 在 setup 里监听 `agent/turn-stopping`（harness 在 `turn/end` 提交前 await 的边界钩子），用
+  `subagents.listDescendants` + `subagents.waitForChildren` join 仍在运行的子代理；子代理结果回到 worker
+  inbox 后 loop 再跑一步，直到没有 live child 才允许结束本轮（tkt_969114d7aca74a45，2026-11-09）
+- 恢复 `subagent` / `subagent_fork` / `list_agents` / `send_message` 工具（不再禁用）；workerBrief 改为
+  "可以起 subagent 做独立复核；run 会等它们完成，不要在结果回来前给最终总结"
+- 兜底：最多 join 20 轮；abort 立即退出；`waitForChildren` 返回 false（idle resident child）不阻塞完成
+- 测试：`joinChildrenBeforeTurnEnd` 单测 ×3 + worker 注册/清理/join 测试 ×1
+- 验证：`node --test` 395/395；render-check 134/134；build-client --check、check-keys 通过
+
 ## [0.4.3] — 2026-11-09
 
 两件事：修复 worker 把"等待独立复核"当成最终执行总结（tkt_969114d7aca74a45），以及评估确认的配置进入设置页。
