@@ -7910,6 +7910,7 @@ Object.assign(PAGE_TEXT, {
   'st.reference': ['参考', 'Reference'],
   // The run/worker/write groups split the old executor group; their labels live here as page-local overrides of the
   // shared settingsGroup dictionary (06-i18n.js keeps source/eval/repos/prompts only).
+  'settingsGroup.review': ['评估确认', 'Review'],
   'settingsGroup.run': ['运行', 'Runtime'],
   'settingsGroup.worker': ['Worker', 'Worker'],
   'settingsGroup.write': ['写权限', 'Write access'],
@@ -8060,7 +8061,18 @@ Object.assign(PAGE_TEXT, {
   'st.judgeCalls': ['模型调用（成功 / 失败 / 跳过）', 'Model calls (ok / failed / skipped)'],
   'st.configured': ['已配置', 'Configured'],
   'st.notConfigured': ['未配置', 'Not configured'],
+  'st.reviewIntro': ['每条评估都会回发来源群；只有下面列出的操作人回复「接单 ABCD / 忽略 ABCD」才会生效。保存后下一轮轮询生效。',
+    'Every evaluation is posted back to its source group; only the operators listed below can answer with “接单 ABCD / 忽略 ABCD”. Applies on the next poll after saving.'],
   'st.reviewSummary': ['评估确认（{pending} 待回复 / {answered} 已回复）', 'Evaluation review ({pending} awaiting / {answered} answered)'],
+  'st.reviewEnabled': ['启用评估确认', 'Enable review prompts'],
+  'st.reviewEnabledHint': ['关闭后不再发确认消息，已经发出的确认仍可回复。', 'When off, no new prompts are posted; already-posted ones remain answerable.'],
+  'st.reviewSenders': ['允许回复的操作人（Octo uid）', 'Operators allowed to answer (Octo uids)'],
+  'st.reviewSendersHint': ['逗号或换行分隔；留空表示没有人能回复确认。uid 可从群成员资料或历史消息里查。',
+    'Comma or newline separated; empty means nobody can confirm. Find uids in member profiles or past messages.'],
+  'st.reviewExpire': ['回复有效期（小时）', 'Reply validity (hours)'],
+  'st.reviewExpireHint': ['1–168 小时；过期的评估不再接受回复。', '1–168 hours; expired reviews no longer accept answers.'],
+  'st.reviewExpireInvalid': ['回复有效期需为 1–168 之间的小时数。', 'Reply validity must be an integer between 1 and 168 hours.'],
+  'st.reviewExample': ['回复示例：接单 ABCD / 忽略 ABCD（短码在前也认）', 'Reply examples: 接单 ABCD / 忽略 ABCD (code-first also works)'],
   'st.reviewScope': ['确认范围', 'Review scope'],
   'st.reviewScopeAll': ['所有评估', 'Every evaluation'],
   'st.reviewScopeUncertain': ['仅分歧与不确定', 'Disagreements only'],
@@ -8197,6 +8209,7 @@ const emptyRepoForm = () => ({
     the "参考" label, then these. The content column and the save-bar logic are unchanged — only the rail groups them. */
 const SETTINGS_GROUPS = [
   { id: 'source', labelKey: 'settingsGroup.source', icon: 'inbox' },
+  { id: 'review', labelKey: 'settingsGroup.review', icon: 'decision' },
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
@@ -8207,7 +8220,7 @@ const SETTINGS_GROUPS = [
 
 /** Only these groups own writable fields, so only they may ever render a save bar. `run`, `worker` and `write` keep
     separate drafts and separate save bars even though all three patch `executor.*`. */
-const SETTINGS_SAVEABLE = ['source', 'run', 'worker', 'write']
+const SETTINGS_SAVEABLE = ['source', 'review', 'run', 'worker', 'write']
 
 const settingsOmit = (object, key) => {
   const next = { ...(object ?? {}) }
@@ -8229,6 +8242,15 @@ function settingsSame(left, right) {
 function settingsPatchOf(group, draft) {
   const patch = {}
   if (!draft) return patch
+  if (group === 'review') {
+    if ('review.enabled' in draft) patch['review.enabled'] = draft['review.enabled'] === true
+    if ('review.scope' in draft) patch['review.scope'] = String(draft['review.scope'])
+    if ('review.allowSenderIds' in draft) {
+      patch['review.allowSenderIds'] = String(draft['review.allowSenderIds'] ?? '')
+        .split(/[\s,，;；]+/).map(value => value.trim()).filter(Boolean)
+    }
+    if ('review.expireHours' in draft) patch['review.expireHours'] = Number(draft['review.expireHours'])
+  }
   if (group === 'source') {
     if ('enabled' in draft) patch.enabled = draft.enabled === true
     if ('pollSeconds' in draft) patch.pollSeconds = Number(draft.pollSeconds)
@@ -8774,6 +8796,11 @@ function LiveSettingsPage({ route }) {
       setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.pollInvalid')) } }))
       return
     }
+    if ('review.expireHours' in patch && (!Number.isInteger(patch['review.expireHours'])
+      || patch['review.expireHours'] < 1 || patch['review.expireHours'] > 168)) {
+      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.reviewExpireInvalid')) } }))
+      return
+    }
     setSavingGroup(group)
     setSaveErrors(previous => settingsOmit(previous, group))
     clearTimeout(savedTimers.current[group])
@@ -9056,12 +9083,8 @@ function LiveSettingsPage({ route }) {
     const decision = data.eval?.decision ?? {}
     const judge = data.eval?.judge ?? {}
     const configured = value => value ? pt(t, 'st.configured') : pt(t, 'st.notConfigured')
-    const review = data.review ?? {}
-    const reviewCounts = review.counts ?? {}
     const rows = [
       [pt(t, 'st.evalMode'), modeText],
-      [pt(t, 'st.reviewScope'), review.scope === 'uncertain' ? pt(t, 'st.reviewScopeUncertain') : pt(t, 'st.reviewScopeAll')],
-      [pt(t, 'st.reviewSummary', { pending: reviewCounts.pending ?? 0, answered: reviewCounts.answered ?? 0 }), ''],
       [pt(t, 'st.judgeEndpoint'), configured(decision.endpointConfigured)],
       [pt(t, 'st.judgeModel'), decision.model || t('empty')],
       [pt(t, 'st.judgeToken'), configured(decision.tokenConfigured)],
@@ -9079,6 +9102,49 @@ function LiveSettingsPage({ route }) {
         rules.length
           ? h(KeyValues, { rows: rules.map(rule => [`${rule.id} · ${rule.name}`, rule.description]) })
           : h(Hint, null, pt(t, 'st.noRules'))))
+  }
+
+  // ---- review group: the group-confirmation loop (who may answer, scope, expiry) --------------------------------
+  const renderReview = () => {
+    const draft = drafts.review ?? {}
+    const field = (key, fallback) => key in draft ? draft[key] : fallback
+    const frozen = savingGroup === 'review'
+    const review = data.review ?? {}
+    const counts = review.counts ?? {}
+    const initialSenders = Array.isArray(review.allowSenderIds) ? review.allowSenderIds.join(', ') : ''
+    const senders = field('review.allowSenderIds', initialSenders)
+    const expireHours = field('review.expireHours', String(review.expireHours ?? 24))
+    const scope = field('review.scope', review.scope === 'uncertain' ? 'uncertain' : 'all')
+    return h('div', { className: 'sa-settings-group' },
+      settingsHeading(),
+      h(Hint, null, pt(t, 'st.reviewIntro')),
+      h(SettingsSwitchRow, { label: pt(t, 'st.reviewEnabled'), hint: pt(t, 'st.reviewEnabledHint'),
+        checked: Boolean(field('review.enabled', review.enabled === true)), disabled: frozen,
+        onChange: next => editField('review', 'review.enabled', next, review.enabled === true) }),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewScope')),
+        h(Select, { label: pt(t, 'st.reviewScope'), disabled: frozen, value: scope,
+          options: [{ value: 'all', label: pt(t, 'st.reviewScopeAll') },
+            { value: 'uncertain', label: pt(t, 'st.reviewScopeUncertain') }],
+          onChange: next => editField('review', 'review.scope', next, review.scope === 'uncertain' ? 'uncertain' : 'all') })),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewSenders')),
+        h('div', { style: { display: 'flex', maxWidth: '520px', minWidth: 0 } },
+          h(Input, { value: String(senders ?? ''), disabled: frozen, 'aria-label': pt(t, 'st.reviewSenders'),
+            onChange: event => editField('review', 'review.allowSenderIds', event.target.value, initialSenders) })),
+        h(Hint, null, pt(t, 'st.reviewSendersHint'))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewExpire')),
+        h('div', { style: { display: 'flex', maxWidth: '220px', minWidth: 0 } },
+          h(Input, { type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
+            'aria-label': pt(t, 'st.reviewExpire'),
+            onChange: event => editField('review', 'review.expireHours', event.target.value, String(review.expireHours ?? 24)) })),
+        h(Hint, null, pt(t, 'st.reviewExpireHint'))),
+      h(KeyValues, { rows: [
+        [pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 }), ''],
+      ] }),
+      h(Hint, null, pt(t, 'st.reviewExample')),
+      saveBarFor('review'))
   }
 
   // ---- run group: the executor master switch, how it runs and the manual ticket form -------------------------
@@ -9255,6 +9321,7 @@ function LiveSettingsPage({ route }) {
   }
 
   const renderGroup = () => {
+    if (active === 'review') return renderReview()
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()

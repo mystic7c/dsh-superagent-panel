@@ -7,9 +7,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.2**（0.4.2 加入"评估确认"：每条评估回发来源群，你回复「接单/忽略 + 短码」决定是否开单，
-判断会写成信号标签供校准；0.4.1 修复 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动修复；
-发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.3**（0.4.3 修复 worker 误用异步 subagent 导致执行总结停在"等待独立复核"，并把评估确认的
+操作人名单/范围/有效期放进设置页可配置；0.4.2 加入评估确认；0.4.1 修复 hybrid 漏单；
+0.4.0 多后端 Worker 路由 + 发布失败自动修复；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -66,7 +66,8 @@ plugin_manager install_bundle target=<本仓库目录>
   `state.json`（旧管理层的空文档，面板不使用）。
 - 令牌文件：`octo.token` 与每个仓库的 `gitlab-*.token`（均为 600，面板不回显）。
 - 本插件没有演示种子：首次启动创建空状态；`POST /superagent/api/demo/reset` 只会清空回空状态。
-- 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、运行（执行器开关/自动执行/暂停/MR 方式）、
+- 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、评估确认（启用/范围/允许回复的操作人/
+  有效期）、运行（执行器开关/自动执行/暂停/MR 方式）、
   Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
   编辑/删除已有仓库、闸门命令、超时、worktree、UAT/健康检查地址、gate `onFail/repairHint`、
   `executor.maxRepairRounds` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
@@ -131,6 +132,8 @@ Superagent: 评估 #A7K2
 - **严格 gate 由 `executor.autoRun` 控制**：把它设为 `false` 时，新工单只会排队，只有你回复"接单"才会执行；
   设为 `true` 时照常自动执行，确认消息只作为反馈/撤销不了已开始的工单。
 - 没回复的评估 24 小时后过期（`review.expireHours`）。
+- **设置 → 评估确认**可写：启用开关、确认范围（all / uncertain）、允许回复的操作人（Octo uid，逗号/换行分隔，
+  留空 = 没人能回复）、回复有效期（1–168 小时）；保存后下一轮轮询生效。
 
 ```json
 {

@@ -541,8 +541,16 @@ check('the merge permission is marked as high risk', writeText.includes('高危'
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
-  navLabels.slice(0, 5).join('/') === '来源/运行/Worker/写权限/仓库' && navLabels.slice(5).join('/') === '评估/提示词'
+  navLabels.slice(0, 6).join('/') === '来源/评估确认/运行/Worker/写权限/仓库'
+    && navLabels.slice(6).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
+clickByText('评估确认', '.sa-settings-nav button')
+await sleep(800)
+const reviewSettingsText = text()
+check('review group configures the operator allow-list, scope and expiry',
+  reviewSettingsText.includes('启用评估确认') && reviewSettingsText.includes('允许回复的操作人')
+    && reviewSettingsText.includes('回复有效期') && reviewSettingsText.includes('确认范围'),
+  reviewSettingsText.slice(0, 500))
 clickByText('来源', '.sa-settings-nav button')
 await sleep(900)
 const sourceSettingsText = text()
