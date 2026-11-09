@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.4.3] — 2026-11-09
+
+两件事：修复 worker 把"等待独立复核"当成最终执行总结（tkt_969114d7aca74a45），以及评估确认的配置进入设置页。
+
+### worker 总结停在"等待独立复核"
+
+工单 `tkt_969114d7aca74a45` 已走到 `mr-open`，但执行总结是"初版改动已完成，独立复核仍在进行中…"。
+trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_agents` 发现还没结果，随后用了
+`superagent_report_progress` 并结束本轮（`turn/end completed`）；executor 以"turn 结束"作为 worker 完成，
+继续跑闸门、提交并发布 MR，最后一条 assistant 文本就成了 handoff summary。异步 subagent 的结果不会回到
+这个 headless run，所以那句话不是最终交付说明。
+
+- 修复：worker 的 `DENY_TOOLS` 增加 `subagent` / `subagent_fork` / `list_agents` / `send_message` /
+  `interrupt_agent`，headless run 不允许再起异步 agent
+- workerBrief 明确：headless run 在 turn 结束时收尾，独立复核必须在本轮内 inline 做第二遍；不要起后台 agent
+- 回归：worker guard 测试覆盖新增的 denied 工具
+
+### 评估确认设置页可配置
+
+- 新增「设置 → 评估确认」可写分组：启用开关、确认范围（all/uncertain）、允许回复的操作人
+  （Octo uid 逗号/换行分隔，留空 = 没人能回复）、回复有效期（1–168 小时），带保存栏与校验
+- `live-json.js` allow-list 新增 `review.enabled` / `review.scope` / `review.allowSenderIds` /
+  `review.expireHours`（枚举/小时数校验），设置页保存走同一原子写与配置回滚
+- render-check 增加「评估确认」分组与 rail 顺序检查
+- 验证：`node --test` 391/391；render-check 134/134；build-client --check、check-keys 通过
+
 ## [0.4.2] — 2026-11-09
 
 评估确认（群消息复核）：每条评估回发来源群，操作人回复「接单/忽略 + 短码」决定是否开单，并把判断写成信号
