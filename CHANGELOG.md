@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.4.0] — 2026-11-09
+
+多 Worker 后端路由：原来 `executor.workerBackend` 只能选一个后端，现在可同时启用 DSH / Codex CLI / Claude Code CLI，并由路由按任务类型选择执行者与档位。
+
+- 配置：`executor.workers`（每个后端 enabled/model/command）+ `executor.routing`（`mode: single|suggest|auto`、`defaultBackend`、`fallback`、`preferences`）；未写 workers 时完全沿用旧的单后端行为
+- 分类与路由（`lib/live/routing.js`）：关键词分类 analysis/review/test/dev/docs/research/interactive；能力硬约束优先（联网调研与需提问只能 DSH、测试验证不能 Claude），其次用户偏好、默认、降级链；多后端默认 `suggest`（只记录建议，仍用默认后端），`auto` 才真正分发
+- 执行：`run.route` / `ticket.route` 记录 workType、backend、profile、reason；CLI 按档位收紧（Codex `-s read-only`、Claude `--permission-mode plan`），DSH 只读用工具 guard 禁写；analysis/review/research/interactive 无改动时交付报告并结束为 `closed`，不跑闸门、不提交推送
+- 手动改派：`POST engine/ticket/:id/run` 支持 `backend` 覆盖路由（记录为 manual）
+- 面板：设置→Worker 改为路由模式、三后端启用与模型/CLI 路径、默认/降级后端、任务类型偏好表；运行记录新增「后端 · 类型（建议）」标签
+- 回归：`lib/live/routing.test.js` 8 条 + executor/config/live-json 新增用例；`node --test` 374/374；render-check 133/133
+
+### 验证
+- `node --test` 374/374
+- render-check 133/133
+- `npm run verify`：client 产物最新；737 literal keys / 513 shared / 1102 page-local 通过
+
+## [0.3.8] — 2026-11-09
+
+设置新增「Worker」页签：把 worker 后端与「运行后端能力」矩阵从「运行」组迁出，单独成组。
+
+- 左侧导航在「运行」之后新增「Worker」（robot 图标）：Worker 后端选择、模型/CLI 路径与该后端的提示、只读
+  「运行后端能力」矩阵都在这里；「运行」组只保留执行器总开关、自动执行、暂停、MR 方式、闸门/超时与手工建单
+- 新组可写，沿用同一 `executor.*` allow-list：`settingsPatchOf` 的 run/worker/write 三组共用补丁逻辑，各自独立
+  草稿与保存条；选中 DSH 时仍不渲染模型/CLI 输入（与迁移前一致）
+- 文案同步：运行组提示不再提 worker 配置；工单详情的 CLI 失败提示改指「设置 → Worker → CLI 路径」；README 的
+  设置分组说明同步
+- 回归：render-check 131/131（新增 Worker 组、运行组不再含后端/能力矩阵、导航顺序、能力矩阵高亮 4 条断言）
+
+### 验证
+- `node --test` 355/355
+- render-check 131/131
+- `npm run verify`：client 产物最新；724 literal keys / 513 shared / 1064 page-local 通过
+
 ## [0.3.7] — 2026-11-09
 
 修复「发布 MR」时带 `passChangedFiles` 的闸门拿不到改动文件：发布路径直接跑 gate 的原始命令，没有像干跑那样把

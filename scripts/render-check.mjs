@@ -504,9 +504,32 @@ const settingsTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-t
 check('settings groups carry an H2 heading that mirrors the navigation label',
   settingsTitles.length === 1 && settingsTitles[0] === '运行', JSON.stringify(settingsTitles))
 check('run group no longer carries the repository list', !settingsText.includes('本地路径') && !settingsText.includes('前往仓库页管理'), settingsText.slice(0, 260))
+// The worker backend and its capability matrix were moved out of the run group into their own Worker group, so the
+// run group no longer competes with them for the operator's attention.
+check('run group no longer carries the worker backend or capability matrix',
+  !settingsText.includes('Worker 后端') && !settingsText.includes('运行后端能力'), settingsText.slice(0, 400))
 const repoSelect = [...rootElement.querySelectorAll('select')]
   .find(select => [...select.options].some(option => option.value === 'ebs'))
 check('manual ticket form offers the ebs repository', Boolean(repoSelect), String(repoSelect?.value))
+clickByText('Worker', '.sa-settings-nav button')
+await sleep(800)
+const workerText = text()
+const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
+check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
+check('worker group carries the routing mode control',
+  Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),
+  JSON.stringify([...rootElement.querySelectorAll('.sa-main select')].map(select => select.getAttribute('aria-label'))))
+check('worker group lists every backend with its own enable switch',
+  ['DSH（进程内）', 'Codex CLI（本机）', 'Claude Code CLI（本机）'].every(label => workerText.includes(label))
+    && rootElement.querySelectorAll('.sa-main .sa-switch-row').length >= 3,
+  String(rootElement.querySelectorAll('.sa-main .sa-switch-row').length))
+check('worker group carries the work-type preference table',
+  workerText.includes('任务类型偏好') && workerText.includes('需求分析') && workerText.includes('代码 review')
+    && workerText.includes('功能测试验证'), workerText.slice(0, 800))
+check('worker group carries the capability matrix', workerText.includes('运行后端能力')
+  && workerText.includes('流式事件') && workerText.includes('工具调用审批'), workerText.slice(0, 600))
+check('capability matrix highlights the saved backend',
+  Boolean(rootElement.querySelector('.sa-capabilities tr[data-current="true"]')), workerText.slice(0, 300))
 clickByText('写权限', '.sa-settings-nav button')
 await sleep(800)
 const writeText = text()
@@ -518,7 +541,7 @@ check('the merge permission is marked as high risk', writeText.includes('高危'
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
-  navLabels.slice(0, 4).join('/') === '来源/运行/写权限/仓库' && navLabels.slice(4).join('/') === '评估/提示词'
+  navLabels.slice(0, 5).join('/') === '来源/运行/Worker/写权限/仓库' && navLabels.slice(5).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
 clickByText('来源', '.sa-settings-nav button')
 await sleep(900)
