@@ -244,6 +244,10 @@ Object.assign(PAGE_TEXT, {
   'st.judgeCalls': ['模型调用（成功 / 失败 / 跳过）', 'Model calls (ok / failed / skipped)'],
   'st.configured': ['已配置', 'Configured'],
   'st.notConfigured': ['未配置', 'Not configured'],
+  'st.reviewSummary': ['评估确认（{pending} 待回复 / {answered} 已回复）', 'Evaluation review ({pending} awaiting / {answered} answered)'],
+  'st.reviewScope': ['确认范围', 'Review scope'],
+  'st.reviewScopeAll': ['所有评估', 'Every evaluation'],
+  'st.reviewScopeUncertain': ['仅分歧与不确定', 'Disagreements only'],
   'st.judgeHint': ['shadow 模式下模型只记录意见；hybrid 下模型参与接单（repo_task 自动开单、risky 拦截、其余转人工）。地址与模型名在 live.json 的 eval.decision 里配置；token 通过接口写文件。',
     'In shadow mode the model only records an opinion; in hybrid it takes part in intake (repo_task opens, risky blocks, the rest goes to review). Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
   'st.rules': ['规则目录', 'Rule catalog'],
@@ -1236,8 +1240,12 @@ function LiveSettingsPage({ route }) {
     const decision = data.eval?.decision ?? {}
     const judge = data.eval?.judge ?? {}
     const configured = value => value ? pt(t, 'st.configured') : pt(t, 'st.notConfigured')
+    const review = data.review ?? {}
+    const reviewCounts = review.counts ?? {}
     const rows = [
       [pt(t, 'st.evalMode'), modeText],
+      [pt(t, 'st.reviewScope'), review.scope === 'uncertain' ? pt(t, 'st.reviewScopeUncertain') : pt(t, 'st.reviewScopeAll')],
+      [pt(t, 'st.reviewSummary', { pending: reviewCounts.pending ?? 0, answered: reviewCounts.answered ?? 0 }), ''],
       [pt(t, 'st.judgeEndpoint'), configured(decision.endpointConfigured)],
       [pt(t, 'st.judgeModel'), decision.model || t('empty')],
       [pt(t, 'st.judgeToken'), configured(decision.tokenConfigured)],
