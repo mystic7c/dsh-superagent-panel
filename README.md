@@ -7,9 +7,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.1**（0.4.1 把 `repo_task` 描述扩到"具体开发/数据交付需求"，修复一条真实需求被误判
-`context` 的 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动交给 worker 修复并重跑 + 手动仓库巡检
-不再受 3 次上限；发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.2**（0.4.2 加入"评估确认"：每条评估回发来源群，你回复「接单/忽略 + 短码」决定是否开单，
+判断会写成信号标签供校准；0.4.1 修复 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动修复；
+发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -102,6 +102,49 @@ plugin_manager install_bundle target=<本仓库目录>
   }
 }
 ```
+
+## 评估确认（群消息复核，0.4.2）
+
+打开后，**每一条被评估的消息**（规则接单、规则忽略、模型否决都算）都会回发到来源群一条确认消息：
+
+```
+Superagent: 评估 #A7K2
+消息：需求：库存出入库流水表…数据传BI…
+规则：接单 · 模型：repo_task 0.97 → 建议接单
+工单：tkt_xxx（已排队，等你确认后执行）
+回复「接单 A7K2」或「忽略 A7K2」
+```
+
+操作人在群里回复短码即可：
+
+| 回复 | 引擎原结论 | 动作 |
+|---|---|---|
+| `接单 A7K2` | 忽略/模型否决 | 用规则重放该信号建单（规则硬拦的高风险仍不建单） |
+| `接单 A7K2` | 已接单、工单排队 | 立即执行该工单 |
+| `忽略 A7K2` | 已接单、工单排队 | 撤销（dismiss）该工单 |
+| `忽略 A7K2` | 忽略/模型否决 | 记录你的判断 |
+
+- 每次回复都会写成 `decision.humanReview` 和信号标签（`correct / false_wake / missed_wake`），直接成为
+  规则 vs 模型的校准数据。
+- 回复消息在正常 intake 之前被拦截，不会被当成新需求；机器人自己的通知以 `Superagent:` 开头，也会被自回复
+  过滤，不会循环。
+- **严格 gate 由 `executor.autoRun` 控制**：把它设为 `false` 时，新工单只会排队，只有你回复"接单"才会执行；
+  设为 `true` 时照常自动执行，确认消息只作为反馈/撤销不了已开始的工单。
+- 没回复的评估 24 小时后过期（`review.expireHours`）。
+
+```json
+{
+  "review": {
+    "enabled": true,
+    "scope": "all",
+    "allowSenderIds": ["<你的 Octo uid>"],
+    "expireHours": 24
+  },
+  "executor": { "autoRun": false }
+}
+```
+
+`scope` 可选 `all`（所有评估）或 `uncertain`（只发规则/模型分歧与模型否决的消息，减少群噪声）。
 
 ## 决策模型 shadow（可选，落地第一步）
 

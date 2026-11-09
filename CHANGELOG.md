@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.2] — 2026-11-09
+
+评估确认（群消息复核）：每条评估回发来源群，操作人回复「接单/忽略 + 短码」决定是否开单，并把判断写成信号
+标签用于校准。
+
+- 新增 `lib/live/reviews.js` + 引擎 review 流程：每条被评估的消息（规则接单/规则忽略/模型否决）生成一条
+  `#ABCD` 短码确认消息发回来源群；回复支持 `接单 ABCD` / `忽略 ABCD`（也支持码在前）
+- 回复在 intake 之前拦截，不会变成新需求；机器人通知以 `Superagent:` 开头，被自回复过滤，不会循环
+- 动作：模型否决/规则忽略 + 接单 → 规则重放建单（规则硬拦的高风险仍拒绝）；已排队工单 + 接单 → 立即执行；
+  已排队工单 + 忽略 → dismiss；忽略 + 忽略 → 记录一致
+- 每次回答写 `decision.humanReview` 并把 `correct / false_wake / missed_wake` 写入信号标签
+- 严格 gate 用 `executor.autoRun=false` 控制（新工单排队等确认）；未回复的评估按 `review.expireHours`
+  （默认 24h）过期
+- 配置 `review.enabled / scope(all|uncertain) / allowSenderIds / expireHours`；面板设置→评估显示确认范围与
+  待回复/已回复计数，评估页显示人工结论标签
+- 新增 8 条 reviews 单测 + 10 条引擎 review 流程测试 + 1 条配置测试
+- 验证：`node --test` 390/390；render-check 133/133；build-client --check、check-keys 通过
+
 ## [0.4.1] — 2026-11-09
 
 修复 hybrid 线上漏单：2026-11-09 05:41 的一条真实需求
