@@ -154,6 +154,7 @@ Object.assign(PAGE_TEXT, {
     request: ['需求', 'Request'],
     changedFiles: ['改动文件', 'Changed files'],
     workerSummary: ['执行总结', 'Worker summary'],
+    workerSummaryRun: ['执行总结（来自运行 {run}）', 'Worker summary (run {run})'],
     noChangedFiles: ['这次执行没有记录改动文件。', 'No changed files were recorded for this run.'],
     noChanges: ['暂时没有可展示的改动内容。', 'No change summary yet.'],
     stepsCount: ['{count} 步', '{count} steps'],
