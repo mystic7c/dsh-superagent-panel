@@ -511,6 +511,11 @@ check('run group no longer carries the worker backend or capability matrix',
 const repoSelect = [...rootElement.querySelectorAll('select')]
   .find(select => [...select.options].some(option => option.value === 'ebs'))
 check('manual ticket form offers the ebs repository', Boolean(repoSelect), String(repoSelect?.value))
+// The run timeout is editable (it used to be file-only, so a timed-out Ticket could not be retried with more time).
+const timeoutInput = rootElement.querySelector('.sa-main input[aria-label="执行超时"]')
+check('run timeout is editable from the run group',
+  Boolean(timeoutInput) && timeoutInput.type === 'number' && Number(timeoutInput.max) === 1440,
+  timeoutInput ? `${timeoutInput.type} ${timeoutInput.value}/${timeoutInput.min}-${timeoutInput.max}` : 'missing')
 clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
