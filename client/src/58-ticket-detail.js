@@ -39,6 +39,8 @@ Object.assign(PAGE_TEXT, {
 
   // ---- P1 §3.2: the run's worktree diff, read on demand (the executor never stores the patch) --------------------
   'ticket.diffOpenFile': ['查看 {path} 的 diff', 'View the diff of {path}'],
+  'ticket.autoVerifyLimit': ['自动巡检已在同一提交上用完 3 次，不会继续刷新；点右上角 ⋯ →「核对合并/UAT」手动刷新。',
+    'Automatic checks for this commit are used up; open ··· → “Verify merge/UAT” to refresh.'],
   'ticket.diffTitle': ['改动 diff', 'Change diff'],
   'ticket.diffLoading': ['正在读取 diff…', 'Reading the diff…'],
   'ticket.diffUnavailable': ['这个工单没有可读取的工作树（可能已被清理，或还没执行）。diff 只在该次执行的工作树还在时可用。',
@@ -1143,6 +1145,9 @@ function TicketDetail({ id, page = 'execution' }) {
   // Evidence decides the shape of the acceptance block: two cards only when there is something in them, otherwise one
   // sentence. A gate-blocked Ticket used to spend ~200px on "还没有合并请求 / 还没有 UAT 验收记录" (T10).
   const uatEvidence = ticket.links?.verification?.uat ?? ticket.links?.deployment?.uat
+  // The auto-verify budget is per commit; when it is spent the panel must say so instead of looking stuck.
+  const autoVerifyLimit = ticket.links?.autoVerify?.lastSkipReason === 'auto-verify-limit'
+    && ['mr-open', 'ci-pending', 'deploy-pending'].includes(ticket.status)
   const hasAcceptanceEvidence = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl
     || ticket.links?.verification?.merged === true || uatEvidence)
   const acceptMode = ticket.repoAcceptance ?? 'deployed'
@@ -1460,6 +1465,7 @@ function TicketDetail({ id, page = 'execution' }) {
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
         : null,
+      autoVerifyLimit ? h(Hint, null, pt(t, 'ticket.autoVerifyLimit')) : null,
       hasAcceptanceEvidence
         ? h(Fragment, null,
           h('div', { className: 'sa-card-grid', style: { marginBottom: 'var(--sa-sp-8)' } },
