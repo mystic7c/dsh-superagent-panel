@@ -199,6 +199,20 @@ function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children
     open ? children : null)
 }
 
+/** Nearest ancestor whose horizontal overflow clips its children (the panel's `.sa-scroll`); the document otherwise. */
+function menuClipBounds(node) {
+  const view = node?.ownerDocument?.defaultView
+  const computed = (element) => (view?.getComputedStyle ? view.getComputedStyle(element) : undefined)
+  let parent = node?.parentElement
+  while (parent) {
+    const overflowX = String(computed(parent)?.overflowX ?? '')
+    if (/auto|scroll|hidden/.test(overflowX)) return parent.getBoundingClientRect()
+    parent = parent.parentElement
+  }
+  const doc = node?.ownerDocument ?? document
+  return (doc.scrollingElement ?? doc.documentElement).getBoundingClientRect()
+}
+
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
 
 /** Overflow menu. A label + current value makes it a view picker (`text`); the default trigger is the ⋯ icon.
@@ -207,9 +221,29 @@ const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
 function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
+  const [side, setSide] = useState(align === 'start' ? 'start' : 'end')
   const root = useRef(null)
   const trigger = useRef(null)
   const pop = useRef(null)
+  // A menu near the left edge of the scroll container used to open leftwards (data-align=end) and lose every label to
+  // the container's horizontal clip. Pick the side with room for the measured popover width; the requested side wins
+  // when it fits. Measurements are side-independent, so this effect runs once per open and never toggles.
+  useLayoutEffect(() => {
+    const preferred = align === 'start' ? 'start' : 'end'
+    if (!open) { setSide(preferred); return }
+    const popEl = pop.current
+    const rootEl = root.current
+    if (!popEl || !rootEl) return
+    const bounds = menuClipBounds(rootEl)
+    const triggerRect = rootEl.getBoundingClientRect()
+    const width = popEl.getBoundingClientRect().width || 184
+    const fitsEnd = triggerRect.right - width >= bounds.left + 8
+    const fitsStart = triggerRect.left + width <= bounds.right - 8
+    const next = preferred === 'start'
+      ? (fitsStart ? 'start' : fitsEnd ? 'end' : 'start')
+      : (fitsEnd ? 'end' : fitsStart ? 'start' : 'end')
+    setSide(current => current === next ? current : next)
+  }, [open, align])
   useEffect(() => {
     if (!open) return
     const onPointer = (event) => { if (!root.current?.contains(event.target)) setOpen(false) }
@@ -263,7 +297,7 @@ function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
       : h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
         'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
         onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
-    open ? h('div', { ref: pop, role: 'menu', 'aria-label': label, className: 'sa-menu-pop', 'data-align': align === 'start' ? 'start' : 'end',
+    open ? h('div', { ref: pop, role: 'menu', 'aria-label': label, className: 'sa-menu-pop', 'data-align': side,
       onKeyDown: onPopKeyDown },
       items.map(item => h('button', { key: item.key, type: 'button', role: item.checked === undefined ? 'menuitem' : 'menuitemradio',
         'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
