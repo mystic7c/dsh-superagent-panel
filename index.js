@@ -473,7 +473,15 @@ export function apply(ctx, config = {}) {
           return
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'publish') {
-          send(res, 200, await publishTicket({ engine, ticketId: third, commitMessage: body?.commitMessage, log: line => ctx.logger?.info?.('superagent publish: %s', line) }))
+          // Publishing may include automatic repair rounds, so it starts asynchronously like a manual run: the panel
+          // polls the Ticket for progress instead of holding one request open for a worker's whole turn.
+          const work = publishTicket({ ctx, engine, ticketId: third, commitMessage: body?.commitMessage,
+            log: line => ctx.logger?.info?.('superagent publish: %s', line) })
+            .catch(error => ctx.logger?.warn?.('superagent publish failed: %s',
+              error instanceof Error ? error.message : String(error)))
+          if (body?.wait === true) { send(res, 200, await work); return }
+          void work
+          send(res, 202, { started: true, ticketId: third })
           return
         }
         // Human acceptance of a deployed UAT build: records the sign-off so the Ticket leaves "needs you".

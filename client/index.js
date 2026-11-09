@@ -3124,6 +3124,8 @@ Object.assign(PAGE_TEXT, {
     ciDone: ['CI 已刷新：{status}', 'CI refreshed: {status}'],
     ciNoToken: ['没有 GitLab token，无法观测 CI。', 'No GitLab token, CI cannot be observed.'],
     dryDone: ['干跑完成。', 'Dry run finished.'],
+    publishStarted: ['已开始发布：闸门失败会自动让 worker 修复并重试，进度看工单状态',
+      'Publish started; a failing gate is repaired by the worker and retried'],
     publishDone: ['已发布 MR #{iid}', 'Published MR #{iid}'],
     publishPushed: ['已推送分支。', 'Branch pushed.'],
     pollDone: ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）', 'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
@@ -3643,8 +3645,8 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const dryRun = useAction(async () => { await act.runTicket(ticket.id, { dryRun: true, wait: false }); notify(pt(t, 'toast.dryDone')) },
     { reload: refreshAll })
   const publish = useAction(async () => {
-    const result = await act.publishTicket(ticket.id)
-    notify(result?.mergeRequest?.iid ? pt(t, 'toast.publishDone', { iid: result.mergeRequest.iid }) : pt(t, 'toast.publishPushed'))
+    await act.publishTicket(ticket.id)
+    notify(pt(t, 'toast.publishStarted'))
   }, { reload: refreshAll })
   const refreshCi = useAction(async () => {
     const result = await act.refreshCi(ticket.id)
@@ -6240,8 +6242,8 @@ Object.assign(PAGE_TEXT, {
   'detail.failedSteps': ['失败步骤：{steps}', 'Failed steps: {steps}'],
   'detail.failedNoChanges': ['执行器没有检测到任何文件改动。检查工单正文是否包含可执行的需求，或看「运行记录」里的 worker 输出后重试。',
     'The executor saw no file changes. Check that the request text is actionable, review the worker output under Run records, then retry.'],
-  'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → 运行 → CLI 路径」填写绝对路径后重试。',
-    'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Runtime → CLI path, then retry.'],
+  'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → Worker → CLI 路径」填写绝对路径后重试。',
+    'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Worker → CLI path, then retry.'],
   'detail.failedTimeout': ['执行超时。缩小需求或调大「执行超时」后重试。', 'The run timed out. Narrow the request or raise the run timeout, then retry.'],
   'detail.failedGate': ['闸门未通过。展开下面的「闸门结果」看失败输出，修复后重试。', 'A gate failed. Open Gate results for the failing output, fix it, then retry.'],
   'detail.failedInternal': ['执行器内部错误（旧版自动执行没有把宿主上下文传给 worker）。该问题已在本次修复中解决，直接点「重试执行」即可。',
@@ -7218,7 +7220,10 @@ function TicketDetail({ id, page = 'execution' }) {
   }, { reload: refreshAll })
   const dryRun = useAction(() => act.runTicket(id, { dryRun: true, wait: false }), { reload: refreshAll })
   const retry = useAction(() => act.runTicket(id, { dryRun: false, wait: false }), { reload: refreshAll })
-  const publish = useAction(() => act.publishTicket(id), { reload: refreshAll })
+  const publish = useAction(async () => {
+    await act.publishTicket(id)
+    notify(pt(t, 'toast.publishStarted'))
+  }, { reload: refreshAll })
   const refreshCi = useAction(() => act.refreshCi(id), { reload: refreshAll })
   const verify = useAction(async () => {
     const result = await act.verifyTicket(id)
