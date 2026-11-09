@@ -244,6 +244,8 @@ Object.assign(PAGE_TEXT, {
     ciDone: ['CI 已刷新：{status}', 'CI refreshed: {status}'],
     ciNoToken: ['没有 GitLab token，无法观测 CI。', 'No GitLab token, CI cannot be observed.'],
     dryDone: ['干跑完成。', 'Dry run finished.'],
+    publishStarted: ['已开始发布：闸门失败会自动让 worker 修复并重试，进度看工单状态',
+      'Publish started; a failing gate is repaired by the worker and retried'],
     publishDone: ['已发布 MR #{iid}', 'Published MR #{iid}'],
     publishPushed: ['已推送分支。', 'Branch pushed.'],
     pollDone: ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）', 'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
@@ -763,8 +765,8 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const dryRun = useAction(async () => { await act.runTicket(ticket.id, { dryRun: true, wait: false }); notify(pt(t, 'toast.dryDone')) },
     { reload: refreshAll })
   const publish = useAction(async () => {
-    const result = await act.publishTicket(ticket.id)
-    notify(result?.mergeRequest?.iid ? pt(t, 'toast.publishDone', { iid: result.mergeRequest.iid }) : pt(t, 'toast.publishPushed'))
+    await act.publishTicket(ticket.id)
+    notify(pt(t, 'toast.publishStarted'))
   }, { reload: refreshAll })
   const refreshCi = useAction(async () => {
     const result = await act.refreshCi(ticket.id)
