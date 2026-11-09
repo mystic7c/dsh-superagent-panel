@@ -408,7 +408,9 @@ export function apply(ctx, config = {}) {
           const dryRun = body?.dryRun === true
           if (!dryRun && !engine.configView().executor.enabled) throw new ActionError(403, 'executor.enabled is false in live.json (use dryRun)')
           if (!dryRun && engine.configView().executor.allowPush !== true) throw new ActionError(403, 'executor.allowPush is false in live.json')
-          const work = executeTicket({ ctx, engine, ticketId: third, dryRun, log: line => ctx.logger?.info?.('superagent executor: %s', line) })
+          const work = executeTicket({ ctx, engine, ticketId: third, dryRun,
+            backend: typeof body?.backend === 'string' ? body.backend : undefined,
+            log: line => ctx.logger?.info?.('superagent executor: %s', line) })
             .catch(error => { ctx.logger?.warn?.('executor failed: %s', error instanceof Error ? error.message : String(error)); return { status: 'failed', error: String(error) } })
           if (body?.wait === true) { send(res, 200, await work); return }
           void work

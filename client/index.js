@@ -6244,6 +6244,20 @@ Object.assign(PAGE_TEXT, {
     'The executor saw no file changes. Check that the request text is actionable, review the worker output under Run records, then retry.'],
   'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → Worker → CLI 路径」填写绝对路径后重试。',
     'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Worker → CLI path, then retry.'],
+  // P1 routing: who ran (or would run) a Ticket, independent of ticket status.
+  'detail.routeSuggest': ['建议 {backend} · {workType}', 'suggested {backend} · {workType}'],
+  'detail.routeLabel': ['执行路由', 'Route'],
+  'detail.routeSuggested': ['建议', 'suggested'],
+  'detail.routeApplied': ['{backend} · {workType}', '{backend} · {workType}'],
+  'detail.routeReadOnly': ['只读', 'read-only'],
+  'detail.routeWrite': ['可写', 'write'],
+  'detail.workType.analysis': ['需求分析', 'analysis'],
+  'detail.workType.review': ['代码 review', 'code review'],
+  'detail.workType.test': ['功能测试验证', 'verification'],
+  'detail.workType.dev': ['代码开发', 'development'],
+  'detail.workType.docs': ['文档', 'documentation'],
+  'detail.workType.research': ['联网调研', 'web research'],
+  'detail.workType.interactive': ['需提问/确认', 'interactive'],
   'detail.failedTimeout': ['执行超时。缩小需求或调大「执行超时」后重试。', 'The run timed out. Narrow the request or raise the run timeout, then retry.'],
   'detail.failedGate': ['闸门未通过。展开下面的「闸门结果」看失败输出，修复后重试。', 'A gate failed. Open Gate results for the failing output, fix it, then retry.'],
   'detail.failedInternal': ['执行器内部错误（旧版自动执行没有把宿主上下文传给 worker）。该问题已在本次修复中解决，直接点「重试执行」即可。',
@@ -6862,6 +6876,19 @@ function TicketActivities({ activities }) {
     list.length > shown.length ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.activityMore', { total: list.length, shown: shown.length })) : null)
 }
 
+/** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
+function runRouteTag(t, run) {
+  const route = run?.route
+  if (!route || typeof route !== 'object') return null
+  const workType = pt(t, `detail.workType.${route.workType}`)
+  const backend = route.execBackend ?? route.backend
+  const text = route.applied
+    ? pt(t, 'detail.routeApplied', { backend, workType })
+    : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
+  return h(Tag, { tone: route.applied ? 'outline' : 'info',
+    title: `${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.profile ?? ''}` }, text)
+}
+
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
 function TicketRunRows({ runs }) {
@@ -6879,6 +6906,7 @@ function TicketRunRows({ runs }) {
           h(StatusIcon, { state: view.state, size: 14 }),
           h('span', null, pt(t, view.labelKey)),
           trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
+          runRouteTag(t, run),
           stop ? h(Tag, { tone: stop.tone }, stop.label) : null,
           // P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched.
           repair && repairStatus !== 'none'
@@ -7370,6 +7398,12 @@ function TicketDetail({ id, page = 'execution' }) {
   ]
   if (thread?.key) authRows.push([t('term.thread'), h(Button, { variant: 'ghost', size: 'sm',
     onClick: () => navigate({ page: 'trigger', id: thread.key }) }, thread.title ?? liveShortId(thread.key))])
+  // P1 routing: before the next run show who routing suggests (and whether it will be applied).
+  const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
+  if (routePreview) {
+    authRows.push([pt(t, 'detail.routeLabel'),
+      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+  }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
   // never goes through the ⋯ menu. The mode comes from the repository (contract §12): `merged` repositories accept
@@ -7773,11 +7807,12 @@ function TicketDetail({ id, page = 'execution' }) {
 
 
 // ---- 60-settings.js ----
-/* LiveSettingsPage: live.json configuration in six groups (contract §6.6). The left column switches groups and the
-   right column edits one group at a time. The executor split into two groups — one for how work runs (run) and one
-   for what it may write (write) — so a high-risk permission never sits beside an unrelated switch. Editable groups
-   keep a group-local draft and save through `actions.patchSettings(patch)` followed by a model reload; read-only rows
-   state where the value comes from (live.json / built-in prompts) and never render a fake switch. */
+/* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
+   right column edits one group at a time. What runs the work is split out of the executor groups: `run` owns how work
+   runs, `worker` owns which backend executes it (and its capability matrix), and `write` owns what may be written — so
+   a high-risk permission never sits beside an unrelated switch. Editable groups keep a group-local draft and save
+   through `actions.patchSettings(patch)` followed by a model reload; read-only rows state where the value comes from
+   (live.json / built-in prompts) and never render a fake switch. */
 
 Object.assign(PAGE_TEXT, {
   'repos.intro': ['执行器使用的 GitLab 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
@@ -7866,9 +7901,10 @@ Object.assign(PAGE_TEXT, {
   'st.navLabel': ['设置分组', 'Settings groups'],
   // Reference groups (评估 / 提示词) are read-only: they sit below a divider in the rail and never show a save bar.
   'st.reference': ['参考', 'Reference'],
-  // The run/write groups split the old executor group; their labels live here as page-local overrides of the shared
-  // settingsGroup dictionary (06-i18n.js keeps source/eval/repos/prompts only).
+  // The run/worker/write groups split the old executor group; their labels live here as page-local overrides of the
+  // shared settingsGroup dictionary (06-i18n.js keeps source/eval/repos/prompts only).
   'settingsGroup.run': ['运行', 'Runtime'],
+  'settingsGroup.worker': ['Worker', 'Worker'],
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
@@ -7922,8 +7958,36 @@ Object.assign(PAGE_TEXT, {
     'Intake: connect Octo first, then choose watched groups, who may trigger work, and the poll interval; read-only values come from the host.'],
   'st.evalHint': ['评估方式、判定模型与规则目录由 live.json 和代码版本决定，这里只读展示。',
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
-  'st.runHint': ['执行器总开关、运行方式与 worker 配置。改完保存后立即生效；写权限在「写权限」分组单独管理。',
-    'The executor master switch, how work runs and the worker configuration. Changes apply after saving; write permissions are managed separately under Write access.'],
+  'st.runHint': ['执行器总开关、运行方式、闸门/超时与手工建单。改完保存后立即生效；worker 后端在「Worker」分组单独管理。',
+    'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
+  'st.workerHint': ['路由模式决定“建议 / 自动 / 单后端”；启用多个后端后按任务类型分发。suggest 只记录建议、仍用默认后端执行。',
+    'The routing mode decides suggest / auto / single. With several backends enabled, work is dispatched by task type; suggest only records the choice and still runs the default backend.'],
+  'st.routingTitle': ['路由模式', 'Routing mode'],
+  'st.routingModeSingle': ['单后端（沿用旧配置）', 'Single backend (legacy)'],
+  'st.routingModeSuggest': ['建议（只记录，不改变执行）', 'Suggest (record only)'],
+  'st.routingModeAuto': ['自动（按任务类型分发）', 'Auto (dispatch by work type)'],
+  'st.routingModeHint': ['建议模式先在运行记录里展示“会交给谁”，确认准确后再切自动。',
+    'Suggest mode shows who would run the Ticket in the run record; switch to auto once the choices look right.'],
+  'st.defaultBackend': ['默认后端', 'Default backend'],
+  'st.defaultBackendHint': ['没有偏好规则、或偏好后端不可用时使用。', 'Used when no preference matches or the preferred backend is unavailable.'],
+  'st.fallbackBackend': ['降级后端（可选）', 'Fallback backend (optional)'],
+  'st.fallbackNone': ['不降级', 'No fallback'],
+  'st.enabledBackends': ['启用的后端', 'Enabled backends'],
+  'st.enabledBackendsHint': ['至少启用一个。启用多个后默认进入建议模式；CLI 后端需要本机已登录。',
+    'Enable at least one. Several enabled defaults to suggest mode; CLI backends require a local login.'],
+  'st.routePreferences': ['任务类型偏好', 'Work-type preferences'],
+  'st.routePreferencesHint': ['按任务类型指定后端；留空跟随默认后端。硬约束优先：联网调研与需提问只能 DSH，测试验证不能 Claude。',
+    'Bind each work type to a backend; leave it on “follow default” when unsure. Hard capability limits win: research and interactive work can only run on DSH, and verification cannot run on Claude.'],
+  'st.routeFollowDefault': ['跟随默认', 'Follow default'],
+  'st.workTypeAnalysis': ['需求分析', 'Analysis'],
+  'st.workTypeReview': ['代码 review', 'Code review'],
+  'st.workTypeTest': ['功能测试验证', 'Verification'],
+  'st.workTypeDev': ['代码开发', 'Development'],
+  'st.workTypeDocs': ['文档', 'Documentation'],
+  'st.workTypeResearch': ['联网调研', 'Web research'],
+  'st.workTypeInteractive': ['需提问/确认', 'Interactive'],
+  'st.routeReadOnly': ['只读', 'read-only'],
+  'st.routeWrite': ['可写', 'write'],
   'st.writeHint': ['执行器对 GitLab 和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to GitLab and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
   'st.deployHint': ['部署与 GitLab 目标由 live.json 文件配置。这里只读展示，可重载配置或检查 UAT。',
@@ -8116,21 +8180,23 @@ const emptyRepoForm = () => ({
 })
 
 /** Group order of the left column; labels come from the shared settingsGroup dictionary in 06-i18n.js, except the
-    two executor groups whose labels are page-local overrides (settingsGroup.run / settingsGroup.write above).
+    executor groups whose labels are page-local overrides (settingsGroup.run / settingsGroup.worker /
+    settingsGroup.write above).
     `reference: true` marks a read-only group: the rail lists the groups that can be changed first, then a divider and
     the "参考" label, then these. The content column and the save-bar logic are unchanged — only the rail groups them. */
 const SETTINGS_GROUPS = [
   { id: 'source', labelKey: 'settingsGroup.source', icon: 'inbox' },
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
+  { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
 ]
 
-/** Only these groups own writable fields, so only they may ever render a save bar. `run` and `write` keep separate
-    drafts and separate save bars even though both patch `executor.*`. */
-const SETTINGS_SAVEABLE = ['source', 'run', 'write']
+/** Only these groups own writable fields, so only they may ever render a save bar. `run`, `worker` and `write` keep
+    separate drafts and separate save bars even though all three patch `executor.*`. */
+const SETTINGS_SAVEABLE = ['source', 'run', 'worker', 'write']
 
 const settingsOmit = (object, key) => {
   const next = { ...(object ?? {}) }
@@ -8139,8 +8205,12 @@ const settingsOmit = (object, key) => {
 }
 
 /** Draft comparison: booleans by value, numbers/strings by their text form (the number input holds a string). */
+/** Draft comparison: booleans by value, objects by JSON, numbers/strings by their text form. */
 function settingsSame(left, right) {
   if (typeof left === 'boolean' || typeof right === 'boolean') return Boolean(left) === Boolean(right)
+  if ((left && typeof left === 'object') || (right && typeof right === 'object')) {
+    return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
+  }
   return String(left ?? '') === String(right ?? '')
 }
 
@@ -8156,9 +8226,9 @@ function settingsPatchOf(group, draft) {
       const list = Array.isArray(draft['octo.allowSenderIds']) ? draft['octo.allowSenderIds'] : []
       patch['octo.allowSenderIds'] = list.map(value => String(value).trim()).filter(Boolean)
     }
-  } else if (group === 'run' || group === 'write') {
-    // `run` and `write` are two views of the same executor block: the union below patches every draft key either group
-    // can hold, so a field moved between the two groups keeps saving through the same `executor.*` allow-list.
+  } else if (group === 'run' || group === 'worker' || group === 'write') {
+    // `run`, `worker` and `write` are three views of the same executor block: the union below patches every draft key
+    // any of them can hold, so a field moved between the groups keeps saving through the same `executor.*` allow-list.
     for (const key of ['executor.enabled', 'executor.autoRun', 'executor.allowPush', 'executor.allowMerge', 'executor.allowReply']) {
       if (key in draft) patch[key] = draft[key] === true
     }
@@ -8166,6 +8236,10 @@ function settingsPatchOf(group, draft) {
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     for (const key of ['executor.workerBackend', 'executor.workerModel', 'executor.workerCommand']) {
       if (key in draft) patch[key] = draft[key]
+    }
+    // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
+    if (group === 'worker') {
+      for (const key of ['executor.workers', 'executor.routing']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -8262,6 +8336,28 @@ const WORKER_CAP_COLUMNS = [
   { key: 'diff', labelKey: 'st.capDiff' },
   { key: 'report', labelKey: 'st.capReport' },
 ]
+/** P1 routing controls: the same enums the host validates (routing.js). Labels are page-local i18n keys. */
+const ROUTE_BACKENDS = [
+  { value: 'dsh', labelKey: 'st.workerDsh', hintKey: 'st.workerDshHint' },
+  { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
+  { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
+]
+const ROUTE_WORK_TYPES = [
+  { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
+  { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
+  { key: 'test', labelKey: 'st.workTypeTest', hintKey: 'st.routeWrite' },
+  { key: 'dev', labelKey: 'st.workTypeDev', hintKey: 'st.routeWrite' },
+  { key: 'docs', labelKey: 'st.workTypeDocs', hintKey: 'st.routeWrite' },
+  { key: 'research', labelKey: 'st.workTypeResearch', hintKey: 'st.routeReadOnly' },
+  { key: 'interactive', labelKey: 'st.workTypeInteractive', hintKey: 'st.routeReadOnly' },
+]
+/** Built-in preference table mirroring lib/live/routing.js: capability first, then the operator's intent. */
+const ROUTE_DEFAULT_PREFERENCES = [
+  { workTypes: ['research', 'interactive'], backend: 'dsh' },
+  { workTypes: ['analysis', 'review', 'test'], backend: 'codex' },
+  { workTypes: ['dev', 'docs'], backend: 'claude' },
+]
+
 const WORKER_CAPABILITIES = [
   { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
     stream: { yes: true },
@@ -8970,7 +9066,7 @@ function LiveSettingsPage({ route }) {
           : h(Hint, null, pt(t, 'st.noRules'))))
   }
 
-  // ---- run group: the executor master switch, how it runs, worker backend and the manual ticket form ---------
+  // ---- run group: the executor master switch, how it runs and the manual ticket form -------------------------
   const renderRun = () => {
     const draft = drafts.run ?? {}
     const field = (key, fallback) => key in draft ? draft[key] : fallback
@@ -9001,42 +9097,105 @@ function LiveSettingsPage({ route }) {
           options: [{ value: 'api', label: pt(t, 'st.mrModeApi') }, { value: 'push', label: pt(t, 'st.mrModePush') }],
           onChange: next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api') }),
         h(Hint, null, pt(t, 'st.mrModeHint'))),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.workerBackend')),
-        h(Select, { label: pt(t, 'st.workerBackend'), disabled: frozen,
-          value: field('executor.workerBackend', executor.workerBackend ?? 'dsh'),
-          options: [{ value: 'dsh', label: pt(t, 'st.workerDsh') }, { value: 'codex', label: pt(t, 'st.workerCodex') },
-            { value: 'claude', label: pt(t, 'st.workerClaude') }],
-          onChange: next => editField('run', 'executor.workerBackend', next, executor.workerBackend ?? 'dsh') }),
-        h(Hint, null, pt(t, 'st.workerBackendHint'))),
-      field('executor.workerBackend', executor.workerBackend ?? 'dsh') === 'dsh'
-        ? h(Hint, null, pt(t, 'st.workerDshHint'))
-        : h(Fragment, null,
-          h('div', { className: 'sa-field' },
-            h('span', { className: 'sa-field-head' }, pt(t, 'st.workerModel')),
-            h('div', { style: { display: 'flex', maxWidth: '420px', minWidth: 0 } },
-              h(Input, { value: field('executor.workerModel', executor.workerModel ?? ''), disabled: frozen,
-                placeholder: pt(t, 'st.workerModel'), 'aria-label': pt(t, 'st.workerModel'),
-                onChange: event => editField('run', 'executor.workerModel', event.target.value, executor.workerModel ?? '') })),
-            h(Hint, null, pt(t, 'st.workerModelHint'))),
-          h('div', { className: 'sa-field' },
-            h('span', { className: 'sa-field-head' }, pt(t, 'st.workerCommand')),
-            h('div', { style: { display: 'flex', maxWidth: '420px', minWidth: 0 } },
-              h(Input, { value: field('executor.workerCommand', executor.workerCommand ?? ''), disabled: frozen,
-                placeholder: field('executor.workerBackend', executor.workerBackend ?? 'dsh') === 'codex'
-                  ? '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex' : 'claude',
-                'aria-label': pt(t, 'st.workerCommand'),
-                onChange: event => editField('run', 'executor.workerCommand', event.target.value, executor.workerCommand ?? '') })),
-            h(Hint, null, pt(t, 'st.workerCommandHint'))),
-          h(Hint, null, pt(t, field('executor.workerBackend', executor.workerBackend ?? 'dsh') === 'codex'
-            ? 'st.workerCodexHint' : 'st.workerClaudeHint'))),
       h(KeyValues, { rows }),
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
       h(ManualTicketForm, { onDone: () => { void reload() } }),
-      // P2-5: static capability matrix, read-only; highlights the saved executor.workerBackend (defaults to DSH).
-      h(WorkerCapabilityCard, { currentBackend: executor.workerBackend ?? 'dsh' }),
       saveBarFor('run'))
+  }
+
+  // ---- worker group: routing mode, enabled backends, work-type preferences and the capability matrix ----------
+  const renderWorker = () => {
+    const draft = drafts.worker ?? {}
+    const frozen = savingGroup === 'worker'
+    const legacyBackend = ['dsh', 'codex', 'claude'].includes(executor.workerBackend) ? executor.workerBackend : 'dsh'
+    const baseWorkers = executor.workers && typeof executor.workers === 'object'
+      ? executor.workers : { [legacyBackend]: { enabled: true } }
+    const baseRouting = executor.routing && typeof executor.routing === 'object' ? executor.routing : {}
+    const workers = draft['executor.workers'] ?? baseWorkers
+    const routing = draft['executor.routing'] ?? baseRouting
+    const enabled = ROUTE_BACKENDS.map(backend => backend.value)
+      .filter(backend => backend in workers && workers[backend]?.enabled !== false)
+    const visible = (routing.mode ?? (enabled.length > 1 ? 'suggest' : 'single'))
+    const defaultBackend = enabled.includes(routing.defaultBackend) ? routing.defaultBackend
+      : enabled.includes(legacyBackend) ? legacyBackend : enabled[0] ?? 'dsh'
+    const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
+    const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
+    const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
+    const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
+    const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
+    const setRouting = next => editRouting({ ...routing, ...next })
+    const toggleBackend = (backend, on) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), enabled: on } })
+    const setBackendField = (backend, key, value) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), [key]: value } })
+    const preferenceOf = type => preferences.find(rule => Array.isArray(rule.workTypes) && rule.workTypes.includes(type))?.backend ?? ''
+    const setPreference = (type, backend) => {
+      const rules = preferences.map(rule => ({ workTypes: [...(rule.workTypes ?? [])].filter(item => item !== type), backend: rule.backend }))
+      if (backend) {
+        const existing = rules.find(rule => rule.backend === backend)
+        if (existing) existing.workTypes.push(type)
+        else rules.push({ workTypes: [type], backend })
+      }
+      setRouting({ preferences: rules.filter(rule => rule.workTypes.length) })
+    }
+    const backendCard = backend => {
+      const entry = workers[backend.value] ?? {}
+      const on = backend.value in workers && entry.enabled !== false
+      return h('div', { key: backend.value, className: 'sa-field' },
+        h(SettingsSwitchRow, { label: pt(t, backend.labelKey), hint: pt(t, backend.hintKey), disabled: frozen,
+          checked: on, onChange: next => toggleBackend(backend.value, next) }),
+        backend.value === 'dsh' ? null : h(Fragment, null,
+          h('div', { style: { display: 'flex', gap: 'var(--sa-sp-8)', flexWrap: 'wrap', maxWidth: '560px', minWidth: 0 } },
+            h('div', { style: { flex: '1 1 180px', minWidth: 0, display: 'flex' } },
+              h(Input, { className: 'sa-input-full', value: entry.model ?? '', disabled: frozen,
+                placeholder: pt(t, 'st.workerModel'), 'aria-label': pt(t, 'st.workerModel'),
+                onChange: event => setBackendField(backend.value, 'model', event.target.value) })),
+            h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
+              h(Input, { className: 'sa-input-full', value: entry.command ?? '', disabled: frozen,
+                placeholder: pt(t, 'st.workerCommand'), 'aria-label': pt(t, 'st.workerCommand'),
+                onChange: event => setBackendField(backend.value, 'command', event.target.value) }))),
+          h(Hint, null, pt(t, 'st.workerModelHint'))))
+    }
+    return h('div', { className: 'sa-settings-group' },
+      settingsHeading(),
+      h(Hint, null, pt(t, 'st.workerHint')),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routingTitle')),
+        h(Select, { label: pt(t, 'st.routingTitle'), disabled: frozen, value: visible,
+          options: [{ value: 'single', label: pt(t, 'st.routingModeSingle') },
+            { value: 'suggest', label: pt(t, 'st.routingModeSuggest') },
+            { value: 'auto', label: pt(t, 'st.routingModeAuto') }],
+          onChange: next => setRouting({ mode: next }) }),
+        h(Hint, null, pt(t, 'st.routingModeHint'))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.enabledBackends')),
+        h(Hint, null, pt(t, 'st.enabledBackendsHint')),
+        ROUTE_BACKENDS.map(backendCard)),
+      h('div', { style: { display: 'flex', gap: 'var(--sa-sp-16)', flexWrap: 'wrap' } },
+        h('div', { className: 'sa-field', style: { flex: '1 1 220px', minWidth: 0 } },
+          h('span', { className: 'sa-field-head' }, pt(t, 'st.defaultBackend')),
+          h(Select, { label: pt(t, 'st.defaultBackend'), disabled: frozen, value: defaultBackend,
+            options: backendOptions, onChange: next => setRouting({ defaultBackend: next }) }),
+          h(Hint, null, pt(t, 'st.defaultBackendHint'))),
+        h('div', { className: 'sa-field', style: { flex: '1 1 220px', minWidth: 0 } },
+          h('span', { className: 'sa-field-head' }, pt(t, 'st.fallbackBackend')),
+          h(Select, { label: pt(t, 'st.fallbackBackend'), disabled: frozen, value: fallback,
+            options: [{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions],
+            onChange: next => setRouting({ fallback: next ? [next] : [] }) }))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreferences')),
+        h(Hint, null, pt(t, 'st.routePreferencesHint')),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
+          ROUTE_WORK_TYPES.map(type => h('div', { key: type.key, className: 'sa-switch-row' },
+            h('div', { className: 'sa-switch-row-text' },
+              h('span', null, pt(t, type.labelKey)),
+              h('span', { className: 'sa-hint' }, type.hintKey ? pt(t, type.hintKey) : '')),
+            h('div', { style: { flex: '0 0 200px', minWidth: 0 } },
+              h(Select, { label: pt(t, type.labelKey), disabled: frozen, value: preferenceOf(type.key),
+                options: [{ value: '', label: pt(t, 'st.routeFollowDefault') }, ...backendOptions],
+                onChange: next => setPreference(type.key, next) })))))),
+      // P2-5: static capability matrix, read-only; highlights the default backend.
+      h(WorkerCapabilityCard, { currentBackend: defaultBackend }),
+      saveBarFor('worker'))
   }
 
   // ---- write-permission group: the three things the executor may write, with the high-risk merge called out ------
@@ -9083,6 +9242,7 @@ function LiveSettingsPage({ route }) {
   const renderGroup = () => {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
+    if (active === 'worker') return renderWorker()
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()

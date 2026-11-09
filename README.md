@@ -24,7 +24,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 | 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细 |
 | 评估 | 决定列表（接单/忽略）与命中规则；shadow 模式另显示模型意见；只读 |
 | 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**、**追加要求（输入后自动干跑重跑，保留工作树改动）**、干跑完成后主行动为「发布 MR」；MR 卡显示「草稿」「过期 CI」提示 |
-| 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行 / 写权限 / 仓库（token、新增仓库）/ 变更历史 可写；评估与提示词为只读参考 |
+| 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行 / Worker（多后端启用、路由模式与任务类型偏好、模型/CLI 路径、能力矩阵）/ 写权限 / 仓库（token、新增仓库）/ 变更历史 可写；评估与提示词为只读参考 |
 
 首次安装后状态为空（不是演示种子）。设置 → 来源里可完成 Octo token 保存、从群列表选择监听群、
 编辑允许的触发人并绑定仓库；设置 → 仓库可用向导新增仓库（本地路径、GitLab 项目、验证方式），再在仓库卡片上
@@ -67,8 +67,8 @@ plugin_manager install_bundle target=<本仓库目录>
   `state.json`（旧管理层的空文档，面板不使用）。
 - 令牌文件：`octo.token` 与每个仓库的 `gitlab-*.token`（均为 600，面板不回显）。
 - 本插件没有演示种子：首次启动创建空状态；`POST /superagent/api/demo/reset` 只会清空回空状态。
-- 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、运行（执行器开关/自动执行/暂停/worker
-  后端/MR 方式）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
+- 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、运行（执行器开关/自动执行/暂停/MR 方式）、
+  Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
   编辑/删除已有仓库、闸门命令、超时、worktree、UAT/健康检查地址、gate `onFail/repairHint`、
   `executor.maxRepairRounds` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
 - 手动 `live.json` 修改后，使用设置页「重载配置」让引擎重新读取。
@@ -163,7 +163,7 @@ TypeSafe Jev、Kev/Von 等同一协议实现）对每条候选消息再判一次
 **P2**：工单级自动执行（`automation`：fixed interval / 每天 HH:mm / maxExecutions / nextAt / lastSkipReason；触发原因 heartbeat|schedule）、
 GitLab 观察升级（MR headSha、只采用匹配 head 的 pipeline、不匹配写 `pipeline.stale` 不覆盖结论、draft/WIP 跳过、自动巡检 3 次/headSha 上限）、
 signal 人工标注（correct/false_wake/missed_wake/cleared + 来源页标注菜单与计数）；
-**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry/publish 不自动修。设置→运行新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
+**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry/publish 不自动修。设置→Worker 新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
 **P2 第三批**：`GET engine/metrics?window=24h|7d|all` 聚合运行质量（成功/失败/停止/中断/等待、时长 avg/p50/p95、触发方式、停止原因、Top 失败原因、按仓库、验收轮次/通过率、信号与标注）；概览「运行质量」卡片。token/成本数据宿主尚未提供（`cost.available=false`）。
 失败原因结构化（`run.stopReason/errorCode`）、worker 执行事件轨迹（`run.trace`，≤80 条）、
 闸门失败暂停并由人「放行/重试该闸门/终止」、插件重载把中断运行标为 `interrupted` 并可「继续执行」（checkpoint：gates/commit/push/MR 阶段复用 worktree）、
@@ -177,6 +177,13 @@ worker 任务工具（`superagent_report_progress/artifact/set_verify/ask_human`
 详情页「改动内容」点文件名看单文件 patch，工作树被清理时说明原因）、
 工单追加要求（详情页输入 → `POST engine/ticket/:id/revision` 追加 `revisions[]` 并以干跑重跑；
 worker task 按序携带最近 10 条修订，保留上一轮 worktree 改动）。
+
+**多后端路由（P1）**：`executor.workers` 可同时启用 DSH / Codex / Claude，`executor.routing`（`single|suggest|auto`、`defaultBackend`、`fallback`、`preferences`）按任务类型分发：
+- 任务类型由关键词分类为 analysis / review / test / dev / docs / research / interactive；硬约束优先——联网调研与需提问只能 DSH，测试验证不能 Claude；
+- 多后端时默认 `suggest`：只把「建议谁执行」写进运行记录，仍用默认后端执行；切到 `auto` 才真正按路由运行（设置→Worker 可切，或直接改 live.json）；
+- 每张工单的 `run.route` / `ticket.route` 记录 workType、backend、profile、reason（preference/default/fallback/manual）；运行记录显示「后端 · 类型」标签，建议模式同时给出本次实际后端；
+- 只读档位按适配器收紧：Codex `-s read-only`、Claude `--permission-mode plan`、DSH 工具 guard 禁止写文件；analysis/review/research/interactive 无文件改动时交付报告并结束为 `closed`，不提交、不推送；
+- 手动改派：`POST engine/ticket/:id/run` 的 body 可带 `backend: "dsh"|"codex"|"claude"`，覆盖路由并记为 manual。
 
 **部分可用**：Codex CLI / Claude Code CLI worker（代码与单测存在，本机尚无生产运行记录）；手动验收仓库
 只观测 MR 合入，不做 UAT 指纹；多仓库的部署健康检查以各仓库配置为准。

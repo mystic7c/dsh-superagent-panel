@@ -176,6 +176,10 @@ async function commandCapture() {
     await clickText(cdp, '运行', { exact: true, selector: '.sa-settings-nav button' }).catch(() => {})
     await sleep(800)
     const settingsRun = await shot(cdp, '68-settings-run-1280.png')
+    // The worker backend and its capability matrix live in their own Settings entry, after the run group.
+    await clickText(cdp, 'Worker', { exact: true, selector: '.sa-settings-nav button' }).catch(() => {})
+    await sleep(800)
+    const settingsWorker = await shot(cdp, '72-settings-worker-1280.png')
     await clickText(cdp, '写权限', { exact: true, selector: '.sa-settings-nav button' }).catch(() => {})
     await sleep(800)
     const settingsWrite = await shot(cdp, '69-settings-write-1280.png')
@@ -212,7 +216,7 @@ async function commandCapture() {
     const execution960Text = await textOfPanel(cdp)
     writeFileSync(join(scratch, 'overview-960.txt'), narrowText)
     await setViewport(cdp, VIEWPORT.width, VIEWPORT.height)
-    const report = { tabs, settingsRun, settingsWrite, settingsRepos, settingsReference, search, narrow, narrowScan: scanText(narrowText), execution960, execution960Scan: scanText(execution960Text) }
+    const report = { tabs, settingsRun, settingsWorker, settingsWrite, settingsRepos, settingsReference, search, narrow, narrowScan: scanText(narrowText), execution960, execution960Scan: scanText(execution960Text) }
     mkdirSync(scratch, { recursive: true })
     writeFileSync(join(scratch, 'capture-report.json'), JSON.stringify(report, null, 2))
     console.log(JSON.stringify(report, null, 2))

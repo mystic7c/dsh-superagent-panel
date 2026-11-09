@@ -10,6 +10,20 @@ Object.assign(PAGE_TEXT, {
     'The executor saw no file changes. Check that the request text is actionable, review the worker output under Run records, then retry.'],
   'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → Worker → CLI 路径」填写绝对路径后重试。',
     'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Worker → CLI path, then retry.'],
+  // P1 routing: who ran (or would run) a Ticket, independent of ticket status.
+  'detail.routeSuggest': ['建议 {backend} · {workType}', 'suggested {backend} · {workType}'],
+  'detail.routeLabel': ['执行路由', 'Route'],
+  'detail.routeSuggested': ['建议', 'suggested'],
+  'detail.routeApplied': ['{backend} · {workType}', '{backend} · {workType}'],
+  'detail.routeReadOnly': ['只读', 'read-only'],
+  'detail.routeWrite': ['可写', 'write'],
+  'detail.workType.analysis': ['需求分析', 'analysis'],
+  'detail.workType.review': ['代码 review', 'code review'],
+  'detail.workType.test': ['功能测试验证', 'verification'],
+  'detail.workType.dev': ['代码开发', 'development'],
+  'detail.workType.docs': ['文档', 'documentation'],
+  'detail.workType.research': ['联网调研', 'web research'],
+  'detail.workType.interactive': ['需提问/确认', 'interactive'],
   'detail.failedTimeout': ['执行超时。缩小需求或调大「执行超时」后重试。', 'The run timed out. Narrow the request or raise the run timeout, then retry.'],
   'detail.failedGate': ['闸门未通过。展开下面的「闸门结果」看失败输出，修复后重试。', 'A gate failed. Open Gate results for the failing output, fix it, then retry.'],
   'detail.failedInternal': ['执行器内部错误（旧版自动执行没有把宿主上下文传给 worker）。该问题已在本次修复中解决，直接点「重试执行」即可。',
@@ -628,6 +642,19 @@ function TicketActivities({ activities }) {
     list.length > shown.length ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.activityMore', { total: list.length, shown: shown.length })) : null)
 }
 
+/** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
+function runRouteTag(t, run) {
+  const route = run?.route
+  if (!route || typeof route !== 'object') return null
+  const workType = pt(t, `detail.workType.${route.workType}`)
+  const backend = route.execBackend ?? route.backend
+  const text = route.applied
+    ? pt(t, 'detail.routeApplied', { backend, workType })
+    : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
+  return h(Tag, { tone: route.applied ? 'outline' : 'info',
+    title: `${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.profile ?? ''}` }, text)
+}
+
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
 function TicketRunRows({ runs }) {
@@ -645,6 +672,7 @@ function TicketRunRows({ runs }) {
           h(StatusIcon, { state: view.state, size: 14 }),
           h('span', null, pt(t, view.labelKey)),
           trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
+          runRouteTag(t, run),
           stop ? h(Tag, { tone: stop.tone }, stop.label) : null,
           // P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched.
           repair && repairStatus !== 'none'
@@ -1136,6 +1164,12 @@ function TicketDetail({ id, page = 'execution' }) {
   ]
   if (thread?.key) authRows.push([t('term.thread'), h(Button, { variant: 'ghost', size: 'sm',
     onClick: () => navigate({ page: 'trigger', id: thread.key }) }, thread.title ?? liveShortId(thread.key))])
+  // P1 routing: before the next run show who routing suggests (and whether it will be applied).
+  const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
+  if (routePreview) {
+    authRows.push([pt(t, 'detail.routeLabel'),
+      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+  }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
   // never goes through the ⋯ menu. The mode comes from the repository (contract §12): `merged` repositories accept
