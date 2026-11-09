@@ -7,7 +7,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.3.5**（0.3.5 起工单详情可「追加要求」并自动干跑重跑；
+**当前版本：0.3.6**（0.3.6 修复追加要求后执行总结仍显示上一轮；0.3.5 起工单详情可「追加要求」并自动干跑重跑；
 0.3.4 加入 hybrid 试点：规则硬闸不变，模型 `ticket-v1` 判定参与接单；
 0.3.3 把 shadow 问题集换成 `ticket-v1` 五类 choice，人工回归集 24/25、真实标注开单精确率 100%；
 0.3.2 落地决策模型 shadow；0.3.1 起工单详情可查看该次运行工作树的 diff）。
@@ -221,7 +221,7 @@ node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 353 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 123/123）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 125/125）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 

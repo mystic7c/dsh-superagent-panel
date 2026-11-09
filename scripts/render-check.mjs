@@ -71,6 +71,10 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'deployed', startedAt: nowIso, endedAt: nowIso,
     steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }] })
+  // An older round: the changes section must describe the newest run, not the first one.
+  engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
+    startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
+    steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里' }, changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -314,6 +318,9 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
     String(rootElement.querySelectorAll('.sa-changes-grid > *').length))
   check('worker summary renders an ordered list', rootElement.querySelectorAll('.sa-md ol li').length >= 1,
     String(rootElement.querySelectorAll('.sa-md ol li').length))
+  check('the worker summary comes from the newest run, not the first',
+    /修复验收流程/.test(detailText) && !/旧一轮的总结/.test(detailText), detailText.slice(0, 300))
+  check('the worker summary names the run it came from', /执行总结（来自运行/.test(detailText), detailText.slice(0, 200))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
   check('detail nav keeps all seven jumps (automation included, activities folded into the timeline) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,

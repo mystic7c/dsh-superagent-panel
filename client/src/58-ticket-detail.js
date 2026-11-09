@@ -698,20 +698,25 @@ function cleanWorkerSummary(text) {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
-/** Changed files and the worker summary: the human-readable "what changed", unioned across runs. */
+/**
+ * Changed files (union across runs) and the worker summary of the newest run that wrote one. The summary describes the
+ * current worktree, so a revision rerun must replace it — taking the last run in the newest-first list (the old
+ * behaviour) kept showing the first round's summary after a rerun.
+ */
 function changesOf(runs) {
   const files = []
   const seen = new Set()
   let worker
+  let workerRunId
   for (const run of runs) {
     for (const file of Array.isArray(run.changedPaths) ? run.changedPaths : []) {
       if (typeof file !== 'string' || seen.has(file)) continue
       seen.add(file)
       files.push(file)
     }
-    if (run.worker?.text) worker = run.worker.text
+    if (!worker && run.worker?.text) { worker = run.worker.text; workerRunId = run.id }
   }
-  return { files, worker: cleanWorkerSummary(worker) }
+  return { files, worker: cleanWorkerSummary(worker), workerRunId }
 }
 
 /** One unified-diff line's role; the first character of the line is the whole classification. */
@@ -1391,7 +1396,9 @@ function TicketDetail({ id, page = 'execution' }) {
         ? h(Hint, null, pt(t, 'ticket.noChanges'))
         : h('div', { className: 'sa-changes-grid' },
         h('div', { className: 'sa-changes-main' },
-          h('p', { className: 'sa-hint' }, pt(t, 'ticket.workerSummary')),
+          h('p', { className: 'sa-hint' },
+            changes.workerRunId ? pt(t, 'ticket.workerSummaryRun', { run: liveShortId(changes.workerRunId, 10) })
+              : pt(t, 'ticket.workerSummary')),
           changes.worker
             ? h(MarkdownLite, { text: String(changes.worker) })
             : h(Hint, null, pt(t, 'ticket.noChanges'))),
