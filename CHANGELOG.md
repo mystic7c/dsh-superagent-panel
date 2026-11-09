@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.1] — 2026-11-09
+
+修复 hybrid 线上漏单：2026-11-09 05:41 的一条真实需求
+
+> 需求：库存出入库流水表（Cux_Mtl_Transactions_Pkg.Main）数据传BI …… 1、新增procedure：Main_Bi，参数 p_Ledger_Id…
+
+被 `ticket-v1` 判成 `context`（P(repo_task)=0.30）→ `modelSkip` 忽略。消息里大量表名/procedure/参数名触发了
+`context` 描述，但它是明确的开发需求（要求新增 procedure、并发请求、定时刷新、写入 cux schema）。
+
+- 问题集 `ticket-v1` → **`ticket-v2`**：`repo_task` 描述扩展到"或提出具体的开发/数据交付需求（含需求说明、
+  procedure/报表/接口、参数与定时规则）"；同一条消息重判为 `repo_task` 0.97
+- 回归：人工回归集 25 条保持 24/25；真实标注（加入这条漏单，24 条）22/24，开单精确率保持 100%；
+  golden/real 上没有新增误开
+- 漏单的原始信号已用重放补建工单（replay 走规则判定，人工覆盖通道）
+- 验证：`node --test` 374/374；render-check 116/116；build-client --check、check-keys 通过
+
 ## [0.4.0] — 2026-11-09
 
 多 Worker 后端路由：原来 `executor.workerBackend` 只能选一个后端，现在可同时启用 DSH / Codex CLI / Claude Code CLI，并由路由按任务类型选择执行者与档位。
