@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.12] — 2026-11-11
+
+README 补上「用面板开发本仓库（自开发）」一节：自开发链路已经跑通（工单 → 闸门 → 推送 → auto-pr → merge commit →
+验收），但操作口径只散落在 `AGENTS.md` 与 CHANGELOG 里，照 GitLab/`ml-ebs` 的旧习惯操作容易踩坑（例如用 squash
+合并，面板的 ancestry 判定认不到已合入，工单停在 `mr-open`）。
+
+### 内容
+- README 在「开发与验证」后新增该小节，按本仓库在 `live.json` 的仓库项说明：
+  - `verifyMode: "manual"`（只观察提交是否合入 `main`）、`acceptance: "merged"`（合入后仍需人工验收）、
+    `createMr: "push"`（只推分支，推送输出的 `pull/new` 链接记为 pending MR）、`ci: false`（发布后直接 `mr-open`）
+  - 5 个闸门 `syntax` / `client-build` / `i18n` / `host-tests` / `render` 的命令与各自验证范围
+  - 交付流程：闸门 → 提交 → 推送 `feature/<ticketId>` → 面板记 pending MR 并进入 `mr-open` →
+    `.github/workflows/auto-pr.yml` 自动开 PR → 人工评审
+  - 合并必须用 merge commit（fast-forward 可以；squash/rebase 会重写 commit，`git merge-base --is-ancestor`
+    判定不到，工单一直停在 `mr-open`）
+  - 状态流转 `queued → working → mr-open → merged → 人工验收`；失败时先看「闸门结果」与运行记录里的证据
+  - 入口：执行页「手工建单」时选本仓库（`live.json` 的默认仓库是 `ml-ebs`，不能沿用默认）
+- 改动范围：README、CHANGELOG 与 `package.json` 版本号；不涉及 Host/客户端代码，`client/index.js` 不重建
+
+### 验证
+- `node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments 最新）、
+  `node scripts/check-keys.mjs`（756 literal / 513 shared / 1131 page-local）通过
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs` 138/138（无客户端改动，渲染回归不变）
+
 ## [0.4.11] — 2026-11-11
 
 第一张自开发工单的实测暴露了两个问题，都在这里修掉：GitHub 仓库带着 GitLab push options 推送会被服务端拒绝；
