@@ -753,5 +753,12 @@ await sleep(600)
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 const failed = checks.filter(item => !item.ok)
 console.log(JSON.stringify({ ok: failed.length === 0, checks, calls: [...new Set(calls)].slice(0, 20) }, null, 2))
+// The gate only keeps the tail of a command's output (executor.js OUTPUT_TAIL = 4000 bytes), and the JSON above is
+// ~40KB, so a failing assertion's `FAIL` line would be cut away. Repeat the failure summary AFTER the JSON so the
+// evidence the repair worker receives names the failed checks instead of showing only the payload's tail.
+if (failed.length) {
+  console.log(`FAILED ${failed.length}/${checks.length}: ${failed.map(item => item.name).join(' | ')}`)
+  for (const item of failed.slice(0, 3)) console.log(`DETAIL ${item.name}: ${String(item.detail).slice(-500)}`)
+}
 try { rootDom.unmount(); dom.window.close() } catch { /* best effort */ }
 process.exit(failed.length === 0 ? 0 : 1)
