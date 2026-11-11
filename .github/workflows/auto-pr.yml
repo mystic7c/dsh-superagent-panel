@@ -1,0 +1,47 @@
+# Delivery bridge for GitHub-hosted repositories.
+#
+# The Superagent executor can only push a feature branch on GitHub: `git push -o merge_request.*`
+# is GitLab-only and github.com ignores it, so no merge/pull request exists after a Ticket push.
+# This workflow opens the pull request for every `feature/**` branch the executor pushes.
+#
+# A pull request opened by GitHub Actions cannot be merged by the same token: a person reviews and
+# merges it. The panel's manual-repository verification then judges the merge by git ancestry
+# (`git merge-base --is-ancestor`), so the PR must be merged with a merge commit (or fast-forward),
+# not squashed.
+name: auto-pr
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: auto-pr-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open a pull request for this feature branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh pr view "$BRANCH" --json number --jq '.number' >/dev/null 2>&1; then
+            echo "a pull request for $BRANCH is already open"
+            exit 0
+          fi
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Superagent: $BRANCH" \
+            --body "Automatic pull request for branch \`$BRANCH\` pushed by the Superagent executor.
+
+          Local gate evidence lives in the Ticket's run record until this PR is merged."

@@ -1,3 +1,24 @@
+# Changelog
+
+## [0.4.9] — 2026-11-11
+
+为「用面板开发面板」补齐 GitHub 交付侧的唯一缺口，并把仓库规则落成 worker 可直接读取的 `AGENTS.md`。
+
+### 内容
+- **GitHub 推送后解析 create-PR 链接**：`parseMergeRequestFromPush` 增加 GitHub 的 `/pull/new/<branch>` 形态，
+  返回 pending merge request（`created:false`、无 `iid`）。GitHub 会忽略 `merge_request.*` push options 且不创建
+  PR，此前工单停在 `pushed`（已推送·缺 MR）；现在工单进入 `mr-open`，manual 仓库的巡检继续用 git ancestry
+  判断合并，面板详情页也能直接点开建 PR 链接
+- **`.github/workflows/auto-pr.yml`**：GitHub 仓库的交付桥，`feature/**` 分支推送后自动 `gh pr create`
+  （幂等：已有 PR 就跳过）。PR 仍需人工评审合并；合并请用 merge commit，否则 ancestry 判定不到
+- **`AGENTS.md`**：仓库结构、改动最低验证命令（build --check / check-keys / host tests / render-check）、版本与
+  CHANGELOG 约定、禁止项、GitHub 交付语义，供 Superagent worker 在干净 worktree 里直接遵循
+- `CHANGELOG.md` 把 H1 移回文件顶部（0.4.8 的版本节误加在 H1 之前）
+
+### 验证
+- `node --test` 397/397（新增 GitHub create-PR 解析用例）；`build-client --check`、`check-keys`、`render-check` 通过
+- 真实 GitHub 推送输出回归：`remote: Create a pull request ... /pull/new/...` 解析出 pending MR URL
+
 ## [0.4.8] — 2026-11-11
 
 Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的修正：先修三处界面与数据自相矛盾，再修窄屏、对比度与
@@ -32,8 +53,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
 - `build-client --check`、`check-keys` 通过；`impeccable detect --cdp` 六页面板内 findings 0（修前 1 条 low-contrast）
 - 实机复检 1280/960/390：概览 来源「已启用 1/3」+ 执行器「已停用」、执行页 7 个阶段 chip 与「已忽略」切片、
   工单详情闸门区显示 `ebs-deploy`/`ebs-access`、390 横幅图标同行、标签不压字
-
-# Changelog
 
 ## [0.4.7] — 2026-11-11
 
