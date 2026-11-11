@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.10] — 2026-11-11
+
+修复 `metricsView` 时长夹具的 1ms 竞态（flaky）：`metricsView classifies runs, windows them and rolls up
+durations/triggers/stop reasons (p2c §1)` 偶发失败——2026-11-10 的全量运行里实际值 `totalMs=5280001`、
+断言期望 `5280000`，其它字段一致，重跑即过。
+
+根因在测试夹具自身，不在引擎：`seedMetrics` 里每个 run 的 `startedAt` 与 `completedAt` 是两次独立调用
+`hoursAgo(...)` / `daysAgo(...)` 得到的（例如 `startedAt: hoursAgo(1)`、`completedAt: plusMinutes(hoursAgo(1), 10)`）。
+两次 `Date.now()` 之间跨过 1 毫秒时，该 run 的时长就从 600000 变成 600001，聚合结果随之漂移。
+
+- `seedMetrics` 在夹具开头冻结一次 `base = Date.now()`，`hoursAgo` / `daysAgo` 增加可选 `base` 参数
+  （默认仍是 `Date.now()`，其它用例行为不变），每个 run 的两端都由同一基准推导；断言意图与期望聚合值
+  保留不变（avgMs 528000 / p50Ms 360000 / p95Ms 1800000 / totalMs 5280000）
+- 用例新增一条守卫断言：每个已结束 run 的 `completedAt - startedAt` 必须是整分钟数（`% 60000 === 0`），
+  漂移会直接指向出错的那一行，而不是只表现为聚合值差 1
+- 只改测试夹具，运行时行为（`lib/live/engine.js`）不变，`client/index.js` 无需重建
+
+### 验证
+- `node --test` 397/397；该用例单跑与全量均通过，重复运行稳定（该用例连续单跑 10 次也全过）
+- 复现对照（时钟每次 `Date.now()` 前进 1ms）：旧夹具单 run 600001ms、10 个 run 合计 5280010ms；
+  新夹具 600000ms / 5280000ms
+- `node --check index.js`、`build-client --check`、`check-keys` 通过
+- `render-check` 138/138，连续复跑 20 次均通过（含 `bash -lc` 登录 shell 的 node 24.14、8 路并发与 CPU 满载）；
+  发布闸门曾报过一次 render exit 1，同一工作树/live 状态下未能复现，本轮不改客户端与闸门脚本
+
 ## [0.4.9] — 2026-11-11
 
 为「用面板开发面板」补齐 GitHub 交付侧的唯一缺口，并把仓库规则落成 worker 可直接读取的 `AGENTS.md`。
