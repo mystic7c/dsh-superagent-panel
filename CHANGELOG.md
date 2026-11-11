@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.7] — 2026-11-11
+
+修复「运行记录」把交付时的阶段当成实时状态：`tkt_f6a66f97a4ab41fe` 的 MR 已合并、已部署 UAT 并验收，
+运行记录里仍有一条「等待 CI」在转圈，看起来像 CI 一直没回来。
+
+根因是两段事实不一致：`run.status` 在交付那一刻被写成工单当时所处的阶段（`lib/live/executor.js` 的
+`run.status = ticket.status`，例如 `ci-pending`），此后 CI 通过、MR 合入、部署、验收都只改 `ticket.status`
+与 `ticket.links`，不会回写 run（run 是只追加证据，唯一的回写是 reconcile 把陈旧的 `running` 标成
+`interrupted`）。而运行记录行直接拿 `run.status` 走工单状态表渲染，`ci-pending` 在状态表里是 `ongoing`
+（默认转圈），于是**已经结束几小时的 run 一直在转**。
+
+- 新增 `runView(t, run)`（`client/src/34-live-ui.js`）：run 有 `stopReason` 且状态不是 `running` /
+  `waiting_for_human` 即视为已结算，形状由结束原因（`RUN_STOP_STATE`）决定；若它的末状态是交付阶段
+  （`ci-pending` / `ci-passed` / `mr-open` / `pushed` / `merged` / `deploy-pending` / `gates-passed` / `ready`），
+  文案改为「交付时：{阶段}」，不再借用该阶段的实时形状。交付时的阶段作为历史保留，`stopReason` 标签
+  （完成 / 失败 / 中断…）不变
+- 三处同源渲染改走 `runView`：工单详情运行记录行（`58-ticket-detail.js`）、阶段链路「执行」步结果、
+  `LiveRunRows` 兼容层
+- 回归：render-check 把演示工单的 run 固定成 `status:'ci-pending' + stopReason:'done'`（真机上该工单的形态），
+  新增「已交付 run 写交付时阶段」「已结算 run 不转圈」两条断言，136/136；`node --test` 396/396；
+  `build-client --check` 与 `check-keys` 通过
+
 ## [0.4.6] — 2026-11-09
 
 修复工单详情「工单动作」菜单显示成一块空白灰块：菜单按 `align="end"` 向左展开，越过 `.sa-scroll` 的横向

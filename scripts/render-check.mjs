@@ -68,7 +68,10 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
     'gate:frontend', 'commit', 'push', 'merge-request']
   const steps = stepNames.map((name, index) => ({ name,
     at: new Date(Date.now() - (10 - index) * 60_000).toISOString(), state: 'ok', exitCode: 0 }))
-  engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'deployed', startedAt: nowIso, endedAt: nowIso,
+  // The run recorded the phase it handed the Ticket off at (`ci-pending`) and finished there; the Ticket went on to
+  // merge and deploy. Its row must read that phase as history, never as a live CI spinner.
+  engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
+    completedAt: nowIso, endedAt: nowIso,
     steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }] })
   // An older round: the changes section must describe the newest run, not the first one.
@@ -311,6 +314,13 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   const positions = order.map(label => sectionTitles.indexOf(label))
   check('detail sections follow the requested order', positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])),
     JSON.stringify({ sectionTitles, positions }))
+  // A settled run keeps its hand-off phase as history: the row says 交付时 and the CI spinner is gone (the Ticket has
+  // already deployed and been accepted, no CI is pending).
+  const firstRunRow = rootElement.querySelector('#sa-ticket-runs .sa-row')
+  check('a delivered run names the phase it handed off at',
+    /交付时：等待 CI/.test(firstRunRow?.textContent ?? ''), firstRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a settled run never keeps the CI spinner turning',
+    Boolean(firstRunRow) && !firstRunRow.querySelector('.sa-spin'), firstRunRow?.innerHTML?.slice(0, 200) ?? 'no run row')
   check('changes section carries the changed files and worker summary', /改动文件/.test(detailText) && /执行总结/.test(detailText), detailText.slice(0, 300))
   // Wide layout: the worker summary is the left reading column, the files/request are the right evidence column.
   check('changes section reads summary left, files right', Boolean(rootElement.querySelector('.sa-changes-grid .sa-changes-main .sa-md'))

@@ -2990,6 +2990,8 @@ Object.assign(PAGE_TEXT, {
     commit_failed: ['提交失败', 'Commit failed'], push_failed: ['推送失败', 'Push failed'],
     mr_failed: ['MR 创建失败', 'MR creation failed'], interrupted: ['已中断', 'Interrupted'],
     stopped: ['人工终止', 'Stopped by a person'], other: ['其他原因（{reason}）', 'Other ({reason})'] },
+  // A settled run keeps the Ticket phase it handed off at as history, never as a live state (see runView).
+  runState: { handoff: ['交付时：{phase}', 'Handed off: {phase}'] },
   problem: { engineError: ['引擎报告异常', 'The engine reported an error'], paused: ['处理已暂停', 'Processing is paused'],
     engineOff: ['自动触发未开启', 'Automatic intake is off'], sourceError: ['{name} 异常', '{name} is failing'],
     octoToken: ['Octo token 未配置', 'Octo token is missing'], gitlabToken: ['GitLab token 未配置', 'GitLab token is missing'],
@@ -3172,7 +3174,7 @@ Object.assign(PAGE_TEXT, {
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
   'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
-  'runTrigger', 'runStop', 'automation']
+  'runTrigger', 'runStop', 'runState', 'automation']
 for (const group of TEXT_GROUPS) {
   const nested = PAGE_TEXT[group]
   if (!nested || Array.isArray(nested)) continue
@@ -3392,6 +3394,31 @@ function runStopLabel(t, run) {
   const key = RUN_STOP_REASON_KEYS[String(reason)]
   return { tone: RUN_STOP_TONE[String(reason)] ?? 'outline',
     label: key ? pt(t, key) : pt(t, 'runStop.other', { reason: String(reason) }) }
+}
+
+/**
+ * Ticket phases a run can keep as its last recorded status: the run had already delivered, so these name where the
+ * Ticket went on — not what the run is doing. `run.status` is written once at hand-off and never updated afterwards
+ * (`ci-pending` stays `ci-pending` after CI passed, the MR merged, the deploy succeeded and the Ticket was accepted).
+ */
+const RUN_HANDOFF_STATUSES = new Set(['ci-pending', 'ci-passed', 'mr-open', 'pushed', 'merged', 'deploy-pending',
+  'gates-passed', 'ready'])
+/** A settled run's shape comes from how it ended (`stopReason`); an unknown reason keeps the phase's own shape. */
+const RUN_STOP_STATE = { done: 'done', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
+  interrupted: 'warning', stopped: 'idle', error: 'error', timeout: 'error', worker_failed: 'error',
+  prepare_failed: 'error', bootstrap_failed: 'error', guard_failed: 'error', commit_failed: 'error', push_failed: 'error' }
+
+/**
+ * One run → the state and label its row renders. A run that stopped at hand-off must never borrow the phase's live
+ * shape: `ci-pending` used to keep a spinner turning on an accepted Ticket (the run had finished hours earlier).
+ * → { state, label } — the phase stays readable as "交付时：…", with `runStopLabel` carrying the outcome tag.
+ */
+function runView(t, run) {
+  const base = ticketStatus({ status: run?.status })
+  const reason = String(run?.stopReason ?? run?.errorCode ?? '')
+  const settled = Boolean(reason) && run?.status !== 'running' && run?.status !== 'waiting_for_human'
+  if (!settled || !RUN_HANDOFF_STATUSES.has(String(run?.status))) return { state: base.state, label: pt(t, base.labelKey) }
+  return { state: RUN_STOP_STATE[reason] ?? base.state, label: pt(t, 'runState.handoff', { phase: pt(t, base.labelKey) }) }
 }
 
 /** Old public seam: status string → tag tone. Kept because pages may still import it. */
@@ -4016,7 +4043,7 @@ function StageRail({ ticket, detail = false }) {
     { key: 'ticket', state: 'done', result: '' },
     { key: 'execution', state: ticket.status === 'working' ? 'ongoing' : runFailed ? (recovered ? 'warning' : 'error')
       : executed ? 'done' : 'idle',
-      result: recovered ? pt(t, 'rail.retried') : run ? pt(t, ticketStatus({ status: run.status }).labelKey) : '' },
+      result: recovered ? pt(t, 'rail.retried') : run ? runView(t, run).label : '' },
     { key: 'gate', state: gateFailed ? 'error' : gateDone ? 'done' : ticket.status === 'working' ? 'ongoing' : 'idle',
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
@@ -4108,13 +4135,16 @@ function LiveRunRows({ runs, limit = Infinity }) {
   const { t } = usePanel()
   const list = Array.isArray(runs) ? runs.slice(0, limit) : []
   if (!list.length) return h(Hint, null, t('empty'))
-  return h('ul', { className: 'sa-list' }, list.map(run => h('li', { key: run.id, className: 'sa-row' },
-    h('div', { className: 'sa-row-main' },
-      h('div', { className: 'sa-row-title' },
-        h(StatusIcon, { state: ticketStatus({ status: run.status }).state, size: 14 }),
-        h('span', null, pt(t, ticketStatus({ status: run.status }).labelKey)),
-        h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
-      run.error ? h('p', { className: 'sa-error' }, String(run.error)) : null))))
+  return h('ul', { className: 'sa-list' }, list.map(run => {
+    const view = runView(t, run)
+    return h('li', { key: run.id, className: 'sa-row' },
+      h('div', { className: 'sa-row-main' },
+        h('div', { className: 'sa-row-title' },
+          h(StatusIcon, { state: view.state, size: 14 }),
+          h('span', null, view.label),
+          h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
+        run.error ? h('p', { className: 'sa-error' }, String(run.error)) : null))
+  }))
 }
 function LiveStatusTags({ engine, config }) {
   const { t } = usePanel()
@@ -6935,7 +6965,7 @@ function runRouteTag(t, run) {
 function TicketRunRows({ runs }) {
   const { t } = usePanel()
   return h('ul', { className: 'sa-list' }, runs.map(run => {
-    const view = ticketStatus({ status: run.status })
+    const view = runView(t, run)
     const stop = runStopLabel(t, run)
     const trigger = runTriggerLabel(t, run)
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
@@ -6945,7 +6975,7 @@ function TicketRunRows({ runs }) {
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', null, pt(t, view.labelKey)),
+          h('span', null, view.label),
           trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
           runRouteTag(t, run),
           stop ? h(Tag, { tone: stop.tone }, stop.label) : null,

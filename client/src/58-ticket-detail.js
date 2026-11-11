@@ -660,7 +660,7 @@ function runRouteTag(t, run) {
 function TicketRunRows({ runs }) {
   const { t } = usePanel()
   return h('ul', { className: 'sa-list' }, runs.map(run => {
-    const view = ticketStatus({ status: run.status })
+    const view = runView(t, run)
     const stop = runStopLabel(t, run)
     const trigger = runTriggerLabel(t, run)
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
@@ -670,7 +670,7 @@ function TicketRunRows({ runs }) {
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', null, pt(t, view.labelKey)),
+          h('span', null, view.label),
           trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
           runRouteTag(t, run),
           stop ? h(Tag, { tone: stop.tone }, stop.label) : null,
