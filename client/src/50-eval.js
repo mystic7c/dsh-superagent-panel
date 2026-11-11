@@ -40,6 +40,9 @@ Object.assign(PAGE_TEXT, {
   'ev.shadowHint': ['shadow 模式：模型意见只记录，接单仍由规则决定。',
     'Shadow mode: the model opinion is recorded only; the rules still decide intake.'],
   'ev.human': ['人工：{answer}', 'Human: {answer}'],
+  // `recorded` means the reply was kept but no Ticket was started (the rule gate still refused it): say so in the tag
+  // instead of showing "人工：接单" on a row that produced nothing (critique 2026-11-11).
+  'ev.humanRecorded': ['人工：{answer}（仅记录）', 'Human: {answer} (recorded)'],
   'ev.humanAccept': ['接单', 'accept'],
   'ev.humanIgnore': ['忽略', 'ignore'],
   'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
@@ -149,8 +152,10 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
           decision.humanReview
-            ? h(Tag, { tone: 'quiet', title: `${decision.humanReview.code} · ${decision.humanReview.outcome ?? ''}` },
-              pt(t, 'ev.human', { answer: pt(t, decision.humanReview.answer === 'accept' ? 'ev.humanAccept' : 'ev.humanIgnore') }))
+            ? h(Tag, { tone: decision.humanReview.outcome === 'recorded' ? 'warning' : 'quiet',
+              title: `${decision.humanReview.code} · ${decision.humanReview.outcome ?? ''}` },
+              pt(t, decision.humanReview.outcome === 'recorded' ? 'ev.humanRecorded' : 'ev.human',
+                { answer: pt(t, decision.humanReview.answer === 'accept' ? 'ev.humanAccept' : 'ev.humanIgnore') }))
             : null,
           evalModelTag(t, decision),
           decision.at ? h(When, { at: decision.at }) : null,

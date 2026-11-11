@@ -221,7 +221,7 @@ const PANEL_CSS = `
 
 /* ---------- primary tabs (underline) ---------- */
 .sa-tabs { display: flex; width: 100%; gap: var(--sa-sp-24); overflow-x: auto; padding: 0; border-bottom: 0.5px solid var(--sa-line); }
-.sa-tab { flex: none; box-sizing: border-box; height: 36px; padding: 0 var(--sa-sp-2); border: 0;
+.sa-tab { flex: none; box-sizing: border-box; height: 36px; padding: 0 var(--sa-sp-8); border: 0;
   border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-alias-label-secondary);
   font: inherit; font-size: var(--sa-fs-body); line-height: 1.5; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .sa-tab:hover { color: var(--dsw-alias-label-primary); }
@@ -288,7 +288,7 @@ const PANEL_CSS = `
 .sa-menu-item-icon { display: inline-flex; flex: none; color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-secondary)); }
 
 /* ---------- tags / pills / segmented ---------- */
-.sa-tag { display: inline-flex; align-items: center; border-radius: var(--sa-r-pill); padding: 0 var(--sa-sp-8);
+.sa-tag { display: inline-flex; align-items: center; flex: none; border-radius: var(--sa-r-pill); padding: 0 var(--sa-sp-8);
   font-size: var(--sa-fs-caption); line-height: 1.6; font-weight: 500; white-space: nowrap; }
 .sa-tag[data-tone='outline'] { border: 0.5px solid var(--sa-line); color: var(--sa-label-tertiary); }
 .sa-tag[data-tone='neutral'] { background: var(--dsw-alias-bg-layer-2, transparent); color: var(--dsw-alias-label-secondary); }
@@ -320,10 +320,12 @@ const PANEL_CSS = `
   background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-segmented-chips .sa-segment[aria-checked='true'] { font-weight: 600;
   background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
-.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 0.66;
-  font-variant-numeric: tabular-nums; }
-.sa-chip-count[data-zero='true'] { opacity: 0.42; }
-.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { opacity: 0.8; }
+/* The count is real text: it must clear AA. Opacity 0.66/0.42 measured 2.75:1 / 1.82:1 on white, so the full
+   tertiary colour (5.5:1) carries both states and the active chip inherits the selected label colour. */
+.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 1;
+  color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
+.sa-chip-count[data-zero='true'] { opacity: 1; }
+.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { color: inherit; opacity: 1; }
 
 /* View pickers: the two view settings are labelled outline buttons that open a two-option menu, so the row states
    what each choice is ("分组 按阶段") instead of looking like a second filter row. */
@@ -470,6 +472,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-md);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 7%, transparent); }
 .sa-automation-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-automation-head { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
 .sa-automation-title { font-size: var(--sa-fs-body); line-height: 1.4; font-weight: 600;
   color: var(--dsw-alias-label-primary); }
 .sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
@@ -576,7 +579,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
-.sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+.sa-settings-body { min-width: 0; max-width: 640px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
 .sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
@@ -637,7 +640,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-input:focus-within { border-color: var(--dsw-alias-brand-primary); }
 .sa-input-full { width: 100%; }
 .sa-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary);
-  font: inherit; font-size: var(--sa-fs-body); }
+  font: inherit; font-size: var(--sa-fs-body); align-self: stretch; }
 .sa-input-icon { display: inline-flex; color: var(--sa-label-tertiary); }
 .sa-select { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; padding: 0 var(--sa-sp-8);
   border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm); font: inherit; font-size: var(--sa-fs-body);
@@ -647,17 +650,18 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-sm); padding: var(--sa-sp-8) var(--sa-sp-12); font: inherit; font-size: var(--sa-fs-body);
   line-height: 1.5; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1, transparent); resize: vertical; }
 .sa-textarea:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: var(--sa-r-pill);
+.sa-switch { position: relative; flex: none; width: 40px; height: 24px; padding: 0; border: 0; border-radius: var(--sa-r-pill);
   cursor: pointer; background: var(--dsw-alias-border-l2); transition: background 140ms ease; }
 .sa-switch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
 .sa-switch:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-switch:disabled { cursor: not-allowed; opacity: 0.4; }
-.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
   background: var(--dsw-alias-label-primary-foreground); transition: left 140ms ease; }
 .sa-switch[aria-checked='true'] .sa-switch-thumb { left: 18px; }
 /* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list. */
-.sa-switch-compact { width: 30px; height: 18px; }
-.sa-switch-compact .sa-switch-thumb { width: 14px; height: 14px; }
+/* Slimmer than the settings switch but still a 24px-tall target (WCAG 2.5.8 minimum). */
+.sa-switch-compact { width: 36px; height: 24px; }
+.sa-switch-compact .sa-switch-thumb { width: 20px; height: 20px; }
 .sa-switch-compact[aria-checked='true'] .sa-switch-thumb { left: 14px; }
 
 /* ---------- empty / error / skeleton ---------- */
@@ -894,7 +898,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
   /* Keep the settings rail and its form as one centered unit instead of leaving a 400px dead column on the right. */
-  .sa-settings { grid-template-columns: 140px minmax(0, 760px); justify-content: center; }
+  .sa-settings { grid-template-columns: 140px minmax(0, 640px); justify-content: center; }
   /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
   .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
@@ -1184,8 +1188,10 @@ const TEXT = {
   decisionEmpty: { work: ['还没有接单或续做的决定。', 'No accept or reopen Decision yet.'], stop: ['没有停止的决定。', 'No stop Decision.'], ignore: ['没有忽略的决定。', 'No ignore Decision.'], unavailable: ['没有未完成的评估。', 'No unavailable Eval.'], all: ['还没有任何决定。', 'No Decision yet.'] },
   window24h: ['仅看 24 小时', 'Last 24 hours'],
   matchedRules: ['命中规则', 'Matched rules'],
-  ruleMatched: ['命中', 'Matched'],
-  ruleNotMatched: ['未命中', 'Not matched'],
+  // A rule's `matched` means "this check passed", not "a risk word was hit": R3 matched = no high-risk topic found.
+  // Printing 命中 next to R3's own reason "未命中生产/DDL/…" contradicted itself (critique 2026-11-11).
+  ruleMatched: ['通过', 'Passed'],
+  ruleNotMatched: ['未通过', 'Not passed'],
   decisionReason: ['原因', 'Reason'],
   decisionDirection: ['方向判断', 'Direction'],
   decisionTicket: ['工单', 'Ticket'],
@@ -1680,9 +1686,9 @@ function Button({ variant = 'ghost', size = 'md', icon, className, children, typ
     children !== undefined && children !== null ? children : null)
 }
 
-function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost' }) {
+function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
   return h('button', { type: 'button', className: 'sa-icon-btn', 'data-variant': variant,
-    'aria-label': label ?? title, title: title ?? label, disabled, onClick }, controlIcon(icon, 16))
+    'aria-label': label ?? title, title: title ?? label, disabled, onClick, ...rest }, controlIcon(icon, 16))
 }
 
 function Tag({ tone = 'outline', title, children }) {
@@ -1754,10 +1760,14 @@ function Switch({ checked, onChange, label, className, disabled }) {
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
-function Modal({ open, onClose, title, closeLabel, description, footer, className, children }) {
+function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
   const dialog = useRef(null)
   const close = useRef(onClose)
   close.current = onClose
+  // Where focus goes on close. The opener is right for a click-opened dialog; a dialog opened by a keyboard shortcut
+  // (Ctrl+K) has no opener, so search points this at its own header button instead of leaving focus on <body>.
+  const restore = useRef(restoreTo)
+  restore.current = restoreTo
   useEffect(() => {
     if (!open) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
@@ -1775,7 +1785,14 @@ function Modal({ open, onClose, title, closeLabel, description, footer, classNam
       }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown); opener?.focus() }
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Focus goes back to whatever opened the dialog. A keyboard-opened dialog has no usable opener (the active
+      // element was <body>), so it falls back to the explicit target the caller names — the search trigger for Ctrl+K.
+      const fallback = typeof restore.current === 'function' ? restore.current() : restore.current
+      const target = opener && opener !== document.body ? opener : fallback
+      ;(target instanceof HTMLElement ? target : opener)?.focus()
+    }
   }, [open])
   if (!open) return null
   return h('div', { className: 'sa-modal-root', role: 'presentation' },
@@ -2556,7 +2573,9 @@ function GlobalSearch({ open, onClose }) {
             h('h3', { className: 'sa-ledger-title' }, pt(t, group.titleKey),
               h('span', { className: 'sa-count' }, pt(t, 'search.showCount', { count: group.items.length }))),
             h('div', { className: 'sa-list' }, group.items.map(group.render)))))
-  return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal' },
+  return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal',
+    // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
+    restoreTo: () => document.getElementById('sa-search-trigger') },
     h(Input, { inputRef, icon: 'search', className: 'sa-input-full',
       value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
       onChange: event => setQuery(event.target.value) }),
@@ -2578,7 +2597,7 @@ function Header({ onOpenSearch }) {
         h('h1', { className: 'sa-title' }, t('title'))),
       h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(GlobalStatus, null),
-        h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
+        h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
           title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
         h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
           title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
@@ -2667,6 +2686,9 @@ function PanelShell({ location, openTab }) {
       if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return
       event.preventDefault()
       openTab(TABS[index])
+      // Selection moves with the shortcut, so focus must follow: otherwise the selected tab is tabindex=-1 and the
+      // keyboard focus sits on a tab the user is no longer on (real-click arrow keys already keep the two in sync).
+      document.getElementById(`sa-tab-${TABS[index]}`)?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -3022,7 +3044,7 @@ Object.assign(PAGE_TEXT, {
     noDecision: ['还没有决定。', 'No decision yet.'], noMessages: ['这个线程还没有消息。', 'This thread has no messages yet.'],
     latestDecision: ['最近决定', 'Latest decision'], reason: ['原因', 'Reason'], rules: ['规则', 'Rules'],
     openTicket: ['打开工单', 'Open Ticket'], decisionsTitle: ['决定历史', 'Decisions'],
-    rulesHit: ['{hit} 命中 / {miss} 未命中', '{hit} matched / {miss} unmatched'],
+    rulesHit: ['{hit} 通过 / {miss} 未通过', '{hit} passed / {miss} not passed'],
     factsRaw: ['事实原始值', 'Raw facts'], noSelection: ['从左侧选择一个线程', 'Pick a thread on the left'],
     noSelectionHint: ['选中线程后，这里会展示事实、评估、决定与消息去向。',
       'Pick a thread to see its facts, evaluation, decision and where each message went.'],
@@ -3056,7 +3078,7 @@ Object.assign(PAGE_TEXT, {
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
       'Re-runs the gates in the existing worktree, then pushes the branch and creates/refreshes the MR: {title}'],
-    step: { prepareWorktree: ['准备工作区', 'Prepare worktree'], prepareRepo: ['准备仓库', 'Prepare repository'],
+    step: { prepareWorktree: ['准备工作树', 'Prepare worktree'], prepareRepo: ['准备仓库', 'Prepare repository'],
       exportRepo: ['导出 UAT 对象', 'Export UAT objects'], worker: ['执行 worker', 'Run the worker'],
       changedPaths: ['检查改动', 'Inspect changes'], bootstrap: ['安装依赖', 'Install dependencies'],
       gate: ['闸门', 'Gates'], commit: ['提交改动', 'Commit changes'], push: ['推送分支', 'Push the branch'],
@@ -3139,9 +3161,9 @@ Object.assign(PAGE_TEXT, {
   automation: {
     offTitle: ['自动化未启动', 'Automation is off'],
     pausedTitle: ['处理已暂停', 'Processing is paused'],
-    paused: ['处理已暂停', 'Paused'],
-    engineOff: ['引擎未启用', 'Intake off'],
-    executorOff: ['执行器未启用', 'Executor off'],
+    paused: ['处理已暂停（设置→运行）', 'Paused (Settings → Runtime)'],
+    engineOff: ['引擎未启用（设置→来源）', 'Intake off (Settings → Source)'],
+    executorOff: ['执行器未启用（设置→运行）', 'Executor off (Settings → Runtime)'],
     start: ['启动自动化', 'Start automation'],
     resume: ['恢复处理', 'Resume processing'],
     startHint: ['启动后会按轮询间隔读取群消息，新工单会开始执行。',
@@ -3463,9 +3485,12 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
     ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
   return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title,
     'data-compact': compact ? 'true' : undefined },
-    h(StatusIcon, { state: 'warning', size: 16 }),
     h('div', { className: 'sa-automation-main' },
-      h('span', { className: 'sa-automation-title' }, title),
+      // The icon travels with the title: as a sibling of the flex-basis block it wrapped onto a line of its own on a
+      // 390px panel, leaving a lone warning triangle above the sentence (critique 2026-11-11).
+      h('div', { className: 'sa-automation-head' },
+        h(StatusIcon, { state: 'warning', size: 16 }),
+        h('span', { className: 'sa-automation-title' }, title)),
       h('span', { className: 'sa-automation-facts' }, facts.join(' · '),
         progressText ? h(Fragment, null, ' · ', progressText) : null),
       compact ? null : h('span', { className: 'sa-hint' }, hint)),
@@ -3864,7 +3889,7 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
-function ManualTicketForm({ onDone, heading = true }) {
+function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
@@ -3913,8 +3938,11 @@ function ManualTicketForm({ onDone, heading = true }) {
       onChange: event => setTitle(event.target.value) }),
     h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
       'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
-    h('div', { className: 'sa-actions' },
-      h(Button, { variant: 'primary', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
+    // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
+    // give a modal caller an explicit cancel next to it (critique 2026-11-11).
+    h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
+      onCancel ? h(Button, { variant: 'ghost', size: 'md', onClick: onCancel }, t('cancel')) : null,
+      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }),
         disabled: busy || !title.trim(), onClick: () => { void submit() } }, pt(t, 'st.create'))),
     created?.id ? h('div', { className: 'sa-actions' },
       h(StatusText, { state: 'done' }, pt(t, 'st.created')),
@@ -4000,17 +4028,22 @@ function latestGatesOf(ticket) {
   return { run, gates: Array.isArray(run?.gates) ? run.gates : [] }
 }
 
-/** Three gates as paired shape+text (`standards ✓ / backend ✓ / frontend ✗`), from runs[].gates. */
+/** Every gate this run recorded, as paired shape+text. Unknown names keep their configured name (a repository may
+    configure its own gates), and a failed gate carries its exit code instead of a bare red mark. */
 function GateSummary({ ticket }) {
   const { t } = usePanel()
   const { gates } = latestGatesOf(ticket)
   if (!gates.length) return h(Hint, null, pt(t, 'gate.none'))
   return h('div', { className: 'sa-gates' },
-    ['standards', 'backend', 'frontend'].map(name => {
-      const gate = gates.find(entry => entry.name === name)
-      if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+    gates.map((gate, index) => {
       const ok = gate.exitCode === 0 && !gate.timedOut
-      return h('span', { key: name, className: 'sa-gate' }, h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)))
+      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+        'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+        h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+        ok ? null : h('span', { className: 'sa-hint' },
+          gate.timedOut ? pt(t, 'gate.timedOut')
+            : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
+              : ''))
     }))
 }
 
@@ -4203,9 +4236,11 @@ Object.assign(PAGE_TEXT, {
   'ov.pulseDue': ['每 {seconds} 秒轮询 · 正在轮询', 'Polls every {seconds}s · polling now'],
   'ov.pulsePaused': ['处理已暂停 · 不自动轮询', 'Paused · no automatic polling'],
   'ov.pulseOff': ['自动触发未开启', 'Automatic intake is off'],
-  'ov.pulseSourcesValue': ['{ready}/{total} 正常', '{ready}/{total} healthy'],
+  // Same denominator as the Source page ("已启用 1/3"): a disabled Source is configuration, not an incident.
+  'ov.pulseSourcesValue': ['已启用 {active}/{total}', '{active}/{total} enabled'],
   'ov.pulseSourcesBad': [' · {count} 个异常', ' · {count} failing'],
   'ov.pulseExecutorIdle': ['空闲 · 无排队或运行中工单', 'Idle · nothing queued or running'],
+  'ov.pulseExecutorOff': ['已停用（设置→运行）', 'Disabled (Settings → Runtime)'],
   'ov.pulseExecutorValue': ['执行中 {running} · 排队 {queued} · 等待你 {waiting} · 失败 {failed}',
     '{running} running · {queued} queued · {waiting} waiting · {failed} failed'],
   'ov.pulseLifetimeValue': ['读取 {received} · 接单 {accepted} · 忽略 {ignored}',
@@ -4399,7 +4434,8 @@ function ovWatchItems(t, data, now, options = {}) {
   const dismissed = (Array.isArray(data.tickets) ? data.tickets : []).filter(ticket => ticket.status === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed'))
   if (dismissed.length) {
-    out.push({ key: 'dismissed', state: 'warning', page: 'execution', title: pt(t, 'ov.watchDismissed', { count: dismissed.length }) })
+    out.push({ key: 'dismissed', state: 'warning', page: 'execution', stage: 'dismissed',
+      title: pt(t, 'ov.watchDismissed', { count: dismissed.length }) })
   }
   const failingSources = (Array.isArray(data.sources) ? data.sources : [])
     .filter(source => source.enabled !== false && source.state === 'error')
@@ -4568,11 +4604,13 @@ function LiveOverviewPage({ route }) {
       : pt(t, 'ov.pulseDue', { seconds: pollSecondCount }))
     : pt(t, 'ov.autoVerifyValue', { value: engine.autoVerifySeconds ?? '—' })
   const sources = Array.isArray(data.sources) ? data.sources : []
-  const enabledSources = sources.filter(source => source.enabled !== false)
+  // Same rule as the Source page: a Source is enabled only when it says so, so both pages agree on the denominator.
   // Only a failing/blocked Source is unhealthy: a repository card reads `idle` while the executor is switched off,
   // which is a configuration state, not an incident (critique risk: the ratio should not cry wolf).
+  const enabledSources = sources.filter(source => source.enabled === true)
   const healthySources = enabledSources.filter(source => !['error', 'setup'].includes(source.state))
   const badSourceCount = enabledSources.length - healthySources.length
+  const executorOff = data.config?.executor?.enabled === false
   const load = data.load ?? {}
   const loadTotal = ['running', 'queued', 'waiting', 'failed'].reduce((sum, key) => sum + Number(load[key] ?? 0), 0)
   const lifetime = engine.events ?? {}
@@ -4584,9 +4622,9 @@ function LiveOverviewPage({ route }) {
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
       h('span', { className: 'sa-hint' }, engineDetail))],
     [pt(t, 'ov.pulseSources'), h('span', null,
-      pt(t, 'ov.pulseSourcesValue', { ready: healthySources.length, total: enabledSources.length }),
+      pt(t, 'ov.pulseSourcesValue', { active: enabledSources.length, total: sources.length }),
       badSourceCount > 0 ? pt(t, 'ov.pulseSourcesBad', { count: badSourceCount }) : null)],
-    [pt(t, 'ov.pulseExecutor'), loadTotal === 0 ? pt(t, 'ov.pulseExecutorIdle')
+    [pt(t, 'ov.pulseExecutor'), loadTotal === 0 ? (executorOff ? pt(t, 'ov.pulseExecutorOff') : pt(t, 'ov.pulseExecutorIdle'))
       : pt(t, 'ov.pulseExecutorValue', { running: load.running ?? 0, queued: load.queued ?? 0,
         waiting: load.waiting ?? 0, failed: load.failed ?? 0 })],
     [pt(t, 'ov.pulseLifetime'), pt(t, 'ov.pulseLifetimeValue', { received: ovCount(lifetime.received, t.lang),
@@ -4774,7 +4812,8 @@ function LiveOverviewPage({ route }) {
                 h('div', { className: 'sa-row-main' }, h('div', { className: 'sa-row-title' }, h('span', null, item.title))),
                 h('div', { className: 'sa-row-actions' },
                   h(Button, { variant: 'ghost', size: 'sm',
-                    onClick: () => navigate({ page: item.page }) }, pt(t, 'ov.watchOpen')))))))
+                    onClick: () => navigate({ page: item.page, ...(item.stage ? { stage: item.stage } : {}) }) },
+                  pt(t, 'ov.watchOpen')))))))
             : h('div', { className: 'sa-actions', style: { padding: 'var(--sa-sp-4) 0' } },
               h(StatusIcon, { state: 'done', size: 16 }),
               h('span', { className: 'sa-hint' }, pt(t, 'ov.watchEmpty')))))),
@@ -4816,7 +4855,11 @@ Object.assign(PAGE_TEXT, {
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
   'src.checkNeedsToken': ['先保存 Octo token 才能检查新消息。', 'Save the Octo token before checking for messages.'],
-  'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
+  'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
+    'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
+  // A repository card is enabled by the executor switch, not the engine switch: say the switch that actually enables it.
+  'src.disabledRepo': ['已禁用：打开「启用执行器」（设置→运行）并保存。',
+    'Disabled: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -5125,9 +5168,9 @@ function LiveSourcePage() {
     const repo = repoOf(source)
     const repoName = repo?.name ?? source.repoId
     const notes = []
-    // When the page-level automation bar already says why everything is off, the cards only keep their state tag;
-    // otherwise each card explains its own off state.
-    if (!source.enabled && !showAutomationBar) notes.push(pt(t, 'src.disabled'))
+    // Every disabled Source says so on its own card: the page-level automation bar explains the pause, not which
+    // Sources are switched off, and two cards reading only "空闲" looked like healthy repositories (critique 2026-11-11).
+    if (!source.enabled) notes.push(pt(t, source.kind === 'execution' ? 'src.disabledRepo' : 'src.disabled'))
     if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
@@ -5779,6 +5822,9 @@ Object.assign(PAGE_TEXT, {
   'ev.shadowHint': ['shadow 模式：模型意见只记录，接单仍由规则决定。',
     'Shadow mode: the model opinion is recorded only; the rules still decide intake.'],
   'ev.human': ['人工：{answer}', 'Human: {answer}'],
+  // `recorded` means the reply was kept but no Ticket was started (the rule gate still refused it): say so in the tag
+  // instead of showing "人工：接单" on a row that produced nothing (critique 2026-11-11).
+  'ev.humanRecorded': ['人工：{answer}（仅记录）', 'Human: {answer} (recorded)'],
   'ev.humanAccept': ['接单', 'accept'],
   'ev.humanIgnore': ['忽略', 'ignore'],
   'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
@@ -5888,8 +5934,10 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
           decision.humanReview
-            ? h(Tag, { tone: 'quiet', title: `${decision.humanReview.code} · ${decision.humanReview.outcome ?? ''}` },
-              pt(t, 'ev.human', { answer: pt(t, decision.humanReview.answer === 'accept' ? 'ev.humanAccept' : 'ev.humanIgnore') }))
+            ? h(Tag, { tone: decision.humanReview.outcome === 'recorded' ? 'warning' : 'quiet',
+              title: `${decision.humanReview.code} · ${decision.humanReview.outcome ?? ''}` },
+              pt(t, decision.humanReview.outcome === 'recorded' ? 'ev.humanRecorded' : 'ev.human',
+                { answer: pt(t, decision.humanReview.answer === 'accept' ? 'ev.humanAccept' : 'ev.humanIgnore') }))
             : null,
           evalModelTag(t, decision),
           decision.at ? h(When, { at: decision.at }) : null,
@@ -5975,7 +6023,9 @@ function LiveEvalPage() {
    status model for the executor load and the paused flag. */
 
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
-const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
+// `dismissed` is not a lifecycle stage: it is the cleanup slice of the finished history (a person dropped the Ticket),
+// kept as its own stage because "what did we abandon after a failed run" is a question the Overview points here with.
+const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done', 'dismissed']
 const EXEC_DONE_RECENT = 10
 // P1-8: the execution list's view state survives a page switch inside the same browser session.
 const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
@@ -6030,6 +6080,9 @@ Object.assign(PAGE_TEXT, {
   'ex.stageWaiting': ['等待你', 'Waiting on you'],
   'ex.stageFailed': ['失败工单', 'Failed Tickets'],
   'ex.stageDone': ['已结束', 'Ended'],
+  'ex.stageDismissed': ['已忽略', 'Dismissed'],
+  'ex.dismissedNote': ['失败后由人放弃的工单，不会再执行；点开可看当时的失败原因。',
+    'Tickets a person dropped after a failed run. They never run again; open one for the failure that preceded it.'],
   'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
     '{total} Tickets: {accepted} accepted, {dismissed} dismissed; {retried} completed after a failed-run retry'],
   'ex.doneShowAll': ['查看全部（{count}）', 'Show all ({count})'],
@@ -6072,11 +6125,17 @@ function execDoneSummary(t, doneTickets) {
 }
 
 /** List view: executor strip, pause confirmation, manual entry, stage filter, then the stage groups. */
-function ExecutionQueuePage() {
+function ExecutionQueuePage({ route }) {
   const { t, notify, navigate } = usePanel()
   const model = usePanelData()
   const list = useLiveResource('engine/tickets', {})
-  const [stage, setStage] = useState('all')
+  // A stage may arrive as a route (the Overview's "failed then dismissed" watch item deep-links here); a stale or
+  // unknown value falls back to the whole queue instead of trapping the page on an empty slice.
+  const routeStage = route?.stage && EXEC_STAGES.includes(route.stage) ? route.stage : 'all'
+  const [stage, setStage] = useState(routeStage)
+  useEffect(() => {
+    if (route?.stage && EXEC_STAGES.includes(route.stage)) setStage(route.stage)
+  }, [route?.stage])
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
   const [execView, setExecView] = useState(execReadView)
@@ -6120,10 +6179,13 @@ function ExecutionQueuePage() {
   const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : 'success'
   const recentRunKey = recentRunFailed ? 'ex.recentFailed' : recentRunWaiting ? 'ex.recentWaiting' : 'ex.recentOk'
   const counts = list.data?.counts ?? {}
-  const countOf = group => Number.isFinite(counts[group]) ? counts[group]
-    : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
+  // The host counts lifecycle stages; `dismissed` is a slice of the ended history, so its count comes from the rows.
+  const countOf = group => group === 'dismissed'
+    ? tickets.filter(ticket => ticket.status === 'dismissed').length
+    : Number.isFinite(counts[group]) ? counts[group]
+      : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
   const EXEC_STAGE_LABEL = { queued: 'ex.stageQueued', working: 'ex.stageWorking', waiting: 'ex.stageWaiting',
-    failed: 'ex.stageFailed', done: 'ex.stageDone' }
+    failed: 'ex.stageFailed', done: 'ex.stageDone', dismissed: 'ex.stageDismissed' }
   // Each chip carries its own count: the filter row is the one place that answers "how much of the queue is in this
   // slice", so the number never has to be repeated by a section heading.
   const stageOptions = EXEC_STAGES.map(group => ({
@@ -6134,10 +6196,12 @@ function ExecutionQueuePage() {
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
   const sorted = execSortTickets(tickets, execView.sort)
-  const inStageBase = stage === 'all' ? sorted : sorted.filter(ticket => ticketStatus(ticket).group === stage)
+  const inStageBase = stage === 'all' ? sorted
+    : stage === 'dismissed' ? sorted.filter(ticket => ticket.status === 'dismissed')
+      : sorted.filter(ticket => ticketStatus(ticket).group === stage)
   // P1-8: "show ended" hides the finished group but an explicit stage filter for it always wins, and the group keeps a
-  // reveal entry below the list so history is never unreachable.
-  const doneAllowed = execView.showDone || stage === 'done'
+  // reveal entry below the list so history is never unreachable. The dismissed slice lives inside the ended history.
+  const doneAllowed = execView.showDone || stage === 'done' || stage === 'dismissed'
   const inStage = doneAllowed ? inStageBase : inStageBase.filter(ticket => ticketStatus(ticket).group !== 'done')
   const doneTickets = inStageBase.filter(ticket => ticketStatus(ticket).group === 'done')
   const recentDone = doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
@@ -6217,7 +6281,12 @@ function ExecutionQueuePage() {
           h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
             label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
-  const queueBody = execView.groupBy === 'repo'
+  const queueBody = stage === 'dismissed'
+    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+      h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
+        badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
+        h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
+    : execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' }, queueHeader,
       repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
         h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
@@ -6293,12 +6362,14 @@ function ExecutionQueuePage() {
                 : null),
     h(Modal, { open: manualOpen, onClose: () => setManualOpen(false), title: pt(t, 'ex.createTicket'),
       closeLabel: t('close'), description: pt(t, 'ex.createHint') },
-      h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() } })))
+      h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() },
+        onCancel: () => setManualOpen(false) })))
 }
 
-/** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue. */
+/** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
+    arrives from the Overview's watch items, which deep-link the dismissed slice). */
 function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage)
+  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage, { route })
 }
 
 
@@ -6536,6 +6607,10 @@ Object.assign(PAGE_TEXT, {
   'gate.onFailManual': ['人工', 'Manual'],
   'gate.onFailHintAutoRepair': ['失败时先尝试自动修复，仍失败才停下等人。', 'On failure the executor first tries an automatic repair, then parks for a person.'],
   'gate.onFailHintManual': ['失败时直接停下等人处理。', 'On failure the run parks for a person immediately.'],
+  'gate.exitCode': ['exit {code}', 'exit {code}'],
+  'gate.timedOut': ['超时', 'Timed out'],
+  'gate.passed': ['通过', 'Passed'],
+  'gate.failed': ['未通过', 'Failed'],
   'detail.repairRun': ['自动修复 {attempts}/{max} 轮', 'Auto-repair {attempts}/{max}'],
   'detail.repairRunHint': ['这一轮执行里自动修复的轮数与结果（maxRepairRounds 控制上限）。',
     'Automatic repair rounds in this run and their outcome (bounded by maxRepairRounds).'],
@@ -6803,13 +6878,19 @@ function TicketGateResults({ ticket, record }) {
   if (!gates.length && !pending) return h(Hint, null, pt(t, 'gate.none'))
   const policies = gates.map(gate => gateOnFailOf(gate, record))
   const sharedPolicy = policies.length && policies.every(policy => policy === policies[0]) ? policies[0] : undefined
-  const gateRow = name => {
-    const gate = gates.find(entry => entry.name === name)
-    if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+  // Render the gates this run actually has. A repository can configure its own names (ebs-deploy, ebs-access, …), so a
+  // fixed standards/backend/frontend list printed "— — —" while the rail above said "闸门 2/2" (critique 2026-11-11).
+  const gateRow = (gate, index) => {
     const ok = gate.exitCode === 0 && !gate.timedOut
     const policy = gateOnFailOf(gate, record)
-    return h('span', { key: name, className: 'sa-gate' },
-      h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)),
+    // The label gets its outcome as a text alternative: shape+colour alone leaves a screen reader with a bare name.
+    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+      'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+      h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+      ok ? null : h('span', { className: 'sa-hint' },
+        gate.timedOut ? pt(t, 'gate.timedOut')
+          : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
+            : ''),
       // The failure policy is one fact about the Ticket's gates, so it is said once under the row; only a mixed set
       // needs a tag per gate to tell them apart (T13).
       sharedPolicy ? null : h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline',
@@ -6823,7 +6904,7 @@ function TicketGateResults({ ticket, record }) {
           h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
           h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
         : null,
-      gates.length ? ['standards', 'backend', 'frontend'].map(gateRow) : null),
+      gates.map(gateRow)),
     gates.length
       ? h('p', { className: 'sa-hint' }, sharedPolicy
         ? pt(t, 'detail.gatePolicy', { policy: pt(t, GATE_ONFAIL_KEYS[sharedPolicy]) })
@@ -8204,7 +8285,7 @@ Object.assign(PAGE_TEXT, {
   'st.repo': ['仓库', 'Repository'],
   'st.manualRepoHint': ['工单会在这个仓库上执行；默认是 {name}。',
     'The Ticket runs on this repository; the default is {name}.'],
-  'st.worktreeRoot': ['worktree 根目录', 'Worktree root'],
+  'st.worktreeRoot': ['工作树根目录', 'Worktree root'],
   'st.manualTitle': ['手工建单（测试）', 'Create a Ticket (test)'],
   'st.manualHint': ['测试用：会真实写入 live 状态并加入执行队列，不是干跑。',
     'For testing: writes real live state and joins the execution queue — not a dry run.'],

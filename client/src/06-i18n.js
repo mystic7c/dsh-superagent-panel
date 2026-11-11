@@ -201,8 +201,10 @@ const TEXT = {
   decisionEmpty: { work: ['还没有接单或续做的决定。', 'No accept or reopen Decision yet.'], stop: ['没有停止的决定。', 'No stop Decision.'], ignore: ['没有忽略的决定。', 'No ignore Decision.'], unavailable: ['没有未完成的评估。', 'No unavailable Eval.'], all: ['还没有任何决定。', 'No Decision yet.'] },
   window24h: ['仅看 24 小时', 'Last 24 hours'],
   matchedRules: ['命中规则', 'Matched rules'],
-  ruleMatched: ['命中', 'Matched'],
-  ruleNotMatched: ['未命中', 'Not matched'],
+  // A rule's `matched` means "this check passed", not "a risk word was hit": R3 matched = no high-risk topic found.
+  // Printing 命中 next to R3's own reason "未命中生产/DDL/…" contradicted itself (critique 2026-11-11).
+  ruleMatched: ['通过', 'Passed'],
+  ruleNotMatched: ['未通过', 'Not passed'],
   decisionReason: ['原因', 'Reason'],
   decisionDirection: ['方向判断', 'Direction'],
   decisionTicket: ['工单', 'Ticket'],

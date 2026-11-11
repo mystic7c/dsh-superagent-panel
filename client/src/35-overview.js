@@ -47,9 +47,11 @@ Object.assign(PAGE_TEXT, {
   'ov.pulseDue': ['每 {seconds} 秒轮询 · 正在轮询', 'Polls every {seconds}s · polling now'],
   'ov.pulsePaused': ['处理已暂停 · 不自动轮询', 'Paused · no automatic polling'],
   'ov.pulseOff': ['自动触发未开启', 'Automatic intake is off'],
-  'ov.pulseSourcesValue': ['{ready}/{total} 正常', '{ready}/{total} healthy'],
+  // Same denominator as the Source page ("已启用 1/3"): a disabled Source is configuration, not an incident.
+  'ov.pulseSourcesValue': ['已启用 {active}/{total}', '{active}/{total} enabled'],
   'ov.pulseSourcesBad': [' · {count} 个异常', ' · {count} failing'],
   'ov.pulseExecutorIdle': ['空闲 · 无排队或运行中工单', 'Idle · nothing queued or running'],
+  'ov.pulseExecutorOff': ['已停用（设置→运行）', 'Disabled (Settings → Runtime)'],
   'ov.pulseExecutorValue': ['执行中 {running} · 排队 {queued} · 等待你 {waiting} · 失败 {failed}',
     '{running} running · {queued} queued · {waiting} waiting · {failed} failed'],
   'ov.pulseLifetimeValue': ['读取 {received} · 接单 {accepted} · 忽略 {ignored}',
@@ -243,7 +245,8 @@ function ovWatchItems(t, data, now, options = {}) {
   const dismissed = (Array.isArray(data.tickets) ? data.tickets : []).filter(ticket => ticket.status === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed'))
   if (dismissed.length) {
-    out.push({ key: 'dismissed', state: 'warning', page: 'execution', title: pt(t, 'ov.watchDismissed', { count: dismissed.length }) })
+    out.push({ key: 'dismissed', state: 'warning', page: 'execution', stage: 'dismissed',
+      title: pt(t, 'ov.watchDismissed', { count: dismissed.length }) })
   }
   const failingSources = (Array.isArray(data.sources) ? data.sources : [])
     .filter(source => source.enabled !== false && source.state === 'error')
@@ -412,11 +415,13 @@ function LiveOverviewPage({ route }) {
       : pt(t, 'ov.pulseDue', { seconds: pollSecondCount }))
     : pt(t, 'ov.autoVerifyValue', { value: engine.autoVerifySeconds ?? '—' })
   const sources = Array.isArray(data.sources) ? data.sources : []
-  const enabledSources = sources.filter(source => source.enabled !== false)
+  // Same rule as the Source page: a Source is enabled only when it says so, so both pages agree on the denominator.
   // Only a failing/blocked Source is unhealthy: a repository card reads `idle` while the executor is switched off,
   // which is a configuration state, not an incident (critique risk: the ratio should not cry wolf).
+  const enabledSources = sources.filter(source => source.enabled === true)
   const healthySources = enabledSources.filter(source => !['error', 'setup'].includes(source.state))
   const badSourceCount = enabledSources.length - healthySources.length
+  const executorOff = data.config?.executor?.enabled === false
   const load = data.load ?? {}
   const loadTotal = ['running', 'queued', 'waiting', 'failed'].reduce((sum, key) => sum + Number(load[key] ?? 0), 0)
   const lifetime = engine.events ?? {}
@@ -428,9 +433,9 @@ function LiveOverviewPage({ route }) {
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
       h('span', { className: 'sa-hint' }, engineDetail))],
     [pt(t, 'ov.pulseSources'), h('span', null,
-      pt(t, 'ov.pulseSourcesValue', { ready: healthySources.length, total: enabledSources.length }),
+      pt(t, 'ov.pulseSourcesValue', { active: enabledSources.length, total: sources.length }),
       badSourceCount > 0 ? pt(t, 'ov.pulseSourcesBad', { count: badSourceCount }) : null)],
-    [pt(t, 'ov.pulseExecutor'), loadTotal === 0 ? pt(t, 'ov.pulseExecutorIdle')
+    [pt(t, 'ov.pulseExecutor'), loadTotal === 0 ? (executorOff ? pt(t, 'ov.pulseExecutorOff') : pt(t, 'ov.pulseExecutorIdle'))
       : pt(t, 'ov.pulseExecutorValue', { running: load.running ?? 0, queued: load.queued ?? 0,
         waiting: load.waiting ?? 0, failed: load.failed ?? 0 })],
     [pt(t, 'ov.pulseLifetime'), pt(t, 'ov.pulseLifetimeValue', { received: ovCount(lifetime.received, t.lang),
@@ -618,7 +623,8 @@ function LiveOverviewPage({ route }) {
                 h('div', { className: 'sa-row-main' }, h('div', { className: 'sa-row-title' }, h('span', null, item.title))),
                 h('div', { className: 'sa-row-actions' },
                   h(Button, { variant: 'ghost', size: 'sm',
-                    onClick: () => navigate({ page: item.page }) }, pt(t, 'ov.watchOpen')))))))
+                    onClick: () => navigate({ page: item.page, ...(item.stage ? { stage: item.stage } : {}) }) },
+                  pt(t, 'ov.watchOpen')))))))
             : h('div', { className: 'sa-actions', style: { padding: 'var(--sa-sp-4) 0' } },
               h(StatusIcon, { state: 'done', size: 16 }),
               h('span', { className: 'sa-hint' }, pt(t, 'ov.watchEmpty')))))),

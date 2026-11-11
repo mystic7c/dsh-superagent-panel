@@ -97,7 +97,7 @@ const PANEL_CSS = `
 
 /* ---------- primary tabs (underline) ---------- */
 .sa-tabs { display: flex; width: 100%; gap: var(--sa-sp-24); overflow-x: auto; padding: 0; border-bottom: 0.5px solid var(--sa-line); }
-.sa-tab { flex: none; box-sizing: border-box; height: 36px; padding: 0 var(--sa-sp-2); border: 0;
+.sa-tab { flex: none; box-sizing: border-box; height: 36px; padding: 0 var(--sa-sp-8); border: 0;
   border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-alias-label-secondary);
   font: inherit; font-size: var(--sa-fs-body); line-height: 1.5; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .sa-tab:hover { color: var(--dsw-alias-label-primary); }
@@ -164,7 +164,7 @@ const PANEL_CSS = `
 .sa-menu-item-icon { display: inline-flex; flex: none; color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-secondary)); }
 
 /* ---------- tags / pills / segmented ---------- */
-.sa-tag { display: inline-flex; align-items: center; border-radius: var(--sa-r-pill); padding: 0 var(--sa-sp-8);
+.sa-tag { display: inline-flex; align-items: center; flex: none; border-radius: var(--sa-r-pill); padding: 0 var(--sa-sp-8);
   font-size: var(--sa-fs-caption); line-height: 1.6; font-weight: 500; white-space: nowrap; }
 .sa-tag[data-tone='outline'] { border: 0.5px solid var(--sa-line); color: var(--sa-label-tertiary); }
 .sa-tag[data-tone='neutral'] { background: var(--dsw-alias-bg-layer-2, transparent); color: var(--dsw-alias-label-secondary); }
@@ -196,10 +196,12 @@ const PANEL_CSS = `
   background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-segmented-chips .sa-segment[aria-checked='true'] { font-weight: 600;
   background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
-.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 0.66;
-  font-variant-numeric: tabular-nums; }
-.sa-chip-count[data-zero='true'] { opacity: 0.42; }
-.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { opacity: 0.8; }
+/* The count is real text: it must clear AA. Opacity 0.66/0.42 measured 2.75:1 / 1.82:1 on white, so the full
+   tertiary colour (5.5:1) carries both states and the active chip inherits the selected label colour. */
+.sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 1;
+  color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
+.sa-chip-count[data-zero='true'] { opacity: 1; }
+.sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { color: inherit; opacity: 1; }
 
 /* View pickers: the two view settings are labelled outline buttons that open a two-option menu, so the row states
    what each choice is ("分组 按阶段") instead of looking like a second filter row. */
@@ -346,6 +348,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-md);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 7%, transparent); }
 .sa-automation-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-automation-head { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
 .sa-automation-title { font-size: var(--sa-fs-body); line-height: 1.4; font-weight: 600;
   color: var(--dsw-alias-label-primary); }
 .sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
@@ -452,7 +455,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
   border-left-color: var(--sa-label-tertiary); }
-.sa-settings-body { min-width: 0; max-width: 760px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
+.sa-settings-body { min-width: 0; max-width: 640px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
 .sa-settings-intro { display: flex; align-items: flex-start; gap: var(--sa-sp-8); flex-wrap: wrap; min-width: 0; }
@@ -513,7 +516,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-input:focus-within { border-color: var(--dsw-alias-brand-primary); }
 .sa-input-full { width: 100%; }
 .sa-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary);
-  font: inherit; font-size: var(--sa-fs-body); }
+  font: inherit; font-size: var(--sa-fs-body); align-self: stretch; }
 .sa-input-icon { display: inline-flex; color: var(--sa-label-tertiary); }
 .sa-select { box-sizing: border-box; width: 100%; min-width: 0; height: 32px; padding: 0 var(--sa-sp-8);
   border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm); font: inherit; font-size: var(--sa-fs-body);
@@ -523,17 +526,18 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-sm); padding: var(--sa-sp-8) var(--sa-sp-12); font: inherit; font-size: var(--sa-fs-body);
   line-height: 1.5; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1, transparent); resize: vertical; }
 .sa-textarea:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-switch { position: relative; flex: none; width: 36px; height: 20px; padding: 0; border: 0; border-radius: var(--sa-r-pill);
+.sa-switch { position: relative; flex: none; width: 40px; height: 24px; padding: 0; border: 0; border-radius: var(--sa-r-pill);
   cursor: pointer; background: var(--dsw-alias-border-l2); transition: background 140ms ease; }
 .sa-switch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
 .sa-switch:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-switch:disabled { cursor: not-allowed; opacity: 0.4; }
-.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
   background: var(--dsw-alias-label-primary-foreground); transition: left 140ms ease; }
 .sa-switch[aria-checked='true'] .sa-switch-thumb { left: 18px; }
 /* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list. */
-.sa-switch-compact { width: 30px; height: 18px; }
-.sa-switch-compact .sa-switch-thumb { width: 14px; height: 14px; }
+/* Slimmer than the settings switch but still a 24px-tall target (WCAG 2.5.8 minimum). */
+.sa-switch-compact { width: 36px; height: 24px; }
+.sa-switch-compact .sa-switch-thumb { width: 20px; height: 20px; }
 .sa-switch-compact[aria-checked='true'] .sa-switch-thumb { left: 14px; }
 
 /* ---------- empty / error / skeleton ---------- */
@@ -770,7 +774,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
    width, and a viewport breakpoint produced two ~300px columns at 1024–1180 with the sidebar open. */
 @container (min-width: 960px) {
   /* Keep the settings rail and its form as one centered unit instead of leaving a 400px dead column on the right. */
-  .sa-settings { grid-template-columns: 140px minmax(0, 760px); justify-content: center; }
+  .sa-settings { grid-template-columns: 140px minmax(0, 640px); justify-content: center; }
   /* The left brief carries the funnel + run-quality, the right one the pulse; give the working column more room. */
   .sa-brief-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     gap: var(--sa-sp-32); align-items: start; }
