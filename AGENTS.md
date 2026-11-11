@@ -34,7 +34,7 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 node --check index.js                              # Host 半语法
 node scripts/build-client.mjs --check               # 客户端产物是否最新（改了 client/src 先跑 node scripts/build-client.mjs）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 396 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量，当前 398 个）
 node scripts/render-check.mjs                      # jsdom 渲染回归（依赖 /tmp/sa-harness）
 ```
 
@@ -58,7 +58,8 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
 
 `live.json` 里本仓库的仓库项使用 `verifyMode: "manual"`、`createMr: "push"`、`ci: false`：
 
-- 执行器跑完闸门、提交并推送 `feature/<ticketId>` 分支；GitHub 忽略 push options，`.github/workflows/auto-pr.yml`
-  收到分支后自动开 PR，人工评审合并。
+- 执行器跑完闸门、提交并推送 `feature/<ticketId>` 分支；对 github.com 仓库**不带 GitLab push options**推送
+  （GitHub 忽略这些选项，且实测带 options 的推送会被服务端以 `no voting servers succeeded` 拒绝），
+  `.github/workflows/auto-pr.yml` 收到分支后自动开 PR，人工评审合并。
 - 合并请用 merge commit（不要 squash）——面板靠 `git merge-base --is-ancestor` 判断是否合入 `main`。
 - 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并后自动转 `merged`，再由人验收。

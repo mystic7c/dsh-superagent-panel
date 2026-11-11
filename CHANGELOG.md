@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.11] — 2026-11-11
+
+第一张自开发工单的实测暴露了两个问题，都在这里修掉：GitHub 仓库带着 GitLab push options 推送会被服务端拒绝；
+render 闸门失败时证据只剩 40KB JSON 的尾巴，看不到是哪条断言失败。
+
+### 内容
+- **GitHub 仓库不以 push options 推送**：`createMr: "push"` 原先无条件带 `merge_request.*` push options。GitHub 忽略这些
+  选项（PR 由 `.github/workflows/auto-pr.yml` 在分支推送后创建），而实测带 options 的推送被 GitHub 以
+  `remote unpack failed: no voting servers succeeded` 拒绝两次，同一分支不带 options 立即推送成功。新增
+  `usesPushOptionMr(repo)`：`gitlab.baseUrl` 指向 github.com 时不带 options，GitLab 仓库行为不变；GitHub 输出里的
+  `pull/new/<branch>` 链接仍由 `parseMergeRequestFromPush` 记为 pending MR，工单照常进入 `mr-open`
+- **闸门失败证据可定位**：`executor.runCommand` 只保留命令输出末尾 4000 字节，而 render-check 的 JSON 约 40KB，
+  失败断言的 `FAIL` 行正好落在被截断的前段。`render-check.mjs` 在 JSON 之后补打 `FAILED n/total: 名称 | …` 与最多
+  3 条 `DETAIL`，自动修复 worker 拿到的证据能指向具体断言
+
+### 验证
+- `node --test` 398/398（新增 GitHub 仓库不带 options 推送、`usesPushOptionMr` 的两组断言）
+- 自开发工单实测链路：worker 修复 → 5 个闸门通过 → commit → push 两次被 GitHub 拒绝（带 push options）→ 人工 retry
+  不带 options 成功 → Actions 自动开 PR #1 → merge commit 合入 `main` → 面板按 ancestry 判定 `merged` → 人工验收
+
 ## [0.4.10] — 2026-11-11
 
 修复 `metricsView` 时长夹具的 1ms 竞态（flaky）：`metricsView classifies runs, windows them and rolls up
