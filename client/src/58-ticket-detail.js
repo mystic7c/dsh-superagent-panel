@@ -231,6 +231,10 @@ Object.assign(PAGE_TEXT, {
   'gate.onFailManual': ['人工', 'Manual'],
   'gate.onFailHintAutoRepair': ['失败时先尝试自动修复，仍失败才停下等人。', 'On failure the executor first tries an automatic repair, then parks for a person.'],
   'gate.onFailHintManual': ['失败时直接停下等人处理。', 'On failure the run parks for a person immediately.'],
+  'gate.exitCode': ['exit {code}', 'exit {code}'],
+  'gate.timedOut': ['超时', 'Timed out'],
+  'gate.passed': ['通过', 'Passed'],
+  'gate.failed': ['未通过', 'Failed'],
   'detail.repairRun': ['自动修复 {attempts}/{max} 轮', 'Auto-repair {attempts}/{max}'],
   'detail.repairRunHint': ['这一轮执行里自动修复的轮数与结果（maxRepairRounds 控制上限）。',
     'Automatic repair rounds in this run and their outcome (bounded by maxRepairRounds).'],
@@ -498,13 +502,19 @@ function TicketGateResults({ ticket, record }) {
   if (!gates.length && !pending) return h(Hint, null, pt(t, 'gate.none'))
   const policies = gates.map(gate => gateOnFailOf(gate, record))
   const sharedPolicy = policies.length && policies.every(policy => policy === policies[0]) ? policies[0] : undefined
-  const gateRow = name => {
-    const gate = gates.find(entry => entry.name === name)
-    if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+  // Render the gates this run actually has. A repository can configure its own names (ebs-deploy, ebs-access, …), so a
+  // fixed standards/backend/frontend list printed "— — —" while the rail above said "闸门 2/2" (critique 2026-11-11).
+  const gateRow = (gate, index) => {
     const ok = gate.exitCode === 0 && !gate.timedOut
     const policy = gateOnFailOf(gate, record)
-    return h('span', { key: name, className: 'sa-gate' },
-      h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)),
+    // The label gets its outcome as a text alternative: shape+colour alone leaves a screen reader with a bare name.
+    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+      'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+      h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+      ok ? null : h('span', { className: 'sa-hint' },
+        gate.timedOut ? pt(t, 'gate.timedOut')
+          : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
+            : ''),
       // The failure policy is one fact about the Ticket's gates, so it is said once under the row; only a mixed set
       // needs a tag per gate to tell them apart (T13).
       sharedPolicy ? null : h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline',
@@ -518,7 +528,7 @@ function TicketGateResults({ ticket, record }) {
           h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
           h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
         : null,
-      gates.length ? ['standards', 'backend', 'frontend'].map(gateRow) : null),
+      gates.map(gateRow)),
     gates.length
       ? h('p', { className: 'sa-hint' }, sharedPolicy
         ? pt(t, 'detail.gatePolicy', { policy: pt(t, GATE_ONFAIL_KEYS[sharedPolicy]) })

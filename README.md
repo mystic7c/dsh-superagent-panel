@@ -7,10 +7,10 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.4**（0.4.4 用 `agent/turn-stopping` 边界钩子让 worker 对自己发起的 subagent run 负责：
-子代理没跑完，本轮不允许结束；0.4.3 把评估确认的操作人名单/范围/有效期放进设置页可配置；
-0.4.2 加入评估确认；0.4.1 修复 hybrid 漏单；0.4.0 多后端 Worker 路由 + 发布失败自动修复；
-发布准备/交付细节见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.8**（0.4.8 是一次系统设计评审后的修正：闸门结果按 run 实际记录的闸门渲染、概览「失败后被忽略」
+可深链到执行页新增的「已忽略」切片、来源与执行器状态口径统一、390 窄屏与对比度/键盘焦点问题；
+0.4.7/0.4.6 修复运行记录终态与动作菜单，0.4.4 用 `agent/turn-stopping` 让 worker 对自己发起的 run 负责；
+版本历史见 [CHANGELOG.md](CHANGELOG.md)）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -23,7 +23,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 | 来源 | Octo 消息源与每个仓库的执行面：24h 到达/过滤/接单、被过滤消息、**原始信号（含跳过/忽略/失败，可重放，可人工标注正确/误报/漏报）**、健康检查、检查新消息 |
 | 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细 |
 | 评估 | 决定列表（接单/忽略）与命中规则；shadow 模式另显示模型意见；只读 |
-| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**、**追加要求（输入后自动干跑重跑，保留工作树改动）**、干跑完成后主行动为「发布 MR」；MR 卡显示「草稿」「过期 CI」提示 |
+| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、**「已忽略」切片（失败后被人放弃的工单）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**、**追加要求（输入后自动干跑重跑，保留工作树改动）**、干跑完成后主行动为「发布 MR」；MR 卡显示「草稿」「过期 CI」提示 |
 | 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行（执行器开关、自动执行、暂停、MR 方式、执行超时）/ Worker（多后端启用、路由模式与任务类型偏好、模型/CLI 路径、能力矩阵）/ 写权限 / 仓库（token、新增仓库）/ 变更历史 可写；评估与提示词为只读参考 |
 
 首次安装后状态为空（不是演示种子）。设置 → 来源里可完成 Octo token 保存、从群列表选择监听群、
@@ -275,9 +275,9 @@ CHANGELOG.md        版本与能力变更记录
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 374 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 396 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 132/132）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 138/138）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 

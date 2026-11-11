@@ -73,7 +73,7 @@ if (!Object.values(engine.state.tickets).some(ticket => ticket.status === 'deplo
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
     completedAt: nowIso, endedAt: nowIso,
     steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
-    gates: [{ name: 'standards', exitCode: 0 }] })
+    gates: [{ name: 'standards', exitCode: 0 }, { name: 'demo-deploy', exitCode: 0 }] })
   // An older round: the changes section must describe the newest run, not the first one.
   engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
     startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
@@ -356,6 +356,12 @@ check('any activity fold lives inside the timeline',
   timelineSection?.textContent?.slice(0, 120) ?? 'no timeline')
 check('empty gate results no longer own a section', !sectionTitles.includes('闸门结果') || Boolean(detailText.match(/失败策略|通过/)),
   JSON.stringify(sectionTitles))
+// The gate section must render the gates the run actually recorded. A fixed standards/backend/frontend list printed
+// three dashes for a repository that configures its own names while the rail above said "闸门 2/2".
+check('gate results name the gates the run recorded, including repository-defined ones',
+  /规范/.test(rootElement.querySelector('#sa-ticket-gates')?.textContent ?? '')
+  && /demo-deploy/.test(rootElement.querySelector('#sa-ticket-gates')?.textContent ?? ''),
+  rootElement.querySelector('#sa-ticket-gates')?.textContent?.slice(0, 220) ?? 'no gate section')
 check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
@@ -445,7 +451,7 @@ check('ticket id is copyable from the detail head', Boolean(rootElement.querySel
   check('detail action bar is one primary plus an overflow menu',
     Boolean(rootElement.querySelector('.sa-main [aria-haspopup="menu"]')), 'menu trigger')
   const timeline = detailText.slice(detailText.indexOf('时间线'))
-  check('timeline has no duplicated running/ok pairs', (timeline.match(/准备工作区/g) ?? []).length <= 1, String((timeline.match(/准备工作区/g) ?? []).length))
+  check('timeline has no duplicated running/ok pairs', (timeline.match(/准备工作树/g) ?? []).length <= 1, String((timeline.match(/准备工作树/g) ?? []).length))
   const firstActor = rootElement.querySelector('.sa-timeline .sa-event-actor')
   check('timeline rows start with an absolute time', Boolean(firstActor && /\d{1,2}:\d{2}/.test(firstActor.textContent ?? '')), firstActor?.textContent?.slice(0, 80))
   check('timeline no longer prints 40-char SHAs', !/[0-9a-f]{40}/.test(timeline), 'sha')
@@ -621,20 +627,31 @@ check('execution rows carry an evidence rail', evidence.length >= 1 && /MR #|原
   JSON.stringify(evidence.slice(0, 4)))
 check('execution rows put their actions at the row end', rootElement.querySelectorAll('.sa-exec-queue .sa-row-actions').length
   === rootElement.querySelectorAll('.sa-exec-queue .sa-row').length, String(rootElement.querySelectorAll('.sa-exec-queue .sa-row').length))
-check('stage filter keeps the counts for every stage', ['排队', '执行中', '等待你', '失败工单', '已结束'].every(label => execText.includes(label)),
+check('stage filter keeps the counts for every stage', ['排队', '执行中', '等待你', '失败工单', '已结束', '已忽略'].every(label => execText.includes(label)),
   execText.slice(0, 500))
 check('execution ledger has a column header', ['工单', '证据', '操作'].every(label => (rootElement.querySelector('.sa-queue-head')?.textContent ?? '').includes(label)),
   rootElement.querySelector('.sa-queue-head')?.textContent ?? '')
 check('executor band shows the last run', /最近一次执行/.test(execText), execText.slice(0, 400))
 // The queue's control row: stage chips carry the counts, and grouping/ordering are labelled pickers (not a second
 // filter row) with the current choice spelled out on the button.
-const stageWords = /全部|等待你|失败工单|执行中|排队|已结束/
+const stageWords = /全部|等待你|失败工单|执行中|排队|已结束|已忽略/
 const stageButtons = [...rootElement.querySelectorAll('.sa-main .sa-list-bar .sa-segment')]
   .filter(button => stageWords.test(button.textContent ?? ''))
-check('execution offers six stage chips with counts', stageButtons.length === 6 && /全部/.test(stageButtons[0]?.textContent ?? ''),
+check('execution offers seven stage chips with counts (the dismissed slice included)',
+  stageButtons.length === 7 && /全部/.test(stageButtons[0]?.textContent ?? ''),
   JSON.stringify(stageButtons.map(button => (button.textContent ?? '').trim())))
 check('stage chips print each stage count inside the chip', /全部\s*\d+/.test(stageButtons[0]?.textContent ?? ''),
   String(stageButtons[0]?.textContent))
+// The Overview's "failed then dismissed" watch item deep-links this slice; it must be a real filter, not a dead chip.
+const dismissedChip = stageButtons.find(button => /已忽略/.test(button.textContent ?? ''))
+dismissedChip?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(300)
+check('the dismissed chip filters the ended history and stays selected',
+  dismissedChip?.getAttribute('aria-checked') === 'true'
+  && /失败后由人放弃的工单/.test(rootElement.querySelector('.sa-main')?.textContent ?? ''),
+  `${dismissedChip?.getAttribute('aria-checked')} · ${rootElement.querySelector('.sa-main')?.textContent?.slice(0, 120)}`)
+rootElement.querySelector('.sa-main .sa-list-bar .sa-segment')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(200)
 const viewPickers = [...rootElement.querySelectorAll('.sa-main .sa-list-bar .sa-menu-picker')]
 const viewText = viewPickers.map(node => (node.textContent ?? '').replace(/\s+/g, '')).join(' ')
 check('view bar states grouping and ordering as labelled pickers',

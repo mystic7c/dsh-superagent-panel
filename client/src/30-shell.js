@@ -149,7 +149,9 @@ function GlobalSearch({ open, onClose }) {
             h('h3', { className: 'sa-ledger-title' }, pt(t, group.titleKey),
               h('span', { className: 'sa-count' }, pt(t, 'search.showCount', { count: group.items.length }))),
             h('div', { className: 'sa-list' }, group.items.map(group.render)))))
-  return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal' },
+  return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal',
+    // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
+    restoreTo: () => document.getElementById('sa-search-trigger') },
     h(Input, { inputRef, icon: 'search', className: 'sa-input-full',
       value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
       onChange: event => setQuery(event.target.value) }),
@@ -171,7 +173,7 @@ function Header({ onOpenSearch }) {
         h('h1', { className: 'sa-title' }, t('title'))),
       h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(GlobalStatus, null),
-        h(IconButton, { icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
+        h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
           title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
         h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
           title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
@@ -260,6 +262,9 @@ function PanelShell({ location, openTab }) {
       if (!Number.isInteger(index) || index < 0 || index >= TABS.length) return
       event.preventDefault()
       openTab(TABS[index])
+      // Selection moves with the shortcut, so focus must follow: otherwise the selected tab is tabindex=-1 and the
+      // keyboard focus sits on a tab the user is no longer on (real-click arrow keys already keep the two in sync).
+      document.getElementById(`sa-tab-${TABS[index]}`)?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

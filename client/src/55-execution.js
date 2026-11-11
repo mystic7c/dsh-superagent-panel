@@ -8,7 +8,9 @@
    status model for the executor load and the paused flag. */
 
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
-const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done']
+// `dismissed` is not a lifecycle stage: it is the cleanup slice of the finished history (a person dropped the Ticket),
+// kept as its own stage because "what did we abandon after a failed run" is a question the Overview points here with.
+const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done', 'dismissed']
 const EXEC_DONE_RECENT = 10
 // P1-8: the execution list's view state survives a page switch inside the same browser session.
 const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
@@ -63,6 +65,9 @@ Object.assign(PAGE_TEXT, {
   'ex.stageWaiting': ['等待你', 'Waiting on you'],
   'ex.stageFailed': ['失败工单', 'Failed Tickets'],
   'ex.stageDone': ['已结束', 'Ended'],
+  'ex.stageDismissed': ['已忽略', 'Dismissed'],
+  'ex.dismissedNote': ['失败后由人放弃的工单，不会再执行；点开可看当时的失败原因。',
+    'Tickets a person dropped after a failed run. They never run again; open one for the failure that preceded it.'],
   'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
     '{total} Tickets: {accepted} accepted, {dismissed} dismissed; {retried} completed after a failed-run retry'],
   'ex.doneShowAll': ['查看全部（{count}）', 'Show all ({count})'],
@@ -105,11 +110,17 @@ function execDoneSummary(t, doneTickets) {
 }
 
 /** List view: executor strip, pause confirmation, manual entry, stage filter, then the stage groups. */
-function ExecutionQueuePage() {
+function ExecutionQueuePage({ route }) {
   const { t, notify, navigate } = usePanel()
   const model = usePanelData()
   const list = useLiveResource('engine/tickets', {})
-  const [stage, setStage] = useState('all')
+  // A stage may arrive as a route (the Overview's "failed then dismissed" watch item deep-links here); a stale or
+  // unknown value falls back to the whole queue instead of trapping the page on an empty slice.
+  const routeStage = route?.stage && EXEC_STAGES.includes(route.stage) ? route.stage : 'all'
+  const [stage, setStage] = useState(routeStage)
+  useEffect(() => {
+    if (route?.stage && EXEC_STAGES.includes(route.stage)) setStage(route.stage)
+  }, [route?.stage])
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
   const [execView, setExecView] = useState(execReadView)
@@ -153,10 +164,13 @@ function ExecutionQueuePage() {
   const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : 'success'
   const recentRunKey = recentRunFailed ? 'ex.recentFailed' : recentRunWaiting ? 'ex.recentWaiting' : 'ex.recentOk'
   const counts = list.data?.counts ?? {}
-  const countOf = group => Number.isFinite(counts[group]) ? counts[group]
-    : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
+  // The host counts lifecycle stages; `dismissed` is a slice of the ended history, so its count comes from the rows.
+  const countOf = group => group === 'dismissed'
+    ? tickets.filter(ticket => ticket.status === 'dismissed').length
+    : Number.isFinite(counts[group]) ? counts[group]
+      : group === 'all' ? tickets.length : tickets.filter(ticket => ticketStatus(ticket).group === group).length
   const EXEC_STAGE_LABEL = { queued: 'ex.stageQueued', working: 'ex.stageWorking', waiting: 'ex.stageWaiting',
-    failed: 'ex.stageFailed', done: 'ex.stageDone' }
+    failed: 'ex.stageFailed', done: 'ex.stageDone', dismissed: 'ex.stageDismissed' }
   // Each chip carries its own count: the filter row is the one place that answers "how much of the queue is in this
   // slice", so the number never has to be repeated by a section heading.
   const stageOptions = EXEC_STAGES.map(group => ({
@@ -167,10 +181,12 @@ function ExecutionQueuePage() {
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
   const sorted = execSortTickets(tickets, execView.sort)
-  const inStageBase = stage === 'all' ? sorted : sorted.filter(ticket => ticketStatus(ticket).group === stage)
+  const inStageBase = stage === 'all' ? sorted
+    : stage === 'dismissed' ? sorted.filter(ticket => ticket.status === 'dismissed')
+      : sorted.filter(ticket => ticketStatus(ticket).group === stage)
   // P1-8: "show ended" hides the finished group but an explicit stage filter for it always wins, and the group keeps a
-  // reveal entry below the list so history is never unreachable.
-  const doneAllowed = execView.showDone || stage === 'done'
+  // reveal entry below the list so history is never unreachable. The dismissed slice lives inside the ended history.
+  const doneAllowed = execView.showDone || stage === 'done' || stage === 'dismissed'
   const inStage = doneAllowed ? inStageBase : inStageBase.filter(ticket => ticketStatus(ticket).group !== 'done')
   const doneTickets = inStageBase.filter(ticket => ticketStatus(ticket).group === 'done')
   const recentDone = doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
@@ -250,7 +266,12 @@ function ExecutionQueuePage() {
           h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
             label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
-  const queueBody = execView.groupBy === 'repo'
+  const queueBody = stage === 'dismissed'
+    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+      h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
+        badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
+        h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
+    : execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' }, queueHeader,
       repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
         h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
@@ -326,10 +347,12 @@ function ExecutionQueuePage() {
                 : null),
     h(Modal, { open: manualOpen, onClose: () => setManualOpen(false), title: pt(t, 'ex.createTicket'),
       closeLabel: t('close'), description: pt(t, 'ex.createHint') },
-      h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() } })))
+      h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() },
+        onCancel: () => setManualOpen(false) })))
 }
 
-/** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue. */
+/** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
+    arrives from the Overview's watch items, which deep-link the dismissed slice). */
 function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage)
+  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage, { route })
 }

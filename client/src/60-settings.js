@@ -324,7 +324,7 @@ Object.assign(PAGE_TEXT, {
   'st.repo': ['仓库', 'Repository'],
   'st.manualRepoHint': ['工单会在这个仓库上执行；默认是 {name}。',
     'The Ticket runs on this repository; the default is {name}.'],
-  'st.worktreeRoot': ['worktree 根目录', 'Worktree root'],
+  'st.worktreeRoot': ['工作树根目录', 'Worktree root'],
   'st.manualTitle': ['手工建单（测试）', 'Create a Ticket (test)'],
   'st.manualHint': ['测试用：会真实写入 live 状态并加入执行队列，不是干跑。',
     'For testing: writes real live state and joins the execution queue — not a dry run.'],

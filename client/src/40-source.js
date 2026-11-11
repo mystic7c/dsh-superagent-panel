@@ -25,7 +25,11 @@ Object.assign(PAGE_TEXT, {
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
   'src.checkNeedsToken': ['先保存 Octo token 才能检查新消息。', 'Save the Octo token before checking for messages.'],
-  'src.disabled': ['已禁用：在设置→来源打开「启用引擎」并保存。', 'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
+  'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
+    'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
+  // A repository card is enabled by the executor switch, not the engine switch: say the switch that actually enables it.
+  'src.disabledRepo': ['已禁用：打开「启用执行器」（设置→运行）并保存。',
+    'Disabled: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -334,9 +338,9 @@ function LiveSourcePage() {
     const repo = repoOf(source)
     const repoName = repo?.name ?? source.repoId
     const notes = []
-    // When the page-level automation bar already says why everything is off, the cards only keep their state tag;
-    // otherwise each card explains its own off state.
-    if (!source.enabled && !showAutomationBar) notes.push(pt(t, 'src.disabled'))
+    // Every disabled Source says so on its own card: the page-level automation bar explains the pause, not which
+    // Sources are switched off, and two cards reading only "空闲" looked like healthy repositories (critique 2026-11-11).
+    if (!source.enabled) notes.push(pt(t, source.kind === 'execution' ? 'src.disabledRepo' : 'src.disabled'))
     if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []

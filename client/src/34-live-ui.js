@@ -108,7 +108,7 @@ Object.assign(PAGE_TEXT, {
     noDecision: ['还没有决定。', 'No decision yet.'], noMessages: ['这个线程还没有消息。', 'This thread has no messages yet.'],
     latestDecision: ['最近决定', 'Latest decision'], reason: ['原因', 'Reason'], rules: ['规则', 'Rules'],
     openTicket: ['打开工单', 'Open Ticket'], decisionsTitle: ['决定历史', 'Decisions'],
-    rulesHit: ['{hit} 命中 / {miss} 未命中', '{hit} matched / {miss} unmatched'],
+    rulesHit: ['{hit} 通过 / {miss} 未通过', '{hit} passed / {miss} not passed'],
     factsRaw: ['事实原始值', 'Raw facts'], noSelection: ['从左侧选择一个线程', 'Pick a thread on the left'],
     noSelectionHint: ['选中线程后，这里会展示事实、评估、决定与消息去向。',
       'Pick a thread to see its facts, evaluation, decision and where each message went.'],
@@ -142,7 +142,7 @@ Object.assign(PAGE_TEXT, {
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
       'Re-runs the gates in the existing worktree, then pushes the branch and creates/refreshes the MR: {title}'],
-    step: { prepareWorktree: ['准备工作区', 'Prepare worktree'], prepareRepo: ['准备仓库', 'Prepare repository'],
+    step: { prepareWorktree: ['准备工作树', 'Prepare worktree'], prepareRepo: ['准备仓库', 'Prepare repository'],
       exportRepo: ['导出 UAT 对象', 'Export UAT objects'], worker: ['执行 worker', 'Run the worker'],
       changedPaths: ['检查改动', 'Inspect changes'], bootstrap: ['安装依赖', 'Install dependencies'],
       gate: ['闸门', 'Gates'], commit: ['提交改动', 'Commit changes'], push: ['推送分支', 'Push the branch'],
@@ -225,9 +225,9 @@ Object.assign(PAGE_TEXT, {
   automation: {
     offTitle: ['自动化未启动', 'Automation is off'],
     pausedTitle: ['处理已暂停', 'Processing is paused'],
-    paused: ['处理已暂停', 'Paused'],
-    engineOff: ['引擎未启用', 'Intake off'],
-    executorOff: ['执行器未启用', 'Executor off'],
+    paused: ['处理已暂停（设置→运行）', 'Paused (Settings → Runtime)'],
+    engineOff: ['引擎未启用（设置→来源）', 'Intake off (Settings → Source)'],
+    executorOff: ['执行器未启用（设置→运行）', 'Executor off (Settings → Runtime)'],
     start: ['启动自动化', 'Start automation'],
     resume: ['恢复处理', 'Resume processing'],
     startHint: ['启动后会按轮询间隔读取群消息，新工单会开始执行。',
@@ -549,9 +549,12 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
     ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
   return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title,
     'data-compact': compact ? 'true' : undefined },
-    h(StatusIcon, { state: 'warning', size: 16 }),
     h('div', { className: 'sa-automation-main' },
-      h('span', { className: 'sa-automation-title' }, title),
+      // The icon travels with the title: as a sibling of the flex-basis block it wrapped onto a line of its own on a
+      // 390px panel, leaving a lone warning triangle above the sentence (critique 2026-11-11).
+      h('div', { className: 'sa-automation-head' },
+        h(StatusIcon, { state: 'warning', size: 16 }),
+        h('span', { className: 'sa-automation-title' }, title)),
       h('span', { className: 'sa-automation-facts' }, facts.join(' · '),
         progressText ? h(Fragment, null, ' · ', progressText) : null),
       compact ? null : h('span', { className: 'sa-hint' }, hint)),
@@ -950,7 +953,7 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
-function ManualTicketForm({ onDone, heading = true }) {
+function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
@@ -999,8 +1002,11 @@ function ManualTicketForm({ onDone, heading = true }) {
       onChange: event => setTitle(event.target.value) }),
     h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
       'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
-    h('div', { className: 'sa-actions' },
-      h(Button, { variant: 'primary', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
+    // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
+    // give a modal caller an explicit cancel next to it (critique 2026-11-11).
+    h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
+      onCancel ? h(Button, { variant: 'ghost', size: 'md', onClick: onCancel }, t('cancel')) : null,
+      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }),
         disabled: busy || !title.trim(), onClick: () => { void submit() } }, pt(t, 'st.create'))),
     created?.id ? h('div', { className: 'sa-actions' },
       h(StatusText, { state: 'done' }, pt(t, 'st.created')),
@@ -1086,17 +1092,22 @@ function latestGatesOf(ticket) {
   return { run, gates: Array.isArray(run?.gates) ? run.gates : [] }
 }
 
-/** Three gates as paired shape+text (`standards ✓ / backend ✓ / frontend ✗`), from runs[].gates. */
+/** Every gate this run recorded, as paired shape+text. Unknown names keep their configured name (a repository may
+    configure its own gates), and a failed gate carries its exit code instead of a bare red mark. */
 function GateSummary({ ticket }) {
   const { t } = usePanel()
   const { gates } = latestGatesOf(ticket)
   if (!gates.length) return h(Hint, null, pt(t, 'gate.none'))
   return h('div', { className: 'sa-gates' },
-    ['standards', 'backend', 'frontend'].map(name => {
-      const gate = gates.find(entry => entry.name === name)
-      if (!gate) return h('span', { key: name, className: 'sa-gate sa-hint' }, `${pt(t, `gate.${name}`)} —`)
+    gates.map((gate, index) => {
       const ok = gate.exitCode === 0 && !gate.timedOut
-      return h('span', { key: name, className: 'sa-gate' }, h(StatusText, { state: ok ? 'done' : 'error' }, pt(t, `gate.${name}`)))
+      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+        'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+        h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+        ok ? null : h('span', { className: 'sa-hint' },
+          gate.timedOut ? pt(t, 'gate.timedOut')
+            : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
+              : ''))
     }))
 }
 

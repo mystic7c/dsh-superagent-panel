@@ -42,9 +42,9 @@ function Button({ variant = 'ghost', size = 'md', icon, className, children, typ
     children !== undefined && children !== null ? children : null)
 }
 
-function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost' }) {
+function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
   return h('button', { type: 'button', className: 'sa-icon-btn', 'data-variant': variant,
-    'aria-label': label ?? title, title: title ?? label, disabled, onClick }, controlIcon(icon, 16))
+    'aria-label': label ?? title, title: title ?? label, disabled, onClick, ...rest }, controlIcon(icon, 16))
 }
 
 function Tag({ tone = 'outline', title, children }) {
@@ -116,10 +116,14 @@ function Switch({ checked, onChange, label, className, disabled }) {
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
-function Modal({ open, onClose, title, closeLabel, description, footer, className, children }) {
+function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
   const dialog = useRef(null)
   const close = useRef(onClose)
   close.current = onClose
+  // Where focus goes on close. The opener is right for a click-opened dialog; a dialog opened by a keyboard shortcut
+  // (Ctrl+K) has no opener, so search points this at its own header button instead of leaving focus on <body>.
+  const restore = useRef(restoreTo)
+  restore.current = restoreTo
   useEffect(() => {
     if (!open) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
@@ -137,7 +141,14 @@ function Modal({ open, onClose, title, closeLabel, description, footer, classNam
       }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown); opener?.focus() }
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Focus goes back to whatever opened the dialog. A keyboard-opened dialog has no usable opener (the active
+      // element was <body>), so it falls back to the explicit target the caller names — the search trigger for Ctrl+K.
+      const fallback = typeof restore.current === 'function' ? restore.current() : restore.current
+      const target = opener && opener !== document.body ? opener : fallback
+      ;(target instanceof HTMLElement ? target : opener)?.focus()
+    }
   }, [open])
   if (!open) return null
   return h('div', { className: 'sa-modal-root', role: 'presentation' },
