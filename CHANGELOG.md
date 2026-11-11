@@ -18,10 +18,12 @@ durations/triggers/stop reasons (p2c §1)` 偶发失败——2026-11-10 的全�
 - 只改测试夹具，运行时行为（`lib/live/engine.js`）不变，`client/index.js` 无需重建
 
 ### 验证
-- `node --test` 397/397；该用例单跑与全量均通过，重复运行稳定
+- `node --test` 397/397；该用例单跑与全量均通过，重复运行稳定（该用例连续单跑 10 次也全过）
 - 复现对照（时钟每次 `Date.now()` 前进 1ms）：旧夹具单 run 600001ms、10 个 run 合计 5280010ms；
   新夹具 600000ms / 5280000ms
 - `node --check index.js`、`build-client --check`、`check-keys` 通过
+- `render-check` 138/138，连续复跑 20 次均通过（含 `bash -lc` 登录 shell 的 node 24.14、8 路并发与 CPU 满载）；
+  发布闸门曾报过一次 render exit 1，同一工作树/live 状态下未能复现，本轮不改客户端与闸门脚本
 
 ## [0.4.9] — 2026-11-11
 
