@@ -1,3 +1,9 @@
+Object.assign(PAGE_TEXT, {
+  'wf.progress': ['执行流程', 'Execution workflow'],
+  'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
+  'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
+  'wf.review': ['独立验收', 'Independent review'],
+})
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
    plus a ⋯ menu; destructive ones always confirm (retry, publish MR, accept/reject).
@@ -1436,6 +1442,13 @@ function TicketDetail({ id, page = 'execution' }) {
         'aria-current': activeJump === jump.id ? 'location' : undefined,
         onClick: () => jumpTo(jump.id) }, pt(t, jump.labelKey)))),
       headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
+
+    ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
+      h('p', null, ticket.workflow.status),
+      ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
+        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${stage.status}` },
+        h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },
+          stage.error ?? JSON.stringify(stage.result ?? {}, null, 2))))) : null,
 
     // 1. What changed: repository, request body, changed files and the worker's summary — gates stay in their section.
     h(Section, { id: 'sa-ticket-changes', title: pt(t, 'ticket.changes') },

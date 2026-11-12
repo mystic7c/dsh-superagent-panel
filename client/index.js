@@ -6412,6 +6412,12 @@ function LiveExecutionPage({ route }) {
 
 
 // ---- 58-ticket-detail.js ----
+Object.assign(PAGE_TEXT, {
+  'wf.progress': ['执行流程', 'Execution workflow'],
+  'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
+  'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
+  'wf.review': ['独立验收', 'Independent review'],
+})
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
    plus a ⋯ menu; destructive ones always confirm (retry, publish MR, accept/reject).
@@ -7851,6 +7857,13 @@ function TicketDetail({ id, page = 'execution' }) {
         onClick: () => jumpTo(jump.id) }, pt(t, jump.labelKey)))),
       headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
 
+    ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
+      h('p', null, ticket.workflow.status),
+      ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
+        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${stage.status}` },
+        h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },
+          stage.error ?? JSON.stringify(stage.result ?? {}, null, 2))))) : null,
+
     // 1. What changed: repository, request body, changed files and the worker's summary — gates stay in their section.
     h(Section, { id: 'sa-ticket-changes', title: pt(t, 'ticket.changes') },
       repoRows.length
@@ -8000,6 +8013,15 @@ function TicketDetail({ id, page = 'execution' }) {
 
 
 // ---- 60-settings.js ----
+Object.assign(PAGE_TEXT, {
+  'wf.title': ['分阶段执行', 'Staged execution'],
+  'wf.off': ['关闭（沿用单 worker）', 'Off (single worker)'],
+  'wf.auto': ['自动评估难度', 'Assess complexity automatically'],
+  'wf.simple': ['直接实现', 'Direct implementation'],
+  'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
+  'wf.implementer': ['实现后端', 'Implementation backend'],
+  'wf.hint': ['自动模式由 Codex 只读评估；复杂任务先规划，再实现、运行闸门及独立验收。最多返工两轮。', 'Auto mode uses read-only Codex assessment; complex tasks run planning, implementation, gates and independent review. At most two repair rounds.'],
+})
 /* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
    right column edits one group at a time. What runs the work is split out of the executor groups: `run` owns how work
    runs, `worker` owns which backend executes it (and its capability matrix), and `write` owns what may be written — so
@@ -8463,7 +8485,7 @@ function settingsPatchOf(group, draft) {
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -9449,6 +9471,16 @@ function LiveSettingsPage({ route }) {
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
       h(Hint, null, pt(t, 'st.workerHint')),
+      h('div', { className: 'sa-field' },
+        h(Select, { label: pt(t, 'wf.title'), disabled: frozen,
+          value: draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off',
+          options: ['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) })),
+          onChange: value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off') }),
+        h(Select, { label: pt(t, 'wf.implementer'), disabled: frozen,
+          value: draft['executor.implementer'] ?? executor.implementer ?? 'dsh',
+          options: [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }],
+          onChange: value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh') }),
+        h(Hint, null, pt(t, 'wf.hint'))),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.routingTitle')),
         h(Select, { label: pt(t, 'st.routingTitle'), disabled: frozen, value: visible,
