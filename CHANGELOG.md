@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.4.18] — 2026-11-12
+
+README 虽已在 0.4.17 把自开发细节移出，仍有 308 行：其中「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
+「决策模型 shadow（可选，落地第一步）」「功能成熟度」四节约占 170 行，属于机制/排障/历史细节，按 AGENTS.md 的
+「文档分层」应放 `docs/`，README 只留概览与入口。本次把四节原样迁到两个新文档，README 只留「进阶能力」入口。
+只改文档与版本号，不改 `index.js`/`lib`/`client`，不重建 `client/index.js`。
+
+### 内容
+- 新增 `docs/intake-and-eval.md`：原样迁入「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
+  「决策模型 shadow（可选，落地第一步）」三节（保留 H2 层级、表格、代码块、链接与数字），开头注明
+  本文件是评估与接单的进阶配置、非安装必读
+- 新增 `docs/feature-maturity.md`：原样迁入「功能成熟度」整节（稳定/可用/部分/未实现分级、P1/P2 批次、
+  多后端路由与 P1 诚实边界）
+- README 删除上述四节，替换为 6 行以内的「## 进阶能力」：评估接单与确认、决策模型 shadow 指向
+  `docs/intake-and-eval.md`，功能成熟度指向 `docs/feature-maturity.md`；README 308 → 141 行，其余章节不动
+- AGENTS.md 的 `docs/` 结构描述补上两个新文档名
+- `package.json` 版本 0.4.17 → 0.4.18（`files` 已含 `docs/**/*.md`，无需调整）；README 顶部「当前版本」同步
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs` 138/138
+- `node scripts/isolated-verify.mjs`
+
 ## [0.4.17] — 2026-11-12
 
 README.md 已到 418 行，自开发的全部操作细节（`live.json` 仓库配置与字段语义、GitFlow、6 个闸门表、交付流程、

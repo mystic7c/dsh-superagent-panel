@@ -22,7 +22,8 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 - `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接；`client/index.js` 是**构建产物，必须提交**。
 - `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、`isolated-verify.mjs`）。
 - `locale/`：插件清单文案（中/英）。
-- `docs/`：机制、流程、配置与排障细节（如 `docs/self-development.md` 的自开发完整操作）；README 只留摘要与入口。
+- `docs/`：机制、流程、配置与排障细节（如 `docs/self-development.md` 的自开发完整操作、
+  `docs/intake-and-eval.md` 的评估与接单配置、`docs/feature-maturity.md` 的功能成熟度清单）；README 只留摘要与入口。
 - `cordis.patch.yml`：插件注册（sidebar/main 槽位）。
 - `.github/workflows/auto-pr.yml`：GitHub 仓库的交付桥——执行器只能推 feature 分支，这个 workflow 负责开 PR。
 
