@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.4.24] — 2026-11-12
+
+群回复「接单 A7K2」用于人工推翻模型否决时，replay 会按规则重新判定并建单，但这条路径此前只建单、不执行
+（`outcome.started=false`），群回复固定为「已建单」；即使 `executor.enabled=true`，操作人还得再到面板点一次
+执行，与「接单即执行」的语义不一致，也和已排队工单被接单时的行为不一致。规则重放本身只走规则（高风险硬闸门
+仍然生效，规则判定 ignore 时不建单），因此启用执行器时应在 replay 建单成功后立即 autoExecute，并把群回复
+改成「已开始执行」。
+
+### 内容
+- `lib/live/engine.js`：`applyReviewAnswer` 的 replay 分支在建单成功后，若工单仍为 `queued`/`ready` 且
+  `executor.enabled === true`，置 `outcome.started = true` 并调用 `autoExecute([replay.ticket.id])`；与
+  「已排队工单被接单」路径一致，闸门是 `executor.enabled` 而不是 `autoRun`（`autoRun` 只控制新工单的自动派发）。
+  规则判定高风险时仍是 `blocked: 'high-risk'`，不建单也不执行。
+- `lib/live/engine.test.js`：新增 2 个用例——(a) 模型否决的评估收到「接单」后 replay 建单并立即执行（即使
+  `autoRun=false`），群回复是「已开始执行」、`review.outcome.kind = 'started'`；(b) 规则硬拦的高风险信号即使
+  回复「接单」也不建单、不执行，回复仍是「规则判定高风险」。原「replay 建单」用例继续覆盖
+  `executor.enabled=false` 时只建单（`已建单`）。
+- `docs/intake-and-eval.md`：复查动作表补充「`executor.enabled=true` 时同时立即执行」。
+- `package.json` 版本 0.4.22 → 0.4.24（本工单开工后 `develop` 已由空闲看门狗工单升到 0.4.23）；`client/index.js`
+  无变化（未改客户端源码）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（760 literal / 513 shared / 1134 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：418 通过，0 失败（0.4.24 新增 2 例、0.4.23 新增 3 例）
+- `node scripts/render-check.mjs`：143/143 通过（`ok: true`，0 SKIP）
+- `node scripts/isolated-verify.mjs`：PASS（6 个 tab、0 console error）。本会话的 DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑在 `Runtime.enable` 超时；用 `CHROME_PATH` 指向补 `--no-sandbox` 的临时包装脚本后通过
+
 ## [0.4.23] — 2026-11-12
 
 空闲看门狗只看 session 事件：`tool/call` 之后到 `tool/result` 之前没有任何事件，长 bash（如连续 12 次 render-check，约 5–6 分钟）必然超过 `workerIdleTimeoutMs`（默认 300000），worker 仍在跑却被判 `worker_lost` 并 cancel。本次让在途工具调用成为看门狗的活动窗口。
