@@ -1,19 +1,26 @@
 # Delivery bridge for GitHub-hosted repositories.
 #
-# The Superagent executor can only push a feature branch on GitHub: `git push -o merge_request.*`
+# The Superagent executor can only push a branch on GitHub: `git push -o merge_request.*`
 # is GitLab-only and github.com ignores it, so no merge/pull request exists after a Ticket push.
-# This workflow opens the pull request for every `feature/**` branch the executor pushes.
+# This workflow opens the pull request for every delivery branch the executor pushes, following
+# the repository's GitFlow layout:
+#
+#   feature/**  -> develop   (integration branch, Tickets merge here)
+#   release/**  -> main      (release branch cut from develop)
+#   hotfix/**   -> main      (hotfix branch cut from main)
 #
 # A pull request opened by GitHub Actions cannot be merged by the same token: a person reviews and
-# merges it. The panel's manual-repository verification then judges the merge by git ancestry
-# (`git merge-base --is-ancestor`), so the PR must be merged with a merge commit (or fast-forward),
-# not squashed.
+# merges it. The panel's manual-repository verification judges the merge by git ancestry
+# (`git merge-base --is-ancestor <commit> origin/<targetBranch>`), so delivery branches must be
+# merged with a merge commit (or fast-forward), never squashed.
 name: auto-pr
 
 on:
   push:
     branches:
       - 'feature/**'
+      - 'release/**'
+      - 'hotfix/**'
 
 permissions:
   contents: read
@@ -28,20 +35,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Open a pull request for this feature branch
+      - name: Open a pull request for this delivery branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          case "$BRANCH" in
+            release/*|hotfix/*) BASE=main ;;
+            */*) BASE=develop ;;
+            *) echo "unexpected delivery branch: $BRANCH" >&2; exit 1 ;;
+          esac
           if gh pr view "$BRANCH" --json number --jq '.number' >/dev/null 2>&1; then
             echo "a pull request for $BRANCH is already open"
             exit 0
           fi
           gh pr create \
-            --base main \
+            --base "$BASE" \
             --head "$BRANCH" \
             --title "Superagent: $BRANCH" \
-            --body "Automatic pull request for branch \`$BRANCH\` pushed by the Superagent executor.
+            --body "Automatic pull request for branch \`$BRANCH\` pushed by the Superagent executor (base: \`$BASE\`).
 
           Local gate evidence lives in the Ticket's run record until this PR is merged."

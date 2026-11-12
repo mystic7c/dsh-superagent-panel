@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.13] — 2026-11-12
+
+自开发链路改用 GitFlow，并把自开发代码与本机日常安装彻底分开。此前仓库只有 `main`：工单 PR 以 `main` 为 base、
+合并即发布，dev 代码通过 `link:` 直接进入桌面 profile；本版本把交付、发布、本机运行三层拆开，并新增隔离实例闸门。
+
+### 内容
+- `auto-pr.yml` 按分支前缀选 base：`feature/**` → `develop`，`release/**`、`hotfix/**` → `main`（幂等，已有 PR 跳过）
+- 仓库配置：`baseBranch`/`targetBranch` 改为 `develop`，工单合入集成分支即 `merged`，`main` 只由 release/hotfix 合入
+- README 增加「分支策略（GitFlow）」「本机稳定安装（与开发仓库分离）」「隔离实例验证」三节，交付流程与
+  `verifyMode: manual` 的 ancestry 判定改为 `origin/develop`
+- 新增 `scripts/isolated-verify.mjs` 与 `isolated` 闸门：临时 `DSH_HOME` + 临时 state + 随机端口起一次性 DSH，
+  Chrome headless CDP 实机断言侧栏入口、面板页签与空状态、console 无错误，结束后清理
+- `AGENTS.md` 交付语义改为 GitFlow（feature→develop、release/hotfix→main、tag 发布、stable clone 跟随 tag）
+
+### 验证
+- `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js`
+- `node scripts/render-check.mjs`
+- `node scripts/isolated-verify.mjs`（本机 Chrome；闸门上线后在真实工单上再验证一次）
+
 ## [0.4.12] — 2026-11-11
 
 README 补上「用面板开发本仓库（自开发）」一节：自开发链路已经跑通（工单 → 闸门 → 推送 → auto-pr → merge commit →
