@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.4.19] — 2026-11-12
+
+工单 tkt_ed2bb9e10a3b46e2 的 run_3953a38ea58c476a 在 prepare-worktree 之后卡在 worker 步骤：worker 没有产出报告，
+run 一直保持 `working`，只能重载插件让 reconcile 把 run 标成 `interrupted` 再 `/resume`。根因是
+`lib/live/worker.js` 的 `runWorker` 只靠 `ctx.on('session/event')` 的 `turn/end` 来 settle；worker 会话/代理在没有
+`turn/end` 的情况下结束或事件流中断时，`done` 永远不 settle，run 只能等 `executor.timeoutMs`（默认 1_500_000ms）
+超时才失败，期间工单一直 `working`、也无法重试。本次加空闲看门狗与宿主结束信号，并让 worker_lost 的失败可重试。
+
+### 内容
+- `lib/live/worker.js`：记录最近一次 worker 事件时间（`assistant/message`、`tool/call`、`tool/result`、`turn/end`、
+  `error` 等 `session/event`）；新增 `idleTimeoutMs` 参数（默认 300_000，由 executor 从配置传入），超过该窗口没有
+  新事件时调用 `handle.agent.cancel?.('worker idle timeout')` 并返回 `{ error: 'worker_lost', timedOut: false }`，
+  `events` 里追加一条 `error` / state `worker_lost` 的终止事件；同时监听 `session/disposed` 与 `agent/disposed`
+  （`{ agent }`），worker 会话/代理被宿主关掉时立即 settle，不再等总超时。所有监听器在 `finally` 统一注销，
+  `worker_lost` 只在 idle/lifecycle 路径记录一次 error 事件
+- `lib/live/executor.js`：`invokeWorker` 透传 `idleTimeoutMs: config.executor.workerIdleTimeoutMs`；
+  worker 返回 `error === 'worker_lost'` 时以 `stopReason/errorCode = 'worker_lost'` 结束 run（worker 步骤 failed）；
+  `failRun` 对 `worker_lost` 把工单放回可重试的 `ready`（保留 branch/worktree），写一条 `run` activity，
+  终态仍由 `finally` 的 `persist()` 落盘，不再出现长期 `working`
+- `lib/live/engine.js`：`deriveInboxItems` 在 `run.stopReason === 'worker_lost'` 且工单为 `ready` 时仍派生
+  `kind: 'failure'` 待办（标题「worker 失联，可重试」），保证失败在桌面可见
+- `lib/live/config.js`：`DEFAULT_EXECUTOR.workerIdleTimeoutMs = 300_000`，合并时只接受 60_000..3_600_000 的整数
+- `lib/live/live-json.js`：白名单新增 `executor.workerIdleTimeoutMs`（kind `worker-idle-ms`，60_000..3_600_000）
+- `lib/live/worker.test.js`：新增 5 个用例（无事件 → idleTimeoutMs 后 `worker_lost`、窗口内有事件则重新计时、
+  正常 `turn/end` 不受影响、`session/disposed`/`agent/disposed` 立即 settle）；`fakeHost` 按事件类型记录监听器，避免生命周期事件与
+  `session/event` 混淆
+- `lib/live/executor.test.js`：新增 worker_lost → run failed/stopReason worker_lost/工单 `ready`/worktree 保留/
+  activity 与 inbox failure 待办/未提交未推送，并断言 `idleTimeoutMs` 从配置透传
+- `lib/live/config.test.js`、`lib/live/live-json.test.js`：覆盖默认值 300_000 与 60_000/3_600_000 边界及越界回退
+- `package.json` 版本 0.4.18 → 0.4.19
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`（`client/index.js is up to date (22 fragments)`）
+- `node scripts/check-keys.mjs`（756 literal keys / 513 shared keys / 1131 page-local keys）
+- `node --test lib/store.test.js lib/live/*.test.js` 406/406（新增 8 个用例）
+- `node scripts/render-check.mjs` 本机 137/138；基线上同一个失败（`overview names the needs-you vs worth-a-look split`，
+  本机 state 无 worth-a-look 项），与本次 Host 改动无关
+- `node scripts/isolated-verify.mjs` 本机在 `Runtime.enable timed out` 失败；基线同（Chrome/CDP 环境问题）
+
 ## [0.4.18] — 2026-11-12
 
 README 虽已在 0.4.17 把自开发细节移出，仍有 308 行：其中「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
