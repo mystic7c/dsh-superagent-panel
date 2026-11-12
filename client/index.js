@@ -2997,7 +2997,7 @@ Object.assign(PAGE_TEXT, {
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
-    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
+    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
     evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
     evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
@@ -3060,7 +3060,8 @@ Object.assign(PAGE_TEXT, {
     mergeState: ['合并状态', 'Merge state'],
     origin: ['来源请求', 'Origin request'], basis: ['决定依据', 'Decision basis'], target: ['目标分支', 'Target branch'],
     pipeline: ['流水线', 'Pipeline'], autoMerge: ['自动合并', 'Auto merge'], mrState: ['MR 状态', 'MR state'],
-    mrLink: ['MR 链接', 'MR link'], mergedYes: ['已合入目标分支', 'Merged into the target branch'],
+    mrLink: ['MR 链接', 'MR link'], openPr: ['打开 PR', 'Open the PR'],
+    mergedYes: ['已合入目标分支', 'Merged into the target branch'],
     mergedNo: ['尚未合入目标分支', 'Not merged yet'], commit: ['提交', 'Commit'], devCommit: ['目标分支提交', 'Target commit'],
     uatReachable: ['UAT 可访问', 'UAT reachable'], uatUnreachable: ['UAT 不可访问', 'UAT unreachable'],
     uatChanged: ['已变化', 'Changed'], uatSame: ['未变化', 'Unchanged'],
@@ -3149,6 +3150,9 @@ Object.assign(PAGE_TEXT, {
   'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
   'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
   'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
+  // push mode records only the GitHub `/pull/new/` URL: the PR itself is opened by `.github/workflows/auto-pr.yml`.
+  'mr.pushHint': ['这个 PR 由推送后的 auto-pr workflow 自动创建；合并状态由目标分支历史判定。',
+    'This PR is created automatically by the post-push auto-pr workflow; merge state comes from the target branch history.'],
   // P2-7: GitLab observation upgrades shown on the MR card.
   'mr.draft': ['草稿', 'Draft'],
   'mr.draftHint': ['这个 MR 仍是草稿/WIP：自动巡检会跳过合并与 UAT 判定。',
@@ -3696,8 +3700,9 @@ function ticketEvidence(t, ticket, view) {
     return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
   }
   const mr = links.mergeRequest ?? {}
-  if (mr.iid) {
-    const label = pt(t, 'row.evidenceMr', { iid: mr.iid })
+  // push mode has a PR URL but no iid until the repo's auto-pr workflow opens it; the URL alone is still evidence.
+  if (mr.iid || mr.webUrl) {
+    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid }) : pt(t, 'row.evidencePr')
     return mr.webUrl
       ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
         title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
@@ -3751,7 +3756,7 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
     notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
   }, { reload: refreshAll })
   const canPublish = Boolean(data?.config?.executor?.enabled && data?.config?.executor?.allowPush)
-  const hasMr = Boolean(ticket.links?.mergeRequest?.iid)
+  const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   const primary = primaryActionOf(ticket, view)
 
   const busyOf = { verify: verify.busy, refreshCi: refreshCi.busy, dryRun: dryRun.busy, publish: publish.busy, dismiss: dismiss.busy }
@@ -4082,7 +4087,8 @@ function StageRail({ ticket, detail = false }) {
     { key: 'gate', state: gateFailed ? 'error' : gateDone ? 'done' : ticket.status === 'working' ? 'ongoing' : 'idle',
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
-      result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}` : '' },
+      result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
+        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, 'row.evidencePr') : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
@@ -4100,11 +4106,18 @@ function MergeRequestCard({ ticket }) {
   const { t } = usePanel()
   const links = ticket?.links ?? {}
   const mr = links.mergeRequest ?? {}
+  const verification = links.verification ?? {}
   const pipeline = links.pipeline ?? {}
   const autoMerge = links.autoMerge ?? {}
+  // push mode records only the GitHub `/pull/new/` URL before any PR number exists; the URL alone is MR evidence.
+  const hasMr = Boolean(mr.iid || mr.webUrl)
+  const merged = mr.state === 'merged' || verification.merged === true
   const rows = []
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
+  else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
   if (mr.state) rows.push([pt(t, 'ticket.mrState'), providerStateText(t, MR_STATE_KEYS, mr.state)])
+  // push mode has no provider state; the verify step's ancestry result is what says the PR landed.
+  if (!mr.state && verification.merged === true) rows.push([pt(t, 'ticket.mergeState'), pt(t, 'ticket.mergedYes')])
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
@@ -4123,8 +4136,12 @@ function MergeRequestCard({ ticket }) {
       ? h(Folded, { summary: pt(t, 'mr.stale') }, h('p', { className: 'sa-hint' },
         pt(t, 'mr.staleHint', { head: liveShortId(stale.headSha, 8) || '—', latest: liveShortId(stale.latestSha, 8) || '—' })))
       : null,
-    mr.iid || pipeline.status || autoMerge.state
-      ? h(KeyValues, { rows })
+    hasMr || pipeline.status || autoMerge.state || merged
+      ? h(Fragment, null,
+        h(KeyValues, { rows }),
+        mr.webUrl && !mr.iid
+          ? h('p', { className: 'sa-hint', style: { marginTop: 'var(--sa-sp-8)' } }, pt(t, 'mr.pushHint'))
+          : null)
       : h(Hint, null, liveText('还没有合并请求。', 'No merge request yet.')))
 }
 
@@ -7521,7 +7538,8 @@ function TicketDetail({ id, page = 'execution' }) {
     .filter(step => step.state === 'failed' && step.name !== 'error').map(step => ticketStepLabel(t, step.name))
   const canRun = config.executor?.enabled === true
   const canPush = canRun && config.executor?.allowPush === true
-  const hasMr = Boolean(ticket.links?.mergeRequest?.iid)
+  // push mode records the GitHub `/pull/new/` URL without a PR number; the link alone still counts as an MR.
+  const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   // Which repository this Ticket runs on (contract §12): the derived name/id plus the local clone and branch flow.
   const repos = panelRepos(model?.data)
   const repoId = ticket.repoId ?? panelDefaultRepo(model?.data)
