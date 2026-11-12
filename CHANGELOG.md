@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.14] — 2026-11-12
+
+README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.json` 已到 0.4.13），「开发与验证」里的 Host 测试数量
+仍停在 396，实际已是 398。本次只同步文档与版本号，不改代码、不重建 `client/index.js`。
+
+### 内容
+- README 顶部「当前版本」改为 0.4.14，并注明 0.4.13 起交付走 GitFlow（feature→develop，release/hotfix 走独立分支），
+  版本历史指向 CHANGELOG
+- README「开发与验证」的 Host 测试数量 396 → 398，与 `AGENTS.md`、闸门表和实跑结果一致
+- `package.json` 版本 0.4.13 → 0.4.14
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs`
+
 ## [0.4.13] — 2026-11-12
 
 自开发链路改用 GitFlow，并把自开发代码与本机日常安装彻底分开。此前仓库只有 `main`：工单 PR 以 `main` 为 base、
