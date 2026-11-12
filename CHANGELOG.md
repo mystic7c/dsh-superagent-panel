@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.4.16] — 2026-11-12
+
+README 的闸门表只写了 `isolated` 验证什么，没写闸门清单从哪来、本机需要什么依赖、失败时看什么；在没装 Chrome 的
+机器上只会读到 `no Chrome/Chromium binary found (set CHROME_PATH)`，不知道 `CHROME_PATH` 的作用与失败标记长什么样。
+本次只补文档与版本号，不改代码、不重建 `client/index.js`。
+
+### 内容
+- README「用面板开发本仓库（自开发）」在闸门表后补一段：executor 的闸门清单来自 `live.json` 的 `repo.gates`；
+  0.4.15 起第 6 项 `isolated` 由 `node scripts/isolated-verify.mjs` 承担（临时 `DSH_HOME`/state + 真实 Chrome
+  headless CDP）；本机需 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行文件；失败时打印
+  `[isolated-verify] FAIL <原因>`
+- README 顶部「当前版本」同步到 0.4.16（此前停在 0.4.14，0.4.15 漏更新）
+- `package.json` 版本 0.4.15 → 0.4.16
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs`
+- `node scripts/isolated-verify.mjs` 单独跑通
+
+## [0.4.15] — 2026-11-12
+
+`render` 闸门在 jsdom + 共享 `/tmp/sa-harness` 上渲染客户端，证明不了「真实 DSH Web UI 里 Host 半 + 客户端能一起挂载」。
+新增 `scripts/isolated-verify.mjs`：临时 `DSH_HOME` 与 `DSH_SUPERAGENT_STATE_DIR`、随机端口、真实 Chrome headless CDP，
+打开左侧栏「超级智能体」并断言 6 个 tab、空状态引导、console 无错误，截图写入 `verification/`（gitignore）。
+
+CLI 定位兼容 `DSH_NODE_EXECUTABLE` + `DSH_INSTALL_DIR`（executor gate 环境可能没有这两个变量），
+其次探测 macOS 应用包（asar 内的 `lib/bin.js` 由 Electron 以 `ELECTRON_RUN_AS_NODE=1` 读取），最后回退 PATH 上的 `dsh`。
+
+### 验证
+- 本机 `node scripts/isolated-verify.mjs` PASS（清空 `DSH_*` 环境变量后走 app-bundle 兜底）
+- `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`
+- Host 测试 398/398、`node scripts/render-check.mjs`
+
+## [0.4.14] — 2026-11-12
+
+README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.json` 已到 0.4.13），「开发与验证」里的 Host 测试数量
+仍停在 396，实际已是 398。本次只同步文档与版本号，不改代码、不重建 `client/index.js`。
+
+### 内容
+- README 顶部「当前版本」改为 0.4.14，并注明 0.4.13 起交付走 GitFlow（feature→develop，release/hotfix 走独立分支），
+  版本历史指向 CHANGELOG
+- README「开发与验证」的 Host 测试数量 396 → 398，与 `AGENTS.md`、闸门表和实跑结果一致
+- `package.json` 版本 0.4.13 → 0.4.14
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs`
+
 ## [0.4.13] — 2026-11-12
 
 自开发链路改用 GitFlow，并把自开发代码与本机日常安装彻底分开。此前仓库只有 `main`：工单 PR 以 `main` 为 base、
