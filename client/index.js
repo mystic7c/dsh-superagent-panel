@@ -977,9 +977,17 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 }
 @container (max-width: 600px) {
   .sa-head-tools > .sa-icon-btn { display: none; }
-  .sa-mobile-tools { display: inline-flex; }
+  /* The overflow trigger belongs to the title row: in the tools flow it landed after the full-width status line and
+     read as an orphan "…" on its own row. The title row takes the full width here, so the status and the four hidden
+     icons always wrap to a second row and the menu sits at the title's right edge without covering the status text. */
+  .sa-head-title { flex: 1 0 100%; }
+  .sa-mobile-tools { display: inline-flex; margin-left: auto; align-self: center; }
   .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 40px; height: 40px; }
   .sa-tabs .sa-tab { min-height: 40px; }
+}
+@container (max-width: 760px) {
+  /* Once the recent-run line wraps under the load bar it is a leading label, not a right-aligned caption. */
+  .sa-executor-recent { justify-content: flex-start; margin-left: 0; }
 }
 `
 
@@ -1413,9 +1421,9 @@ const TEXT = {
   reloadConfig: ['重新载入配置', 'Reload config'],
   noData: ['暂无数据', 'No data'],
   statusLabel: ['状态', 'Status'],
-  loadbarRunning: ['运行中 {count}', 'Running {count}'],
+  loadbarRunning: ['执行中 {count}', 'Working {count}'],
   loadbarQueued: ['排队 {count}', 'Queued {count}'],
-  loadbarWaiting: ['等待人 {count}', 'Waiting on people {count}'],
+  loadbarWaiting: ['等你处理 {count}', 'Waiting on you {count}'],
   loadbarFailed: ['失败 {count}', 'Failed {count}'],
   loadbarPaused: ['已暂停', 'Paused'],
   funnelReceived: ['到达', 'Arrived'],
@@ -2596,7 +2604,15 @@ function Header({ onOpenSearch }) {
   return h(Fragment, null,
     h('header', { className: 'sa-head' },
       h('div', { className: 'sa-head-title' },
-        h('h1', { className: 'sa-title' }, t('title'))),
+        h('h1', { className: 'sa-title' }, t('title')),
+        // Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable.
+        h('div', { className: 'sa-mobile-tools' },
+          h(Menu, { label: pt(t, 'actions.more'), iconName: 'more', items: [
+            { key: 'search', label: pt(t, 'actions.search'), onSelect: onOpenSearch },
+            { key: 'check', label: pt(t, 'actions.checkNow'), disabled: poll.busy, onSelect: () => { void poll.run() } },
+            { key: 'refresh', label: pt(t, 'actions.refreshStatus'), onSelect: () => { void model.reload() } },
+            { key: 'glossary', label: t('glossary'), onSelect: () => setGlossaryOpen(true) },
+          ] }))),
       h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         h(GlobalStatus, null),
         h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
@@ -2607,15 +2623,8 @@ function Header({ onOpenSearch }) {
           title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
         h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
           variant: 'outline', onClick: () => setGlossaryOpen(true) }),
-        // Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable.
-        h('div', { className: 'sa-mobile-tools' },
-          h(Menu, { label: pt(t, 'actions.more'), iconName: 'more', items: [
-            { key: 'search', label: pt(t, 'actions.search'), onSelect: onOpenSearch },
-            { key: 'check', label: pt(t, 'actions.checkNow'), disabled: poll.busy, onSelect: () => { void poll.run() } },
-            { key: 'refresh', label: pt(t, 'actions.refreshStatus'), onSelect: () => { void model.reload() } },
-            { key: 'glossary', label: t('glossary'), onSelect: () => setGlossaryOpen(true) },
-          ] }))),
-    ), h(GlossaryModal, { open: glossaryOpen, onClose: () => setGlossaryOpen(false) }))
+      )),
+    h(GlossaryModal, { open: glossaryOpen, onClose: () => setGlossaryOpen(false) }))
 }
 
 /** Route → the page component for that tab. Pages receive the route as a prop (detail id included). */
@@ -2972,10 +2981,10 @@ Object.assign(PAGE_TEXT, {
     'gate-blocked': ['闸门待处理', 'Gate needs you'],
     // P1-4: the worker asked a question; the run is parked until a person answers (group waiting, primary 'answer').
     'awaiting-answer': ['等待回答', 'Awaiting your answer'],
-    waiting_for_human: ['等待人工', 'Waiting for you'], interrupted: ['已中断', 'Interrupted'],
+    waiting_for_human: ['等你处理', 'Waiting on you'], interrupted: ['已中断', 'Interrupted'],
     accepted: ['已验收', 'Accepted'],
   },
-  group: { queued: ['待排', 'Queued'], working: ['执行中', 'Working'], waiting: ['等待人', 'Waiting for you'],
+  group: { queued: ['排队', 'Queued'], working: ['执行中', 'Working'], waiting: ['等你处理', 'Waiting on you'],
     failed: ['失败', 'Failed'], done: ['已结束', 'Ended'] },
   primary: { accept: ['去验收', 'Review UAT'], merge: ['去合并 MR', 'Merge MR'], deploy: ['刷新部署', 'Refresh deploy'],
     diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'],
@@ -3884,12 +3893,16 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
     if (!grouped.has(group)) grouped.set(group, [])
     grouped.get(group).push(ticket)
   }
-  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map(group =>
+  // One column header for the whole ledger, placed under the first group title: above every group it was a table
+  // header that preceded the section it described, and repeating it for each stage turned a four-column list into
+  // three little tables. The groups that follow share the same tracks.
+  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map((group, index) =>
     h(Section, { key: group, title: pt(t, `group.${group}`),
       count: groupCounts?.[group] === false ? undefined : grouped.get(group).length,
       badge: groupNotes?.[group] ?? null },
+      index === 0 ? header ?? null : null,
       h(TicketList, { tickets: grouped.get(group), page, actions, reload })))
-  return className ? h('div', { className }, header, rendered) : h(Fragment, null, header, rendered)
+  return className ? h('div', { className }, rendered) : h(Fragment, null, rendered)
 }
 
 /**
@@ -3997,10 +4010,10 @@ function ExecutorLoad({ load, labels = true }) {
     { key: 'loadbarFailed', value: load.failed ?? 0, tone: 'error' },
   ]
   const total = counts.reduce((sum, entry) => sum + entry.value, 0)
-  // Zero is information: "running 0 · queued 0 · waiting 0 · failed 0" says the executor is calm without a sentence
+  // Zero is information: "working 0 · queued 0 · waiting 0 · failed 0" says the executor is calm without a sentence
   // that repeats the header. No track is drawn at zero — an empty 8px bar reads as a broken progress bar.
-  // The four counts belong to the interactive stage filter (one place, one unit). The band keeps the composition bar
-  // only while work is moving, so the same numbers are never printed twice on one screen.
+  // The bar is segmented, so it only means something with its legend: the same counts and words as the stage filter
+  // sit under it, and the segment colours are read through those words rather than guessed.
   if (total === 0) return null
   return h('div', { className: 'sa-executor-load' },
     h('div', { className: 'sa-loadbar' },
@@ -6095,9 +6108,9 @@ Object.assign(PAGE_TEXT, {
   'ex.colEvidence': ['证据', 'Evidence'],
   'ex.colActions': ['操作', 'Actions'],
   'ex.stageQueued': ['排队', 'Queued'],
-  'ex.stageWorking': ['执行中', 'Running'],
-  'ex.stageWaiting': ['等待你', 'Waiting on you'],
-  'ex.stageFailed': ['失败工单', 'Failed Tickets'],
+  'ex.stageWorking': ['执行中', 'Working'],
+  'ex.stageWaiting': ['等你处理', 'Waiting on you'],
+  'ex.stageFailed': ['失败', 'Failed'],
   'ex.stageDone': ['已结束', 'Ended'],
   'ex.stageDismissed': ['已忽略', 'Dismissed'],
   'ex.dismissedNote': ['失败后由人放弃的工单，不会再执行；点开可看当时的失败原因。',
@@ -6301,13 +6314,15 @@ function ExecutionQueuePage({ route }) {
             label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
   const queueBody = stage === 'dismissed'
-    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+    ? h('div', { className: 'sa-exec-queue' },
       h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
         badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
+        queueHeader,
         h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
     : execView.groupBy === 'repo'
-    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
-      repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+    ? h('div', { className: 'sa-exec-queue' },
+      repoGroupsOf(inStage).map((group, index) => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+        index === 0 ? queueHeader : null,
         h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
     : h(Fragment, null,
       h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
@@ -6340,7 +6355,7 @@ function ExecutionQueuePage({ route }) {
       badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
       action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
-        h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
+        h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load })),
         h('div', { className: 'sa-executor-recent' },
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
@@ -7785,7 +7800,8 @@ function TicketDetail({ id, page = 'execution' }) {
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
   // title row (right of the title, left of the actions) instead of owning a full-width line under the head; the jump
-  // still lands on the acceptance card (`#sa-acceptance`).
+  // still lands on the acceptance card (`#sa-acceptance`). When the primary action already is that jump, the note
+  // stays text only: two identical 去验收 controls side by side made the header read as a duplicated action.
   const acceptanceNote = acceptanceView.state === 'none'
     ? null
     : h('span', { className: 'sa-page-head-note' },
@@ -7793,8 +7809,9 @@ function TicketDetail({ id, page = 'execution' }) {
         : acceptanceView.state === 'accepted'
           ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
           : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at) || '—' })),
-      h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
-        pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
+      needsAcceptance ? null
+        : h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
+          pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
 
   // The header's right corner is the Ticket's control cluster: sign-off note, the one state-following primary action,
   // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.

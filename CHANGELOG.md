@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.4.25] — 2026-11-12
+
+对超级智能体面板做了一轮 Impeccable 系统评分（Operate 模式；设计审查 + 1280/960/390 实机截图与
+DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执行页的词汇在筛选片、分组标题、行标签和负载图例
+之间各说各话；一个 40px 的移动端溢出菜单在标题下自成一行；工单头的验收跳转与主行动并排成两个「去验收」；
+列头压在分组标题之上；四段负载条没有图例。本次把这几项落掉，不改 Host 契约。
+
+### 系统评分
+| 维度 | 分数 | 依据 |
+|---|---|---|
+| 系统状态可见 | 4/4 | 全局状态行、系统脉搏、执行器条都有实时值 |
+| 贴合真实世界 | 3/4 | 词汇漂移：等待你 / 等待人 / 等待回答 |
+| 用户控制与自由 | 4/4 | 确认、返回、Esc、菜单均可退出 |
+| 一致性与标准 | 2/4 | 同页四种等待说法、列头位置、重复 CTA |
+| 错误预防 | 4/4 | 暂停/重试/写操作均有确认与禁用态 |
+| 识别而非记忆 | 3/4 | 图标按钮有 aria/title；负载条此前不可解码 |
+| 灵活与高效 | 3/4 | Alt+1..6、Ctrl+K、筛选持久化 |
+| 美学与极简 | 3/4 | 密度合理，但重复列头/空图例制造噪声 |
+| 错误识别与恢复 | 4/4 | 失败原因、重试、not-found 空态完整 |
+| 帮助与文档 | 3/4 | 术语表与页内提示齐全，缺 PRODUCT.md |
+
+### 内容
+- `client/src/58-ticket-detail.js`：`needsAcceptance` 时验收注记只保留「待你验收」文字，不再渲染第二个
+  「去验收」跳转按钮；主行动本身已滚到 `#sa-acceptance`，两个同文案控件相邻会被读成重复操作。已验收/已打回
+  仍保留「查看验收」跳转。
+- `client/src/34-live-ui.js`、`client/src/55-execution.js`、`client/src/06-i18n.js`：统一执行页词汇为
+  **排队 / 执行中 / 等你处理 / 失败 / 已结束**。分组标题、筛选片、`waiting_for_human` 行标签、负载图例使用
+  同一组词；`awaiting-answer` 保留更具体的「等待回答」。`loadbarRunning` 由「运行中」改为「执行中」。
+- `client/src/34-live-ui.js`、`client/src/55-execution.js`：队列列头只渲染一次，放进第一个分组 `Section`
+  的标题之下（阶段分组、仓库分组、已忽略单组一致）；此前列头先于「等你处理 3」出现，读起来像页面级表头。
+- `client/src/55-execution.js`：执行器负载条恢复图例（`ExecutorLoad` 默认 `labels=true`），四段颜色由同一组
+  阶段词解码；零负载仍不画条。
+- `client/src/30-shell.js`、`client/src/05-style.js`：移动端溢出菜单移入标题行（`.sa-head-title`）右端，
+  标题格在 `@container (max-width:600px)` 下 `flex:1` 撑满，状态行因此整体换到下一行；菜单不再在状态行后
+  单独占一行，也不会压住状态文字，40px 触控目标保留。`@container (max-width:760px)` 下
+  `最近一次执行` 左对齐，换行后不再右飘。
+- `scripts/render-check.mjs`：新增 3 条断言——工单头只有一个「去验收」、列头位于分组标题之后、负载条图例
+  含四个阶段词；阶段词断言同步为新词汇。
+- `package.json` 0.4.25；`client/index.js` 重建（22 fragments，9726 行）。
+
+### 未落地（记录，不在本单）
+- 评估页 39 条记录整页铺开（约 3390px），无分页/搜索；属于日志页信息架构改动，另开。
+- 概览「策略规则」胶囊是只读 `Tag`，与状态标签同一惯用法；不改交互外观以免制造假按钮。
+- 全局搜索遮罩使用宿主 `--dsw-alias-bg-mask-1`（24% 黑），实测像素 194 vs 255，遮罩有效，不改。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（760 literal / 513 shared / 1134 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：418 通过，0 失败
+- `node scripts/render-check.mjs`：147/147 通过，0 SKIP
+- `node scripts/isolated-verify.mjs`：PASS（6 个 tab，0 console error；用 `CHROME_PATH` 包装脚本补
+  `--no-sandbox --disable-crashpad`，否则本会话沙箱下 Chrome 在 `Runtime.enable` 超时）
+
 ## [0.4.24] — 2026-11-12
 
 群回复「接单 A7K2」用于人工推翻模型否决时，replay 会按规则重新判定并建单，但这条路径此前只建单、不执行
