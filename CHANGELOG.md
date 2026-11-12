@@ -1,5 +1,71 @@
 # Changelog
 
+## [0.4.19] — 2026-11-12
+
+工单 tkt_ed2bb9e10a3b46e2 的 run_3953a38ea58c476a 在 prepare-worktree 之后卡在 worker 步骤：worker 没有产出报告，
+run 一直保持 `working`，只能重载插件让 reconcile 把 run 标成 `interrupted` 再 `/resume`。根因是
+`lib/live/worker.js` 的 `runWorker` 只靠 `ctx.on('session/event')` 的 `turn/end` 来 settle；worker 会话/代理在没有
+`turn/end` 的情况下结束或事件流中断时，`done` 永远不 settle，run 只能等 `executor.timeoutMs`（默认 1_500_000ms）
+超时才失败，期间工单一直 `working`、也无法重试。本次加空闲看门狗与宿主结束信号，并让 worker_lost 的失败可重试。
+
+### 内容
+- `lib/live/worker.js`：记录最近一次 worker 事件时间（`assistant/message`、`tool/call`、`tool/result`、`turn/end`、
+  `error` 等 `session/event`）；新增 `idleTimeoutMs` 参数（默认 300_000，由 executor 从配置传入），超过该窗口没有
+  新事件时调用 `handle.agent.cancel?.('worker idle timeout')` 并返回 `{ error: 'worker_lost', timedOut: false }`，
+  `events` 里追加一条 `error` / state `worker_lost` 的终止事件；同时监听 `session/disposed` 与 `agent/disposed`
+  （`{ agent }`），worker 会话/代理被宿主关掉时立即 settle，不再等总超时。所有监听器在 `finally` 统一注销，
+  `worker_lost` 只在 idle/lifecycle 路径记录一次 error 事件
+- `lib/live/executor.js`：`invokeWorker` 透传 `idleTimeoutMs: config.executor.workerIdleTimeoutMs`；
+  worker 返回 `error === 'worker_lost'` 时以 `stopReason/errorCode = 'worker_lost'` 结束 run（worker 步骤 failed）；
+  `failRun` 对 `worker_lost` 把工单放回可重试的 `ready`（保留 branch/worktree），写一条 `run` activity，
+  终态仍由 `finally` 的 `persist()` 落盘，不再出现长期 `working`
+- `lib/live/engine.js`：`deriveInboxItems` 在 `run.stopReason === 'worker_lost'` 且工单为 `ready` 时仍派生
+  `kind: 'failure'` 待办（标题「worker 失联，可重试」），保证失败在桌面可见
+- `lib/live/config.js`：`DEFAULT_EXECUTOR.workerIdleTimeoutMs = 300_000`，合并时只接受 60_000..3_600_000 的整数
+- `lib/live/live-json.js`：白名单新增 `executor.workerIdleTimeoutMs`（kind `worker-idle-ms`，60_000..3_600_000）
+- `lib/live/worker.test.js`：新增 5 个用例（无事件 → idleTimeoutMs 后 `worker_lost`、窗口内有事件则重新计时、
+  正常 `turn/end` 不受影响、`session/disposed`/`agent/disposed` 立即 settle）；`fakeHost` 按事件类型记录监听器，避免生命周期事件与
+  `session/event` 混淆
+- `lib/live/executor.test.js`：新增 worker_lost → run failed/stopReason worker_lost/工单 `ready`/worktree 保留/
+  activity 与 inbox failure 待办/未提交未推送，并断言 `idleTimeoutMs` 从配置透传
+- `lib/live/config.test.js`、`lib/live/live-json.test.js`：覆盖默认值 300_000 与 60_000/3_600_000 边界及越界回退
+- `package.json` 版本 0.4.18 → 0.4.19
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`（`client/index.js is up to date (22 fragments)`）
+- `node scripts/check-keys.mjs`（756 literal keys / 513 shared keys / 1131 page-local keys）
+- `node --test lib/store.test.js lib/live/*.test.js` 406/406（新增 8 个用例）
+- `node scripts/render-check.mjs` 本机 137/138；基线上同一个失败（`overview names the needs-you vs worth-a-look split`，
+  本机 state 无 worth-a-look 项），与本次 Host 改动无关
+- `node scripts/isolated-verify.mjs` 本机在 `Runtime.enable timed out` 失败；基线同（Chrome/CDP 环境问题）
+
+## [0.4.18] — 2026-11-12
+
+README 虽已在 0.4.17 把自开发细节移出，仍有 308 行：其中「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
+「决策模型 shadow（可选，落地第一步）」「功能成熟度」四节约占 170 行，属于机制/排障/历史细节，按 AGENTS.md 的
+「文档分层」应放 `docs/`，README 只留概览与入口。本次把四节原样迁到两个新文档，README 只留「进阶能力」入口。
+只改文档与版本号，不改 `index.js`/`lib`/`client`，不重建 `client/index.js`。
+
+### 内容
+- 新增 `docs/intake-and-eval.md`：原样迁入「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
+  「决策模型 shadow（可选，落地第一步）」三节（保留 H2 层级、表格、代码块、链接与数字），开头注明
+  本文件是评估与接单的进阶配置、非安装必读
+- 新增 `docs/feature-maturity.md`：原样迁入「功能成熟度」整节（稳定/可用/部分/未实现分级、P1/P2 批次、
+  多后端路由与 P1 诚实边界）
+- README 删除上述四节，替换为 6 行以内的「## 进阶能力」：评估接单与确认、决策模型 shadow 指向
+  `docs/intake-and-eval.md`，功能成熟度指向 `docs/feature-maturity.md`；README 308 → 141 行，其余章节不动
+- AGENTS.md 的 `docs/` 结构描述补上两个新文档名
+- `package.json` 版本 0.4.17 → 0.4.18（`files` 已含 `docs/**/*.md`，无需调整）；README 顶部「当前版本」同步
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs` 138/138
+- `node scripts/isolated-verify.mjs`
+
 ## [0.4.17] — 2026-11-12
 
 README.md 已到 418 行，自开发的全部操作细节（`live.json` 仓库配置与字段语义、GitFlow、6 个闸门表、交付流程、
