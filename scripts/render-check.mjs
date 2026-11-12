@@ -225,8 +225,8 @@ const h = React.createElement
 `
 const files = readdirSync(join(root, 'client', 'src')).filter(name => name.endsWith('.js') && name !== '90-apply.js').sort()
 const source = files.map(name => readFileSync(join(root, 'client', 'src', name), 'utf8')).join('\n')
-const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT }')
-const { App, translate, DICTS, PAGE_TEXT } = factory(id => {
+const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite }')
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite } = factory(id => {
   if (id === 'react') return React
   throw new Error(`unexpected require(${id})`)
 })
@@ -688,6 +688,18 @@ check('manual Ticket opens in place, without leaving Execution', Boolean(manualM
 rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 await sleep(500)
 check('manual Ticket modal closes with Escape', !rootElement.querySelector('.sa-modal'), 'modal still open')
+
+// Regression: a bare URL autolinks to itself, so the inline renderer must not re-parse that label forever.
+{
+  const probeRoot = window.document.createElement('div')
+  window.document.body.appendChild(probeRoot)
+  const probe = ReactDOM.createRoot(probeRoot)
+  probe.render(React.createElement(MarkdownLite, { text: '见 https://example.com/a 说明' }))
+  await sleep(80)
+  const links = [...probeRoot.querySelectorAll('a')]
+  check('a bare URL renders as one link without recursing',
+    links.length === 1 && links[0].getAttribute('href') === 'https://example.com/a', `${links.length} links`)
+}
 
 clickByText('触发')
 await sleep(1000)
