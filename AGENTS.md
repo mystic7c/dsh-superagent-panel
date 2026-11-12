@@ -1,7 +1,7 @@
 # AGENTS.md — dsh-superagent-panel
 
 DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板（工单 / 来源 / 触发 / 评估 / 执行 / 验收 / 部署）。
-本文件是给在这个仓库里干活的 Agent（包括 Superagent worker）的项目规则；更细的设计说明见 `README.md` 与
+本文件是给在这个仓库里干活的 Agent（包括 Superagent worker）的项目规则；更细的说明见 `README.md`、`docs/` 与
 `CHANGELOG.md`（`spec/`、`verification/` 是本地验收材料，不进仓库，干净 clone 里看不到）。
 
 ## 先读什么
@@ -22,6 +22,7 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 - `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接；`client/index.js` 是**构建产物，必须提交**。
 - `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、`isolated-verify.mjs`）。
 - `locale/`：插件清单文案（中/英）。
+- `docs/`：机制、流程、配置与排障细节（如 `docs/self-development.md` 的自开发完整操作）；README 只留摘要与入口。
 - `cordis.patch.yml`：插件注册（sidebar/main 槽位）。
 - `.github/workflows/auto-pr.yml`：GitHub 仓库的交付桥——执行器只能推 feature 分支，这个 workflow 负责开 PR。
 
@@ -44,6 +45,13 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
 - 提交信息沿用 `fix(0.4.x): 一句话` / `feat(0.4.x): 一句话`；每个改动在 `CHANGELOG.md` 顶部加一节
   （最新版本在上），写清根因、修改点、验证数字，并把 `package.json` 的 `version` 升一个 patch。
 - `CHANGELOG.md` 的 H1 `# Changelog` 在最上面，版本节按倒序排列。
+
+## 文档分层
+
+- `README.md` 只放项目概览、安装、5 分钟接入、简短的开发验证命令与入口链接。
+- 机制/流程/配置/排障细节放 `docs/`（例如自开发的完整操作在 `docs/self-development.md`）。
+- 版本变更写 `CHANGELOG.md`，不要把版本历史塞进 README。
+- 新增内容先判断归属，不要把长文继续塞进 README；README 超过约 250 行时先考虑拆 `docs/`。
 
 ## 禁止
 

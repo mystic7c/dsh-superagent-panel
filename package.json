@@ -1,6 +1,6 @@
 {
   "name": "@mystic7c/dsh-superagent-panel",
-  "version": "0.4.16",
+  "version": "0.4.17",
   "private": true,
   "type": "module",
   "description": "Superagent 管理面板：待办/工单/运行观测/自动化/验收/来源与部署设置（DSH 插件）。",
@@ -22,6 +22,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
+    "docs/**/*.md",
     "CHANGELOG.md"
   ],
   "dsh": {

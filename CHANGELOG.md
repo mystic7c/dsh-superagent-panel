@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.4.17] — 2026-11-12
+
+README.md 已到 418 行，自开发的全部操作细节（`live.json` 仓库配置与字段语义、GitFlow、6 个闸门表、交付流程、
+状态流转、入口、本机稳定安装、隔离实例验证、常见坑）都堆在「用面板开发本仓库（自开发）」一节，项目概览与操作手册
+混在一起。本次做文档分层：细节原样移到 `docs/self-development.md`，README 只留一句话闭环、闸门名与入口链接。
+只改文档与版本号，不改 `index.js`/`lib`/`client`，不重建 `client/index.js`。
+
+### 内容
+- 新增 `docs/self-development.md`（130 行）：`live.json` 字段语义（`verifyMode`/`acceptance`/`createMr`/`ci`）、
+  GitFlow 分支策略、6 个闸门表与依赖说明、交付流程 1–5、状态流转与失败处理、入口、本机稳定安装、隔离实例验证、
+  常见坑（merge commit 与 ancestry、GitHub 免费私库无分支保护、desktop profile 由 Electron 管理）；命令、路径、
+  字段名与数字保持原样，只归并小标题并新设「常见坑」一节
+- README「用面板开发本仓库（自开发）」由 132 行压缩到 12 行：一句话说明自开发闭环 + 一行 6 个闸门名 +
+  指向 `docs/self-development.md` 与 `AGENTS.md` 的链接；README 418 → 308 行，其余章节不动
+- AGENTS.md 新增「文档分层」约定：README 只放概览/安装/5 分钟接入/简短验证命令/入口链接，机制与排障细节放 `docs/`，
+  版本变更写 `CHANGELOG.md`，README 超过约 250 行先考虑拆文档
+- `package.json` 版本 0.4.16 → 0.4.17，`files` 加入 `docs/**/*.md`（README 链接的文档随包分发）
+- README 顶部「当前版本」同步到 0.4.17
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs`
+- `node scripts/isolated-verify.mjs`
+
 ## [0.4.16] — 2026-11-12
 
 README 的闸门表只写了 `isolated` 验证什么，没写闸门清单从哪来、本机需要什么依赖、失败时看什么；在没装 Chrome 的
