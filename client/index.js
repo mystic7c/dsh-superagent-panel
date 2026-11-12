@@ -2165,17 +2165,19 @@ function KeyValues({ rows, className }) {
       h('dt', null, key), h('dd', null, value))))
 }
 
-function Inlines({ parts }) {
+function Inlines({ parts, depth = 0 }) {
   return h(Fragment, null, parts.map((part, index) => part.kind === 'bold' ? h('strong', { key: index }, part.text)
     : part.kind === 'code' ? h('code', { key: index, className: 'sa-code' }, part.text)
     // Link labels can carry their own inline markup (`[`file.sql`](path)`); parse the label instead of printing its
-    // backticks literally.
-    : part.kind === 'link' ? h('a', { key: index, className: 'sa-inline-link', href: part.url, title: part.url, target: '_blank', rel: 'noopener noreferrer' },
-      h(Inlines, { parts: inlines(part.text) }))
+    // backticks literally. An autolinked URL's label is the URL itself, so a second parse yields the same link again:
+    // nested rendering therefore stops after one level. Without that stop a bare URL recursed until the heap died.
+    : part.kind === 'link' ? depth > 0 ? part.text
+      : h('a', { key: index, className: 'sa-inline-link', href: part.url, title: part.url, target: '_blank', rel: 'noopener noreferrer' },
+        h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     // A repository-relative target (a changed file, a spec doc) has no URL inside the app shell: show the label as
     // reference text with the target in the tooltip instead of linking somewhere that 404s.
     : part.kind === 'ref' ? h('span', { key: index, className: 'sa-code', title: part.url },
-      h(Inlines, { parts: inlines(part.text) }))
+      depth > 0 ? part.text : h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     : h(Fragment, { key: index }, part.text)))
 }
 
