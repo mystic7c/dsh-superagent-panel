@@ -20,7 +20,8 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   （live.json 与多仓库）、`octo.js`（群轮询）、`gitlab.js`（GitLab API）、`eval.js` / `judge.js`（接单评估）、
   以及 inbox/signals/operations/acceptance 等台账。
 - `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接；`client/index.js` 是**构建产物，必须提交**。
-- `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、`isolated-verify.mjs`）。
+- `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、
+  `isolated-verify.mjs`、`local-install.mjs` 本机打包安装）。
 - `locale/`：插件清单文案（中/英）。
 - `docs/`：机制、流程、配置与排障细节（如 `docs/self-development.md` 的自开发完整操作、
   `docs/intake-and-eval.md` 的评估与接单配置、`docs/feature-maturity.md` 的功能成熟度清单）；README 只留摘要与入口。
@@ -75,5 +76,6 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
 - 合并请用 merge commit（不要 squash）——面板靠 `git merge-base --is-ancestor <commit> origin/develop` 判断是否
   合入集成分支（分支取自 `baseBranch`）。
 - 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并进 `develop` 后自动转 `merged`，再由人验收。
-- 发布由人做：`develop` → `main` 的 PR 合并（merge commit），打 tag `vX.Y.Z`；本机 stable clone fetch + checkout
-  tag 后重载插件。不要直接向 `main`/`develop` 推改动（bootstrap 例外，由维护者执行）。
+- 发布由人做：`develop` → `main` 的 PR 合并（merge commit），打 tag `vX.Y.Z`；本机安装只认 `main` 的打包
+  tarball——显式安装新 tarball（`scripts/local-install.mjs`）后重载插件，stable clone 仅作回滚参考。不要直接向
+  `main`/`develop` 推改动（bootstrap 例外，由维护者执行）。
