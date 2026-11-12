@@ -352,6 +352,13 @@ await sleep(1200)
 check('去验收 opens the ticket detail', text().includes('阶段链路') && text().includes('权限依据'),
   text().slice(0, 200))
 {
+  const pageHead = rootElement.querySelector('.sa-page-head')
+  const acceptCtas = [...(pageHead?.querySelectorAll('button') ?? [])]
+    .filter(node => (node.textContent ?? '').trim() === '去验收')
+  check('ticket header keeps one 去验收 action', acceptCtas.length === 1,
+    JSON.stringify(acceptCtas.map(node => node.className)))
+}
+{
   const detailText = text()
   const sectionTitles = [...rootElement.querySelectorAll('.sa-main .sa-section-title')]
     .map(node => (node.textContent ?? '').trim().replace(/\s+/g, '').replace(/\d+$/, ''))
@@ -692,14 +699,23 @@ check('execution rows carry an evidence rail', evidence.length >= 1 && /MR #|原
   JSON.stringify(evidence.slice(0, 4)))
 check('execution rows put their actions at the row end', rootElement.querySelectorAll('.sa-exec-queue .sa-row-actions').length
   === rootElement.querySelectorAll('.sa-exec-queue .sa-row').length, String(rootElement.querySelectorAll('.sa-exec-queue .sa-row').length))
-check('stage filter keeps the counts for every stage', ['排队', '执行中', '等待你', '失败工单', '已结束', '已忽略'].every(label => execText.includes(label)),
+check('stage filter keeps the counts for every stage', ['排队', '执行中', '等你处理', '失败', '已结束', '已忽略'].every(label => execText.includes(label)),
   execText.slice(0, 500))
 check('execution ledger has a column header', ['工单', '证据', '操作'].every(label => (rootElement.querySelector('.sa-queue-head')?.textContent ?? '').includes(label)),
   rootElement.querySelector('.sa-queue-head')?.textContent ?? '')
+const queueHead = rootElement.querySelector('.sa-queue-head')
+const queueSectionTitle = queueHead?.closest('.sa-section')?.querySelector('.sa-section-title')
+check('execution column header sits under its group title',
+  Boolean(queueHead) && queueHead.previousElementSibling === queueSectionTitle,
+  queueHead?.parentElement?.className ?? 'no header')
+const loadLegend = rootElement.querySelector('.sa-loadbar-meta')
+check('executor load bar carries the stage legend', Boolean(loadLegend) &&
+  ['执行中', '排队', '等你处理', '失败'].every(label => (loadLegend.textContent ?? '').includes(label)),
+  loadLegend?.textContent ?? 'no legend')
 check('executor band shows the last run', /最近一次执行/.test(execText), execText.slice(0, 400))
 // The queue's control row: stage chips carry the counts, and grouping/ordering are labelled pickers (not a second
 // filter row) with the current choice spelled out on the button.
-const stageWords = /全部|等待你|失败工单|执行中|排队|已结束|已忽略/
+const stageWords = /全部|等你处理|失败|执行中|排队|已结束|已忽略/
 const stageButtons = [...rootElement.querySelectorAll('.sa-main .sa-list-bar .sa-segment')]
   .filter(button => stageWords.test(button.textContent ?? ''))
 check('execution offers seven stage chips with counts (the dismissed slice included)',

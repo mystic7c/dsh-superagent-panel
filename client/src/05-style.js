@@ -853,8 +853,16 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 }
 @container (max-width: 600px) {
   .sa-head-tools > .sa-icon-btn { display: none; }
-  .sa-mobile-tools { display: inline-flex; }
+  /* The overflow trigger belongs to the title row: in the tools flow it landed after the full-width status line and
+     read as an orphan "…" on its own row. The title row takes the full width here, so the status and the four hidden
+     icons always wrap to a second row and the menu sits at the title's right edge without covering the status text. */
+  .sa-head-title { flex: 1 0 100%; }
+  .sa-mobile-tools { display: inline-flex; margin-left: auto; align-self: center; }
   .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 40px; height: 40px; }
   .sa-tabs .sa-tab { min-height: 40px; }
+}
+@container (max-width: 760px) {
+  /* Once the recent-run line wraps under the load bar it is a leading label, not a right-aligned caption. */
+  .sa-executor-recent { justify-content: flex-start; margin-left: 0; }
 }
 `

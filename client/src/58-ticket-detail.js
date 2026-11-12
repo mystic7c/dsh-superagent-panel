@@ -1390,7 +1390,8 @@ function TicketDetail({ id, page = 'execution' }) {
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
   // title row (right of the title, left of the actions) instead of owning a full-width line under the head; the jump
-  // still lands on the acceptance card (`#sa-acceptance`).
+  // still lands on the acceptance card (`#sa-acceptance`). When the primary action already is that jump, the note
+  // stays text only: two identical 去验收 controls side by side made the header read as a duplicated action.
   const acceptanceNote = acceptanceView.state === 'none'
     ? null
     : h('span', { className: 'sa-page-head-note' },
@@ -1398,8 +1399,9 @@ function TicketDetail({ id, page = 'execution' }) {
         : acceptanceView.state === 'accepted'
           ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
           : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at) || '—' })),
-      h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
-        pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
+      needsAcceptance ? null
+        : h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
+          pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
 
   // The header's right corner is the Ticket's control cluster: sign-off note, the one state-following primary action,
   // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.
