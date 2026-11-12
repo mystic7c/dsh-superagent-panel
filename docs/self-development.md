@@ -46,7 +46,8 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 
 ## 分支策略（GitFlow）
 
-- `main`：发布分支，只接收 `release/**` 与 `hotfix/**` 的合并；每次发布打 tag（`v0.4.13` 起），本机稳定安装跟随 tag。
+- `main`：发布分支，只接收 `release/**` 与 `hotfix/**` 的合并；每次发布打 tag（`v0.4.13` 起）。本机安装跟随
+  `main` 的打包产物（见「本机安装（main 打包产物）」），不再从 stable clone link。
 - `develop`：集成分支，工单的 `feature/<ticketId>` 都合到这里；`live.json` 的 `baseBranch`/`targetBranch` 指向它。
 - `feature/**`：执行器为每张工单推送的交付分支，auto-pr 以 `develop` 为 base 开 PR。
 - `release/<version>`（从 `develop` 切出）与 `hotfix/<version>`（从 `main` 切出）：auto-pr 以 `main` 为 base 开 PR；
@@ -99,24 +100,82 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 执行页 →「手工建单」→ 仓库下拉选择 **DSH Superagent Panel**（`live.json` 的默认仓库是 `ml-ebs`，别沿用默认），
 填写标题与需求后创建；工单随后按上面的流程推进。自开发的典型操作路径是：手工建单 → 工单详情「干跑执行」
-（worker 改工作树、跑闸门、不推送）→ 确认改动后「发布 MR」（重跑闸门再提交、推送）。
+（worker 改工作树、跑闸门、不推送）→ 确认改动后「发布 MR」（重跑闸门再提交、推送）。合入 `develop` 只更新
+集成分支，不会更新本机安装；把新版本装进日常界面要显式安装 `main` 的 tarball（见「本机安装（main 打包产物）」）。
 
-## 本机稳定安装（与开发仓库分离）
+## 本机安装（main 打包产物）
 
-桌面 profile 不要 `link:` 开发工作树，否则未发布的 dev 代码会直接进入日常界面，且每次改 Host 半都要重载：
+本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树，也不是 stable clone：
 
-1. 另建一个 stable clone：`git clone <repo> ../dsh-superagent-panel-stable`，`git checkout v0.4.13`（发布 tag）。
-2. 把 profile 依赖指过去：`dsh plugin --profile desktop add ../dsh-superagent-panel-stable`（等价于
-   `pnpm add link:...`），再在 Plugin Manager 里禁用→启用插件。
-3. 发布后更新：stable clone `git fetch --tags && git checkout vX.Y.Z`，重载插件；`live.json` 里执行器的 `repo`
-   仍指向开发工作树，工单代码不会进 stable clone。
+- profile 依赖是 `file:<tarball 绝对路径>`（例如
+  `file:/Users/mlamp/Documents/workspace/private/dsh-plugins/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`）。
+- `~/.dsh/profiles/desktop/node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的**实体目录**，
+  不是指向开发仓库的 `link:`。
+- 升级必须**显式安装新 tarball**，再在面板的插件管理里重载插件并刷新页面；合并进 `develop`、在工作树里跑闸门
+  都不会改动安装目录或运行态。
+- 旧的 stable clone（`../dsh-superagent-panel-stable`）不再是安装源，只保留作**回滚参考**；不要再用
+  `dsh plugin add` / `link:` 把它接回 profile。
+
+### 本地打包与安装
+
+推荐用仓库自带脚本（参数见下），等价的纯手工步骤如下：
+
+```bash
+# 1) 在 dev 仓库的 main 分支打 tarball，产物落在仓库同级的 releases/
+cd <dev-repo>
+git switch main && git pull --ff-only
+mkdir -p ../releases
+npm pack --pack-destination ../releases
+# 产物：../releases/mystic7c-dsh-superagent-panel-<version>.tgz
+
+# 2) 备份 profile 的 package.json
+PROFILE="$HOME/.dsh/profiles/desktop"
+cp "$PROFILE/package.json" "$PROFILE/package.json.bak-local-install-$(date +%Y%m%d-%H%M%S)"
+
+# 3) 删除旧包目录（或旧的 link）
+rm -rf "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel"
+
+# 4) 把 tarball 解包到 profile node_modules 的包目录（tarball 内层是 package/）
+TARBALL="$(cd ../releases && pwd)/mystic7c-dsh-superagent-panel-<version>.tgz"
+mkdir -p "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel"
+tar -xzf "$TARBALL" -C "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel" --strip-components=1
+
+# 5) 把 profile dependency 改为 file:<tarball 绝对路径>
+#    编辑 "$PROFILE/package.json" 的 dependencies：
+#    "@mystic7c/dsh-superagent-panel": "file:/.../mystic7c-dsh-superagent-panel-<version>.tgz"
+
+# 6) 在面板「插件管理」里重载该插件（或禁用→启用），然后刷新页面
+```
+
+也可以一条命令完成 2–5 步（默认从仓库同级 `releases/` 找当前版本的 tarball）：
+
+```bash
+node scripts/local-install.mjs              # 备份 → 解包 → 改 dependency（要求当前在 main 且工作树干净）
+node scripts/local-install.mjs --dry-run    # 只校验并打印计划，不写盘
+node scripts/local-install.mjs --verify     # 只读核对当前安装态
+```
+
+脚本支持 `--tarball <path>`（指定 tgz）与 `--profile-dir <path>`（默认
+`$DSH_HOME/profiles/desktop`，通常 `~/.dsh/profiles/desktop`），并校验 tarball 内 `package.json` 的
+`name`/`version` 与仓库一致。安装前要求 `main` 分支且工作树干净（`--allow-branch` 可放宽分支检查）；
+它只写 profile 目录及其包目录，**不调用面板、不重启 DSH、不改 `live.json`**，失败时保留
+`package.json.bak-local-install-*` 备份。
+
+### 升级边界
+
+- `develop` 分支上的工单与 6 个闸门只作用于 `~/.dsh/superagent/worktrees/` 下的工作树；合并进 `develop`
+  不会更新本机安装目录，也不会改变正在运行的插件。
+- 只有显式安装新 tarball 并重载插件，运行态才会更新；release 合并到 `main` 后仍要手动打包安装一次。
+- 回滚：保留 profile 的 `package.json.bak-local-install-*` 与旧 tarball。回滚时把备份覆盖回
+  `$PROFILE/package.json`，再把旧 tarball 按步骤 4 解包回包目录，最后重载插件。
 
 ## 隔离实例验证（`scripts/isolated-verify.mjs`）
 
 `render` 闸门用 jsdom 在共享 `/tmp/sa-harness` 里跑，依赖真实状态目录时会抖动；`isolated` 闸门改为起一个一次性的
-DSH：临时 `DSH_HOME`（profile 以 `link:` 装入本工作树的面板代码）+ 临时 `DSH_SUPERAGENT_STATE_DIR` + 随机端口，
-用 Chrome headless 通过 CDP 打开 UI，断言侧栏「超级智能体」入口、面板页签与空状态，并检查 console 无错误；截图写到
-`verification/`（gitignore）。可单独运行：`node scripts/isolated-verify.mjs`，默认清理临时目录，`--keep` 保留现场。
+DSH：临时 `DSH_HOME`（其中的一次性 profile 以 `link:` 装入本工作树的面板代码，**只用于该闸门，不是本机安装态**）
++ 临时 `DSH_SUPERAGENT_STATE_DIR` + 随机端口，用 Chrome headless 通过 CDP 打开 UI，断言侧栏「超级智能体」入口、
+面板页签与空状态，并检查 console 无错误；截图写到 `verification/`（gitignore）。可单独运行：
+`node scripts/isolated-verify.mjs`，默认清理临时目录，`--keep` 保留现场。
 
 ## 常见坑
 
@@ -125,6 +184,6 @@ DSH：临时 `DSH_HOME`（profile 以 `link:` 装入本工作树的面板代码�
   工单会一直停在 `mr-open`。
 - **GitHub 免费私库没有分支保护**：分支纪律靠约定：交付走 PR、不直接推 `main`/`develop`。
 - **desktop profile 由 Electron 管理**：桌面 DSH 是 Electron 应用，`desktop` profile 的插件与依赖由应用内的
-  Plugin Manager（`~/.dsh/profiles/desktop`）维护；不要手改该目录或用开发工作树 `link:` 覆盖，安装/更新走
-  `dsh plugin --profile desktop ...`，改完在 Plugin Manager 里禁用→启用（或重启 DSH），否则会被应用升级或下一次
-  Plugin Manager 操作覆盖，未发布的 dev 代码也会直接进入日常界面。
+  Plugin Manager（`~/.dsh/profiles/desktop`）维护。当前安装态是 `file:<tarball>` + 实体包目录，不要改回开发
+  工作树的 `link:`；升级用 `scripts/local-install.mjs`（或上面的手工步骤）显式安装新 tarball，再在
+  Plugin Manager 里重载插件并刷新页面。否则会被应用升级或下一次 Plugin Manager 操作覆盖，运行态仍是旧代码。
