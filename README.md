@@ -7,7 +7,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.14**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
+**当前版本：0.4.16**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -351,6 +351,12 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 | `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 398 个） |
 | `render` | `node scripts/render-check.mjs` | jsdom 渲染回归（jsdom/React 来自 `/tmp/sa-harness`） |
 | `isolated` | `node scripts/isolated-verify.mjs` | 起一个隔离 DSH（临时 `DSH_HOME`/state、随机端口）加载本工作树的面板代码，用 Chrome headless CDP 实机渲染并检查侧栏入口、页签与空状态、console 无错误；结束后清理 |
+
+执行器的闸门清单来自 `live.json` 的 `repo.gates`（上面只是仓库配置里的一份快照，增删闸门要改 `live.json`）。
+0.4.15 起第 6 项 `isolated` 由 `node scripts/isolated-verify.mjs` 承担：临时 `DSH_HOME`/state 加真实 Chrome headless
+CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行文件（找不到时脚本报
+`no Chrome/Chromium binary found (set CHROME_PATH)`）；脚本失败时会打印 `[isolated-verify] FAIL <原因>`，闸门结果里
+能看到同样的输出。
 
 ### 交付流程
 
