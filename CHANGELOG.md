@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.16] — 2026-11-12
+
+README 的闸门表只写了 `isolated` 验证什么，没写闸门清单从哪来、本机需要什么依赖、失败时看什么；在没装 Chrome 的
+机器上只会读到 `no Chrome/Chromium binary found (set CHROME_PATH)`，不知道 `CHROME_PATH` 的作用与失败标记长什么样。
+本次只补文档与版本号，不改代码、不重建 `client/index.js`。
+
+### 内容
+- README「用面板开发本仓库（自开发）」在闸门表后补一段：executor 的闸门清单来自 `live.json` 的 `repo.gates`；
+  0.4.15 起第 6 项 `isolated` 由 `node scripts/isolated-verify.mjs` 承担（临时 `DSH_HOME`/state + 真实 Chrome
+  headless CDP）；本机需 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行文件；失败时打印
+  `[isolated-verify] FAIL <原因>`
+- README 顶部「当前版本」同步到 0.4.16（此前停在 0.4.14，0.4.15 漏更新）
+- `package.json` 版本 0.4.15 → 0.4.16
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`
+- `node scripts/check-keys.mjs`
+- `node --test lib/store.test.js lib/live/*.test.js` 398/398
+- `node scripts/render-check.mjs`
+- `node scripts/isolated-verify.mjs` 单独跑通
+
 ## [0.4.15] — 2026-11-12
 
 `render` 闸门在 jsdom + 共享 `/tmp/sa-harness` 上渲染客户端，证明不了「真实 DSH Web UI 里 Host 半 + 客户端能一起挂载」。
