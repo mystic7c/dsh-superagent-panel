@@ -34,10 +34,10 @@ Object.assign(PAGE_TEXT, {
     'gate-blocked': ['闸门待处理', 'Gate needs you'],
     // P1-4: the worker asked a question; the run is parked until a person answers (group waiting, primary 'answer').
     'awaiting-answer': ['等待回答', 'Awaiting your answer'],
-    waiting_for_human: ['等待人工', 'Waiting for you'], interrupted: ['已中断', 'Interrupted'],
+    waiting_for_human: ['等你处理', 'Waiting on you'], interrupted: ['已中断', 'Interrupted'],
     accepted: ['已验收', 'Accepted'],
   },
-  group: { queued: ['待排', 'Queued'], working: ['执行中', 'Working'], waiting: ['等待人', 'Waiting for you'],
+  group: { queued: ['排队', 'Queued'], working: ['执行中', 'Working'], waiting: ['等你处理', 'Waiting on you'],
     failed: ['失败', 'Failed'], done: ['已结束', 'Ended'] },
   primary: { accept: ['去验收', 'Review UAT'], merge: ['去合并 MR', 'Merge MR'], deploy: ['刷新部署', 'Refresh deploy'],
     diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'],
@@ -946,12 +946,16 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
     if (!grouped.has(group)) grouped.set(group, [])
     grouped.get(group).push(ticket)
   }
-  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map(group =>
+  // One column header for the whole ledger, placed under the first group title: above every group it was a table
+  // header that preceded the section it described, and repeating it for each stage turned a four-column list into
+  // three little tables. The groups that follow share the same tracks.
+  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map((group, index) =>
     h(Section, { key: group, title: pt(t, `group.${group}`),
       count: groupCounts?.[group] === false ? undefined : grouped.get(group).length,
       badge: groupNotes?.[group] ?? null },
+      index === 0 ? header ?? null : null,
       h(TicketList, { tickets: grouped.get(group), page, actions, reload })))
-  return className ? h('div', { className }, header, rendered) : h(Fragment, null, header, rendered)
+  return className ? h('div', { className }, rendered) : h(Fragment, null, rendered)
 }
 
 /**
@@ -1059,10 +1063,10 @@ function ExecutorLoad({ load, labels = true }) {
     { key: 'loadbarFailed', value: load.failed ?? 0, tone: 'error' },
   ]
   const total = counts.reduce((sum, entry) => sum + entry.value, 0)
-  // Zero is information: "running 0 · queued 0 · waiting 0 · failed 0" says the executor is calm without a sentence
+  // Zero is information: "working 0 · queued 0 · waiting 0 · failed 0" says the executor is calm without a sentence
   // that repeats the header. No track is drawn at zero — an empty 8px bar reads as a broken progress bar.
-  // The four counts belong to the interactive stage filter (one place, one unit). The band keeps the composition bar
-  // only while work is moving, so the same numbers are never printed twice on one screen.
+  // The bar is segmented, so it only means something with its legend: the same counts and words as the stage filter
+  // sit under it, and the segment colours are read through those words rather than guessed.
   if (total === 0) return null
   return h('div', { className: 'sa-executor-load' },
     h('div', { className: 'sa-loadbar' },

@@ -61,9 +61,9 @@ Object.assign(PAGE_TEXT, {
   'ex.colEvidence': ['证据', 'Evidence'],
   'ex.colActions': ['操作', 'Actions'],
   'ex.stageQueued': ['排队', 'Queued'],
-  'ex.stageWorking': ['执行中', 'Running'],
-  'ex.stageWaiting': ['等待你', 'Waiting on you'],
-  'ex.stageFailed': ['失败工单', 'Failed Tickets'],
+  'ex.stageWorking': ['执行中', 'Working'],
+  'ex.stageWaiting': ['等你处理', 'Waiting on you'],
+  'ex.stageFailed': ['失败', 'Failed'],
   'ex.stageDone': ['已结束', 'Ended'],
   'ex.stageDismissed': ['已忽略', 'Dismissed'],
   'ex.dismissedNote': ['失败后由人放弃的工单，不会再执行；点开可看当时的失败原因。',
@@ -267,13 +267,15 @@ function ExecutionQueuePage({ route }) {
             label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
     : null
   const queueBody = stage === 'dismissed'
-    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
+    ? h('div', { className: 'sa-exec-queue' },
       h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
         badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
+        queueHeader,
         h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
     : execView.groupBy === 'repo'
-    ? h('div', { className: 'sa-exec-queue' }, queueHeader,
-      repoGroupsOf(inStage).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+    ? h('div', { className: 'sa-exec-queue' },
+      repoGroupsOf(inStage).map((group, index) => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
+        index === 0 ? queueHeader : null,
         h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
     : h(Fragment, null,
       h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
@@ -306,7 +308,7 @@ function ExecutionQueuePage({ route }) {
       badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
       action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
-        h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load, labels: false })),
+        h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load })),
         h('div', { className: 'sa-executor-recent' },
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
