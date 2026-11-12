@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.22] — 2026-11-12
+
+本机安装态已切换为 `main` 分支打包产物：桌面 profile 的依赖是 `file:<tarball>`，`node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的实体目录。但 `docs/self-development.md`、`AGENTS.md` 仍描述旧的 stable clone + `link:` 模型，且每次切换/回滚都要手工提取 tarball、改 profile manifest。本次把文档统一到打包模型，并新增可重复的本地打包安装脚本。
+
+### 内容
+- `docs/self-development.md`：`## 本机稳定安装（与开发仓库分离）` 改为 `## 本机安装（main 打包产物）`，写明 profile dependency 为 `file:<tarball 绝对路径>`、包目录是实体目录、升级必须显式安装新 tarball 再重载插件、stable clone 不再是安装源（仅作回滚参考）；新增「本地打包与安装」bash 示例（`git switch main` + `npm pack --pack-destination ../releases`、备份 `package.json`、删除旧目录/链接、`tar --strip-components=1` 解包、dependency 改 `file:<绝对路径>`、插件管理重载 + 刷新页面）；新增「升级边界」小节（develop 工单与 6 个闸门只作用于 `~/.dsh/superagent/worktrees`、安装态只有显式安装才更新、回滚用 `package.json.bak-local-install-*` 与旧 tarball）；分支策略、自开发流程、常见坑中关于安装/升级的措辞同步为打包模型，隔离验证的临时 `link:` profile 明确标注仅用于该闸门
+- `scripts/local-install.mjs`（新增，Node 18+ ESM）：`--tarball <path>`（默认仓库同级 `releases/` 下当前版本的 `.tgz`）、`--profile-dir <path>`（默认 `$DSH_HOME/profiles/desktop`）、`--dry-run`、`--verify`、`--allow-branch`；非 dry-run 校验 `main` 分支、工作树干净、tarball 内 `name`/`version` 与仓库一致、profile 存在；备份 `package.json` 为 `package.json.bak-local-install-<时间戳>`，删除旧包目录或 symlink，解包到 `profile/node_modules/@mystic7c/dsh-superagent-panel`，dependency 改为 `file:<tarball 绝对路径>`；只写 profile 目录，不调用面板、不重启 DSH、不改 `live.json`，失败保留备份并清理解包临时目录
+- `AGENTS.md`：`scripts/` 结构行补 `local-install.mjs`；发布交付语义改为显式安装 `main` tarball（stable clone 仅回滚参考）
+- `package.json` 版本 0.4.21 → 0.4.22
+
+### 验证
+- `node --check scripts/local-install.mjs`
+- `node scripts/local-install.mjs --verify`：当前安装态是 `file:...0.4.21.tgz` + 实体目录 0.4.21，只读通过；仓库已升 0.4.22，脚本只提示需显式安装
+- `node scripts/local-install.mjs --dry-run --tarball ...0.4.22.tgz`：打印计划；profile `package.json` 哈希与 mtime 不变、无临时目录残留
+- 临时仓库 + 临时 profile 端到端：默认从 `../releases` 发现 tarball、备份、删除旧 symlink、解包实体目录 0.4.22、改写 dependency，重跑 `--verify` 通过；`--allow-branch` 在 `feature/x` 上按预期放宽
+- 6 个闸门：`node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments）、`node scripts/check-keys.mjs`（760/513/1134）、`node --test lib/store.test.js lib/live/*.test.js`（413/413）、`node scripts/render-check.mjs`（143/143、0 SKIP）、`node scripts/isolated-verify.mjs` PASS（本 worker 沙箱内 Chrome 需经 `CHROME_PATH` 包装脚本补 `--no-sandbox` 才能初始化，面板 6 tab、0 console error）
+
 ## [0.4.21] — 2026-11-12
 
 工单 tkt_16e724f48ddd41b0 的交付收尾。GitHub 仓库 `createMr: "push"` 的工单交付后，详情卡片的 MR 区显示
