@@ -40,6 +40,21 @@ const { Engine } = await import('../lib/live/engine.js')
 const stateDir = process.env.DSH_SUPERAGENT_STATE_DIR ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
 const engine = new Engine({ stateDir, log: () => {} })
 await engine.state.load()
+// Real in-flight work must not leak into these checks: while a gate runs, the Ticket under review is `working`
+// and live-state keeps only the thin run index row (steps stripped by summarizeRun), so the overview pulse
+// sentence degrades to a bare duration and "overview surfaces in-progress work" flips red for a reason the
+// diff never caused. The fixtures below pin the rows these checks read, so drop the in-flight originals first.
+const IN_FLIGHT_STATUSES = new Set(['working', 'running', 'ci-pending', 'merged', 'deploy-pending'])
+for (const ticket of Object.values(engine.state.tickets ?? {})) {
+  if (!IN_FLIGHT_STATUSES.has(ticket?.status)) continue
+  delete engine.state.tickets[ticket.id]
+  if (Array.isArray(engine.state.state?.ticketOrder)) {
+    engine.state.state.ticketOrder = engine.state.state.ticketOrder.filter(id => id !== ticket.id)
+  }
+}
+if (Array.isArray(engine.state.state?.runs)) {
+  engine.state.state.runs = engine.state.state.runs.filter(run => !IN_FLIGHT_STATUSES.has(run?.status))
+}
 // Repository ids/projects come from this machine's live.json, so the checks below never assume specific
 // project names; only the machine that runs the check needs them configured.
 const { loadLiveConfig } = await import('../lib/live/config.js')
@@ -249,8 +264,8 @@ const h = React.createElement
 `
 const files = readdirSync(join(root, 'client', 'src')).filter(name => name.endsWith('.js') && name !== '90-apply.js').sort()
 const source = files.map(name => readFileSync(join(root, 'client', 'src', name), 'utf8')).join('\n')
-const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite }')
-const { App, translate, DICTS, PAGE_TEXT, MarkdownLite } = factory(id => {
+const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS }')
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS } = factory(id => {
   if (id === 'react') return React
   throw new Error(`unexpected require(${id})`)
 })
@@ -302,9 +317,15 @@ const clickByText = (label, selector = 'button') => {
 console.log('STEP checks')
 check('overview shows the desk', text().includes('需要你处理'), text().slice(0, 120))
 {
-  const desk = text()
+  // User data may quote any phrase: this Ticket's own title quotes 数据更新于 17:21, and it renders as an in-flight
+  // row. Assert the page chrome (everything outside list rows) so a Ticket body can never fake a second status line
+  // or a retired label.
+  const chrome = rootElement.cloneNode(true)
+  chrome.querySelectorAll('.sa-list').forEach(node => node.remove())
+  const chromeText = chrome.textContent ?? ''
   check('overview shows one updated-at and no stale wording',
-    (desk.match(/数据更新于/g) ?? []).length <= 1 && !/立即轮询|上次检查|待处理/.test(desk), desk.slice(0, 260))
+    (chromeText.match(/数据更新于/g) ?? []).length <= 1 && !/立即轮询|上次检查|待处理/.test(chromeText),
+    chromeText.slice(0, 260))
   check('overview no longer duplicates the executor load block',
   ![...rootElement.querySelectorAll('.sa-main .sa-section-title')].some(node => (node.textContent ?? '').trim() === '执行器'),
   [...rootElement.querySelectorAll('.sa-main .sa-section-title')].map(node => (node.textContent ?? '').trim()).join(','))
@@ -340,6 +361,19 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
     String(rootElement.querySelectorAll('.sa-brief-grid .sa-brief-col').length))
   const headerText = rootElement.querySelector('.sa-global-status')?.textContent ?? ''
   check('header shows the running count', /执行中\s*\d+/.test(headerText), headerText)
+  // Mobile header geometry: the overflow trigger must ride the title row (full-width there), never the status row —
+  // if it moved back into .sa-head-tools its 40px hit area would sit on the status line again (see 05-style.js 600px).
+  const head = rootElement.querySelector('.sa-head')
+  const titleRow = head?.querySelector('.sa-head-title')
+  const toolsRow = head?.querySelector('.sa-head-tools')
+  const mobileTrigger = head?.querySelector('.sa-mobile-tools .sa-menu-trigger')
+  check('mobile overflow trigger rides the title row, not the status row',
+    Boolean(mobileTrigger) && Boolean(titleRow?.contains(mobileTrigger)) && !toolsRow?.contains(mobileTrigger),
+    `trigger=${Boolean(mobileTrigger)} inTitle=${Boolean(titleRow?.contains(mobileTrigger))}`)
+  const mobileHeadCss = PANEL_CSS.slice(PANEL_CSS.indexOf('.sa-head-title { flex: 1 0 100%; }'))
+  check('mobile header reserves the 44px trigger column beside the status line',
+    /\.sa-head-tools\s*\{\s*padding-right:\s*calc\(40px \+ var\(--sa-sp-4\)\);\s*\}/.test(mobileHeadCss),
+    mobileHeadCss.slice(0, 260))
 }
 }
 // P0: the desk lists derived inbox items; an accept item's row action is 去工单. Pick the demo row explicitly so a

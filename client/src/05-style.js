@@ -859,6 +859,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-head-title { flex: 1 0 100%; }
   .sa-mobile-tools { display: inline-flex; margin-left: auto; align-self: center; }
   .sa-mobile-tools .sa-icon-btn, .sa-mobile-tools .sa-menu-trigger { width: 40px; height: 40px; }
+  /* Keep the status text out of the trigger column: the 40px touch target plus a 4px buffer. The trigger already
+     lives on the title row (flex: 1 0 100% above); this reserve makes the separation hold even if the status line
+     and the tools ever share a row again, so the hit area can never sit on the status time. */
+  .sa-head-tools { padding-right: calc(40px + var(--sa-sp-4)); }
   .sa-tabs .sa-tab { min-height: 40px; }
 }
 @container (max-width: 760px) {
