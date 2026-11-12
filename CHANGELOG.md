@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.4.21] — 2026-11-12
+
+render 闸门周期性假红，失败断言是「overview names the needs-you vs worth-a-look split when both are on screen」，
+最近一次与代码改动无关（只改了 `lib/live/worker.js` 等 Host 半），同一版本人工复跑有时又通过。根因是
+`scripts/render-check.mjs` 的 fixture 从操作者当时的 state 派生：Overview 的「值得留意」区块只在
+`ovWatchItems` 推导出 watch 项时渲染（24h 内失败 run、失败后被忽略的工单、error source、轮询滞后），
+`deskScope` 也随之消失；inbox 只有验收项、最近没有失败 run 时 watch 为空，断言必失败。metrics 路由的 stub 又把
+`failed` 固定为 0，无法补上 watch 项。DSH_HOME 指向空目录时另有 19 处失败，因为来源页、仓库/UAT、评估与触发页
+的断言依赖真实 live.json 与历史数据。
+
+### 内容
+- `scripts/render-check.mjs`：fixture 注入确定性的「值得留意」数据——一条 `status: 'failed'`、`startedAt`
+  为当前时间前 45 分钟的演示 run（`ticketId` 复用 `tkt_demo_accept`，`error` 固定为「演示：闸门 standards
+  未通过」），以及一张 `status: 'dismissed'` 且 `assignments[].report.state === 'failed'` 的演示工单
+  `tkt_demo_dismissed`；只改内存中的 engine.state，不写真实 state
+- `scripts/render-check.mjs`：把目标断言拆成两条——「值得留意」区块内至少一行且文案匹配
+  `/过去 24 小时 \d+ 次执行失败/`；split note 必须同时包含「需要你处理 = 」与「无需你动作」。pulse 句断言不再
+  依赖哪张执行中工单排在第一位（真实 state 里本 worker 的工单可能更新），改为校验「系统脉搏」/「在飞」/用时文案，
+  并单独断言 fixture 的执行中工单出现在「正在执行」区块
+- `scripts/render-check.mjs`：metrics stub 与注入的失败 run 对齐（`runs.failed = 1`、
+  `stopReasons['gate-failed'] = 1`、`failureReasons` 一条），避免 quality 卡片显示 0 失败而 watch 显示 1 次失败
+- `scripts/render-check.mjs`：新增 `skip(name, reason)` 机制，打印 `SKIP name — reason` 并在汇总 JSON 的
+  `skipped` 中计数，SKIP 不计 FAIL、不影响退出码；依赖本机配置/历史的检查组（UAT 链接、来源页 3 条、ebs
+  仓库选项、GitLab token 编辑器、评估页 7 条、触发/线程页 5 条）在配置或数据不可得时明确 SKIP
+- `scripts/render-check.mjs`：取消「真实 state 已有待验收工单就跳过注入」的分支，演示验收工单始终注入；
+  否则操作者 inbox 里另一张待验收工单会改变（甚至破坏）详情页走查打开的入口
+- 不改 `client/src/35-overview.js` 的产品逻辑：`deskScope` 只在 watch 存在时渲染是正确的
+
+### 验证
+- 真实 state：`node scripts/render-check.mjs` exit 0，141 条检查全过、0 SKIP；连续 3 次结果一致（均 141/141）
+- 空 state（`DSH_HOME` 指向新建临时空目录，stateDir 不存在）：exit 0，123 条通过 + 18 条 SKIP，0 FAIL；
+  连续 3 次一致
+- `node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments，未改客户端）、
+  `node scripts/check-keys.mjs`（756 literal / 513 shared / 1131 page-local）、
+  `node --test lib/store.test.js lib/live/*.test.js`（406 通过）
+- `node scripts/isolated-verify.mjs` PASS（概览/来源/触发/评估/执行/设置 6 个 tab、0 console error）。本会话的
+  DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑两次都在 `Runtime.enable` 超时（最小 CDP 探针可复现）；本次用
+  `CHROME_PATH` 指向加 `--no-sandbox` 的包装脚本跑通，脚本本身未改
+
 ## [0.4.20] — 2026-11-12
 
 自开发状态里 threads 与 triggers 同时存在时，打开「触发」页会让渲染进程堆内存暴涨（render-check 可复现 OOM，
