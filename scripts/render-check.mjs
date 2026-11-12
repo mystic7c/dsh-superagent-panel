@@ -264,8 +264,8 @@ const h = React.createElement
 `
 const files = readdirSync(join(root, 'client', 'src')).filter(name => name.endsWith('.js') && name !== '90-apply.js').sort()
 const source = files.map(name => readFileSync(join(root, 'client', 'src', name), 'utf8')).join('\n')
-const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS }')
-const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS } = factory(id => {
+const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf }')
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = factory(id => {
   if (id === 'react') return React
   throw new Error(`unexpected require(${id})`)
 })
@@ -632,6 +632,8 @@ clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
 const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
+check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' }))
+check('worker group exposes staged workflow and implementer controls', workerText.includes('自动评估难度') && workerText.includes('Codex 规划与独立验收') && Boolean(rootElement.querySelector('select[aria-label="实现后端"]')))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
 check('worker group carries the routing mode control',
   Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),
