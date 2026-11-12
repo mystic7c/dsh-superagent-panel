@@ -7,7 +7,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.18**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
+**当前版本：0.4.27**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -139,3 +139,5 @@ plugin_manager remove_bundle target=@mystic7c/dsh-superagent-panel
 ## License
 
 MIT
+
+分阶段 Worker 配置与验证边界见 [docs/staged-workers.md](docs/staged-workers.md)。
