@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.4.20] — 2026-11-12
+
+工单 tkt_16e724f48ddd41b0 的交付收尾。GitHub 仓库 `createMr: "push"` 的工单交付后，详情卡片的 MR 区显示
+「还没有合并请求」，但同一张工单的合并状态又显示「已合入目标分支」。根因是 push 模式只把
+`links.mergeRequest.webUrl`（`/pull/new/` 链接）落库，不写 `iid`；卡片与列表的 `hasMr` 只看 `iid`，于是把
+「有链接」当成「没有 MR」。同时 `acceptTicket` 的 cleanup 只删本地 worktree 与本地分支，远程
+`feature/<ticketId>` 一直留在 origin。本次让 webUrl 也算 MR 证据，并在 merged 工单验收后 best-effort
+删除远程 feature 分支。
+
+### 内容
+- `client/src/34-live-ui.js` / `client/src/58-ticket-detail.js`：`hasMr` 改为 `iid || webUrl`；push 模式（只有 webUrl）
+  的 MR 卡片显示「MR 链接 → 打开 PR」，并提示该 PR 由推送后的 `.github/workflows/auto-pr.yml` 创建；
+  `links.verification.merged === true` 时保留链接并显示「已合入目标分支」，不再落到「还没有合并请求」空状态；
+  列表证据列与阶段链路同步显示「PR 已创建」；中英文案同步（`ticket.openPr`、`mr.pushHint`、`row.evidencePr`）
+- `client/index.js`：按 `client/src` 重建（22 fragments）
+- `lib/live/repo.js`：新增 `deleteRemoteBranch({ repo, branch, timeoutMs = 120_000 })`，执行
+  `git push origin --delete <branch>`；分支已不存在按已删返回（`{ deleted: true, alreadyGone: true }`），受保护分支
+  直接拒绝，其它失败抛 `RepoError('remote-delete-failed')`
+- `lib/live/engine.js`：`acceptTicket` 的 cleanup 阶段，在 `links.verification.merged === true` 且分支以 `feature/`
+  开头时调用 `deleteRemoteBranch`，结果写 `links.cleanup.remoteBranchDeleted`（或 `remoteBranchError`）；删除失败
+  只告警，不影响验收；未合入、非 feature 分支、缺分支名时跳过
+- `lib/live/repo.test.js`：新增 3 个用例（删除成功、分支已不存在按已删返回、远端失败保留 RepoError 且拒绝受保护分支）
+- `lib/live/engine.test.js`：新增 4 个用例（merged 验收删远程并落盘、未 merged 不删、release/ 分支不删、
+  删除失败不阻塞验收且写 `remoteBranchError`）
+- `scripts/render-check.mjs`：新增仅 webUrl 的 push 模式 fixture，断言 MR 卡片出现「打开 PR」与 auto-pr 提示、
+  不出现「还没有合并请求」、合入后仍显示「已合入目标分支」
+- `package.json` 版本 0.4.19 → 0.4.20
+
+### 验证
+- `node --check index.js`
+- `node scripts/build-client.mjs --check`（`client/index.js is up to date (22 fragments)`）
+- `node scripts/check-keys.mjs`（760 literal keys / 513 shared keys / 1134 page-local keys）
+- `node --test lib/store.test.js lib/live/*.test.js` 413/413（新增 7 个用例）
+- `node scripts/render-check.mjs`：本机默认 live state 在 eval 线程详情渲染阶段 OOM（4GB ~39s）；
+  `git archive HEAD` 基线用同一 state 同样 OOM，与本次改动无关。用清空 `threads` 的 state 副本跑到 140 项，
+  新增 2 条 push-mode 用例通过；6 条失败为 overview worth-a-look 与 5 条线程详情（基线同），其余通过
+- `node scripts/isolated-verify.mjs`：本机在 `Runtime.enable timed out` 失败；0.4.19 基线同（Chrome/CDP 环境问题）
+
 ## [0.4.19] — 2026-11-12
 
 工单 tkt_ed2bb9e10a3b46e2 的 run_3953a38ea58c476a 在 prepare-worktree 之后卡在 worker 步骤：worker 没有产出报告，

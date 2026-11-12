@@ -1143,7 +1143,8 @@ function TicketDetail({ id, page = 'execution' }) {
     .filter(step => step.state === 'failed' && step.name !== 'error').map(step => ticketStepLabel(t, step.name))
   const canRun = config.executor?.enabled === true
   const canPush = canRun && config.executor?.allowPush === true
-  const hasMr = Boolean(ticket.links?.mergeRequest?.iid)
+  // push mode records the GitHub `/pull/new/` URL without a PR number; the link alone still counts as an MR.
+  const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   // Which repository this Ticket runs on (contract §12): the derived name/id plus the local clone and branch flow.
   const repos = panelRepos(model?.data)
   const repoId = ticket.repoId ?? panelDefaultRepo(model?.data)

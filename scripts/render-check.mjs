@@ -750,6 +750,33 @@ check('arrow keys move focus with the selected tab', focusedTab?.getAttribute('r
 clickByText('概览')
 await sleep(600)
 
+// Push mode: the executor can only push a branch and GitHub's auto-pr workflow opens the PR, so links.mergeRequest
+// has a webUrl but no iid. The MR card must still show the PR link and keep the merged state, never "还没有合并请求".
+console.log('STEP push fixture')
+const demoPushId = 'tkt_demo_push'
+engine.state.tickets[demoPushId] = {
+  id: demoPushId, title: '演示：push 模式 PR 链接', body: 'UC-DEMO-004：push 模式只记录 PR 创建链接。',
+  status: 'merged', repoId: primaryRepoId, createdAt: nowIso, updatedAt: nowIso, assignments: [],
+  origin: { threadKey: 'octo:demo', actor: 'demo' },
+  links: { branch: 'feature/tkt_demo_push', commit: 'demo5678',
+    verification: { merged: true, at: nowIso },
+    mergeRequest: { webUrl: 'https://github.com/owner/repo/pull/new/feature/tkt_demo_push' } },
+}
+engine.state.state.ticketOrder.push(demoPushId)
+window.sessionStorage.setItem('superagent-panel/route',
+  JSON.stringify({ route: { page: 'execution', id: demoPushId }, stack: [] }))
+console.log('STEP push remount')
+rootDom.unmount()
+const pushRoot = ReactDOM.createRoot(rootElement)
+pushRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+console.log('STEP push rendered')
+const pushText = rootElement.textContent ?? ''
+check('push-mode MR card shows the PR link instead of the empty state',
+  pushText.includes('打开 PR') && pushText.includes('auto-pr workflow') && !pushText.includes('还没有合并请求'),
+  pushText.slice(0, 400))
+check('push-mode MR card keeps the merged state after the PR link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
+
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 const failed = checks.filter(item => !item.ok)
 console.log(JSON.stringify({ ok: failed.length === 0, checks, calls: [...new Set(calls)].slice(0, 20) }, null, 2))
@@ -760,5 +787,5 @@ if (failed.length) {
   console.log(`FAILED ${failed.length}/${checks.length}: ${failed.map(item => item.name).join(' | ')}`)
   for (const item of failed.slice(0, 3)) console.log(`DETAIL ${item.name}: ${String(item.detail).slice(-500)}`)
 }
-try { rootDom.unmount(); dom.window.close() } catch { /* best effort */ }
+try { pushRoot.unmount(); rootDom.unmount(); dom.window.close() } catch { /* best effort */ }
 process.exit(failed.length === 0 ? 0 : 1)
