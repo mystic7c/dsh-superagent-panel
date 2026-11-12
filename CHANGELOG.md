@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.26] — 2026-11-12
+
+移动端容器 500–600px 时，头部状态行与溢出菜单的触控区没有硬隔离：0.4.24 及更早版本里触发器是
+`.sa-head-tools` 的最后一个子项，状态行排到内容右边缘后，40px 菜单点击区会压在「数据更新于 17:21」上；
+0.4.25 已把触发器移进 `.sa-head-title`，状态行因此换到下一行，但工具行仍未给自己留出触发器列。本单补上
+44px 右余量，并用回归断言锁住「触发器只在标题行」这一前提，即使以后两行再合并，状态文字也不会进入
+40px 点击区。
+
+### 内容
+- `client/src/05-style.js`：`@container (max-width:600px)` 下 `.sa-head-tools` 增加
+  `padding-right: calc(40px + var(--sa-sp-4))`，为标题行右端的 40px 溢出触发器保留 44px 列宽（触控目标 +
+  间距）；601px 以上与桌面布局不受影响。
+- `scripts/render-check.mjs`：新增 2 条断言——移动端溢出触发器必须位于 `.sa-head-title` 内且不在
+  `.sa-head-tools` 内；600px 块的 `.sa-head-tools` 必须声明上述 44px 右余量。同时把「概览只有一条数据更新于」
+  的文本断言收窄到列表行以外：本工单标题本身就引用了「数据更新于 17:21」，整页计数会把它误算成第二条状态行。
+- `package.json` 0.4.26；`client/index.js` 重建（22 fragments，9730 行）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（760 literal / 513 shared / 1134 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：418 通过，0 失败
+- `node scripts/render-check.mjs`：148/148 通过，0 SKIP
+- `node scripts/isolated-verify.mjs`：由执行器运行（本工作树不创建 `verification/` 产物）
+
 ## [0.4.25] — 2026-11-12
 
 对超级智能体面板做了一轮 Impeccable 系统评分（Operate 模式；设计审查 + 1280/960/390 实机截图与
