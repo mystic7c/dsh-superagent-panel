@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.23] — 2026-11-12
+
+空闲看门狗只看 session 事件：`tool/call` 之后到 `tool/result` 之前没有任何事件，长 bash（如连续 12 次 render-check，约 5–6 分钟）必然超过 `workerIdleTimeoutMs`（默认 300000），worker 仍在跑却被判 `worker_lost` 并 cancel。本次让在途工具调用成为看门狗的活动窗口。
+
+### 内容
+- `lib/live/worker.js`：`runWorker` 新增 `pendingTools`（`callId` → 调用名与自身超时截止时间）。`tool/call` 到达时按 `callId`（兼容 `toolCallId`、`message.toolCallId`）登记，并解析该工具声明的 `timeoutMs`（bash 工具自身的执行上界）+ 15s 结果投递宽限作为截止时间；`tool/result`（兼容旧 `tool/end`）按同一 `callId` 释放。
+- 空闲检查发现存在未过期的在途调用时只重新武装计时器，不再触发 `worker_lost`；全部在途调用都超过各自声明的超时后才以 `worker tool timeout` cancel 并记为 `worker_lost`。未声明超时的工具不设截止时间，由整体 worker 超时兜底，避免永不返回的工具无限等待。
+- `session/disposed` / `agent/disposed` 立即失败路径保持不变；`idleTimeoutMs` 语义与 `live.json` 的 `workerIdleTimeoutMs` 配置不变。
+- 测试：新增 3 个用例——(a) 只有 `tool/call`、静默跨过多个空闲窗口仍不判 `worker_lost`；(b) 同一 `callId` 的 `tool/result` 之后继续静默超过 `idleTimeoutMs` 仍判 `worker_lost`；(c) 其它 `callId` 的 result 不会释放在途调用。
+- `package.json` 版本 0.4.22 → 0.4.23；`client/index.js` 无变化。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（760 literal / 513 shared / 1134 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：416 通过，0 失败（`worker.test.js` 新增 3 例通过）
+- `node scripts/render-check.mjs`：143/143 通过，0 SKIP（首跑 1 例共享 harness 抖动，连续重跑全过）
+- `node scripts/isolated-verify.mjs`：PASS（6 个 tab、0 console error）。本会话的 DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑两次在 `Runtime.enable` 超时；用 `CHROME_PATH` 指向临时包装脚本补 `--no-sandbox` 后通过
+
 ## [0.4.22] — 2026-11-12
 
 本机安装态已切换为 `main` 分支打包产物：桌面 profile 的依赖是 `file:<tarball>`，`node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的实体目录。但 `docs/self-development.md`、`AGENTS.md` 仍描述旧的 stable clone + `link:` 模型，且每次切换/回滚都要手工提取 tarball、改 profile manifest。本次把文档统一到打包模型，并新增可重复的本地打包安装脚本。
