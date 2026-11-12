@@ -7,10 +7,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.8**（0.4.8 是一次系统设计评审后的修正：闸门结果按 run 实际记录的闸门渲染、概览「失败后被忽略」
-可深链到执行页新增的「已忽略」切片、来源与执行器状态口径统一、390 窄屏与对比度/键盘焦点问题；
-0.4.7/0.4.6 修复运行记录终态与动作菜单，0.4.4 用 `agent/turn-stopping` 让 worker 对自己发起的 run 负责；
-版本历史见 [CHANGELOG.md](CHANGELOG.md)）。
+**当前版本：0.4.14**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
 运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
 [LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
 不随插件分发）。
@@ -275,7 +272,7 @@ CHANGELOG.md        版本与能力变更记录
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 396 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 398 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
 node scripts/render-check.mjs          # jsdom 渲染回归（当前 138/138）
 node scripts/isolated-verify.mjs       # 隔离 DSH + Chrome headless CDP 实机验证（需本机 Chrome）
