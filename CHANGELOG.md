@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.4.24] — 2026-11-12
+
+群回复「接单 A7K2」用于人工推翻模型否决时，replay 会按规则重新判定并建单，但这条路径此前只建单、不执行
+（`outcome.started=false`），群回复固定为「已建单」；即使 `executor.enabled=true`，操作人还得再到面板点一次
+执行，与「接单即执行」的语义不一致，也和已排队工单被接单时的行为不一致。规则重放本身只走规则（高风险硬闸门
+仍然生效，规则判定 ignore 时不建单），因此启用执行器时应在 replay 建单成功后立即 autoExecute，并把群回复
+改成「已开始执行」。
+
+### 内容
+- `lib/live/engine.js`：`applyReviewAnswer` 的 replay 分支在建单成功后，若工单仍为 `queued`/`ready` 且
+  `executor.enabled === true`，置 `outcome.started = true` 并调用 `autoExecute([replay.ticket.id])`；与
+  「已排队工单被接单」路径一致，闸门是 `executor.enabled` 而不是 `autoRun`（`autoRun` 只控制新工单的自动派发）。
+  规则判定高风险时仍是 `blocked: 'high-risk'`，不建单也不执行。
+- `lib/live/engine.test.js`：新增 2 个用例——(a) 模型否决的评估收到「接单」后 replay 建单并立即执行（即使
+  `autoRun=false`），群回复是「已开始执行」、`review.outcome.kind = 'started'`；(b) 规则硬拦的高风险信号即使
+  回复「接单」也不建单、不执行，回复仍是「规则判定高风险」。原「replay 建单」用例继续覆盖
+  `executor.enabled=false` 时只建单（`已建单`）。
+- `docs/intake-and-eval.md`：复查动作表补充「`executor.enabled=true` 时同时立即执行」。
+- `package.json` 版本 0.4.22 → 0.4.24（本工单开工后 `develop` 已由空闲看门狗工单升到 0.4.23）；`client/index.js`
+  无变化（未改客户端源码）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（760 literal / 513 shared / 1134 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：415 通过，0 失败（新增 2 例通过）
+- `node scripts/render-check.mjs`：143/143 通过（`ok: true`，0 skipped、0 FAIL）
+- `node scripts/isolated-verify.mjs`：PASS（6 个 tab、0 console error）。本会话的 DSH 文件沙箱挡住 Chrome 自带
+  沙箱，裸跑在 `Runtime.enable` 超时；用 `CHROME_PATH` 指向补 `--no-sandbox` 的临时包装脚本后通过，脚本本身未改
+
 ## [0.4.22] — 2026-11-12
 
 本机安装态已切换为 `main` 分支打包产物：桌面 profile 的依赖是 `file:<tarball>`，`node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的实体目录。但 `docs/self-development.md`、`AGENTS.md` 仍描述旧的 stable clone + `link:` 模型，且每次切换/回滚都要手工提取 tarball、改 profile manifest。本次把文档统一到打包模型，并新增可重复的本地打包安装脚本。
