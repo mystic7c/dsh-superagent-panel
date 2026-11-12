@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.15] — 2026-11-12
+
+`render` 闸门在 jsdom + 共享 `/tmp/sa-harness` 上渲染客户端，证明不了「真实 DSH Web UI 里 Host 半 + 客户端能一起挂载」。
+新增 `scripts/isolated-verify.mjs`：临时 `DSH_HOME` 与 `DSH_SUPERAGENT_STATE_DIR`、随机端口、真实 Chrome headless CDP，
+打开左侧栏「超级智能体」并断言 6 个 tab、空状态引导、console 无错误，截图写入 `verification/`（gitignore）。
+
+CLI 定位兼容 `DSH_NODE_EXECUTABLE` + `DSH_INSTALL_DIR`（executor gate 环境可能没有这两个变量），
+其次探测 macOS 应用包（asar 内的 `lib/bin.js` 由 Electron 以 `ELECTRON_RUN_AS_NODE=1` 读取），最后回退 PATH 上的 `dsh`。
+
+### 验证
+- 本机 `node scripts/isolated-verify.mjs` PASS（清空 `DSH_*` 环境变量后走 app-bundle 兜底）
+- `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`
+- Host 测试 398/398、`node scripts/render-check.mjs`
+
 ## [0.4.14] — 2026-11-12
 
 README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.json` 已到 0.4.13），「开发与验证」里的 Host 测试数量
