@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.20] — 2026-11-12
+
+自开发状态里 threads 与 triggers 同时存在时，打开「触发」页会让渲染进程堆内存暴涨（render-check 可复现 OOM，
+桌面 renderer 也被带崩重启）：`client/src/20-widgets.js` 的 `Inlines` 对 link/ref 的标签文本递归调用
+`inlines()`，而裸 URL 的标签就是该 URL 本身，二次解析又得到同一个 link，于是无限递归创建 `<a>`。本次给嵌套
+渲染加上一层深度上限，并补一条 render-check 回归探针（裸 URL 只产出一个链接、不再出现嵌套 `<a>`）。
+
+### 内容
+- `client/src/20-widgets.js`：`Inlines` 增加 `depth`；link/ref 的标签只在最外层再解析一次，嵌套层直接输出文本
+  （裸 URL 的自链接不再递归，也不再产生 `<a>` 嵌套告警）
+- `scripts/render-check.mjs`：新增回归探针「a bare URL renders as one link without recursing」，直接挂载
+  `MarkdownLite` 验证裸 URL 只渲染一个链接；`MarkdownLite` 从客户端片段中导出仅用于该检查
+- `client/index.js`：按新片段重建
+
 ## [0.4.19] — 2026-11-12
 
 工单 tkt_ed2bb9e10a3b46e2 的 run_3953a38ea58c476a 在 prepare-worktree 之后卡在 worker 步骤：worker 没有产出报告，
