@@ -20,7 +20,7 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   （live.json 与多仓库）、`octo.js`（群轮询）、`gitlab.js`（GitLab API）、`eval.js` / `judge.js`（接单评估）、
   以及 inbox/signals/operations/acceptance 等台账。
 - `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接；`client/index.js` 是**构建产物，必须提交**。
-- `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`）。
+- `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、`isolated-verify.mjs`）。
 - `locale/`：插件清单文案（中/英）。
 - `cordis.patch.yml`：插件注册（sidebar/main 槽位）。
 - `.github/workflows/auto-pr.yml`：GitHub 仓库的交付桥——执行器只能推 feature 分支，这个 workflow 负责开 PR。
@@ -56,10 +56,15 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
 
 ## 交付语义（GitHub 仓库）
 
-`live.json` 里本仓库的仓库项使用 `verifyMode: "manual"`、`createMr: "push"`、`ci: false`：
+`live.json` 里本仓库的仓库项使用 `verifyMode: "manual"`、`createMr: "push"`、`ci: false`，分支策略是 GitFlow：
+`main` 只放发布（打 tag），`develop` 是集成分支，工单的 `feature/<ticketId>` 合入 `develop`：
 
 - 执行器跑完闸门、提交并推送 `feature/<ticketId>` 分支；对 github.com 仓库**不带 GitLab push options**推送
   （GitHub 忽略这些选项，且实测带 options 的推送会被服务端以 `no voting servers succeeded` 拒绝），
-  `.github/workflows/auto-pr.yml` 收到分支后自动开 PR，人工评审合并。
-- 合并请用 merge commit（不要 squash）——面板靠 `git merge-base --is-ancestor` 判断是否合入 `main`。
-- 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并后自动转 `merged`，再由人验收。
+  `.github/workflows/auto-pr.yml` 按前缀开 PR：`feature/**` → `develop`，`release/**`、`hotfix/**` → `main`，
+  人工评审合并。
+- 合并请用 merge commit（不要 squash）——面板靠 `git merge-base --is-ancestor <commit> origin/develop` 判断是否
+  合入集成分支（分支取自 `baseBranch`）。
+- 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并进 `develop` 后自动转 `merged`，再由人验收。
+- 发布由人做：`develop` → `main` 的 PR 合并（merge commit），打 tag `vX.Y.Z`；本机 stable clone fetch + checkout
+  tag 后重载插件。不要直接向 `main`/`develop` 推改动（bootstrap 例外，由维护者执行）。
