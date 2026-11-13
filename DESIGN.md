@@ -8,6 +8,7 @@ colors:
   surface-layer-1: "var(--dsw-alias-bg-layer-1)"
   surface-layer-2: "var(--dsw-alias-bg-layer-2)"
   surface-overlay: "var(--dsw-alias-bg-overlay)"
+  surface-raised: "var(--sa-surface-raised)"
   border-line: "var(--dsw-alias-border-l2)"
   text-primary: "var(--dsw-alias-label-primary)"
   text-secondary: "var(--dsw-alias-label-secondary)"
@@ -93,7 +94,7 @@ components:
     rounded: "{rounded.pill}"
     height: "18px"
   modal:
-    backgroundColor: "{colors.surface-overlay}"
+    backgroundColor: "{colors.surface-raised}"
     rounded: "{rounded.lg}"
     width: "560px"
 ---
@@ -130,7 +131,8 @@ components:
 - **Panel Base**（`var(--dsw-alias-bg-base)`）：页面底色。顶栏与详情导航条也用它与滚动内容"融"在一起。
 - **Layer 1**（`var(--dsw-alias-bg-layer-1)`）：输入框、卡片、代码块的底。比 Base 高一层，用来分隔"内容块"。
 - **Layer 2**（`var(--dsw-alias-bg-layer-2)`）：hover 底、分段控件的槽底。
-- **Overlay**（`var(--dsw-alias-bg-overlay)`）：菜单、弹窗、toast、tooltip。这一层才有阴影。
+- **Raised**（`--sa-surface-raised` = `var(--dsw-alias-bg-layer-3)`）：菜单与弹窗的底。这一层才有阴影。
+- **Overlay**（`var(--dsw-alias-bg-overlay)`）：叠加用的薄染层，**不是**浮层表面。深色主题下它解析成 `bluish-700`，二次文本只有 3.85:1，所以不许拿来当菜单或弹窗的底。
 - **Line**（`var(--dsw-alias-border-l2)`，以 `--sa-line` 暴露）：唯一描边色，永远 0.5px。
 - **Label Primary / Secondary / Tertiary**：正文 / 次要说明 / 元信息三档文字。
 
@@ -228,7 +230,7 @@ components:
 - 筛选 chip 变体：无槽无阴影，选中项用 layer-2 底加粗文字，计数用 `--sa-label-tertiary` 并保持 AA。
 
 ### Modal / Toast / Tooltip
-- 弹窗：`min(560px, 100%)`、12px 圆角、overlay 底、prominent 阴影、`120ms ease-out` 入场。
+- 弹窗：`min(560px, 100%)`、12px 圆角、raised 底、prominent 阴影、`120ms ease-out` 入场。
 - Toast：底部居中、8px 圆角、`--dsw-alias-toast-label` 文字；tooltip 用 `--dsw-alias-tooltip-label`。
 - 三者都带 `overscroll-behavior: contain`。
 
