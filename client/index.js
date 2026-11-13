@@ -8613,6 +8613,11 @@ const ROUTE_BACKENDS = [
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
 ]
+/** Staged-flow backends, mirroring lib/live/config.js: the implementer is the in-process DSH worker or Claude,
+    the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
+    enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
+const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
+const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }]
 const ROUTE_WORK_TYPES = [
   { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
   { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
@@ -9480,6 +9485,9 @@ function LiveSettingsPage({ route }) {
     const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
     const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
+    const stagedOptions = (choices, current) => choices
+      .filter(choice => enabled.includes(choice.value) || choice.value === current)
+      .map(choice => ({ ...choice, disabled: !enabled.includes(choice.value) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
     const setRouting = next => editRouting({ ...routing, ...next })
@@ -9526,12 +9534,12 @@ function LiveSettingsPage({ route }) {
         h('span', { className: 'sa-field-head' }, pt(t, 'wf.implementer')),
         h(Select, { label: pt(t, 'wf.implementer'), disabled: frozen,
           value: draft['executor.implementer'] ?? executor.implementer ?? 'dsh',
-          options: [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }],
+          options: stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh'),
           onChange: value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh') }),
         h('span', { className: 'sa-field-head' }, pt(t, 'wf.reviewer')),
         h(Select, { label: pt(t, 'wf.reviewer'), disabled: frozen,
           value: draft['executor.reviewer'] ?? executor.reviewer ?? 'codex',
-          options: [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }],
+          options: stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'),
           onChange: value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex') }),
         h(Hint, null, pt(t, 'wf.reviewerHint')),
         h('span', { className: 'sa-field-head' }, pt(t, 'wf.workerPreset')),
