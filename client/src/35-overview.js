@@ -427,7 +427,9 @@ function LiveOverviewPage({ route }) {
   const lifetime = engine.events ?? {}
   const activeText = activeTickets.length
     ? pt(t, 'ov.pulseActive', { count: activeTickets.length, progress: progressOf(activeTickets[0]) })
-    : pt(t, 'ov.pulseIdleActive')
+    : paused ? pt(t, 'ov.pulsePaused')
+      : config.enabled === false ? pt(t, 'ov.pulseOff')
+        : pt(t, 'ov.pulseIdleActive')
   const pulseRows = [
     [pt(t, 'ov.pulseEngine'), h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-8)' } },
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
@@ -508,7 +510,7 @@ function LiveOverviewPage({ route }) {
     h('span', { style: { flex: '0 1 auto', minWidth: 0, fontSize: 'var(--sa-fs-body)', lineHeight: 1.5,
       color: 'var(--dsw-alias-label-primary)' } }, pt(t, 'ov.idleTitle')),
     h(Button, { variant: 'outline', size: 'sm',
-      onClick: () => navigate(handled > 0 ? { page: 'execution' } : { page: 'source' }) },
+      onClick: () => navigate(handled > 0 ? { page: 'execution', stage: 'done' } : { page: 'source' }) },
     pt(t, handled > 0 ? 'actions.viewHandled' : 'actions.openSource')))
 
   // Legacy desk (hosts without `inbox`): the latest 20 status-derived Ticket rows; the count may exceed the list.

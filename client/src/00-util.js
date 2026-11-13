@@ -106,3 +106,9 @@ function isExternal(url) {
     return typeof location === 'undefined' || target.origin !== location.origin
   } catch { return false }
 }
+
+/** Only an absolute http(s) URL may be written into an href. Everything else (javascript:, data:, relative paths)
+    is rendered as inert text: URLs shown here come from live.json, GitLab and Octo payloads. */
+function safeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
+}

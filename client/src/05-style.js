@@ -651,7 +651,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-md li:last-child { margin-bottom: 0; }
 .sa-md-heading { font-weight: 600; }
 .sa-event-text { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(100%, 640px); }
 .sa-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
