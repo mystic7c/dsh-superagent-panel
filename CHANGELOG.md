@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1] — 2026-11-14
+
+### 修复
+- 测试里不再出现真实的自建 GitLab 主机名（`lib/live/executor.test.js:298` 的 push-option 断言改用
+  `gitlab.example.com`），发布前把内部域名从公开仓库里清掉；断言的行为不变。
+
+### 验证
+- `node --test lib/live/executor.test.js` 通过；全量 555 pass / 0 fail。
+
 ## [0.5.0] — 2026-11-14
 
 开源首发版本：把 0.4.39（开源准备 P0）与 0.4.40（客户端构建层 P1）合进一个可以对外发布的版本。
