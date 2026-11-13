@@ -341,6 +341,10 @@ Object.assign(PAGE_TEXT, {
   'st.bodyPh': ['正文（可选）', 'Body (optional)'],
   'st.create': ['建单', 'Create Ticket'],
   'st.created': ['已建单', 'Ticket created'],
+  'st.repairBudget': ['返工预算', 'Repair budget'],
+  'st.repairBudgetHint': ['0–6 轮，默认 2。分阶段流程里验收要求修改时最多自动返工几轮；用完会停下并说明原因，调大后可点「继续执行」接着返工。',
+    'Rounds from 0 to 6, default 2. How many implement→gates→review rounds a staged workflow may spend when its independent review keeps asking for changes; when spent the workflow stops and says why, and raising it lets Continue run the next round.'],
+  'st.repairBudgetInvalid': ['返工预算需为 0–6 的整数。', 'Repair budget must be an integer from 0 to 6.'],
 
   // ---- prompt group ----
   'st.briefNote': ['下面这段是最近一张工单实际发给 worker 的 brief（data.prompts.workerBrief），只读。',
@@ -465,6 +469,8 @@ function settingsPatchOf(group, draft) {
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
     if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
+    // Repair budget shared by gate auto-repair and the staged review loop (0..6).
+    if ('executor.maxRepairRounds' in draft) patch['executor.maxRepairRounds'] = Number(draft['executor.maxRepairRounds'])
     for (const key of ['executor.workerBackend', 'executor.workerModel', 'executor.workerCommand']) {
       if (key in draft) patch[key] = draft[key]
     }
@@ -1000,6 +1006,11 @@ function LiveSettingsPage({ route }) {
       setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.timeoutInvalid')) } }))
       return
     }
+    if ('executor.maxRepairRounds' in patch && (!Number.isInteger(patch['executor.maxRepairRounds'])
+      || patch['executor.maxRepairRounds'] < 0 || patch['executor.maxRepairRounds'] > 6)) {
+      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.repairBudgetInvalid')) } }))
+      return
+    }
     if ('review.expireHours' in patch && (!Number.isInteger(patch['review.expireHours'])
       || patch['review.expireHours'] < 1 || patch['review.expireHours'] > 168)) {
       setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.reviewExpireInvalid')) } }))
@@ -1360,6 +1371,8 @@ function LiveSettingsPage({ route }) {
     const gateText = gates.length ? gates.map(gate => settingsGateLabel(t, gate)).join(t('listSeparator')) : t('empty')
     const timeout = Number(executor.timeoutMs)
     const timeoutMinutes = Number.isFinite(timeout) ? Math.round(timeout / 60000) : 25
+    // One budget shared by gate auto-repair and the staged review loop (0..6, default 2).
+    const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
       [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono' }, config.repo) : t('empty')],
@@ -1395,6 +1408,19 @@ function LiveSettingsPage({ route }) {
               editField('run', 'executor.timeoutMs', raw === '' ? '' : Number(raw) * 60000, timeout)
             } })),
         h(Hint, null, pt(t, 'st.timeoutHint'))),
+      h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.repairBudget')),
+        h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
+          h(Input, { type: 'number', min: 0, max: 6, step: 1,
+            value: field('executor.maxRepairRounds', repairBudget) === '' ? ''
+              : String(field('executor.maxRepairRounds', repairBudget)),
+            disabled: frozen, 'aria-label': pt(t, 'st.repairBudget'),
+            placeholder: String(repairBudget),
+            onChange: event => {
+              const raw = event.target.value
+              editField('run', 'executor.maxRepairRounds', raw === '' ? '' : Number(raw), repairBudget)
+            } })),
+        h(Hint, null, pt(t, 'st.repairBudgetHint'))),
       h(KeyValues, { rows }),
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
