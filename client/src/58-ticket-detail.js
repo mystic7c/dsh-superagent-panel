@@ -3,6 +3,15 @@ Object.assign(PAGE_TEXT, {
   'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
   'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
   'wf.review': ['独立验收', 'Independent review'],
+  // Host workflow state and stage status are backend enums; render them through these keys (unknown values stay raw).
+  'wf.statePending': ['待开始', 'Pending'], 'wf.stateRunning': ['进行中', 'Running'],
+  'wf.stateAssess': ['评估中', 'Assessing'], 'wf.statePlan': ['规划中', 'Planning'],
+  'wf.stateImplement': ['实现中', 'Implementing'], 'wf.stateGates': ['闸门检查中', 'Checking gates'],
+  'wf.stateReview': ['评审中', 'Reviewing'], 'wf.stateBlocked': ['已阻塞', 'Blocked'],
+  'wf.stateReady': ['已就绪', 'Ready'],
+  'wf.stagePending': ['等待', 'Pending'], 'wf.stageRunning': ['进行中', 'Running'],
+  'wf.stageCompleted': ['已完成', 'Completed'], 'wf.stageFailed': ['失败', 'Failed'],
+  'wf.stageBlocked': ['已阻塞', 'Blocked'],
 })
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
@@ -121,6 +130,41 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptLinePending': ['待你验收', 'Waiting for your sign-off'],
   'detail.acceptLineAccepted': ['已验收 · {time}', 'Accepted · {time}'],
   'detail.acceptLineRejected': ['已打回 · {time}', 'Rejected · {time}'],
+  'detail.evidenceTitle': ['交付证据', 'Delivery evidence'],
+  'detail.evidenceEmpty': ['这段交付还没有持久化的证据（旧工单或尚未跑完）。缺少历史时不推断“已修复”。',
+    'No persisted evidence for this delivery yet (an older Ticket or a run that has not delivered). Missing history never means “fixed”.'],
+  'detail.evidenceRound': ['第 {round} 轮', 'Round {round}'],
+  'detail.evidenceFiles': ['{count} 个文件', '{count} files'],
+  'detail.evidenceGates': ['闸门 {passed}/{total}', 'Gates {passed}/{total}'],
+  'detail.evidenceCompare': ['与上一轮对比：新增 {added}，删除 {removed}，修改 {changed}；闸门变化 {gates} 项。',
+    'Compared with the previous round: +{added} added, -{removed} removed, {changed} changed; {gates} gate change(s).'],
+  'detail.evidencePlatform': ['推送 {pushed} · PR {pr} · 合并 {merged} · 部署 {deployed} · 验收 {accepted}',
+    'pushed {pushed} · PR {pr} · merged {merged} · deployed {deployed} · accepted {accepted}'],
+  'detail.evidenceYes': ['是', 'yes'],
+  'detail.evidenceBranch': ['分支', 'Branch'],
+  'detail.evidenceFilesLabel': ['改动文件', 'Changed files'],
+  'detail.evidenceSummary': ['本轮 worker 总结', 'Worker summary for this round'],
+  'detail.evidenceNoHistory': ['只有这一轮证据，无法比较上一轮；不推断“已修复”。',
+    'Only this round is on file; there is no previous round to compare, so nothing is claimed as fixed.'],
+  'detail.evidenceNo': ['否', 'no'],
+  'detail.evidenceRequirements': ['验收要求变化：新增 {added}；移除 {removed}。',
+    'Acceptance requirements changed: added {added}; removed {removed}.'],
+  'detail.evidenceNotRerun': ['未重跑：{names}。这些结果不能算本轮已通过。',
+    'Not re-run: {names}. These results cannot count as passing in this round.'],
+  'detail.evidenceDeploy': ['部署 commit {sha}', 'Deployment commit {sha}'],
+  'detail.evidenceIncomplete': ['证据不完整：上一轮文件列表截断 {previousOmitted} 项、脱敏 {previousRedacted} 项；本轮截断 {currentOmitted} 项、脱敏 {currentRedacted} 项。缺失项不当作删除。',
+    'Incomplete evidence: the previous file list lost {previousOmitted} to truncation and {previousRedacted} to redaction; this round lost {currentOmitted} and {currentRedacted}. Missing entries are not counted as deletions.'],
+  'detail.evidenceUncertain': ['无法确认新增 {added}、删除 {removed}：对应轮次的文件列表不完整。',
+    'Additions ({added}) and deletions ({removed}) cannot be confirmed: the file list on that side is incomplete.'],
+  'detail.evidencePatchTruncated': ['本轮 patch 已截断（保留 {bytes}\u00A0字节），不是完整改动。',
+    'This round\'s patch was truncated ({bytes}\u00A0bytes kept); it is not the full change.'],
+  'detail.evidenceBaseline': ['基线已变化（{from} → {to}），上一轮的闸门结果不能直接沿用。',
+    'The baseline changed ({from} → {to}); the previous round\'s gate results cannot be reused as-is.'],
+  'detail.evidenceUnfinished': ['本轮仍未通过：{names}。',
+    'Still not passing in this round: {names}.'],
+  'detail.evidenceStale': ['以下闸门沿用了旧代码的结果，需要重跑：{names}。',
+    'These gates reused results from older code and must be re-run: {names}.'],
+  'detail.evidenceNone': ['无', 'none'],
   'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
   'detail.acceptLineView': ['查看验收', 'View acceptance'],
 
@@ -201,8 +245,13 @@ Object.assign(PAGE_TEXT, {
   'detail.resumeTitle': ['继续这个中断的运行？', 'Resume this interrupted run?'],
   'detail.resumeConfirm': ['会从中断的检查点继续；没有检查点时重跑整单：{title}',
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
+  'detail.stoppedHint': ['上一次运行已按人工请求停止，工作树与检查点保留，可以继续执行。',
+    'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
+  'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
+  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只从停下的那一步继续（失败的一步，或验收要求修改后的下一轮返工），通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
+    'Finished assessment, implementation and gates are kept: only the stage where it stopped runs again (the failed one, or the next repair round after a rejection), then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -216,7 +265,7 @@ Object.assign(PAGE_TEXT, {
   'auto.at': ['每天时间', 'Time of day'],
   'auto.atHint': ['本机本地时间，格式 HH:mm。', 'Local machine time, HH:mm.'],
   'auto.maxExecutions': ['执行次数上限', 'Execution limit'],
-  'auto.maxExecutionsPlaceholder': ['不限', 'Unlimited'],
+  'auto.maxExecutionsPlaceholder': ['例如：10', 'e.g. 10'],
   'auto.maxExecutionsHint': ['留空表示不限；只统计自动触发的次数。', 'Leave empty for unlimited; only automatic runs are counted.'],
   'auto.save': ['保存自动化', 'Save automation'],
   'auto.saved': ['自动化已保存。', 'Automation saved.'],
@@ -248,6 +297,27 @@ Object.assign(PAGE_TEXT, {
   'detail.repairFailed': ['失败', 'Failed'],
   'detail.repairExhausted': ['已用尽', 'Exhausted'],
   'detail.repairNone': ['未触发', 'Not triggered'],
+
+  // ---- WIG a11y/UX audit (2026-11-13): action-specific confirms and the small copy fixes --------------------------
+  'detail.confirmRetry': ['重试执行', 'Retry run'],
+  'detail.confirmPublish': ['发布并开 MR', 'Publish and open MR'],
+  'detail.confirmStop': ['终止工单', 'Stop Ticket'],
+  'detail.confirmDismiss': ['忽略并删除分支', 'Dismiss and delete branch'],
+  'detail.confirmResume': ['从断点继续', 'Resume from checkpoint'],
+  'detail.confirmGateRelease': ['放行闸门', 'Release gate'],
+  'detail.confirmAcceptPass': ['确认验收通过', 'Accept delivery'],
+  'detail.confirmAcceptFail': ['确认打回', 'Reject delivery'],
+  'detail.prNone': ['无', 'none'],
+  'detail.answerLabel': ['你的回答', 'Your answer'],
+  'detail.dismissCleanupFailed': ['已忽略该工单，但清理失败：{reason}。本地分支或工作树可能仍在，请手动清理。',
+    'Ticket dismissed, but cleanup failed: {reason}. The local branch or worktree may still exist; clean it up manually.'],
+  'auto.intervalInvalid': ['间隔必须是 10–1440 之间的整数分钟。', 'Interval must be a whole number of minutes between 10 and 1440.'],
+  'auto.atInvalid': ['时间格式应为 HH:mm。', 'Time must use the HH:mm format.'],
+  'auto.maxExecutionsInvalid': ['执行次数上限应为 1–10000 的整数，或留空。',
+    'Execution limit must be a whole number between 1 and 10000, or empty.'],
+  'auto.saving': ['保存中…', 'Saving…'],
+  'ticket.traceCountOmitted': ['执行轨迹（共 {count} 条，显示最近 {shown} 条）',
+    'Execution trace ({count} total, latest {shown} shown)'],
 })
 
 /** Run step name → PAGE_TEXT key suffix; gate steps are labelled with their gate name. */
@@ -283,18 +353,25 @@ function ticketGateLabel(t, name) {
 /** run step state → status shape. */
 const STEP_STATE = { ok: 'done', running: 'ongoing', failed: 'error', pending: 'idle' }
 
-/** Absolute short stamp for the detail timeline and the acceptance line: `MM-DD HH:mm`; the full time goes in title. */
-function ticketStamp(value) {
+/** Absolute short stamp for the detail timeline and the acceptance line; the full time goes in title. */
+function ticketStamp(value, lang) {
   const date = new Date(value ?? '')
   if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : ''
-  const pad = number => String(number).padStart(2, '0')
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  // Intl keeps the stamp consistent with when/fullTime and follows the active language (it used to be a hand-rolled
+  // fixed `MM-DD HH:mm`, which ignored the English locale entirely).
+  return new Intl.DateTimeFormat(timeLocale(lang), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
+/** Scrolls stay instant for reduced-motion users; the shared util helper is owned by another file, so this one is local. */
+function ticketReduceMotion() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 /** Timeline timestamps are read as absolute times first (critique #11): no "20 小时前" at the start of a row. */
 function TicketStamp({ at }) {
   const { t } = usePanel()
-  return h('time', { dateTime: at, title: fullTime(at, t.lang) }, ticketStamp(at))
+  return h('time', { dateTime: at, title: fullTime(at, t.lang) }, ticketStamp(at, t.lang))
 }
 
 /**
@@ -333,7 +410,7 @@ function ticketEvents(t, ticket, runs) {
       // The `error` step repeats run.error, and a reconcile step can carry the same English cause; map any known
       // failure wording to the Chinese cause, keeping the raw text on hover (C9).
       const rawDetail = String(step.message ?? step.error ?? step.branch
-        ?? (step.exitCode !== undefined ? `exit ${step.exitCode}` : ''))
+        ?? (step.exitCode !== undefined ? pt(t, 'gate.exitCode', { code: step.exitCode }) : ''))
       const mapped = failureKnown(rawDetail)
       const detail = mapped ? failureLabel(t, rawDetail) : rawDetail
       add({ at: step.at, stepName: step.name, state: STEP_STATE[step.state] ?? 'idle', detail,
@@ -368,7 +445,7 @@ function TicketTimeline({ ticket, runs }) {
     events.length > TIMELINE_RECENT
       ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.timelineRecent', { count: shown.length, total: events.length }))
       : null,
-    h('ol', { className: 'sa-timeline' }, shown.map((event, index) => h('li', { key: index, className: 'sa-event' },
+    h('ol', { id: 'sa-timeline-events', className: 'sa-timeline' }, shown.map((event, index) => h('li', { key: index, className: 'sa-event' },
       h('div', { className: 'sa-event-actor' },
         h(StatusIcon, { state: event.state, size: 14 }),
         h(TicketStamp, { at: event.at }),
@@ -383,6 +460,7 @@ function TicketTimeline({ ticket, runs }) {
     events.length > TIMELINE_RECENT
       ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)' } },
         h(Button, { variant: 'ghost', size: 'sm', icon: expanded ? 'chevron-up' : 'chevron-down',
+          'aria-expanded': expanded, 'aria-controls': 'sa-timeline-events',
           onClick: () => setExpanded(value => !value) },
         expanded ? pt(t, 'ticket.timelineCollapse') : pt(t, 'ticket.timelineShowAll', { count: events.length })))
       : null)
@@ -398,23 +476,41 @@ const TRACE_KINDS = {
 }
 const TRACE_LIMIT = 80
 
+/**
+ * Folded renders its children even while closed; a trace of up to 80 rows should build its DOM only once opened
+ * (audit P3). Markup and classes mirror the shared Folded, which stays untouched for the other pages.
+ */
+function TicketLazyFolded({ summary, children }) {
+  const [open, setOpen] = useState(false)
+  return h('details', { className: 'sa-folded', onToggle: event => setOpen(event.currentTarget.open) },
+    h('summary', { className: 'sa-folded-summary' }, h(Icon, { name: 'chevron-right', size: 14 }), h('span', null, summary)),
+    open ? h('div', { className: 'sa-folded-body' }, children) : null)
+}
+
 /** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
 function RunTrace({ run }) {
   const { t } = usePanel()
   const trace = Array.isArray(run?.trace) ? run.trace.filter(event => event && typeof event === 'object') : []
   if (!trace.length) return null
   const shown = trace.slice(-TRACE_LIMIT)
-  return h(Folded, { summary: pt(t, 'ticket.traceCount', { count: shown.length }) },
+  const omitted = trace.length - shown.length
+  // The title counts every event and names the omitted tail instead of silently rendering "the last 80" (audit P3).
+  const summary = omitted > 0
+    ? pt(t, 'ticket.traceCountOmitted', { count: trace.length, shown: shown.length })
+    : pt(t, 'ticket.traceCount', { count: trace.length })
+  return h(TicketLazyFolded, { summary },
     h('ol', { className: 'sa-timeline' }, shown.map((event, index) => {
       const kind = TRACE_KINDS[event.type] ?? { icon: 'circle', state: 'idle', labelKey: 'ticket.traceAssistant' }
-      const summary = typeof event.summary === 'string' ? event.summary.slice(0, 300) : ''
+      const full = typeof event.summary === 'string' ? event.summary : ''
+      // A clipped summary says so and keeps the full text reachable on hover/focus (audit P3).
+      const text = full.length > 300 ? `${full.slice(0, 300)}…` : full
       return h('li', { key: index, className: 'sa-event' },
         h('div', { className: 'sa-event-actor' },
           h(StatusIcon, { state: kind.state, size: 13, spin: false }),
           typeof event.at === 'string' && event.at ? h(TicketStamp, { at: event.at }) : null,
           h('span', null, pt(t, kind.labelKey)),
           event.name ? h('span', { className: 'sa-mono sa-hint' }, String(event.name)) : null),
-        summary ? h('p', { className: 'sa-event-text' }, summary) : null)
+        text ? h('p', { className: 'sa-event-text', title: full.length > 300 ? full : undefined }, text) : null)
     })))
 }
 
@@ -514,7 +610,8 @@ function TicketGateResults({ ticket, record }) {
     const ok = gate.exitCode === 0 && !gate.timedOut
     const policy = gateOnFailOf(gate, record)
     // The label gets its outcome as a text alternative: shape+colour alone leaves a screen reader with a bare name.
-    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+    // `role="group"` makes that label a valid accessible name on a generic span (aria-label alone on a span is ignored).
+    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate', role: 'group',
       'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
       h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
       ok ? null : h('span', { className: 'sa-hint' },
@@ -530,7 +627,8 @@ function TicketGateResults({ ticket, record }) {
   return h(Fragment, null,
     h('div', { className: 'sa-gates' },
       pending
-        ? h('span', { className: 'sa-gate' },
+        ? h('span', { className: 'sa-gate', role: 'group',
+          'aria-label': `${ticketGateLabel(t, pending.name)} · ${pt(t, 'detail.gatePendingTag')}` },
           h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
           h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
         : null,
@@ -608,7 +706,7 @@ function AcceptanceRecordCard({ record }) {
                 h(Tag, { tone: onFailOfCheck(check) === 'auto_repair' ? 'info' : 'outline',
                   title: pt(t, onFailOfCheck(check) === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
                 pt(t, GATE_ONFAIL_KEYS[onFailOfCheck(check)])),
-                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, `exit ${check.exitCode}`) : null,
+                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, pt(t, 'gate.exitCode', { code: check.exitCode })) : null,
                 check.timedOut ? h(Tag, { tone: 'warning' }, pt(t, 'runStop.timeout')) : null),
               check.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(check.note))) : null,
               outputTail
@@ -682,7 +780,7 @@ function TicketRunRows({ runs }) {
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
     const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
-    return h('li', { key: run.id, className: 'sa-row' },
+    return h('li', { key: run.id, id: `sa-run-${run.id}`, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
@@ -801,7 +899,8 @@ function DiffCard({ state = {}, onRetry }) {
   const files = Array.isArray(data.files) ? data.files : []
   const additions = files.reduce((total, file) => total + (Number(file.additions) || 0), 0)
   const deletions = files.reduce((total, file) => total + (Number(file.deletions) || 0), 0)
-  const limit = `${Math.max(1, Math.round((Number(data.bytes) || 0) / 1024))} KB`
+  // Locale number formatting and a non-breaking space keep the size from wrapping away from its unit (audit P3).
+  const limit = `${new Intl.NumberFormat(timeLocale(t.lang)).format(Math.max(1, Math.round((Number(data.bytes) || 0) / 1024)))}\u00A0KB`
   const omitted = Number(data.omitted) || 0
   const filePath = typeof data.path === 'string' && data.path ? data.path : (typeof state.path === 'string' ? state.path : '')
   const pathRow = filePath ? h('div', { className: 'sa-mono', style: { overflowWrap: 'anywhere' } }, filePath) : null
@@ -826,6 +925,21 @@ function failureHint(t, error, steps) {
   if (/timed out/i.test(text)) return pt(t, 'detail.failedTimeout')
   if (/gate/i.test(text) || steps.some(step => step.startsWith(pt(t, 'ticket.step.gate')))) return pt(t, 'detail.failedGate')
   return pt(t, 'detail.failedGeneric')
+}
+
+/** Host workflow state → localized text; an unknown value stays visible instead of leaking a backend enum (audit P2). */
+const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
+  plan: 'wf.statePlan', implement: 'wf.stateImplement', gates: 'wf.stateGates', review: 'wf.stateReview',
+  blocked: 'wf.stateBlocked', ready: 'wf.stateReady' }
+const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
+  failed: 'wf.stageFailed', blocked: 'wf.stageBlocked' }
+function ticketWorkflowStateLabel(t, status) {
+  const key = WORKFLOW_STATE_KEYS[String(status ?? '')]
+  return key ? pt(t, key) : String(status ?? '—')
+}
+function ticketWorkflowStageLabel(t, status) {
+  const key = WORKFLOW_STAGE_KEYS[String(status ?? '')]
+  return key ? pt(t, key) : String(status ?? '—')
 }
 
 /** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
@@ -858,15 +972,46 @@ function AutomationCard({ ticket, onSaved }) {
   const [form, setForm] = useState(() => automationFormOf(automation))
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState(undefined)
+  // Audit P2: invalid numbers are explained at the field that produced them, and the focus moves to the first one.
+  const [fieldErrors, setFieldErrors] = useState({})
+  const intervalRef = useRef(null)
+  const atRef = useRef(null)
+  const maxExecutionsRef = useRef(null)
   // Re-sync only when the stored config actually changed (a poll of unchanged data never wipes a half-typed form).
   useEffect(() => { setForm(automationFormOf(automation)) }, [signature])
   // A Ticket without a stored config still needs an entry point to opt in; only the terminal "put away" states hide
   // the card (a dismissed/closed Ticket will never run again by schedule).
-  const update = patch => setForm(previous => ({ ...previous, ...patch }))
-  const setMode = mode => setForm(previous => ({ ...previous, mode,
-    enabled: mode === 'off' ? false : (previous.mode === mode ? previous.enabled : true) }))
+  const update = patch => { setForm(previous => ({ ...previous, ...patch })); setFieldErrors({}) }
+  const setMode = mode => {
+    setFieldErrors({})
+    setForm(previous => ({ ...previous, mode,
+      enabled: mode === 'off' ? false : (previous.mode === mode ? previous.enabled : true) }))
+  }
+  const validate = () => {
+    const errors = {}
+    if (form.mode === 'heartbeat') {
+      const minutes = Number(form.intervalMinutes)
+      if (!Number.isInteger(minutes) || minutes < 10 || minutes > 1440) errors.intervalMinutes = pt(t, 'auto.intervalInvalid')
+    }
+    if (form.mode === 'schedule' && !/^\d{2}:\d{2}$/.test(String(form.at ?? ''))) errors.at = pt(t, 'auto.atInvalid')
+    const limit = String(form.maxExecutions ?? '').trim()
+    if (limit !== '') {
+      const max = Number(limit)
+      if (!Number.isInteger(max) || max < 1 || max > 10000) errors.maxExecutions = pt(t, 'auto.maxExecutionsInvalid')
+    }
+    return errors
+  }
   const save = async () => {
     if (saving || !act?.setAutomation) return
+    // Audit P2: the host used to receive Number('')/NaN/out-of-range values, with only a generic failure afterwards.
+    const errors = validate()
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      const first = errors.intervalMinutes ? intervalRef : errors.at ? atRef : maxExecutionsRef
+      first.current?.focus()
+      return
+    }
+    setFieldErrors({})
     setSaving(true)
     setFailure(undefined)
     try {
@@ -916,9 +1061,10 @@ function AutomationCard({ ticket, onSaved }) {
       h('div', { className: 'sa-card' },
       h('div', { className: 'sa-card-head' },
         h('span', { className: 'sa-card-title' }, automationSummaryText(t, stored) || pt(t, 'auto.modeOff')),
-        h('span', { className: 'sa-actions' },
+        h('label', { className: 'sa-actions' },
           h('span', { className: 'sa-hint' }, pt(t, 'auto.enabled')),
-          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }), label: pt(t, 'auto.enabled') }))),
+          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }),
+            label: pt(t, 'auto.enabled') }))),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'auto.mode')),
         h(SegmentedControl, { value: form.mode, onChange: setMode, label: pt(t, 'auto.mode'),
@@ -928,28 +1074,36 @@ function AutomationCard({ ticket, onSaved }) {
       heartbeat
         ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.interval')),
-          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes,
-            'aria-label': pt(t, 'auto.interval'), onChange: event => update({ intervalMinutes: event.target.value }) }),
+          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes, inputRef: intervalRef,
+            'aria-label': pt(t, 'auto.interval'), 'aria-invalid': fieldErrors.intervalMinutes ? true : undefined,
+            onChange: event => update({ intervalMinutes: event.target.value }) }),
+          fieldErrors.intervalMinutes ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.intervalMinutes) : null,
           h('small', null, pt(t, 'auto.intervalHint')))
         : null,
       schedule
         ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.at')),
-          h(Input, { type: 'time', value: form.at, 'aria-label': pt(t, 'auto.at'),
+          h(Input, { type: 'time', value: form.at, inputRef: atRef, 'aria-label': pt(t, 'auto.at'),
+            'aria-invalid': fieldErrors.at ? true : undefined,
             onChange: event => update({ at: event.target.value }) }),
+          fieldErrors.at ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.at) : null,
           h('small', null, pt(t, 'auto.atHint')))
         : null,
       h('div', { className: 'sa-field sa-field-narrow' },
         h('span', { className: 'sa-field-head' }, pt(t, 'auto.maxExecutions')),
-        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions,
+        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions, inputRef: maxExecutionsRef,
           placeholder: pt(t, 'auto.maxExecutionsPlaceholder'), 'aria-label': pt(t, 'auto.maxExecutions'),
+          'aria-invalid': fieldErrors.maxExecutions ? true : undefined,
           onChange: event => update({ maxExecutions: event.target.value }) }),
+        fieldErrors.maxExecutions ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.maxExecutions) : null,
         h('small', null, pt(t, 'auto.maxExecutionsHint'))),
       dirty || saving || failure
         ? h(Fragment, null,
           h('div', { className: 'sa-actions' },
-            h(Button, { variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !act?.setAutomation,
-              onClick: () => { void save() } }, pt(t, 'auto.save')),
+            h(Button, { variant: 'primary', size: 'sm', icon: saving ? undefined : 'check',
+              disabled: saving || !act?.setAutomation, 'aria-busy': saving || undefined,
+              onClick: () => { void save() } },
+            saving ? h(Fragment, null, h(StatusIcon, { state: 'ongoing', size: 14 }), pt(t, 'auto.saving')) : pt(t, 'auto.save')),
             h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
           failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
         : null,
@@ -972,10 +1126,102 @@ const DETAIL_JUMPS = [
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
 ]
 
-function TicketDetail({ id, page = 'execution' }) {
+/** A jump must land on a section this Ticket really renders: dismissed/closed hides automation, no gate result hides gates. */
+function ticketVisibleJumps(ticket, hasGateResults) {
+  const status = typeof ticket?.status === 'string' ? ticket.status : ''
+  return DETAIL_JUMPS.filter(jump => {
+    if (jump.id === 'sa-automation') return !['dismissed', 'closed'].includes(status)
+    if (jump.id === 'sa-ticket-gates') return Boolean(hasGateResults)
+    return true
+  })
+}
+
+/** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
+function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
+  const { t } = usePanel()
+  const rounds = Array.isArray(data?.rounds) ? data.rounds : []
+  // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
+  // recompute it from the rounds and quietly disagree (review P2 AC-08/AC-09).
+  const compare = useLiveResource('engine/evidence/:id/compare', { id }, 30000,
+    { enabled: Boolean(id) && rounds.length > 1 })
+  // A read still in flight or failed is not "no evidence yet" (audit P2): render the read's own state and retry it.
+  if (error && !data) return h(ErrorState, { error, onRetry })
+  if (loading && !data) return h(Skeleton, { rows: 2 })
+  if (!rounds.length) return h(Hint, null, pt(t, 'detail.evidenceEmpty'))
+  const latest = rounds.at(-1)
+  const diff = compare.data
+  const previous = rounds.length > 1 ? rounds.at(-2) : null
+  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed').length
+  const platform = latest.platform ?? {}
+  const incomplete = diff?.incomplete
+  const uncertain = diff?.filesUncertain
+  const incompleteLine = incomplete && (!incomplete.previous.fileList || !incomplete.current.fileList)
+    ? pt(t, 'detail.evidenceIncomplete', {
+      previousOmitted: incomplete.previous.filesOmitted, previousRedacted: incomplete.previous.filesRedacted,
+      currentOmitted: incomplete.current.filesOmitted, currentRedacted: incomplete.current.filesRedacted })
+    : ''
+  const uncertainAdded = (uncertain?.added ?? []).join('、')
+  const uncertainRemoved = (uncertain?.removed ?? []).join('、')
+  const requirementsAdded = diff?.acceptance?.added ?? []
+  const requirementsRemoved = diff?.acceptance?.removed ?? []
+  const unfinished = (diff?.gatesUnfinished ?? []).map(gate => gate.name)
+  return h('div', { className: 'sa-card' },
+    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'detail.evidenceTitle')),
+      h(Tag, { tone: 'neutral' }, pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length }))),
+    h(KeyValues, { rows: [
+      [pt(t, 'detail.evidenceBranch'), h('span', { className: 'sa-mono' }, latest.branch || '—')],
+      [pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, (latest.headSha ?? '—').slice(0, 8))],
+      [pt(t, 'detail.evidenceFilesLabel'), pt(t, 'detail.evidenceFiles', { count: (latest.files ?? []).length })],
+      [pt(t, 'ticket.gates'), pt(t, 'detail.evidenceGates', { passed, total: (latest.gates ?? []).length })],
+    ] }),
+    h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      pr: platform.pr ?? pt(t, 'detail.prNone'), merged: platform.merged ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      deployed: platform.deployed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })),
+    diff
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
+        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length }))
+      : rounds.length < 2
+        ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNoHistory'))
+        : null,
+    incompleteLine ? h('p', { className: 'sa-hint' }, incompleteLine) : null,
+    uncertainAdded || uncertainRemoved
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUncertain', {
+        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') }))
+      : null,
+    latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePatchTruncated', {
+        bytes: new Intl.NumberFormat(timeLocale(t.lang)).format(Number(latest.patch?.bytes ?? previous?.patch?.bytes ?? 0)) }))
+      : null,
+    diff?.baseline?.changed
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceBaseline', {
+        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) }))
+      : null,
+    unfinished.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') }))
+      : null,
+    diff?.gatesStale?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') }))
+      : null,
+    diff?.gatesNotRun?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') }))
+      : null,
+    requirementsAdded.length || requirementsRemoved.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceRequirements', {
+        added: requirementsAdded.join('；') || pt(t, 'detail.evidenceNone'),
+        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') }))
+      : null,
+    platform.deployCommit
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) }))
+      : null,
+    latest.workerSummary ? h(Folded, { summary: pt(t, 'detail.evidenceSummary') }, h('p', null, latest.workerSummary)) : null)
+}
+
+function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
+  const evidence = useLiveResource('engine/evidence/:id', { id }, 30000)
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
@@ -988,9 +1234,17 @@ function TicketDetail({ id, page = 'execution' }) {
   const [diffOpen, setDiffOpen] = useState(false)
   const [diff, setDiff] = useState({})
   useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
+  // AC-07: an Eval/source record's run link opens this page pinned to that run; scroll to it once the ledger loads.
+  const focusedRun = useRef(null)
+  useEffect(() => {
+    if (!focusRun || focusedRun.current === focusRun) return
+    const node = document.getElementById(`sa-run-${focusRun}`)
+    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
+  }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
   const [revisionText, setRevisionText] = useState('')
+  const [revisionError, setRevisionError] = useState(false)
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
@@ -998,16 +1252,28 @@ function TicketDetail({ id, page = 'execution' }) {
     const node = headRef.current ?? document.querySelector('.sa-page-head')
     const root = document.querySelector('.sa-scroll')
     if (!node || !root) return undefined
-    const update = () => {
+    // Audit P3: one read per animation frame, and a state write only when the threshold actually flips (a scroll
+    // event used to force two layouts and two renders per frame).
+    let frame = 0
+    let stuck = false
+    const measure = () => {
+      frame = 0
       const head = node.getBoundingClientRect()
       const scroll = root.getBoundingClientRect()
       // The compact context appears only once the real PageHead is under the sticky nav (a small overlap margin keeps
       // it from flickering at the boundary).
-      setHeadStuck(head.bottom <= scroll.top + 8)
+      const next = head.bottom <= scroll.top + 8
+      if (next === stuck) return
+      stuck = next
+      setHeadStuck(next)
     }
-    update()
-    root.addEventListener('scroll', update, { passive: true })
-    return () => root.removeEventListener('scroll', update)
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    measure()
+    root.addEventListener('scroll', schedule, { passive: true })
+    return () => {
+      root.removeEventListener('scroll', schedule)
+      if (frame) cancelAnimationFrame(frame)
+    }
   }, [id, data])
   const act = model?.actions
   const refreshAll = useCallback(async () => { await Promise.all([model?.reload?.(), reload()]) }, [model, reload])
@@ -1025,9 +1291,11 @@ function TicketDetail({ id, page = 'execution' }) {
   }
   const revision = useAction(async () => {
     const text = String(revisionText ?? '').trim()
-    if (!text) { notify(pt(t, 'ticket.revisionRequired')); return }
+    // The submit button stays clickable when empty (audit P3): this inline reason is the explanation, not a silent no-op.
+    if (!text) { setRevisionError(true); return }
     await act.addRevision(id, text)
     setRevisionText('')
+    setRevisionError(false)
     notify(pt(t, 'ticket.revisionStarted'))
   }, { reload: refreshAll })
   const dryRun = useAction(() => act.runTicket(id, { dryRun: true, wait: false }), { reload: refreshAll })
@@ -1054,7 +1322,9 @@ function TicketDetail({ id, page = 'execution' }) {
   const dismiss = useAction(async () => {
     const result = await act.dismissTicket(id, '手动忽略')
     const cleanup = result?.cleanup ?? result?.ticket?.links?.cleanup
-    notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
+    // Audit P2: a failed cleanup still leaves the branch/worktree behind, so do not claim they were deleted.
+    notify(pt(t, cleanup ? (cleanup.failed ? 'detail.dismissCleanupFailed' : 'detail.dismissRecorded') : 'detail.dismissRecordedBare',
+      { reason: cleanup?.failed ?? '' }))
     return cleanup
   }, { reload: refreshAll })
   // P0 gate decisions (contract §3.2): release skips the gate and delivers, retry re-runs the gates, stop fails the
@@ -1067,15 +1337,19 @@ function TicketDetail({ id, page = 'execution' }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
   const [answerText, setAnswerText] = useState('')
+  // A click on an empty answer explains itself inline instead of leaving a silently disabled button (audit P3).
+  const [answerError, setAnswerError] = useState(false)
   // P1-3: rejection intents are optional checkboxes next to the reject button.
   const [rejectIntents, setRejectIntents] = useState([])
   const answer = useAction(async () => {
     const text = String(answerText ?? '').trim()
-    if (!text) { notify(pt(t, 'detail.answerRequired')); return }
+    if (!text) { setAnswerError(true); return }
     await act.answerTicket(id, text)
     setAnswerText('')
+    setAnswerError(false)
     notify(pt(t, 'detail.answerSent'))
   }, { reload: refreshAll })
   // Which confirmation dialog the ⋯ menu opened (`publish` / `retry`); mirrors TicketRow's menu behavior (critique #4).
@@ -1086,6 +1360,11 @@ function TicketDetail({ id, page = 'execution' }) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       // An open dialog/menu owns Escape; the trigger wrapper itself is always in the DOM, so test the role.
       if (document.querySelector('.sa-modal') || document.querySelector('[role="menu"]')) return
+      // Audit P1: Escape inside a field cancels that field (blur) instead of navigating away and losing the draft;
+      // only a key pressed outside editable content is the page-level "go back".
+      const target = typeof Element !== 'undefined' && event.target instanceof Element ? event.target : null
+      const editable = target ? target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') : null
+      if (editable) { editable.blur(); return }
       back()
     }
     document.addEventListener('keydown', onKeyDown)
@@ -1097,7 +1376,12 @@ function TicketDetail({ id, page = 'execution' }) {
     if (typeof IntersectionObserver === 'undefined') return undefined
     const root = document.querySelector('.sa-scroll')
     if (!root) return undefined
-    const nodes = DETAIL_JUMPS.map(jump => document.getElementById(jump.id)).filter(Boolean)
+    // Same filtered list as the jump row (audit P2): a hidden section is neither linked nor observed.
+    const ticket = data?.ticket ?? {}
+    const runs = Array.isArray(data?.runs) ? data.runs : []
+    const gates = latestGatesOf({ ...ticket, runs })
+    const hasGates = gates.gates.length > 0 || Boolean(ticket.pendingGate ?? gates.run?.pendingGate)
+    const nodes = ticketVisibleJumps(ticket, hasGates).map(jump => document.getElementById(jump.id)).filter(Boolean)
     if (!nodes.length) return undefined
     const observer = new IntersectionObserver(entries => {
       const visible = entries.filter(entry => entry.isIntersecting)
@@ -1134,7 +1418,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const hasGateResults = gateView.gates.length > 0 || Boolean(parkedGate)
   // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
   const latestRun = latestRunFor(ticket, runs)
-  const interrupted = latestRun?.status === 'interrupted'
+  // AC-04: a stopped run keeps its checkpoint too, so the same resume action serves interrupted and stopped runs.
+  const interrupted = latestRun?.status === 'interrupted' || latestRun?.status === 'stopped'
   // A run in flight has nothing to launch: the dry-run action belongs to the ⋯ menu, not the primary slot (T3).
   const running = latestRun?.status === 'running' || ticket.status === 'working'
   const awaitingAnswer = ticket.status === 'awaiting-answer'
@@ -1184,8 +1469,12 @@ function TicketDetail({ id, page = 'execution' }) {
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
   if (routePreview) {
+    // Deliverable, required capabilities and backend are separate facts: a read-only report is not "the same route"
+    // as a code change, and an operator override must be visible as such.
+    const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
+      `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
@@ -1215,7 +1504,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const busy = { dryRun: dryRun.busy, retry: retry.busy, publish: publish.busy, refreshCi: refreshCi.busy, verify: verify.busy }
   // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
   // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
+  const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
+    || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
+  // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
+  const workflowResumable = failed && ticket.workflowResumable === true
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
   const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
@@ -1223,20 +1516,29 @@ function TicketDetail({ id, page = 'execution' }) {
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
     ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.answer'))
+      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }, pt(t, 'primary.answer'))
     : failed
     ? canRun
-      ? h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
-        message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
-        onConfirm: async () => { await retry.run() } })
-      : h(Button, { variant: 'primary', size: 'sm', disabled: true, title: pt(t, 'ticket.retryUnavailable') }, pt(t, 'ticket.retry'))
+      // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
+      ? workflowResumable
+        ? h(ConfirmButton, { label: pt(t, 'detail.resume'), title: pt(t, 'detail.resumeWorkflowTitle'),
+          message: pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'play',
+          confirmLabel: pt(t, 'detail.confirmResume'), onConfirm: async () => { await resume.run() } })
+        : h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
+          message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
+          confirmLabel: pt(t, 'detail.confirmRetry'), onConfirm: async () => { await retry.run() } })
+      // A disabled control still has to say why; the reason is a focusable InfoTip next to it, not a title tooltip.
+      : h(Fragment, null,
+        h(Button, { variant: 'primary', size: 'sm', disabled: true }, pt(t, 'ticket.retry')),
+        h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }))
     : accepted
-      // An accepted Ticket has nothing left to run: open the merged MR when there is one, otherwise only the ⋯ menu stays.
-      ? (mrUrl ? h(Button, { variant: 'primary', size: 'sm',
-        onClick: () => { window.open(mrUrl, '_blank', 'noopener') } }, pt(t, 'primary.openMr')) : null)
+      // An accepted Ticket has nothing left to run: the merged MR is a real link, otherwise only the ⋯ menu stays.
+      ? (safeHttpUrl(mrUrl) ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm',
+        href: safeHttpUrl(mrUrl), target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' } },
+        pt(t, 'primary.openMr')) : null)
       : needsAcceptance
         ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) },
+          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) },
         pt(t, 'primary.accept'))
         // A parked gate already carries all three decisions in the banner above this row, and running work has
         // nothing to launch — both states keep only the ⋯ menu, so the page never shows a second button that either
@@ -1245,46 +1547,67 @@ function TicketDetail({ id, page = 'execution' }) {
           ? null
           // P1-5: an interrupted run is resumable, so it outranks the generic dry-run action.
           : interrupted
-            ? h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
-              title: canRun ? undefined : pt(t, 'ticket.retryUnavailable'),
-              onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume'))
+            ? h(Fragment, null,
+              h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
+                onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume')),
+              !canRun ? h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }) : null)
             : dryRunReady
-              ? h(Button, { variant: 'primary', size: 'sm', icon: 'external',
-                disabled: busy.publish || !canPush, title: canPush ? undefined : pt(t, 'ticket.publishUnavailable'),
-                onClick: () => setPending('publish') }, pt(t, 'menu.publish'))
-              : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
-                title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
-                onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
+              ? h(Fragment, null,
+                h(Button, { variant: 'primary', size: 'sm', icon: 'external',
+                  disabled: busy.publish || !canPush,
+                  onClick: () => setPending('publish') }, pt(t, 'menu.publish')),
+                !canPush ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null)
+              : h(Fragment, null,
+                h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
+                  onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun')),
+                !canRun ? h(InfoTip, { text: pt(t, 'ticket.dryRunUnavailable'), warn: true }) : null)
   const menuItems = [
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
       disabled: busy.refreshCi || !hasMr },
     { key: 'dryRun', label: pt(t, 'ticket.dryRun'), icon: 'play', onSelect: () => { void dryRun.run() },
-      disabled: busy.dryRun || !canRun, title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
+      disabled: busy.dryRun || !canRun, note: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
     // The publish entry only lives here when it is not already the primary action.
     ...(dryRunReady ? [] : [{ key: 'publish', label: pt(t, 'menu.publish'), icon: 'external',
       onSelect: () => setPending('publish'), disabled: busy.publish || !canPush,
-      title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
+      note: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
-      disabled: busy.retry || !canRun, title: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
-    { key: 'stop', label: pt(t, 'menu.stop'), icon: 'stop', onSelect: () => {}, disabled: true, title: pt(t, 'ticket.stopUnavailable') },
+      disabled: busy.retry || !canRun, note: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
+    { key: 'stop', label: pt(t, ticket.stopRequested ? 'ticket.stopping' : 'menu.stop'), icon: 'stop',
+      onSelect: () => setPending('stop'), disabled: stopRun.busy || !activeRun || Boolean(ticket.stopRequested),
+      note: !activeRun ? pt(t, 'ticket.stopUnavailable') : ticket.stopRequested ? pt(t, 'ticket.stopping') : undefined },
     ...failed ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
   ]
   const runPending = async action => { const done = await action.run(); if (done) setPending(null) }
+  const confirmActionLabels = {
+    retry: pt(t, 'detail.confirmRetry'),
+    publish: pt(t, 'detail.confirmPublish'),
+    stop: pt(t, 'detail.confirmStop'),
+    // Only promise a deletion when there is a branch/worktree to delete.
+    dismiss: ticket.links?.branch || ticket.links?.worktree
+      ? pt(t, 'detail.confirmDismiss') : pt(t, 'detail.dismiss'),
+  }
   const confirmDialog = pending
     ? h(Modal, { open: true, onClose: () => setPending(null),
-      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle') : pt(t, 'ticket.publishTitle'),
+      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
+        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle'),
       closeLabel: t('close'),
       description: pending === 'retry'
         ? pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })
+        : pending === 'stop'
+          ? pt(t, 'ticket.stopConfirm')
         : pending === 'dismiss'
           ? pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
             branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })
           : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss : busy.publish,
-          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
+        // The confirm button names the action it destroys; a destructive one (stop/dismiss) is styled as such.
+        h(Button, { variant: pending === 'dismiss' || pending === 'stop' ? 'danger' : 'primary',
+          disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
+          : pending === 'stop' ? stopRun.busy : busy.publish,
+          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
+            : pending === 'stop' ? stopRun : publish) } }, confirmActionLabels[pending] ?? t('confirm'))) })
     : null
 
   // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
@@ -1339,11 +1662,13 @@ function TicketDetail({ id, page = 'execution' }) {
           h(ConfirmButton, { label: pt(t, 'detail.gateRelease'), title: pt(t, 'detail.gateReleaseTitle'),
             message: pt(t, 'detail.gateReleaseConfirm', { name: ticketGateLabel(t, pendingGate?.name),
               title: ticket.title ?? ticket.id }),
+            confirmLabel: pt(t, 'detail.confirmGateRelease'),
             variant: 'primary', icon: 'play', onConfirm: async () => { await gateRelease.run() } }),
           h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: gateRetry.busy,
             onClick: () => { void gateRetry.run() } }, pt(t, 'detail.gateRetry')),
           h(ConfirmButton, { label: pt(t, 'detail.gateStop'), title: pt(t, 'detail.gateStopTitle'),
             message: pt(t, 'detail.gateStopConfirm', { title: ticket.title ?? ticket.id }),
+            confirmLabel: pt(t, 'detail.confirmStop'),
             variant: 'danger', icon: 'stop', onConfirm: async () => { await gateStop.run() } }))))
     : null
   // P1-4 answer banner: the worker asked a question, so the one thing on screen is the question and the answer box.
@@ -1359,21 +1684,29 @@ function TicketDetail({ id, page = 'execution' }) {
         answerOptions.length
           ? h('div', { className: 'sa-actions' },
             h('span', { className: 'sa-hint' }, pt(t, 'detail.answerOptions')),
-            answerOptions.map((option, index) => h(Button, { key: index, variant: 'outline', size: 'sm',
-              onClick: () => setAnswerText(option) }, option)))
+            answerOptions.map((option, index) => h(Button, { key: index, size: 'sm',
+              variant: answerText === option ? 'primary' : 'outline',
+              'aria-pressed': answerText === option,
+              onClick: () => { setAnswerText(option); setAnswerError(false) } }, option)))
           : null,
-        h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
-          h('textarea', { className: 'sa-textarea', rows: 2, value: answerText,
-            placeholder: pt(t, 'detail.answerPlaceholder'), 'aria-label': pt(t, 'detail.answerPlaceholder'),
-            onChange: event => setAnswerText(event.target.value) }),
-          h(Button, { variant: 'primary', size: 'sm', icon: 'message',
-            disabled: answer.busy || !String(answerText ?? '').trim(),
-            onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit'))),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
+          h('label', { htmlFor: 'sa-answer-input', className: 'sa-hint' }, pt(t, 'detail.answerLabel')),
+          h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
+            h('textarea', { id: 'sa-answer-input', name: 'answer', autoComplete: 'off',
+              className: 'sa-textarea', rows: 2, value: answerText,
+              placeholder: pt(t, 'detail.answerPlaceholder'),
+              'aria-invalid': answerError ? true : undefined,
+              onChange: event => { setAnswerText(event.target.value); setAnswerError(false) } }),
+            h(Button, { variant: 'primary', size: 'sm', icon: 'message',
+              disabled: answer.busy,
+              onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit')))),
+        answerError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'detail.answerRequired')) : null,
         previousAnswers.length
           ? h(Folded, { summary: pt(t, 'detail.answerHistory', { count: previousAnswers.length }) },
             h('ul', { className: 'sa-list' }, previousAnswers.map((entry, index) => h('li', { key: index, className: 'sa-row' },
               h('div', { className: 'sa-row-main' },
-                h('div', { className: 'sa-row-title' }, h('span', null, String(entry.answer ?? ''))),
+                h('div', { className: 'sa-row-title' },
+                  h('span', { style: { whiteSpace: 'pre-wrap' } }, String(entry.answer ?? ''))),
                 entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
           : null))
     : null
@@ -1385,13 +1718,15 @@ function TicketDetail({ id, page = 'execution' }) {
       h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
         h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
           interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
+        h('p', { className: 'sa-hint' }, pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint'))))
     : null
-  const jumps = DETAIL_JUMPS
+  // A jump is only offered for a section this Ticket actually renders (dismissed/closed hide automation, a Ticket
+  // without gate results hides the gates section) — the observer below uses the same filtered list.
+  const jumps = ticketVisibleJumps(ticket, hasGateResults)
   const jumpTo = id => {
     setActiveJump(id)
     const node = document.getElementById(id)
-    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start' })
+    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
   }
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
@@ -1403,8 +1738,8 @@ function TicketDetail({ id, page = 'execution' }) {
     : h('span', { className: 'sa-page-head-note' },
       h('span', null, acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
         : acceptanceView.state === 'accepted'
-          ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
-          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at) || '—' })),
+          ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })
+          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })),
       needsAcceptance ? null
         : h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
           pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
@@ -1414,6 +1749,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const headActions = h(Fragment, null,
     acceptanceNote,
     primaryAction,
+    // AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only.
+    activeRun && !ticket.stopRequested
+      ? h(Button, { size: 'sm', variant: 'ghost', icon: 'stop', disabled: stopRun.busy, onClick: () => setPending('stop') },
+        pt(t, 'menu.stop'))
+      : null,
     h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
       text: primaryAction ? undefined : pt(t, 'menu.label') }))
 
@@ -1444,9 +1784,11 @@ function TicketDetail({ id, page = 'execution' }) {
       headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
 
     ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
-      h('p', null, ticket.workflow.status),
+      // The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked".
+      h('p', null, ticketWorkflowStateLabel(t, ticket.workflow.status),
+        ticket.workflow.detail ? h('span', { className: 'sa-hint' }, ` · ${ticket.workflow.detail}`) : null),
       ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
-        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${stage.status}` },
+        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}` },
         h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },
           stage.error ?? JSON.stringify(stage.result ?? {}, null, 2))))) : null,
 
@@ -1473,11 +1815,11 @@ function TicketDetail({ id, page = 'execution' }) {
         h('div', { className: 'sa-changes-side' },
           h('div', { className: 'sa-actions' },
             h('span', { className: 'sa-hint' }, pt(t, 'ticket.changedFiles')),
-            h('span', { className: 'sa-count' }, String(changes.files.length))),
+            h('span', { className: 'sa-count', 'data-empty': changes.files.length === 0 ? 'true' : undefined }, String(changes.files.length))),
           changes.files.length
             ? h(Fragment, null,
               // Each file name is the entry point to its own patch (only available while the worktree exists).
-              h('ul', { className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
+              h('ul', { id: 'sa-changed-files', className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
                 .map((file, index) => h('li', { key: index, className: 'sa-row' },
                   h('button', { type: 'button', className: 'sa-file-diff',
                     title: pt(t, 'ticket.diffOpenFile', { path: file }),
@@ -1486,6 +1828,7 @@ function TicketDetail({ id, page = 'execution' }) {
               changes.files.length > CHANGES_FILES_RECENT
                 ? h('div', { className: 'sa-actions' },
                   h(Button, { variant: 'ghost', size: 'sm', icon: filesExpanded ? 'chevron-up' : 'chevron-down',
+                    'aria-expanded': filesExpanded, 'aria-controls': 'sa-changed-files',
                     onClick: () => setFilesExpanded(value => !value) },
                   pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })))
                 : null)
@@ -1495,17 +1838,23 @@ function TicketDetail({ id, page = 'execution' }) {
               h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
             : null,
           h('div', { className: 'sa-revision', style: { marginTop: 'var(--sa-sp-8)' } },
-            h('div', { className: 'sa-actions' }, h('span', { className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
+            h('div', { className: 'sa-actions' },
+              h('label', { htmlFor: 'sa-revision-input', className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
             revisionBlocked
               ? h(Hint, null, pt(t, revisionBlocked === 'answer' ? 'ticket.revisionAwaitingAnswer'
                 : revisionBlocked === 'working' ? 'ticket.revisionWorking' : 'ticket.revisionEnded'))
               : h(Fragment, null,
-                h('textarea', { className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
-                  placeholder: pt(t, 'ticket.revisionPlaceholder'), 'aria-label': pt(t, 'ticket.revisionTitle'),
-                  disabled: revision.busy, onChange: event => setRevisionText(event.target.value) }),
+                h('textarea', { id: 'sa-revision-input', name: 'revision', autoComplete: 'off',
+                  className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
+                  placeholder: pt(t, 'ticket.revisionPlaceholder'),
+                  'aria-invalid': revisionError ? true : undefined,
+                  disabled: revision.busy,
+                  onChange: event => { setRevisionText(event.target.value); setRevisionError(false) } }),
+                revisionError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'ticket.revisionRequired')) : null,
                 h('div', { className: 'sa-actions' },
+                  // Clickable while empty, so the click gets the inline reason instead of a dead disabled button (audit P3).
                   h(Button, { variant: 'primary', size: 'sm', icon: 'play',
-                    disabled: revision.busy || !String(revisionText ?? '').trim(),
+                    disabled: revision.busy,
                     onClick: () => { void revision.run() } }, pt(t, 'ticket.revisionSubmit'))),
                 h(Hint, null, pt(t, 'ticket.revisionHint'))),
             revisions.length
@@ -1521,6 +1870,8 @@ function TicketDetail({ id, page = 'execution' }) {
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
     h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
+      // AC-08/09: durable evidence lives next to (not inside) the acceptance record.
+      h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(DeliveryEvidenceCard, { data: evidence.data, id, loading: evidence.loading, error: evidence.error, onRetry: evidence.reload })),
       // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
@@ -1560,9 +1911,11 @@ function TicketDetail({ id, page = 'execution' }) {
           h('div', { className: 'sa-actions' },
             h(ConfirmButton, { label: pt(t, 'ticket.acceptPass'), title: pt(t, 'ticket.acceptPassTitle'),
               message: pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id }),
+              confirmLabel: pt(t, 'detail.confirmAcceptPass'),
               variant: 'primary', icon: 'decision', onConfirm: async () => { await acceptPass.run() } }),
             h(ConfirmButton, { label: pt(t, 'ticket.acceptFail'), title: pt(t, 'ticket.acceptFailTitle'),
               message: pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id }),
+              confirmLabel: pt(t, 'detail.confirmAcceptFail'),
               variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run(rejectIntents) } })))
         : !canAccept && !accepted && hasAcceptanceEvidence
           // Without evidence the empty-state sentence above already says what unlocks acceptance.

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T23:05:00+08:00",
+  "title": "Design System: SuperAgent Panel",
+  "extensions": {
+    "colorMeta": {
+      "brand-primary": { "role": "primary", "displayName": "Harness Brand Blue", "canonical": "var(--dsw-alias-brand-primary)" },
+      "surface-base": { "role": "neutral", "displayName": "Panel Base", "canonical": "var(--dsw-alias-bg-base)" },
+      "surface-layer-1": { "role": "neutral", "displayName": "Layer 1", "canonical": "var(--dsw-alias-bg-layer-1)" },
+      "surface-layer-2": { "role": "neutral", "displayName": "Layer 2", "canonical": "var(--dsw-alias-bg-layer-2)" },
+      "surface-overlay": { "role": "neutral", "displayName": "Overlay", "canonical": "var(--dsw-alias-bg-overlay)" },
+      "border-line": { "role": "neutral", "displayName": "Hairline", "canonical": "var(--dsw-alias-border-l2)" },
+      "text-primary": { "role": "neutral", "displayName": "Label Primary", "canonical": "var(--dsw-alias-label-primary)" },
+      "text-secondary": { "role": "neutral", "displayName": "Label Secondary", "canonical": "var(--dsw-alias-label-secondary)" },
+      "text-tertiary-aa": { "role": "neutral", "displayName": "Raised Tertiary", "canonical": "var(--sa-label-tertiary)" },
+      "danger-text": { "role": "secondary", "displayName": "Raised Danger", "canonical": "var(--sa-danger-text)" },
+      "success-text": { "role": "secondary", "displayName": "Raised Success", "canonical": "var(--sa-success-text)" }
+    },
+    "typographyMeta": {
+      "page": { "displayName": "Page", "purpose": "面板页标题，每页一个。" },
+      "title": { "displayName": "Title", "purpose": "区块标题、工单标题、卡片标题。" },
+      "body": { "displayName": "Body", "purpose": "正文与表格内容，默认档。" },
+      "meta": { "displayName": "Meta", "purpose": "次要说明、字段值、时间戳。" },
+      "caption": { "displayName": "Caption", "purpose": "徽标、计数、短标签，最小值。" },
+      "mono": { "displayName": "Mono", "purpose": "ID、commit、diff、路径等要照抄的内容。" }
+    },
+    "motion": [
+      { "name": "state-fast", "value": "140ms ease", "purpose": "开关 track/thumb 等状态位移。" },
+      { "name": "enter-overlay", "value": "120ms ease-out", "purpose": "弹窗入场（opacity + 4px 位移）。" },
+      { "name": "spin", "value": "1s linear infinite", "purpose": "进行中图标；prefers-reduced-motion 下停止。" }
+    ],
+    "breakpoints": [
+      { "name": "container-480", "value": "480px", "purpose": "单列、按钮占满宽度。" },
+      { "name": "container-600", "value": "600px", "purpose": "KV 表由两列转一列。" },
+      { "name": "container-760", "value": "760px", "purpose": "卡片双列转单列。" },
+      { "name": "container-960", "value": "960px", "purpose": "概览双栏、KV 行内布局的分界。" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主操作，一屏最多一个。",
+      "html": "<button class=\"ds-btn ds-btn-primary\">启动自动化</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;border:none;border-radius:var(--sa-r-sm,4px);padding:0 var(--sa-sp-12,12px);height:32px;font:inherit;font-size:var(--sa-fs-body,13px);line-height:1;font-weight:500;cursor:pointer}.ds-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px}.ds-btn-primary{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary));color:var(--dsw-alias-label-primary-foreground)}.ds-btn-primary:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-brand-primary))}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "与主操作并列的次要动作。",
+      "html": "<button class=\"ds-btn ds-btn-outline\">检查新消息</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;border:none;border-radius:var(--sa-r-sm,4px);padding:0 var(--sa-sp-12,12px);height:32px;font:inherit;font-size:var(--sa-fs-body,13px);line-height:1;font-weight:500;cursor:pointer;background:transparent;color:var(--dsw-alias-label-primary)}.ds-btn-outline{border:0.5px solid var(--sa-line,var(--dsw-alias-border-l2))}.ds-btn-outline:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}.ds-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px}"
+    },
+    {
+      "name": "Icon Button",
+      "kind": "button",
+      "refersTo": "button-icon",
+      "description": "28px 方形图标按钮，用于工具栏与行尾动作。",
+      "html": "<button class=\"ds-icon-btn\" aria-label=\"刷新\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" aria-hidden=\"true\"><path d=\"M21 12a9 9 0 1 1-2.6-6.4\"/><path d=\"M21 3v6h-6\"/></svg></button>",
+      "css": ".ds-icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border:none;border-radius:var(--sa-r-md,8px);background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}.ds-icon-btn:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2));color:var(--dsw-alias-label-primary)}.ds-icon-btn:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:1px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "32px 高、0.5px 描边，聚焦时品牌色边框 + 2px 内缩焦点环。",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">轮询间隔（秒）</span><span class=\"ds-input\"><input value=\"20\"></span></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font-family:inherit}.ds-field-label{font-size:12px;line-height:1.4;color:var(--sa-label-tertiary,var(--dsw-alias-label-tertiary))}.ds-input{display:inline-flex;align-items:center;height:32px;padding:0 8px;border:0.5px solid var(--sa-line,var(--dsw-alias-border-l2));border-radius:var(--sa-r-sm,4px);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}.ds-input:focus-within{border-color:var(--dsw-alias-brand-primary);outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:-1px}.ds-input input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:inherit;font-size:13px;height:100%}"
+    },
+    {
+      "name": "List Row",
+      "kind": "custom",
+      "refersTo": "row",
+      "description": "工单/队列的一行：行内真按钮承载标题，hover 整行染色，行间 0.5px 分隔。",
+      "html": "<div class=\"ds-row\"><button class=\"ds-row-open\"><span class=\"ds-row-title\">下发工单解决问题：移动端 500–600px 时头部溢出</span><span class=\"ds-row-meta\">tkt_4e4c8a25 · 5 分钟前</span></button><span class=\"ds-badge\">已合并</span></div>",
+      "css": ".ds-row{position:relative;display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px 12px;padding:8px 8px 10px;border-radius:8px}.ds-row:hover{background:var(--dsw-alias-interactive-bg-hover,var(--dsw-alias-bg-layer-2))}.ds-row-open{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:4px;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.ds-row-open:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:-2px;border-radius:4px}.ds-row-title{font-size:15px;line-height:1.35;font-weight:600;color:var(--dsw-alias-label-primary)}.ds-row-meta{font-size:12px;line-height:1.4;color:var(--sa-label-tertiary,var(--dsw-alias-label-tertiary));font-variant-numeric:tabular-nums}.ds-badge{display:inline-flex;align-items:center;min-height:18px;padding:0 8px;border:0.5px solid var(--sa-line,var(--dsw-alias-border-l2));border-radius:999px;font-size:11px;line-height:1.4;color:var(--sa-label-tertiary,var(--dsw-alias-label-tertiary))}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "layer-1 底、8px 圆角、16px 内边距，无阴影。",
+      "html": "<section class=\"ds-card\"><h3 class=\"ds-card-title\">系统脉搏</h3><p class=\"ds-card-body\">引擎 已停止 · 自动触发未开启</p></section>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:12px;padding:16px;border:0.5px solid var(--sa-line,var(--dsw-alias-border-l2));border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}.ds-card-title{margin:0;font-size:15px;line-height:1.35;font-weight:600}.ds-card-body{margin:0;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-secondary)}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab",
+      "description": "36px 页签，选中项文字升主色 + 2px 品牌色下划线。",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">概览</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">设置</button></div>",
+      "css": ".ds-tabs{display:flex;gap:24px;border-bottom:0.5px solid var(--sa-line,var(--dsw-alias-border-l2))}.ds-tab{height:36px;padding:0 8px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1.5;font-weight:500;cursor:pointer}.ds-tab:hover{color:var(--dsw-alias-label-primary)}.ds-tab[aria-selected=\"true\"]{color:var(--dsw-alias-label-primary);border-bottom-color:var(--dsw-alias-brand-primary)}.ds-tab:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:2px;border-radius:4px}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "row",
+      "description": "分段筛选：槽用内描边，选中块用 base 底 + soft 阴影。",
+      "html": "<div class=\"ds-segmented\" role=\"radiogroup\"><button class=\"ds-segment\" role=\"radio\" aria-checked=\"true\">已订阅 4 条</button><button class=\"ds-segment\" role=\"radio\" aria-checked=\"false\">已忽略 0 条</button></div>",
+      "css": ".ds-segmented{display:inline-grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;padding:2px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);box-shadow:inset 0 0 0 1px var(--sa-line,var(--dsw-alias-border-l2))}.ds-segment{height:28px;padding:0 12px;border:0;border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;line-height:1.5;font-weight:500;cursor:pointer}.ds-segment[aria-checked=\"true\"]{background:var(--dsw-alias-bg-base,var(--dsw-alias-bg-layer-1));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-elevation-soft,0 1px 2px transparent)}.ds-segment:focus-visible{outline:2px solid var(--dsw-focus-ring-color,var(--dsw-alias-brand-primary));outline-offset:-2px}"
+    },
+    {
+      "name": "Modal",
+      "kind": "custom",
+      "refersTo": "modal",
+      "description": "560px 上限、12px 圆角、overlay 底与 prominent 阴影；关掉背景滚动。",
+      "html": "<div class=\"ds-modal\"><div class=\"ds-modal-header\"><h2>清理令牌</h2><button class=\"ds-icon-btn\" aria-label=\"关闭\">×</button></div><p class=\"ds-modal-desc\">清理后引擎会立刻停止轮询，直到重新粘贴令牌。</p><div class=\"ds-modal-footer\"><button class=\"ds-btn ds-btn-outline\">取消</button><button class=\"ds-btn ds-btn-primary\">清理</button></div></div>",
+      "css": ".ds-modal{display:flex;flex-direction:column;gap:12px;width:min(560px,100%);max-height:min(80vh,720px);overflow:auto;overscroll-behavior:contain;padding:16px 24px;border-radius:12px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-overlay));color:var(--dsw-alias-label-primary);box-shadow:var(--dsw-elevation-prominent)}.ds-modal-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.ds-modal-header h2{margin:0;font-size:15px;line-height:1.35;font-weight:600}.ds-modal-desc{margin:0;font-size:13px;line-height:1.5;color:var(--dsw-alias-label-secondary)}.ds-modal-footer{display:flex;justify-content:flex-end;gap:8px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Instrument Panel",
+    "overview": "这块面板不是一个要被浏览的页面，而是一个在值班时被反复切开看的工作台：用户一天里要点开它十几次，每次都带着一个具体问题。所以整套视觉的目标是让答案在一瞥之内出现，并且第二次打开时长得和第一次一模一样。表达欲全部收进细节：0.5px 的描边、对齐的数字、只在对的时候出现的焦点环。面板不拥有自己的品牌色，它运行在 DSH 宿主主题里，颜色、字体、浮层背景全部来自 --dsw-alias-*。这套设计系统的职责不是定义颜色，而是约束怎么用。",
+    "keyCharacteristics": [
+      "密度优先：正文 13px、行高 1.5，一屏能读完的东西不折行、不换页。",
+      "平面为主：卡片、行、输入框一律无阴影，阴影只属于浮层。",
+      "一条描边：所有边框都是 0.5px solid var(--sa-line)。",
+      "语义色只出现在状态上，不作装饰。",
+      "数字一律 tabular-nums，时间线、计数、百分比上下对齐。"
+    ],
+    "rules": [
+      { "name": "The One Border Rule", "body": "任何边框只有一种写法：0.5px solid var(--sa-line)。不新增边框色，不用 1px 表达分隔。", "section": "colors" },
+      { "name": "The Raised Text Rule", "body": "11–12px 的文本不许直接用 tertiary / link / state 原值，必须用对应的 --sa-* 抬升变体；形状与填充不受此限。", "section": "colors" },
+      { "name": "The One Accent Rule", "body": "品牌色只用于：主操作、当前选中、焦点环。屏幕上同时出现的品牌色块不超过一个。", "section": "colors" },
+      { "name": "The Scale-Only Rule", "body": "只有 11 / 12 / 13 / 15 / 20 五档字号。介于两者之间的值属于控件高度或边框宽度，不属于文字。", "section": "typography" },
+      { "name": "The Tabular Rule", "body": "任何会纵向对齐的数字加 font-variant-numeric: tabular-nums；正文段落显式 opt out。", "section": "typography" },
+      { "name": "The Two-Weight Rule", "body": "字重只用 400 / 500 / 600。600 是标题或当前项，500 是可点的，400 是其余。", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "阴影是「这个元素浮在页面之上」的信号，不是美化手段。给卡片加阴影等于宣称它会移动。", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 所有间距从 2/4/8/12/16/24/32 里取，字号从 11/12/13/15/20 里取，圆角从 4/8/12/999 里取。",
+      "Do 用 --sa-line 画一切分隔线，宽度 0.5px。",
+      "Do 给每个可点元素配 :focus-visible 的 2px 焦点环，并在 hover 之外保留键盘路径。",
+      "Do 用语义色表达状态，并同时给文字，不只给颜色。",
+      "Do 数字加 tabular-nums；时间统一用一个 Intl.DateTimeFormat 实例。"
+    ],
+    "donts": [
+      "Don't 给卡片、行、输入框加阴影——阴影是浮层专属信号。",
+      "Don't 新增字号、间距、圆角档位，或为单个页面发明一个新变量。",
+      "Don't 在 11–12px 文本上直接用 --dsw-alias-label-tertiary / --dsw-alias-link，用 --sa-* 抬升变体。",
+      "Don't 用 outline: none 去掉焦点环；要么换成 var(--sa-focus)，要么连焦点一起删掉。",
+      "Don't 用 emoji 或彩色图标做状态指示。",
+      "Don't 假设深色主题已验证：浅色已按 AA 抬升，深色主题的对比度尚未实测。"
+    ]
+  }
+}

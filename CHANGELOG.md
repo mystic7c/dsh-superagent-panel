@@ -1,5 +1,327 @@
 # Changelog
 
+## [0.4.39] — 2026-11-14
+
+开源准备（P0）：让一个干净 clone 能自查、能被外部贡献者读懂，并把仓库里的"内部习惯"与"外部契约"分开。
+功能行为不变，所有改动都在构建、测试与文档层。
+
+### 内容
+- 新增 `LICENSE`（MIT）与 `.github/workflows/ci.yml`：Node 20/22 矩阵，`npm ci` 后跑 Host 语法、产物一致性、
+  双语 key、Host 测试与渲染回归五道门。
+- 渲染回归不再依赖 `/tmp/sa-harness`：`jsdom`/`react`/`react-dom` 改为 `devDependencies`（精确版本）并提交
+  `package-lock.json`；`scripts/render-check.mjs` 缺依赖时提示 `npm ci` 并以 2 退出。
+- 新增 `test/fixtures/live.json` 与渲染回归的内置 fixture：状态目录里没有 `live.json` 时自动在临时目录搭建
+  一套演示状态（2 个仓库、2 个监听群、四条演示工单、一条接单历史），干净 clone 上不再是 172 检查 + 18 跳过。
+- 新增 `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、issue 表单与 PR 模板；交付桥与发布流程拆到
+  `docs/delivery.md`，`AGENTS.md` 只留指向与 Agent 硬线。
+- CI 基线定为 Node 22/24：`testConfig` 的 Node 检查要求 major ≥ 22，Node 20 已 EOL，降到 20 只会制造
+  声明与实现不一致。
+- 历史快照同一毫秒内写入时排序不稳定（`listLiveConfigHistory` 只按 `at` 排），文件名里的序号现作为二级排序键。
+- 首次在 Linux/UTC 上跑 CI 暴露的三处测试问题（生产代码未改）：`lib/live/api.test.js` 的搜索用例被写进了
+  status 用例体内（子测试抢跑导致偶发 cancelled），已移回顶层；`lib/live/gitlab.test.js` 的超时用例只剩
+  `AbortSignal.timeout` 的 unref 定时器撑着事件循环，补了一个 ref 定时器；`lib/live/schedule.test.js` 的
+  `nextDailyAt` 断言写死 `+08:00`，在 UTC runner 上必然失败，改为按时钟本地构造。
+- 文档卫生：README 去掉写死的 `0.4.31`，改为 CHANGELOG/Releases 入口并加 CI/License/Node 徽章；开发验证一节
+  改为从 `npm ci` 开始、写明前七条可在干净 clone/CI 上跑、后两条需桌面 DSH + Chrome；`docs/self-development.md`
+  去掉本机绝对路径与内部仓库名；`engines.node` 提到 `>= 22`（与 `testConfig` 的 Node 检查、CI 矩阵一致）；`package.json` 补 `repository`/`homepage`/`bugs`。
+
+### 验证
+- 干净状态目录（`DSH_SUPERAGENT_STATE_DIR` 指向空目录）：`node scripts/render-check.mjs` 194 checks / 0 fail /
+  0 skipped；操作者真实状态目录同样 194 / 0 / 0。
+- `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`、
+  `node --test lib/store.test.js lib/live/*.test.js`（555 pass）全部通过；本地与 `TZ=UTC` 两种时区各跑一遍。
+- GitHub Actions：PR #29 上 node 20/22 两条 job 全绿。
+
+## [0.4.38] — 2026-11-13
+
+按 `/impeccable audit`（对着 DESIGN.md 契约跑的 16/20 审计）逐条修复。核心一条是 token 语义错用：`--dsw-alias-bg-overlay`
+是叠加用的薄染层，深色主题下解析成 `#61666b`，菜单/弹窗的二次文本只有 3.85:1。
+
+### 内容
+- 新增 `--sa-surface-raised`（= `var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-overlay))`），`.sa-menu-pop` 与
+  `.sa-modal` 改用它。深色下弹窗描述 3.85 → 8.03:1、菜单说明 3.27 → 6.83:1，浅色下底变纯白。
+- `.sa-info`（16px）与 `.sa-sender-remove`（约 8×12）加 24×24 的居中命中盒（`::before`），图形尺寸不变，满足 2.5.8。
+- `.sa-sender-remove:focus-visible` 的圆角从 2px 改回 `--sa-r-sm`（检测器唯一命中的越界刻度）。
+- 禁用态不透明度 0.4 → 0.55（按钮、图标按钮、分段控件），文字不再"消失"。
+- `.sa-modal:focus-visible` 补焦点环：弹窗接管焦点时键盘用户仍能看到落点。
+- `DESIGN.md`：Neutral 一节把 Overlay 改述为"薄染层"、新增 Raised 一节；Modal 组件绑定 `surface-raised`；
+  `.impeccable/design.json` 同步。
+
+### 验证
+- 隔离 DSH web 实例（真实工单数据）实测：浅色菜单底 `#fff`、说明 5.50:1；切深色后底 `#353638`、说明 6.83:1、
+  弹窗描述 8.03:1；`.sa-info` 与 sender chip 的 × 在 ±11px 处仍命中；390 / 600 / 760 三档容器无横向溢出。
+- `node --check index.js`、`build-client --check`（22 fragments，11682 行）、`check-keys`（967/513/1359）、
+  `node --test`（555 pass）、`render-check`（194 checks / 0 fail）。
+
+## [0.4.37] — 2026-11-13
+
+真浏览器点检（隔离 DSH web 实例 + 真实工单数据）发现的漏项：触发页的三个筛选分段把「条数」只写在 `title`
+里，键盘与读屏都拿不到（WIG A3 同类问题在 0.4.36 清扫时漏掉了这一处）。
+
+### 内容
+- `SegmentedControl` 支持 `option.description`，渲染为按钮内的 `.sa-sr-only` 文案，因此可访问名变成
+  「已订阅 4 条」；`45-trigger.js` 的三个筛选项同时传 `title`（悬停仍显示）与 `description`（读屏/语音输入可见）。
+- 其余 0.4.36 改动在真机同路径点检中表现正常（见 `verification/ui-review-team.md` 的「真机点检」一节）。
+
+### 验证
+- `node scripts/build-client.mjs`（22 fragments，11672 行）、`node scripts/check-keys.mjs`（967 literal / 513 shared /
+  1359 page-local）、`node --test lib/store.test.js lib/live/*.test.js`（555 pass）、`node scripts/render-check.mjs` 全绿；
+  隔离实例里重载后 `.sa-segment` 的可访问名已含条数。
+
+## [0.4.36] — 2026-11-13
+
+按 Web Interface Guidelines 全渲染层审查（89 条）与 CSS 设计审查（14 条）逐条修复；不改变页面信息架构，只修
+语义、键盘路径、对比度与 token 契约。
+
+### 内容
+- 组件层：`Input` 的 `label` 真正成为可访问名（不再泄漏成 DOM 属性）并默认 `spellCheck=false`；`Switch` 换成
+  `<input role="switch">` + 可见 track（调用方用 `<label>` 包裹文案，整行可点）；`DisclosureRow` 改成真 `<button>`；
+  `CopyButton` 用 `role=status` 播报「已复制」；`ConfirmButton` 支持动作级 `confirmLabel`；`MarkdownLite` 输出真
+  h3–h6（`07-md.js` 保留 heading 级别）。
+- 对比度/token：修掉不存在的 `--sa-radius-8`、`--dsw-alias-border-secondary`、`--dsw-alias-bg-secondary`、
+  `--dsw-alias-label-error`；toast/tooltip 改用 `--dsw-alias-toast-label`/`--dsw-alias-tooltip-label`；状态文本统一
+  走 `--sa-danger-text`/`--sa-warn-text`/`--sa-success-text`/`--sa-label-tertiary`。
+- 焦点与键盘：菜单项、输入框、`.sa-scroll` 都有可见焦点环；列表/队列/收件箱的行点击改成行内真按钮（`.sa-row-open`），
+  鼠标仍整行可点；消息列表加 roving tabindex + ↑/↓/Home/End。
+- 深链：路由（含 `stage`/`group`/`focus` 等视图内选择）写入自身 `#sa=` 片段并可在冷启动恢复，sessionStorage 仍是
+  兜底；宿主 URL 不属于本插件时不读不写。
+- 语义与播报：搜索面板改成 `role=search` 表单并播报结果数；异步结果（列表刷新、保存、复制、建单、评测）统一
+  `role=status`/`aria-busy`；`data-empty` 写到计数元素，配合 `.sa-count` 的尺寸契约。
+- 文案与校验：破坏性操作使用动作级确认文案；设置页数字/时间/必填字段有字段级错误与 `aria-invalid`；设置草稿存入
+  sessionStorage 并在离开前提示；`title` 不再作为唯一信息来源（改用可见提示或 focusable InfoTip）。
+- 样式细节：行高收敛到 1/1.35/1.4/1.5，列表分隔线上下对称，sticky 偏移统一 `--sa-sticky-top`，删除死规则
+  （`.sa-cards`/`.sa-grid2`/`.sa-grid3`/`.sa-chip-count[data-zero]`），补 `overscroll-behavior`、
+  `touch-action`、`text-wrap: balance` 与 `prefers-reduced-motion`。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 11670 行）；`node scripts/check-keys.mjs`
+（967 literal / 513 shared / 1359 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。审查清单与逐条状态见 `verification/ui-review-team.md`。
+
+## [0.4.35] — 2026-11-13
+
+收口 0.4.34 遗留的运行质量口径、事件队列 ack/cursor、持久化掉电与证据排序问题。
+
+### 内容
+- 运行质量：24 小时失败数改为按 `runCategoryOf` 分类（`stopReason` 的 gate_failed/worker_failed 等与遗留
+  `status=failed` 同口径），不再只数 `status === 'failed'`。
+- 事件队列：只 ack 已处理（接单/忽略/跳过/指令消费）的事件；处理失败的事件留在队列并保持原 cursor；
+  UUID 形式的 `eventId` 会 ack 但不再把数字 cursor 归零（`Math.max(cursor, NaN)`）。
+- 持久化：新增 `lib/live/durable.js`，所有 temp+rename 写入在 rename 前 fsync 临时文件；掉电时不再可能留下
+  0 字节的 `live-state.json`/`acceptance.json`/`operations.json` 等。
+- 证据：人工决策（采纳/拒绝/覆盖）只推进 `updatedAt`，交付轮次的 `at` 不变，证据列表按最近处理排序。
+- 并发：`verifyTicket` 与 `refreshTicketCi` 也纳入工单锁，避免与执行/发布/回答重叠改同一张工单。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
+（938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。
+
+## [0.4.34] — 2026-11-13
+
+按代码评审与实机点击评审收口：修掉 URL 注入、干跑消费上下文、发布/回答的并发与干跑语义，补齐实机暴露的
+i18n 与状态文案问题；数据加载不再把权限错误当成空状态。
+
+### 内容
+- 安全：`ExternalLink` 只接受 http(s) URL，其余渲染为纯文本；Markdown 链接沿用原有 http(s) 白名单。
+- 干跑：`pollSync`/`pollEvents` 的 `attachContext` 移到 dry-run 返回之后，且只对会入库的仓库执行；实机干跑不再
+  在内存里消费 contextOnly 决策。
+- 执行器：`executeTicket/publishTicket/answerTicket/resumeTicket/resumeInterruptedTicket` 共用进程内工单锁
+  （重复调用报 `already busy`）；`publishTicket` 只接受 ready/failed/pushed；回答追问沿用原 run 的 dryRun；
+  发布修复只对 `onFail=auto_repair` 的闸门生效；去掉重复的 stop 清理；CLI worker 接收 `AbortSignal`，停止会
+  立即终止 CLI 进程组；采用已合并 MR 时不再把工单回退成 ci-pending/mr-open。
+- 数据：`live-state/inbox/signals/operations/acceptance/store` 只在 ENOENT 时按空状态初始化，EACCES/EIO 直接
+  抛错；`live-json` 写入遇到损坏配置拒绝覆盖并提示；新增仓库不再硬编码 `createMr:api`，并拒绝重复本地路径。
+- Host：同源判断比较 host（HTTPS/反代可用）；非法 URL 编码返回 400；`normalizeRepo` 容忍不完整 base。
+- 视图：`signalsView`/`decisionsView` 每次请求只读一次配置；无仓库时 `verifySeconds` 为 null；`requestStop` 走
+  `atomic()` 队列；标题上限 64→160。
+- 客户端：修复重复 `src.signalReason`（原因列显示“按原因筛选”）；补齐 8 个 `repos.*` 文案；仓库卡片改为
+  “执行器未启用”；暂停时概览不再说“等待群消息”；“查看已处理工单”带 `stage=done`；评估筛选空态提供清除筛选；
+  已合并工单不再显示“已推送，等待创建 PR”；信号标题不再被 300px 截断。
+- 工具：`check-keys` 支持三元表达式取 key，并检测重复 PAGE_TEXT key。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
+（938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（551 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。
+
+## [0.4.33] — 2026-11-13
+
+落地产品评审六项改进（AC-01…AC-12）并按七轮独立验收返工收口：路由贯穿分阶段执行、停止真正取消 worker 与
+CLI 进程组、恢复时对远端推送对账、评测与来源深链可回溯、证据与部署判定可复核、仓库与闸门可直接在设置页编辑。
+
+### 内容
+- 路由：`lib/live/routing.js` 与 `executor.js` 的 staged 分支按 `routeBackend`/`routeProfile` 选择实现后端与只读/
+  可写 profile，人工选择不可用时原样报 `unsupported`；设置页展示路由预览（交付类型、后端、是否自动、改动范围）。
+- 停止：`requestStop` 对 queued 工单立即结束排队；executor 每步检查 `ticket.stop`，worker 通过 `AbortSignal` 取消
+  宿主 agent，CLI 以进程组 SIGTERM→3s SIGKILL 升级；停止的 run 可恢复。
+- 推送/部署：`publishTicket` 先持久化推送请求再执行，未知结果按远端分支与 MR 对账；部署判定按记录的 SHA 比较，
+  不用最新流水线代替目标 commit。
+- 证据与评测：gate 记录 `at` 时间戳，reused 判定生效；证据包补齐被截断标记与 `deployCommit`；评测搜索覆盖
+  `candidate.text`/`payload.text`；来源与评估记录深链到具体 id；URL 恢复保留视图、页码与滚动位置。
+- 设置页：仓库对象中的闸门（名称、命令、目录、超时、失败策略、干跑命令）按完整对象编辑与保存，保存后刷新
+  不回退；`POST engine/repo/:id` 与 `POST engine/config/test` 补 API 测试；live-json 的 `onFail` 补断言。
+- 文档：README、`docs/self-development.md`、`docs/feature-maturity.md` 与实际测试数、停止能力对齐。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10826 行）；`node scripts/check-keys.mjs`
+（882 literal / 513 shared / 1295 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（541 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过，含仓库闸门保存后刷新的回归断言）。
+
+## [0.4.32] — 2026-11-13
+
+Claude 验收报 `Unexpected end of JSON input`：不是模型没答，是读不到答案。`runProcess` 的 stdout 上限 8 MB 在
+达上限后丢弃**新到的** chunk，而 Claude stream-json 每个 thinking token 就产出一条 `thinking_tokens` 事件
+（实测约 320 B/token，一次 1 万 token 的思考就有 3.5 MB），真实验收一越过 8 MB，最后那条含 verdict 的 `result`
+就被丢掉，解析器只能拿到空字符串，`JSON.parse('')` 便报这个错。stage 里还留着 sessionId，正是「CLI 跑了、
+只是尾巴没了」的证据。
+
+### 内容
+- `lib/live/worker-cli.js`：`runProcess` 达上限后**保留尾部**（`stdout = stdout.slice(-maxStdout)`），并支持
+  注入 `maxStdout` 便于测试；`parseClaudeStream` 在 `result` 文本缺失时回落到 `structured_output`
+  （`--json-schema` 的正式载荷）；CLI 退出 0 但没有任何结果文本时，错误改为
+  `claude CLI returned no result text (stdout N bytes): …` 并带 stderr/stdout 尾部，不再让 JSON.parse 报误导性错误。
+- 测试：`runProcess keeps the stream tail when the stdout cap is reached`、`a CLI that exits 0 without result
+  text is reported instead of failing JSON parse`、`Claude structured output is used when the result event carries
+  no text`。
+- `package.json` 0.4.32。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`；`node scripts/check-keys.mjs`；
+`node --test lib/store.test.js lib/live/*.test.js`（449 通过 0 失败）。
+
+## [0.4.31] — 2026-11-13
+
+独立验收现在可以选 DSH（独立只读会话），Claude 验收拿到 JSON schema，DSH 验收在 DeepSeek 路由上真正开
+JSON Output。上一版把「DSH 没有验收入口」当成「DSH 不支持结构化输出」，这是错的：DSH 只是没有把
+DeepSeek 的 `response_format` 接进评审请求，而 Claude Code CLI 2.1 早已支持 `--json-schema`（此前只给
+codex 传了 `--output-schema`）。
+
+### 内容
+- `lib/live/worker-cli.js`：Claude 评审把 schema 文件内容以 `--json-schema <json>` 传给 CLI（不是路径），
+  与 codex 的 `--output-schema` 对齐；repro：`claude --help` 的 "JSON Schema for structured output"。
+- `lib/live/workflow-worker.js`：评审提示词追加固定标记 `Return only a json object with keys: verdict,
+  findings, evidence.`（同时满足 DeepSeek JSON 模式「prompt 必须含 json」的要求）；DSH 评审调用带
+  `readOnly: true`（实现轮仍可写）；新增 `parseStageResult()`，容忍 ```json 围栏与前后缀文字，解析失败才抛错。
+- 新增 `lib/live/review-json.js`：`deepseekLlmApiExtensions.register('response_format', provider)`，仅当请求体
+  含评审标记、且（无工具或已见过 tool 结果）时注入 `{type:'json_object'}`——首轮探索保持自由输出，避免
+  JSON 模式打断读代码；宿主没有该扩展注册表时静默跳过，评审退回自由 JSON。
+- `lib/live/config.js` / `lib/live/live-json.js`：`executor.reviewer` 白名单加入 `dsh`（错误文案改为
+  `must be "codex", "claude" or "dsh"`）；设置 → Worker 的「独立验收后端」出现 DSH，选项仍跟随启用后端过滤。
+- `index.js`：插件挂载时注册 JSON mode，失败只记 debug 日志。
+- 测试：`review-json.test.js`（标记门控、工具结果门控、注册/降级）、`worker-cli` 的 `--json-schema` 断言、
+  live-json/config 的 dsh 白名单、执行器 `a DSH reviewer runs read-only and its fenced JSON verdict parses`。
+- `package.json` 0.4.31；`client/index.js` 重建（22 fragments，9828 行）。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（最新）；
+`node scripts/check-keys.mjs`（775 literal / 513 shared / 1157 page-local）；
+`node --test lib/store.test.js lib/live/*.test.js`（446 通过 0 失败）；`node scripts/render-check.mjs`（exit 0）。
+
+## [0.4.30] — 2026-11-13
+
+修掉三件事：设置页保存返工预算报 `unsupported setting: executor.maxRepairRounds`；独立验收后端不能切到 Claude；
+DSH worker 无法按仓库指定 Agent 预设。
+
+根因：`lib/live/live-json.js` 的 FIELDS 白名单漏了 `executor.maxRepairRounds`（设置页能显示、保存被拒）；
+`workflow-worker.js` 把验收后端硬编码为 `config.executor.reviewer ?? 'codex'`，且该配置项既不在白名单也不在 UI；
+`worker.js` 一律 `presets.resolve()` 跟随宿主默认预设，没有按仓库覆盖的入口。
+
+### 内容
+- `lib/live/live-json.js`：FIELDS 增加 `executor.maxRepairRounds`（整数 0..6）、`executor.reviewer`（codex|claude）、
+  `executor.workerPreset`（单行）；对应校验错误文案。保存设置不再报 unsupported setting。
+- `lib/live/config.js`：executor 归一化 reviewer（仅 codex/claude，dsh 不能当 reviewer）与 workerPreset（trim、拒换行）。
+- `lib/live/repos.js`：仓库项支持可选 `reviewer` 与 `workerPreset`（缺省回落到 executor 级配置）。
+- `lib/live/worker.js`：`runWorker({ preset })` 显式解析预设，解析不到时记录一次并回落到宿主默认，不中断运行。
+- `lib/live/executor.js`：`workerPreset = repo.workerPreset ?? config.executor.workerPreset` 传给进程内 DSH worker
+  （分阶段与经典路径都传）；`executeWorkflow` 新增 `reviewer = repo.reviewer ?? config.executor.reviewer`。
+- `lib/live/workflow-worker.js`：验收/规划后端取 `reviewerOverride ?? config.executor.reviewer ?? 'codex'`，
+  实现仍走 `implementer`；启停检查同时看两个后端。
+- `lib/live/worker-cli.js`：Claude 的调用放开 Bash（只读 review 仍用 `plan` 权限模式，编辑被禁；实现轮用 `acceptEdits`），
+  验收可以自己 `git diff`、跑测试，不再需要把 diff 塞进 prompt。
+- 设置 → Worker「分阶段执行」新增「独立验收后端」（Codex / Claude Code）与「Worker 预设（DSH）」输入，
+  每个控件都带可见标题（`sa-field-head`）；两个下拉的选项跟随「启用的后端」过滤，被关闭的后端不再出现
+  （仅当它是已保存值时保留并标灰）；render-check 增加「控件必须有可见标签」「选项跟随启用后端」两条回归断言。
+  patch 白名单同步加入两项。
+- 测试：live-json 白名单/校验、config 解析、仓库 presets/reviewer、执行器按 `executor.reviewer` 选择 CLI 后端。
+- `package.json` 0.4.30；`client/index.js` 重建（22 fragments，9814 行）。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments，最新）；
+`node scripts/check-keys.mjs`（773 literal / 513 shared / 1157 page-local）；
+`node --test lib/store.test.js lib/live/*.test.js`（442 通过 0 失败）；`node scripts/render-check.mjs`（exit 0，ok:true）。
+
+## [0.4.29] — 2026-11-13
+
+分阶段流程停下来时不再只报「workflow blocked: blocked」，返工预算真正生效并且可以在设置里调大后接着返工。
+根因有三处：`runWorkflow` 达到返工上限时把 workflow 置为 blocked 但从不写原因，`executeWorkflow` 抛错时只能拿
+`reason ?? status`，于是用户只看到 `blocked`；`executeWorkflow` 调用 `runWorkflow`/`resumeWorkflow` 时没有把
+`config.executor.maxRepairRounds` 传进去，配置项只管到经典闸门自动修复，分阶段流程永远用默认 2；`workflowResumable`
+只认「最后阶段 failed」，评审要求修改（completed + changes_requested）把预算用完时界面连「继续执行」都不给。
+
+### 内容
+- `lib/live/workflow.js`：`deliver` 内统一经 `blocked(reason, detail)` 停单，写 `state.reason` 与一行
+  `state.detail`：规划遗留问题（带条数）、闸门失败（列出失败闸门）、review 明确 blocked、验收连续要求修改
+  （`review still requested changes after N repair round(s) (M findings); raise executor.maxRepairRounds to keep repairing`）、
+  候选在验收期间变化。导出 `blockedMessage(workflow)`；`resumeWorkflow` 在「最后是 completed changes_requested」时
+  校验 key 里的 plan/gates/digest 与当前候选一致、预算尚有余额，然后 `repairs += 1` 并接回交付循环跑下一轮。
+- `lib/live/workflow-worker.js`：`executeWorkflow` 把 `maxRepairRounds`（0–6，默认 2）传给两个入口；
+  `assertResumable` 接受上述「验收要求修改」的停点，预算不足时报同一句可读原因；失败时抛
+  `workflow blocked: ${blockedMessage(...)}`。
+- `lib/live/executor.js`：`resumableWorkflowOf` 带上预算；`resumeInterruptedTicket` 无法续跑时返回
+  `ticket … workflow blocked: <detail>`，不再只回 `has no interrupted run`。
+- `lib/live/repos.js`：`workflowResumable(ticket, maxRepairs)` 对「验收要求修改」的停点按预算余额判定，
+  `decorateTicket` 传入配置。
+- `lib/live/config.js`：`executor.maxRepairRounds` 上限 3 → 6（0–6，默认 2；经典闸门自动修复仍按 1 起步、
+  最多 3）。
+- 设置 → 运行新增「返工预算」数字输入（0–6，默认 2，含校验与说明）；工单详情的 workflow 行显示停单 detail，
+  「继续执行」确认文案覆盖「失败的一步」与「下一轮返工」两种续跑。
+- `package.json` 0.4.29；`client/index.js` 重建（22 fragments，9800 行）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（770 literal / 513 shared / 1152 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：438 通过，0 失败。新增 8 条：各种停点都写原因与可读 detail；
+  评审用尽预算后调大预算可续跑下一轮返工（阶段、repairs、verdict 序列）；候选变化拒绝续跑；`executeTicket` 在
+  预算耗尽时给出可读错误、调大后只多跑一轮 implement + review 并交付；`resumeInterruptedTicket` 仍拒但带原因；
+  配置 0–6 边界；`workflowResumable` 对 failed review / 预算余额 / 其它状态的判定。
+- `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
+
+## [0.4.28] — 2026-11-13
+
+分阶段执行失败后可以从失败的那一步继续，不再整条重跑。之前的「继续执行」只识别被插件重载中断的运行，
+而分阶段流程的失败（例如 Codex 验收时额度用尽）是普通 failed run，界面只给「重试执行」，等于把已完成的分析、
+实现和闸门全部重做。本单给失败的分阶段工单补上真正的断点续跑：沿用 `ticket.workflow` 里已完成的阶段，
+只用失败阶段 key 里记录的输入重放该阶段，通过后照常提交、推送并按仓库策略交付。
+
+### 内容
+- `lib/live/workflow.js`：新增 `failedStageOf` 与 `resumeWorkflow`，交付循环抽成 `deliver`，支持带
+  `pendingReview`（沿用已记录的 gates 证据与 digest）续跑 review；`makeStage` 复用同 key 的失败项原地重试，
+  不再追加重复阶段。`RESUMABLE_ROLES = ['implement', 'review']`——评估/规划失败仍走整条重跑，闸门有既有
+  的停单/重试路径。
+- `lib/live/workflow-worker.js`：`executeWorkflow({ ..., resume })` 续跑时校验
+  mode、requirementRevision、最后阶段为 failed 且 role 可续，然后采用 `ticket.workflow` 调用
+  `resumeWorkflow`；digest 与验收证据不一致时拒绝续跑（`candidate changed since the gated review`）。
+- `lib/live/executor.js`：`executeTicket({ ..., resumeWorkflow })` 传入续跑标记并记 `workflow:resume` 步骤；
+  新增 `resumableWorkflowOf`，`resumeInterruptedTicket` 在没有 interrupted run 时改走
+  `executeTicket({ trigger:'resume', resumeWorkflow:true })`，两者都没有仍返回 409。
+- `lib/live/repos.js`：`workflowResumable(ticket)` 派生「failed + workflow blocked + 最后阶段 failed 且可续」，
+  `decorateTicket` 以 `workflowResumable` 暴露给客户端（不持久化）。
+- `client/src/58-ticket-detail.js` + i18n：失败且可续时主按钮改为「继续执行」，确认框说明只重跑失败的一步、
+  已完成的分析/实现/闸门保留，「重试执行」仍在 ⋯ 菜单；新增 `detail.resumeWorkflowTitle/Confirm` 中英 key。
+- `package.json` 0.4.28；`client/index.js` 重建（22 fragments，9772 行）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（767 literal / 513 shared / 1149 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：430 通过，0 失败。新增 5 条：review 续跑只重跑 review 且
+  阶段台账原地复用；digest 变化拒绝续跑；implement 失败按记录的 plan/feedback 续跑；无失败阶段拒绝续跑；
+  `executeTicket({ resumeWorkflow:true })` 在 planned 模式下只多调一次 review、implement 只跑一次、交付 dry-run，
+  且新 run 继承闸门结果与实现摘要（续跑不会让运行记录变成空壳）。
+- `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
+
 ## [0.4.27] — 2026-11-12
 
 新增可选分阶段 Worker：自动复杂度评估，或直接选择简单/方案驱动执行。复杂流程由 Codex 规划、Claude/DSH 实现、程序闸门、全新 Codex 会话验收组成，支持最多两轮返工与方案修订。默认关闭，保留现有路由行为。
@@ -415,7 +737,7 @@ README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.j
 ## [0.4.12] — 2026-11-11
 
 README 补上「用面板开发本仓库（自开发）」一节：自开发链路已经跑通（工单 → 闸门 → 推送 → auto-pr → merge commit →
-验收），但操作口径只散落在 `AGENTS.md` 与 CHANGELOG 里，照 GitLab/`demo-legacy-repo` 的旧习惯操作容易踩坑（例如用 squash
+验收），但操作口径只散落在 `AGENTS.md` 与 CHANGELOG 里，照 GitLab/旧仓库的旧习惯操作容易踩坑（例如用 squash
 合并，面板的 ancestry 判定认不到已合入，工单停在 `mr-open`）。
 
 ### 内容
@@ -428,7 +750,7 @@ README 补上「用面板开发本仓库（自开发）」一节：自开发链�
   - 合并必须用 merge commit（fast-forward 可以；squash/rebase 会重写 commit，`git merge-base --is-ancestor`
     判定不到，工单一直停在 `mr-open`）
   - 状态流转 `queued → working → mr-open → merged → 人工验收`；失败时先看「闸门结果」与运行记录里的证据
-  - 入口：执行页「手工建单」时选本仓库（`live.json` 的默认仓库是 `demo-legacy-repo`，不能沿用默认）
+  - 入口：执行页「手工建单」时选本仓库（`live.json` 的默认仓库不是本仓库，不能沿用默认）
 - 改动范围：README、CHANGELOG 与 `package.json` 版本号；不涉及 Host/客户端代码，`client/index.js` 不重建
 
 ### 验证

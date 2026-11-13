@@ -1,25 +1,33 @@
 // Headless render check for the panel (no browser, no CDP).
 //
-// Loads the real client fragments with React + jsdom from the local harness, feeds them fixtures built from the
-// real engine state (read-only: state.load() never reconciles or writes), and walks the acceptance flow:
+// Loads the real client fragments with React + jsdom, feeds them fixtures built from the engine state
+// (read-only: state.load() never reconciles or writes), and walks the acceptance flow:
 // overview -> 去验收 -> ticket detail -> 验收通过 -> back to the desk.
 //
+//   npm ci            # once, installs jsdom/react/react-dom (devDependencies)
 //   node scripts/render-check.mjs
 //
-// It depends on /tmp/sa-harness (jsdom + react + react-dom), which the desktop image provides for verification.
+// It needs no desktop app, no CDP and no operator state: when DSH_SUPERAGENT_STATE_DIR is unset or empty the
+// script builds its own fixture state under a temp dir, so a clean clone can run the same 170+ checks.
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const harness = join('/tmp', 'sa-harness')
-const requireHarness = createRequire(join(harness, 'package.json'))
-const { JSDOM } = requireHarness('jsdom')
-const React = requireHarness('react')
-const ReactDOM = requireHarness('react-dom/client')
+const requireRepo = createRequire(join(root, 'package.json'))
+let JSDOM, React, ReactDOM
+try {
+  ;({ JSDOM } = requireRepo('jsdom'))
+  React = requireRepo('react')
+  ReactDOM = requireRepo('react-dom/client')
+} catch (error) {
+  console.error('render-check needs jsdom + react + react-dom: run `npm ci` in the repo root first.')
+  console.error(String(error?.message ?? error))
+  process.exit(2)
+}
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',
   { url: 'http://127.0.0.1:1/', pretendToBeVisual: true })
@@ -37,7 +45,19 @@ try { Object.defineProperty(global, 'navigator', { value: window.navigator, conf
 
 // ---- fixtures from the real live state (read-only) ---------------------------------------------------------------
 const { Engine } = await import('../lib/live/engine.js')
-const stateDir = process.env.DSH_SUPERAGENT_STATE_DIR ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
+// Operator machines keep their real live.json; a clean clone (or CI) has none, so the committed fixture is copied
+// into a throw-away temp dir and the config-dependent checks (repositories, UAT link, Octo groups, worker backends)
+// run there instead of skipping. Nothing outside that temp dir is read or written.
+const requestedStateDir = process.env.DSH_SUPERAGENT_STATE_DIR
+  ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
+const stateDir = existsSync(join(requestedStateDir, 'live.json')) ? requestedStateDir : prepareFixtureState()
+function prepareFixtureState () {
+  const dir = mkdtempSync(join(tmpdir(), 'sa-render-'))
+  const fixture = readFileSync(join(root, 'test', 'fixtures', 'live.json'), 'utf8').split('@STATE@').join(dir)
+  writeFileSync(join(dir, 'live.json'), fixture)
+  console.log(`STATE fixture ${dir}`)
+  return dir
+}
 const engine = new Engine({ stateDir, log: () => {} })
 await engine.state.load()
 // Real in-flight work must not leak into these checks: while a gate runs, the Ticket under review is `working`
@@ -146,8 +166,61 @@ engine.state.tickets[demoDismissedId] = {
 }
 engine.state.state.ticketOrder.push(demoDismissedId)
 
+// AC-08/09 fixture: a Ticket with two persisted rounds. The first file list was truncated/redacted and the baseline
+// moved, so the detail card must show incompleteness and must not report the missing files as deletions.
+engine.evidence.documents.set('tkt_demo_accept', {
+  ticketId: 'tkt_demo_accept', updatedAt: nowIso,
+  rounds: [
+    { id: 'ev_demo_old', ticketId: 'tkt_demo_accept', runId: 'run_demo_old', round: 1,
+      at: '2026-11-01T00:00:00.000Z', branch: 'feature/tkt_demo_accept', baseSha: 'base-old-1', headSha: 'head-old-1',
+      files: [{ path: 'demo/one/File.java', digest: 'aaaa' }], filesOmitted: 3, filesRedacted: 1,
+      patch: { text: 'diff --git a/demo/one/File.java', truncated: true, bytes: 120 },
+      gates: [{ name: 'standards', state: 'passed', at: '2026-11-01T00:00:00.000Z', codeFingerprint: 'fp-old' }],
+      acceptance: { requirements: ['UC-DEMO-001'] },
+      platform: { pushed: true, pr: 'waiting', prUrl: 'https://example.test/pull/new/feature/tkt_demo_accept' } },
+    { id: 'ev_demo_new', ticketId: 'tkt_demo_accept', runId: 'run_demo', round: 2,
+      at: '2026-11-02T00:00:00.000Z', branch: 'feature/tkt_demo_accept', baseSha: 'base-new-2', headSha: 'head-new-2',
+      files: [{ path: 'demo/one/File.java', digest: 'aaaa' }, { path: 'demo/one/Service.java', digest: 'bbbb' }],
+      gates: [{ name: 'standards', state: 'passed', at: '2026-11-01T00:00:00.000Z', codeFingerprint: 'fp-old' },
+        { name: 'demo-deploy', state: 'failed', at: '2026-11-02T00:00:00.000Z' }],
+      acceptance: { requirements: ['UC-DEMO-001', 'UC-DEMO-005'] },
+      platform: { pushed: true, pr: 'merged', merged: true } },
+  ],
+})
+
 engine.lastStatus = { phase: 'ok', mode: 'sync', at: new Date().toISOString() }
 engine.started = true
+// Intake history (one thread, its trigger message and the rule decision) is what makes the Eval and Triggers pages
+// render rows at all. Real machines carry it; a clean clone does not, so seed one neutral record set. The text is
+// deliberately synthetic — these checks must read the same on any machine.
+{
+  const threadKey = 'octo:fixture-group-a'
+  const at = new Date(Date.now() - 5 * 60_000).toISOString()
+  engine.state.threads[threadKey] = {
+    key: threadKey, source: 'octo', title: '演示群 A', createdAt: at, lastAt: at }
+  engine.state.triggers.trg_fixture = {
+    id: 'trg_fixture', source: 'octo', at, threads: [threadKey], human: true,
+    actor: { source: 'octo', id: 'demo', name: { zh: '演示', en: 'demo' } },
+    text: '依据这个SQL，把报表导出的金额列补上合计行。',
+    eventId: 1, messageId: 'fixture-1',
+    channel: { source: 'octo', thread: 'fixture-group-a', channelType: 2,
+      address: { channelId: 'fixture-group-a', channelType: 2 } },
+    disposition: { decisionId: 'dec_fixture', fanout: ['tkt_demo_accept'], acked: [] },
+  }
+  engine.state.decisions.dec_fixture = {
+    id: 'dec_fixture', threadKey, triggerIds: ['trg_fixture'], at,
+    kind: 'accept', strength: 'explicit',
+    reason: [{ code: 'explicitRequest', values: { text: '依据这个SQL，把报表导出的金额列补上合计行。' } }],
+    rules: [
+      { id: 'R1', name: '群内明确请求', matched: true, reason: '来自监听群的人类请求' },
+      { id: 'R2', name: '来源与身份过滤', matched: true, reason: '监听群内的人类文本消息' },
+      { id: 'R3', name: '高风险主题', matched: true, reason: '未命中高风险主题' },
+    ],
+    ticketId: 'tkt_demo_accept',
+    runs: [{ runId: 'run_demo', ticketId: 'tkt_demo_accept' }],
+    shadow: { status: 'ok', model: 'demo-judge', category: 'request', verdict: 'accept', probability: 0.93, riskP: 0.2 },
+  }
+}
 // P0: the panel now reads the derived inbox; build it from the same fixture state. Saving is stubbed so this read-only
 // check never writes inbox.json into the operator's real state directory.
 await engine.inbox.load()
@@ -166,6 +239,8 @@ if (Array.isArray(fixtures.decisions.items) && fixtures.decisions.items.length) 
   const shadowed = fixtures.decisions.items[0]
   shadowed.shadow = { status: 'ok', at: nowIso, model: 'decision-model-preview', questions: 'request-v1',
     ruleKind: shadowed.kind, p: 0.93, riskP: 0.04, verdict: 'accept', latencyMs: 12 }
+  // AC-07: the Eval row must link the run it caused, not only the Ticket; pin one so the render assertion is stable.
+  shadowed.runs = [{ ticketId: 'tkt_demo_accept', runId: 'run_demo_accept', status: 'done', at: nowIso }]
 }
 const detailOf = id => engine.ticketView(id)
 const threadOf = key => engine.threadView(key)
@@ -182,6 +257,11 @@ function recalcStatus() {
 }
 
 const calls = []
+// Captured by the mock so AC-01 (manual override submit) and AC-03 (stop UI) can assert the actual request.
+let lastCreateRequest = null
+let lastStopId = null
+// AC-07 deep-link probe: set just before the source-page remount so earlier checks still see the real (empty) log.
+let signalFixture
 window.fetch = global.fetch = async (input, init = {}) => {
   const url = new URL(String(input), 'http://127.0.0.1:1')
   const method = String(init.method ?? 'GET').toUpperCase()
@@ -191,7 +271,11 @@ window.fetch = global.fetch = async (input, init = {}) => {
   if (method === 'GET' && p === 'engine/status') return json(fixtures.status)
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
   if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
-  if (method === 'GET' && p === 'engine/signals') return json({ items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
+  if (method === 'GET' && p === 'engine/signals') {
+    return json(signalFixture
+      ? { items: [signalFixture], total: 1, counts: { all: 1, pending: 0, processed: 1, ignored: 0, skipped: 0, failed: 0 } }
+      : { items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
+  }
   if (method === 'GET' && p === 'engine/metrics') return json({
     // Aligned with the deterministic failed run injected above: the quality card and the watchlist must not contradict
     // each other (a 0-failure card next to a "1 execution failed" watch row would).
@@ -216,6 +300,24 @@ window.fetch = global.fetch = async (input, init = {}) => {
       path: file, bytes: 68, truncated: false, omitted: 0, files: [{ path: file, additions: 1, deletions: 0 }],
       diff: `diff --git a/${file} b/${file}\nindex 1111111..2222222 100644\n--- a/${file}\n+++ b/${file}\n@@ -1 +1,2 @@\n old line\n+new line\n` })
   }
+  const signalRoute = /^engine\/signal\/([^/]+)$/.exec(p)
+  if (method === 'GET' && signalRoute) {
+    const id = decodeURIComponent(signalRoute[1])
+    if (id === 'sig_gone') {
+      return new Response(JSON.stringify({ error: 'signal not found' }), { status: 404,
+        headers: { 'content-type': 'application/json' } })
+    }
+    return json({ signal: { id: 'sig_demo', status: 'processed', source: 'octo', receivedAt: nowIso,
+      candidate: { text: '修复网页登录问题，需要联网查文档' }, scopeKey: 'octo:chat-demo', ticketId: 'tkt_demo_accept' },
+    decision: { id: 'dec_demo' }, trigger: { threads: ['octo:chat-demo'] }, ticket: { id: 'tkt_demo_accept' } })
+  }
+  const evidenceCompare = /^engine\/evidence\/([^/]+)\/compare$/.exec(p)
+  if (method === 'GET' && evidenceCompare) {
+    return json(engine.evidenceCompare(decodeURIComponent(evidenceCompare[1]),
+      url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined) ?? {})
+  }
+  const evidenceRoute = /^engine\/evidence\/([^/]+)$/.exec(p)
+  if (method === 'GET' && evidenceRoute) return json(engine.evidenceView(decodeURIComponent(evidenceRoute[1])) ?? {})
   if (method === 'GET' && p.startsWith('engine/ticket/')) {
     const id = decodeURIComponent(p.slice('engine/ticket/'.length))
     return json(detailOf(id))
@@ -252,7 +354,52 @@ window.fetch = global.fetch = async (input, init = {}) => {
     fixtures.status.inbox = { ...fixtures.inbox.counts }
     return json({ ticket: engine.state.tickets[id] })
   }
+  if (method === 'POST' && p === 'engine/ticket') {
+    lastCreateRequest = init.body ? JSON.parse(String(init.body)) : {}
+    return json({ ticket: { id: 'tkt_render_created', title: lastCreateRequest.title, body: lastCreateRequest.body,
+      status: 'queued', repoId: primaryRepoId, routeSelection: lastCreateRequest.route, createdAt: nowIso, updatedAt: nowIso } })
+  }
+  const stopRoute = /^engine\/ticket\/([^/]+)\/stop$/.exec(p)
+  if (method === 'POST' && stopRoute) {
+    const id = decodeURIComponent(stopRoute[1])
+    const ticket = engine.state.tickets[id]
+    if (!ticket) return new Response(JSON.stringify({ error: '未知工单' }), { status: 404, headers: { 'content-type': 'application/json' } })
+    lastStopId = id
+    // Keep the state mutation in memory: the render check must not write the real state directory.
+    ticket.stopRequested = { at: nowIso, by: 'render-check' }
+    ticket.updatedAt = nowIso
+    return json({ ticket: engine.ticketView(id)?.ticket ?? ticket, stopping: true })
+  }
+  if (method === 'POST' && p === 'engine/route') {
+    // Same three dimensions the host returns: deliverable / capabilities / backend, plus the manual selection echo.
+    const body = init.body ? JSON.parse(String(init.body)) : {}
+    const selection = body.selection ?? {}
+    const deliverable = selection.deliverable ?? 'change'
+    const backend = selection.backend ?? 'dsh'
+    return json({
+      route: { workType: deliverable === 'report' ? 'analysis' : 'dev',
+        profile: deliverable === 'report' ? 'read-only' : 'write', deliverable,
+        capabilities: deliverable === 'report' ? ['exec'] : ['edit', 'exec'], backend,
+        reason: { code: selection.backend || selection.deliverable ? 'manual' : 'default' },
+        mode: selection.backend || selection.deliverable ? 'manual' : 'single',
+        applied: Boolean(selection.backend || selection.deliverable), execBackend: backend,
+        execProfile: deliverable === 'report' ? 'read-only' : 'write' },
+      options: { backends: ['dsh', 'codex'], deliverables: ['change', 'report'] },
+    })
+  }
   if (method === 'POST' && p === 'engine/poll') return json({ fetched: 0, accepted: [], ignored: [], skipped: [], dryRun: true })
+  // AC-10: saving one repository edit answers with the saved summary and the config view, exactly like the Host; the
+  // fixture is mutated in memory only so the check never writes live.json.
+  const repoEditRoute = /^engine\/repo\/([^/]+)$/.exec(p)
+  if (method === 'POST' && repoEditRoute) {
+    const body = init.body ? JSON.parse(String(init.body)) : {}
+    const patch = body.patch ?? body
+    const list = Array.isArray(fixtures.status.repos) ? fixtures.status.repos : []
+    const repo = list.find(item => item.id === decodeURIComponent(repoEditRoute[1]))
+    if (repo) Object.assign(repo, patch)
+    fixtures.status.config = { ...(fixtures.status.config ?? {}), repos: list }
+    return json({ repo, config: fixtures.status.config })
+  }
   return json({})
 }
 
@@ -383,6 +530,8 @@ const acceptButtons = inboxButtons.filter(node => (node.closest('li')?.textConte
 check('inbox desk offers 去工单 for a pending acceptance', acceptButtons.length >= 1, `buttons=${acceptButtons.length}`)
 acceptButtons[0]?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
+// The evidence card fetches the Host comparison after the rounds load; give that round-trip one more tick.
+await sleep(400)
 check('去验收 opens the ticket detail', text().includes('阶段链路') && text().includes('权限依据'),
   text().slice(0, 200))
 {
@@ -448,6 +597,20 @@ check('gate results name the gates the run recorded, including repository-define
   /规范/.test(rootElement.querySelector('#sa-ticket-gates')?.textContent ?? '')
   && /demo-deploy/.test(rootElement.querySelector('#sa-ticket-gates')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-gates')?.textContent?.slice(0, 220) ?? 'no gate section')
+check('delivery evidence marks a truncated file list instead of counting deletions',
+  /证据不完整/.test(detailText) && /不当作删除/.test(detailText), detailText.slice(-600))
+check('delivery evidence refuses to confirm additions from an incomplete round',
+  /无法确认新增/.test(detailText) && /Service\.java/.test(detailText), detailText.slice(-600))
+check('delivery evidence warns that the baseline changed',
+  /基线已变化/.test(detailText) && /base-old/.test(detailText), detailText.slice(-600))
+check('delivery evidence names a gate that is still failing',
+  /仍未通过/.test(detailText) && /demo-deploy/.test(detailText), detailText.slice(-600))
+check('delivery evidence flags gate results reused from older code',
+  /沿用了旧代码/.test(detailText) && /standards/.test(detailText), detailText.slice(-600))
+check('delivery evidence compares acceptance requirements across rounds',
+  /UC-DEMO-005/.test(detailText), detailText.slice(-600))
+check('a truncated patch is visible on the evidence card',
+  /patch 已截断/.test(detailText), detailText.slice(-600))
 check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
@@ -560,7 +723,8 @@ else skip('detail offers the UAT link', 'no uatUrl configured for the primary re
 const passButton = clickByText('验收通过')
 check('acceptance button exists', Boolean(passButton))
 await sleep(500)
-const confirm = [...rootElement.querySelectorAll('.sa-modal button')].find(node => (node.textContent ?? '').trim() === '确定')
+const confirm = [...rootElement.querySelectorAll('.sa-modal button')]
+  .find(node => /验收通过/.test((node.textContent ?? '').trim()))
 check('acceptance asks for confirmation', Boolean(confirm))
 confirm?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1600)
@@ -632,8 +796,18 @@ clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
 const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
-check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' }))
+check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' }))
 check('worker group exposes staged workflow and implementer controls', workerText.includes('自动评估难度') && workerText.includes('Codex 规划与独立验收') && Boolean(rootElement.querySelector('select[aria-label="实现后端"]')))
+// A control without a visible label is not discoverable (regression: the reviewer/preset fields shipped unlabelled).
+check('staged workflow controls carry visible labels',
+  ['分阶段执行', '实现后端', '独立验收后端', 'Worker 预设（DSH）'].every(label => workerText.includes(label))
+    && Boolean(rootElement.querySelector('select[aria-label="独立验收后端"]'))
+    && Boolean(rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')),
+  workerText.slice(0, 400))
+check('staged backend options follow the enabled backends',
+  [...rootElement.querySelectorAll('.sa-main select[aria-label="实现后端"] option')].map(option => option.value).join(',') === 'dsh,claude'
+    && [...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value).join(',') === 'codex,claude,dsh',
+  JSON.stringify([...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value)))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
 check('worker group carries the routing mode control',
   Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),
@@ -695,6 +869,54 @@ if (twoReposConfigured) {
 } else skip('repositories group offers a GitLab token editor', 'only one repository (or none) configured on this machine')
 check('token editor has a save button', [...rootElement.querySelectorAll('.sa-main button')]
   .some(button => (button.textContent ?? '').trim() === '保存令牌'))
+check('repository card offers the read-only configuration test',
+  [...rootElement.querySelectorAll('.sa-main button')].some(button => (button.textContent ?? '').trim() === '测试配置'))
+const editRepoButton = [...rootElement.querySelectorAll('.sa-main button')]
+  .find(button => (button.textContent ?? '').trim() === '编辑')
+editRepoButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(120)
+check('repository edit previews the diff before saving',
+  text().includes('保存前差异') && text().includes('尚未修改'), text().slice(-500))
+// AC-10: gates are edited field by field (not one JSON blob) and a command/cwd/timeout/policy change must surface in
+// the pre-save diff even when the gate count is unchanged.
+const addGate = [...rootElement.querySelectorAll('.sa-modal button')]
+  .find(button => (button.textContent ?? '').trim() === '添加闸门')
+const gateNameInput = rootElement.querySelector('.sa-modal input[aria-label="闸门名称"]')
+const gateCommandInput = rootElement.querySelector('.sa-modal input[aria-label="命令"]')
+check('repository gate editor exposes per-gate fields and add/remove controls',
+  Boolean(gateNameInput) && Boolean(gateCommandInput) && Boolean(addGate)
+  && [...rootElement.querySelectorAll('.sa-modal button')].some(button => /删除这个闸门/.test(button.textContent ?? '')),
+  rootElement.querySelector('.sa-modal')?.textContent?.slice(-300) ?? 'no modal')
+if (gateNameInput && gateCommandInput) {
+  const setGate = (node, value) => {
+    node.value = value
+    const key = Object.keys(node).find(name => name.startsWith('__reactProps'))
+    node[key].onChange({ target: { value } })
+  }
+  setGate(gateNameInput, 'render-gate')
+  setGate(gateCommandInput, 'echo changed')
+  await sleep(80)
+  check('a gate field change appears in the pre-save diff',
+    /闸门「render-gate」/.test(text()) && /echo changed/.test(text()), text().slice(-400))
+  // AC-10: the saved edit must survive a reload — the card previously kept showing the old name-only projection and
+  // the reopened editor came back empty.
+  const saveRepoButton = [...rootElement.querySelectorAll('.sa-modal button')]
+    .find(button => (button.textContent ?? '').trim() === '保存')
+  saveRepoButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(400)
+  check('saving a repository edit keeps the edited gate on the card', text().includes('render-gate'), text().slice(-400))
+  const reopenRepoButton = [...rootElement.querySelectorAll('.sa-main button')]
+    .find(button => (button.textContent ?? '').trim() === '编辑')
+  reopenRepoButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(150)
+  const reopenedGates = [...rootElement.querySelectorAll('.sa-modal input[aria-label="闸门名称"]')].map(node => node.value)
+  check('the reopened repository editor shows the saved gate fields',
+    reopenedGates.includes('render-gate'), JSON.stringify(reopenedGates))
+}
+const cancelRepo = [...rootElement.querySelectorAll('.sa-modal button, .sa-dialog button')]
+  .find(button => /取消|关闭/.test((button.textContent ?? '').trim()))
+cancelRepo?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(80)
 
 // Eval page (O9): the row leads with the judged message, and no English reason code leaks.
 clickByText('概览')
@@ -706,21 +928,40 @@ if (evalReady) {
   check('eval rows lead with the judged message', /依据这个SQL|SELECT Gcc|修复：|报表/.test(evalText), evalText.slice(0, 500))
   check('eval rows no longer leak a raw reason key', !/contextOnly/.test(evalText), evalText.slice(0, 500))
   check('eval keeps the rule-by-rule fold', evalText.includes('逐条规则'), evalText.slice(0, 300))
-  check('eval ticket short codes are links', rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length >= 1,
-    String(rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length))
+  check('eval ticket short codes open their ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length >= 1,
+    String(rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length))
   check('eval rows identify their thread or ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length >= 1,
     String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
   check('eval rows show the shadow model opinion', evalText.includes('模型 93%') && evalText.includes('倾向接单'),
     evalText.slice(0, 500))
-  // One filter idiom on every page: kind chips + the time-window chips share the same row and the same chip look.
-  check('eval filters are one row of chips (kind + time window)',
+  check('eval rows link directly to the run they caused', evalText.includes('运行 run_demo'), evalText.slice(0, 500))
+  // One filter idiom on every page: kind, time window and the divergence/override view are segmented chip groups.
+  check('eval filters keep chip groups for kind, window and view',
     rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length >= 4
-    && rootElement.querySelectorAll('.sa-main .sa-filters .sa-segmented-chips').length === 2,
+    && rootElement.querySelectorAll('.sa-main .sa-filters .sa-segmented-chips').length === 3,
     JSON.stringify({ chips: rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length,
       groups: rootElement.querySelectorAll('.sa-main .sa-filters .sa-segmented-chips').length }))
+  // AC-06/07: text/repository/reason/date filters are real controls, and the page can leave the first result page.
+  const evalFilterInputs = [...rootElement.querySelectorAll('.sa-main .sa-filters input')]
+  check('eval offers reason and date-range filters', evalFilterInputs.length >= 3,
+    JSON.stringify(evalFilterInputs.map(input => input.getAttribute('type') ?? 'text')))
+  check('eval has server-side pagination controls', Boolean(rootElement.querySelector('.sa-main .sa-pagination'))
+    && rootElement.querySelectorAll('.sa-main .sa-pagination button').length === 2,
+    rootElement.querySelector('.sa-main .sa-pagination')?.textContent ?? 'no pagination')
+  // A deep link restores the filter state instead of only the page: changing the view writes it into the URL.
+  const divergenceChip = [...rootElement.querySelectorAll('.sa-main .sa-filters button')]
+    .find(button => (button.textContent ?? '').trim() === '模型分歧')
+  divergenceChip?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(150)
+  check('eval filters are written into the URL', new window.URL(window.location.href).searchParams.get('evalView') === 'divergence',
+    new window.URL(window.location.href).search)
+  const allViewChip = [...rootElement.querySelectorAll('.sa-main .sa-filters button')]
+    .find(button => (button.textContent ?? '').trim() === '全部')
+  allViewChip?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(100)
 } else {
   for (const name of ['eval rows lead with the judged message', 'eval rows no longer leak a raw reason key',
-    'eval keeps the rule-by-rule fold', 'eval ticket short codes are links', 'eval rows identify their thread or ticket',
+    'eval keeps the rule-by-rule fold', 'eval ticket short codes open their ticket', 'eval rows identify their thread or ticket',
     'eval rows show the shadow model opinion', 'eval filters are one row of chips (kind + time window)']) {
     skip(name, 'no decisions in this state, so the Eval page has no rows to check')
   }
@@ -784,7 +1025,7 @@ const readyRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openab
   .find(row => (row.textContent ?? '').includes('演示：干跑完成待发布'))
 check('the execution queue lists the finished dry run', Boolean(readyRow),
   [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
-readyRow?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+readyRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 const readyPrimary = [...rootElement.querySelectorAll('.sa-page-head-actions .sa-btn-primary')].map(node => (node.textContent ?? '').trim())
 check('a finished dry run makes 发布 MR the primary action', readyPrimary.includes('发布 MR'), JSON.stringify(readyPrimary))
@@ -802,9 +1043,81 @@ await sleep(800)
 const manualModal = rootElement.querySelector('.sa-modal')
 check('manual Ticket opens in place, without leaving Execution', Boolean(manualModal)
   && Boolean(manualModal.querySelector('input')) && /建单/.test(manualModal.textContent ?? ''), (manualModal?.textContent ?? '').slice(0, 160))
+// AC-01: the form previews the automatic judgement and saves a manual override; the two dimensions are separate.
+const routeSelects = [...(manualModal?.querySelectorAll('select') ?? [])]
+const deliverableSelect = routeSelects.find(select => [...select.options].some(option => option.value === 'report'))
+const backendSelect = routeSelects.find(select => [...select.options].some(option => option.value === 'codex'))
+check('manual Ticket form separates deliverable and backend', Boolean(deliverableSelect) && Boolean(backendSelect),
+  routeSelects.map(select => [...select.options].map(option => option.value).join(',')).join(' | '))
+if (manualModal && deliverableSelect && backendSelect) {
+  const titleInput = manualModal.querySelector('input')
+  // The dialog is a React portal, so a DOM-dispatched input event does not reach the root's delegated listener.
+  // Drive the controlled prop directly instead: this is what a real keystroke calls.
+  const setControlled = (node, value) => {
+    node.value = value
+    const key = Object.keys(node).find(name => name.startsWith('__reactProps'))
+    node[key].onChange({ target: { value } })
+  }
+  setControlled(titleInput, '修复网页登录失败并补测试')
+  await sleep(1200)
+  const previewText = manualModal.textContent ?? ''
+  check('creating a Ticket previews deliverable, capabilities and backend',
+    /自动判断/.test(previewText) && /代码改动/.test(previewText) && /改文件/.test(previewText) && /dsh/.test(previewText),
+    previewText.slice(-260))
+  setControlled(deliverableSelect, 'report')
+  await sleep(900)
+  const overridden = manualModal.textContent ?? ''
+  check('a manual deliverable is previewed as a read-only report', /只读报告/.test(overridden) && /只读/.test(overridden),
+    overridden.slice(-260))
+  setControlled(backendSelect, 'codex')
+  await sleep(900)
+  check('the override selection reaches the preview request',
+    calls.some(entry => /engine\/route/.test(entry)), calls.filter(entry => /engine\/route/.test(entry)).join(' | '))
+  // AC-01: previewing is not saving — submit the form and assert the manual override actually travels with the create.
+  const createButton = [...manualModal.querySelectorAll('button')].find(button => (button.textContent ?? '').trim() === '建单')
+  createButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(900)
+  check('submitting the manual form sends the chosen deliverable and backend',
+    lastCreateRequest?.route?.deliverable === 'report' && lastCreateRequest?.route?.backend === 'codex',
+    JSON.stringify(lastCreateRequest))
+  check('a created Ticket closes the in-place manual form', !rootElement.querySelector('.sa-modal'), 'modal still open')
+}
+if (!rootElement.querySelector('.sa-modal')) { clickByText('手工建单'); await sleep(800) }
 rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 await sleep(500)
 check('manual Ticket modal closes with Escape', !rootElement.querySelector('.sa-modal'), 'modal still open')
+
+// AC-03: while a run is active the stop entry sits in the header, states "正在停止" only after the request is recorded,
+// and never pretends the worker has already finished.
+console.log('STEP stop a running Ticket')
+clickByText('执行')
+await sleep(1000)
+const runningRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
+  .find(row => (row.textContent ?? '').includes('演示：正在执行的工单'))
+check('the execution queue lists the running Ticket', Boolean(runningRow),
+  [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
+runningRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(1200)
+const headerStop = [...rootElement.querySelectorAll('.sa-page-head-actions button')]
+  .find(button => (button.textContent ?? '').trim() === '停止工单')
+check('the running Ticket exposes stop in the header, not only the ··· menu', Boolean(headerStop),
+  [...rootElement.querySelectorAll('.sa-page-head-actions button')].map(button => (button.textContent ?? '').trim()).join(' | '))
+headerStop?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(400)
+const stopDialog = rootElement.querySelector('.sa-modal')
+check('stop asks for confirmation and says the completed work is kept',
+  /请求停止这个工单/.test(stopDialog?.textContent ?? '') && /已完成的动作会保留/.test(stopDialog?.textContent ?? ''),
+  (stopDialog?.textContent ?? '').slice(0, 200))
+const stopConfirm = [...(stopDialog?.querySelectorAll('button') ?? [])]
+  .find(button => /终止工单|^(确认|确定)$/.test((button.textContent ?? '').trim()))
+stopConfirm?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+await sleep(1200)
+const stoppedText = text()
+check('the stop request is recorded for this Ticket', lastStopId === 'tkt_demo_running', String(lastStopId))
+check('the panel shows 正在停止 while the worker is still finishing the current stage',
+  stoppedText.includes('正在停止'), stoppedText.slice(0, 500))
+check('the header stop entry leaves once the request is pending', ![...rootElement.querySelectorAll('.sa-page-head-actions button')]
+  .some(button => (button.textContent ?? '').trim() === '停止工单'), 'stop still offered')
 
 // Regression: a bare URL autolinks to itself, so the inline renderer must not re-parse that label forever.
 {
@@ -877,6 +1190,10 @@ scroller.scrollTop = 240
 clickByText('来源')
 await sleep(900)
 check('route change resets the body scroll', scroller.scrollTop === 0, String(scroller.scrollTop))
+const sourceFilterInputs = [...rootElement.querySelectorAll('.sa-main .sa-filters input')]
+check('source offers repository, reason and date-range filters',
+  sourceFilterInputs.length >= 4 && sourceFilterInputs.filter(input => input.getAttribute('type') === 'date').length === 2,
+  JSON.stringify(sourceFilterInputs.map(input => input.getAttribute('aria-label') ?? input.getAttribute('type'))))
 const selectedTab = rootElement.querySelector('[role="tab"][aria-selected="true"]')
 selectedTab?.focus()
 selectedTab?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
@@ -909,10 +1226,112 @@ pushRoot.render(React.createElement(App, { openSession: async () => {}, t }))
 await sleep(900)
 console.log('STEP push rendered')
 const pushText = rootElement.textContent ?? ''
-check('push-mode MR card shows the PR link instead of the empty state',
-  pushText.includes('打开 PR') && pushText.includes('auto-pr workflow') && !pushText.includes('还没有合并请求'),
+check('a merged legacy push record no longer claims it is waiting for the PR',
+  !pushText.includes('已推送，等待创建 PR') && !pushText.includes('PR 已创建') && pushText.includes('已合入目标分支'),
   pushText.slice(0, 400))
-check('push-mode MR card keeps the merged state after the PR link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
+check('push-mode MR card keeps the merged state after the PR entry link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
+
+// AC-07 deep link: the Eval log links to page/source?id=<signalId>. The raw row may be filtered out or already
+// cleaned up, so the page must resolve the signal and either locate it or say plainly that its text is gone.
+console.log('STEP source deep link')
+fixtures.status.sources = [{ id: 'octo', kind: 'source', title: 'Octo', enabled: true, state: 'ready',
+  lastAt: nowIso, stats: { received: 1, accepted: 1, ignored: 0, skipped: 0 },
+  config: { watchChatIds: ['chat-demo'], chatTitles: { 'chat-demo': '演示群' } } }]
+signalFixture = { id: 'sig_demo', source: 'octo', status: 'processed', occurredAt: nowIso, receivedAt: nowIso,
+  textPreview: '修复网页登录问题，需要联网查文档', ticketId: 'tkt_demo_accept', labels: [] }
+pushRoot.unmount()
+window.sessionStorage.setItem('superagent-panel/source-scroll', '180')
+window.sessionStorage.setItem('superagent-panel/route',
+  JSON.stringify({ route: { page: 'source', id: 'sig_demo' }, stack: [{ page: 'eval' }] }))
+const sourceRoot = ReactDOM.createRoot(rootElement)
+sourceRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const locatedText = rootElement.textContent ?? ''
+check('a signal deep link renders the located-signal card with its text',
+  locatedText.includes('定位的原始信号') && locatedText.includes('修复网页登录问题'), locatedText.slice(0, 400))
+check('the located signal links to its Ticket and Thread',
+  locatedText.includes('查看工单') && locatedText.includes('查看线程'), locatedText.slice(0, 400))
+check('the located signal is highlighted in the raw list',
+  Boolean(rootElement.querySelector('#sa-signal-sig_demo.sa-row-focus')), locatedText.slice(0, 400))
+check('returning to a deep-linked page scrolls to the located signal, not a stale list position',
+  Boolean(rootElement.querySelector('#sa-located-signal')) && Boolean(rootElement.querySelector('#sa-signal-sig_demo')),
+  locatedText.slice(0, 300))
+check('a focused source deep link does not restore the stale list offset',
+  rootElement.querySelector('.sa-scroll')?.scrollTop === 0, String(rootElement.querySelector('.sa-scroll')?.scrollTop))
+
+// AC-07 return position: a source list refresh must restore the remembered offset, not jump to the top.
+console.log('STEP source scroll restore')
+sourceRoot.unmount()
+window.sessionStorage.setItem('superagent-panel/source-scroll', '180')
+window.sessionStorage.setItem('superagent-panel/route', JSON.stringify({ route: { page: 'source' }, stack: [] }))
+const sourceListRoot = ReactDOM.createRoot(rootElement)
+sourceListRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+check('a source refresh restores the remembered list offset',
+  rootElement.querySelector('.sa-scroll')?.scrollTop === 180, String(rootElement.querySelector('.sa-scroll')?.scrollTop))
+sourceListRoot.unmount()
+
+// A signal that was cleaned up must be reported as unavailable, never rendered as an empty page.
+console.log('STEP cleaned-up signal link')
+signalFixture = undefined
+sourceRoot.unmount()
+window.sessionStorage.setItem('superagent-panel/route',
+  JSON.stringify({ route: { page: 'source', id: 'sig_gone' }, stack: [{ page: 'eval' }] }))
+const goneRoot = ReactDOM.createRoot(rootElement)
+goneRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(800)
+const goneText = rootElement.textContent ?? ''
+check('a cleaned-up signal says its text is unavailable',
+  goneText.includes('已不在信号日志中') && goneText.includes('原文不可用'), goneText.slice(0, 400))
+goneRoot.unmount()
+
+// AC-07 return position: the Trigger list lives in the same `.sa-scroll`; opening a Thread and coming back must land
+// on the remembered row, not at the top.
+console.log('STEP trigger scroll restore')
+fixtures.threads = { items: [{ key: 'octo:chat-demo', title: '演示线程', source: 'octo', lastAt: nowIso,
+  triggerCount: 1, ticketIds: [], state: 'recent' }], total: 1,
+counts: { all: 1, subscribed: 0, recent: 1, new: 1 } }
+window.sessionStorage.setItem('superagent-panel/trigger-scroll', '180')
+window.sessionStorage.setItem('superagent-panel/route', JSON.stringify({ route: { page: 'trigger' }, stack: [] }))
+const triggerRoot = ReactDOM.createRoot(rootElement)
+triggerRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const triggerScroller = rootElement.querySelector('.sa-scroll')
+check('trigger list restores the remembered scroll position on return',
+  triggerScroller?.scrollTop === 180, String(triggerScroller?.scrollTop))
+triggerRoot.unmount()
+
+// AC-06/07: a refresh (or a pasted link) restores the eval filters, the result page and the list position; back/forward
+// updates the view in place. The mock ignores the params, so assert the request and the restored controls, not the rows.
+console.log('STEP eval deep link restore')
+window.history.replaceState(null, '', '/?evalView=divergence&evalQ=DDL&evalOffset=25')
+window.sessionStorage.setItem('superagent-panel/eval-scroll', '180')
+window.sessionStorage.setItem('superagent-panel/route', JSON.stringify({ route: { page: 'eval' }, stack: [] }))
+const evalDeepRoot = ReactDOM.createRoot(rootElement)
+evalDeepRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(1000)
+const deepQuery = [...rootElement.querySelectorAll('.sa-main .sa-filters input')]
+  .find(input => input.getAttribute('placeholder') === '消息、原因或工单标题…')
+const deepViewChip = [...rootElement.querySelectorAll('.sa-main .sa-filters button')]
+  .find(button => (button.textContent ?? '').trim() === '模型分歧')
+check('an eval deep link restores the text filter and the divergence view',
+  deepQuery?.value === 'DDL' && deepViewChip?.getAttribute('aria-checked') === 'true',
+  JSON.stringify({ q: deepQuery?.value, view: deepViewChip?.getAttribute('aria-checked') }))
+const deepRequest = calls.filter(entry => /engine\/decisions\?/.test(entry)).at(-1) ?? ''
+check('the restored eval page asks the server for the saved offset and query',
+  /q=DDL/.test(deepRequest) && /offset=25/.test(deepRequest) && /view=divergence/.test(deepRequest), deepRequest)
+check('the eval list restores its scroll position after a refresh',
+  rootElement.querySelector('.sa-scroll')?.scrollTop === 180, String(rootElement.querySelector('.sa-scroll')?.scrollTop))
+window.history.replaceState(null, '', '/?evalView=override&evalOffset=0')
+window.dispatchEvent(new window.PopStateEvent('popstate'))
+await sleep(700)
+const overrideChip = [...rootElement.querySelectorAll('.sa-main .sa-filters button')]
+  .find(button => (button.textContent ?? '').trim() === '人工改判')
+check('back/forward restores the eval view in place', overrideChip?.getAttribute('aria-checked') === 'true',
+  overrideChip?.getAttribute('aria-checked') ?? 'missing')
+evalDeepRoot.unmount()
+window.history.replaceState(null, '', '/')
+window.sessionStorage.removeItem('superagent-panel/eval-scroll')
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 const failed = checks.filter(item => !item.ok)
@@ -925,5 +1344,5 @@ if (failed.length) {
   for (const item of failed.slice(0, 3)) console.log(`DETAIL ${item.name}: ${String(item.detail).slice(-500)}`)
 }
 if (skipped.length) console.log(`SKIPPED ${skipped.length}: ${skipped.map(item => item.name).join(' | ')}`)
-try { pushRoot?.unmount?.(); rootDom.unmount(); dom.window.close() } catch { /* best effort */ }
+try { triggerRoot?.unmount?.(); sourceListRoot?.unmount?.(); sourceRoot?.unmount?.(); goneRoot?.unmount?.(); pushRoot?.unmount?.(); rootDom.unmount(); dom.window.close() } catch { /* best effort */ }
 process.exit(failed.length === 0 ? 0 : 1)

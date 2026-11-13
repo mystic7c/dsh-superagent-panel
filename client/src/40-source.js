@@ -28,8 +28,9 @@ Object.assign(PAGE_TEXT, {
   'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
     'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   // A repository card is enabled by the executor switch, not the engine switch: say the switch that actually enables it.
-  'src.disabledRepo': ['已禁用：打开「启用执行器」（设置→运行）并保存。',
-    'Disabled: turn on “Executor enabled” under Settings → Runtime and save.'],
+  // The repo itself is on; do not call it "disabled" while only the executor is off.
+  'src.disabledRepo': ['执行器未启用：打开「启用执行器」（设置→运行）并保存。',
+    'Executor off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -56,10 +57,32 @@ Object.assign(PAGE_TEXT, {
   'src.signalTicket': ['查看工单', 'Open Ticket'],
   'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
   'src.signalsRefresh': ['刷新', 'Refresh'],
+  'src.signalSearch': ['搜索原始信号', 'Search raw signals'],
+  'src.signalRepo': ['按仓库筛选', 'Filter by repository'],
+  'src.signalRepoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'src.signalReasonFilter': ['按原因筛选', 'Filter by reason'],
+  'src.signalReasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'src.signalFrom': ['开始日期', 'From date'],
+  'src.signalTo': ['结束日期', 'To date'],
+  'src.signalSearchPlaceholder': ['文本、来源或原因…', 'Text, source or reason…'],
+  'src.signalFilter': ['信号状态', 'Signal status'],
+  'src.signalPageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'src.prev': ['上一页', 'Previous'],
+  'src.next': ['下一页', 'Next'],
   // ---- P2-8: human quality labels on raw signals ----------------------------------------------------------------
   'src.labelsSummary': ['正确 {correct} · 误报 {falseWake} · 漏报 {missedWake}',
     '{correct} correct · {falseWake} false wake · {missedWake} missed'],
   'src.labelMenu': ['标注判定', 'Label this signal'],
+  // ---- P1 AC-07: a signal deep link from the Eval log; the row may be filtered out or already cleaned up ----
+  'src.focusTitle': ['定位的原始信号', 'Located signal'],
+  'src.focusMissing': ['这条原始信号已不在信号日志中（可能已清理），原文不可用。',
+    'This signal is no longer in the raw log (it may have been cleared), so its text is unavailable.'],
+  'src.focusMissingHint': ['它关联的工单或线程可能仍然可用。', 'Any Ticket or Thread it produced may still be available.'],
+  'src.focusOffPage': ['这条信号不在当前筛选结果中，下面是它的记录。',
+    'This signal is not in the current filter result; its record is shown below.'],
+  'src.focusOpenThread': ['查看线程', 'Open Thread'],
+  'src.focusClear': ['清除定位', 'Clear link'],
+  'src.focusMissingTag': ['不可用', 'unavailable'],
   'src.labelSaved': ['已标注：{label}', 'Labelled: {label}'],
   'signalLabel.correct': ['正确', 'Correct'], 'signalLabel.false_wake': ['误报', 'False wake'],
   'signalLabel.missed_wake': ['漏报', 'Missed wake'], 'signalLabel.cleared': ['已清理', 'Cleared'],
@@ -97,11 +120,11 @@ function sourceStatRows(source) {
 function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
-  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono' }, String(config.project))])
+  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
   if (config.baseUrl) rows.push([pt(t, 'repo.baseUrl'), h(ExternalLink, { href: String(config.baseUrl), icon: null }, String(config.baseUrl))])
-  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono' }, String(config.targetBranch))])
+  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
   rows.push([pt(t, 'repo.token'), config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')])
-  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono' }, String(repo.repo))])
+  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo))])
   if (repo?.baseBranch || config.targetBranch) {
     rows.push([pt(t, 'repo.branches'), `${repo?.baseBranch ?? '—'} → ${config.targetBranch ?? '—'}`])
   }
@@ -180,7 +203,7 @@ const signalLabelText = (t, label) => {
 }
 
 /** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
-function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
+function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
   const { t, navigate } = usePanel()
   return h('ul', { className: 'sa-list' }, items.map(item => {
     const status = String(item?.status ?? '')
@@ -189,7 +212,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
     const statusKey = `src.signalStatus.${status}`
     const statusLabel = pt(t, statusKey)
     const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
-    return h('li', { key: item.id, className: 'sa-row' },
+    return h('li', { key: item.id, id: `sa-signal-${item.id}`,
+      className: item.id === focusId ? 'sa-row sa-row-focus' : 'sa-row' },
       h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
@@ -197,7 +221,7 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
           h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
         (item?.source || reason || at)
           ? h('div', { className: 'sa-row-meta' },
-            item?.source ? h('span', { className: 'sa-mono' }, String(item.source)) : null,
+            item?.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(item.source)) : null,
             reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
             at ? h(When, { at }) : null,
             labels.length
@@ -209,7 +233,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
           : null),
       h('div', { className: 'sa-row-actions' },
         item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
-          onClick: () => navigate({ page: 'execution', id: item.ticketId }) }, pt(t, 'src.signalTicket')) : null,
+          onClick: () => (onOpenTicket ? onOpenTicket(item.ticketId) : navigate({ page: 'execution', id: item.ticketId })) },
+        pt(t, 'src.signalTicket')) : null,
         signalReplayable(item) ? h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: busy,
           onClick: () => onReplay(item) }, pt(t, 'src.signalReplay')) : null,
         // A host that returns `labels` supports the P2-8 endpoint; an older one gets no dead menu entry.
@@ -221,8 +246,82 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
   }))
 }
 
-function LiveSourcePage() {
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function srcDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
+const SRC_SCROLL_KEY = 'superagent-panel/source-scroll'
+
+/** The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07). */
+function sourceScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberSourceScroll() {
+  const y = sourceScrollTop()
+  if (y > 0) try { sessionStorage.setItem(SRC_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreSourceScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(SRC_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+
+/** P1 AC-07: the Eval log links here with a signal id. The raw row may be filtered out of the current page or already
+    cleaned up, so the link answers with a located-signal card (or an explicit cleaned-up notice) instead of nothing. */
+function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenThread }) {
+  const { t } = usePanel()
+  const signal = view?.signal ?? {}
+  const status = String(signal.status ?? '')
+  const reason = signalReasonText(t, signal)
+  const at = signal.receivedAt ?? signal.occurredAt
+  const ticketId = view?.ticket?.id ?? signal.ticketId
+  const threadKey = view?.trigger?.threads?.[0] ?? signal.scopeKey
+  if (missing) {
+    return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+      h('div', { className: 'sa-card-head' },
+        h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+        h(Tag, { tone: 'warning' }, pt(t, 'src.focusMissingTag'))),
+      h(Hint, null, pt(t, 'src.focusMissing')),
+      h('p', { className: 'sa-hint' }, pt(t, 'src.focusMissingHint')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+  }
+  const statusKey = `src.signalStatus.${status}`
+  const statusLabel = pt(t, statusKey)
+  return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+    h('div', { className: 'sa-card-head' },
+      h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14 }),
+      h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+      h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel)),
+    h('div', { className: 'sa-row-title' },
+      String(signal.textPreview ?? signal.candidate?.text ?? signal.payload?.text ?? '') || pt(t, 'src.signalPreviewEmpty')),
+    h('div', { className: 'sa-row-meta' },
+      signal.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(signal.source)) : null,
+      reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
+      at ? h(When, { at }) : null),
+    offPage ? h(Hint, null, pt(t, 'src.focusOffPage')) : null,
+    h('div', { className: 'sa-actions' },
+      ticketId ? h(Button, { variant: 'outline', size: 'sm', onClick: () => onOpenTicket(ticketId) },
+        pt(t, 'src.signalTicket')) : null,
+      threadKey ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => onOpenThread(threadKey) },
+        pt(t, 'src.focusOpenThread')) : null,
+      h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+}
+
+function LiveSourcePage({ route }) {
   const { t, navigate, notify } = usePanel()
+  const focusId = typeof route?.id === 'string' && route.id.trim() ? route.id.trim() : ''
   const { data, error, reload, actions } = usePanelData()
   const [uat, setUat] = useState()
   const [uatBusy, setUatBusy] = useState(false)
@@ -242,7 +341,83 @@ function LiveSourcePage() {
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
-  const signals = useLiveResource('engine/signals', { limit: 20 }, 30000, { enabled: !signalsOff })
+  const srcInitial = useRef((() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const offset = Number(params.get('srcOffset') ?? 0)
+      const status = params.get('srcStatus') || 'all'
+      return { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
+        repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
+        from: params.get('srcFrom') || '', to: params.get('srcTo') || '',
+        offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+    } catch { return { q: '', status: 'all', repo: '', reason: '', from: '', to: '', offset: 0 } }
+  })())
+  const [sigQuery, setSigQuery] = useState(srcInitial.current.q)
+  const [sigQ, setSigQ] = useState(srcInitial.current.q)
+  const [sigStatus, setSigStatus] = useState(srcInitial.current.status)
+  const [sigRepo, setSigRepo] = useState(srcInitial.current.repo)
+  const [sigReason, setSigReason] = useState(srcInitial.current.reason)
+  const [sigFrom, setSigFrom] = useState(srcInitial.current.from)
+  const [sigTo, setSigTo] = useState(srcInitial.current.to)
+  const [sigOffset, setSigOffset] = useState(srcInitial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepo); setSigReason(sigReason) }, 300)
+    return () => clearTimeout(timer)
+  }, [sigQuery, sigRepo, sigReason])
+  useEffect(() => { setSigOffset(0) }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (sigQ) url.searchParams.set('srcQ', sigQ); else url.searchParams.delete('srcQ')
+      if (sigStatus !== 'all') url.searchParams.set('srcStatus', sigStatus); else url.searchParams.delete('srcStatus')
+      for (const [key, param, value] of [['srcRepo', 'srcRepo', sigRepo], ['srcReason', 'srcReason', sigReason],
+        ['srcFrom', 'srcFrom', sigFrom], ['srcTo', 'srcTo', sigTo]]) {
+        if (value) url.searchParams.set(key, value); else url.searchParams.delete(param)
+      }
+      if (sigOffset > 0) url.searchParams.set('srcOffset', String(sigOffset)); else url.searchParams.delete('srcOffset')
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo, sigOffset])
+  useEffect(() => {
+    const restore = () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const status = params.get('srcStatus') || 'all'
+        setSigQuery(params.get('srcQ') || ''); setSigQ(params.get('srcQ') || '')
+        setSigStatus(Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all')
+        setSigRepo(params.get('srcRepo') || ''); setSigReason(params.get('srcReason') || '')
+        setSigFrom(params.get('srcFrom') || ''); setSigTo(params.get('srcTo') || '')
+        const offset = Number(params.get('srcOffset') ?? 0)
+        setSigOffset(Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const signals = useLiveResource('engine/signals', { q: sigQ,
+    status: sigStatus === 'all' ? undefined : sigStatus, repo: sigRepo, reason: sigReason,
+    from: srcDayBound(sigFrom), to: srcDayBound(sigTo, true), offset: sigOffset, limit: 20 },
+  30000, { enabled: !signalsOff })
+  // AC-07: a link from the Eval log carries a signal id; resolve it even when the current filter/page does not hold it.
+  const focus = useLiveResource('engine/signal/:id', { id: focusId }, 30000, { enabled: Boolean(focusId) })
+  const leaveTo = useCallback(next => { rememberSourceScroll(); navigate(next) }, [navigate])
+  // Leaving the page (a Ticket/Thread link or a tab switch) remembers the list position; coming back restores it unless
+  // the route asks for one specific signal, which scrolls there instead.
+  useEffect(() => () => { rememberSourceScroll() }, [])
+  const restoredSourceScroll = useRef(false)
+  useEffect(() => {
+    if (restoredSourceScroll.current || !signals.data || focusId) return
+    restoredSourceScroll.current = true
+    window.requestAnimationFrame(restoreSourceScroll)
+  }, [signals.data, focusId])
+  const scrolledFocus = useRef('')
+  useEffect(() => {
+    if (!focusId || !focus.data || scrolledFocus.current === focusId) return
+    const node = document.getElementById(`sa-signal-${focusId}`) ?? document.getElementById('sa-located-signal')
+    if (!node) return
+    scrolledFocus.current = focusId
+    if (typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
+  }, [focusId, focus.data, signals.data])
   useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
   const label = useAction(async (signal, labelId) => {
     await actions.labelSignal(signal.id, labelId)
@@ -253,7 +428,7 @@ function LiveSourcePage() {
     const ticket = result?.ticket
     if (ticket?.id) {
       notify(pt(t, 'src.signalReplayTicket'))
-      navigate({ page: 'execution', id: ticket.id })
+      leaveTo({ page: 'execution', id: ticket.id })
       return
     }
     notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
@@ -284,7 +459,7 @@ function LiveSourcePage() {
 
   const enabled = sources.filter(source => source.enabled).length
   const lastAt = sources.map(source => source.lastAt).filter(Boolean).sort().at(-1)
-  const clock = lastAt ? (hhmmss(lastAt, t.lang) || '').slice(0, 5) : ''
+  const clock = lastAt ? hhmm(lastAt, t.lang) : ''
   const summary = clock
     ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
     : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
@@ -304,11 +479,14 @@ function LiveSourcePage() {
       return [
         // Unified action vocabulary (critique §3): 检查新消息 = dry-run poll, with the message icon and no
         // white primary fill, so it reads the same as the header action instead of a generic refresh button.
-        h(Button, { key: 'poll', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-          // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
-          disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
-          title: !source.enabled && data.config?.octo?.tokenConfigured !== true ? pt(t, 'src.checkNeedsToken') : undefined,
-          onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+        // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
+        h(Fragment, { key: 'poll' },
+          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+            disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
+            onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+          // A disabled control still has to say why: the reason is a focusable tip, not a title tooltip (A3).
+          !source.enabled && data.config?.octo?.tokenConfigured !== true
+            ? h(InfoTip, { text: pt(t, 'src.checkNeedsToken'), warn: true }) : null),
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
           onClick: focusFiltered }, pt(t, 'src.action.filtered')),
       ]
@@ -373,6 +551,13 @@ function LiveSourcePage() {
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
         onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
       : null,
+    focusId && (focus.data || focus.error?.missing)
+      ? h(LocatedSignal, { view: focus.data, missing: Boolean(focus.error?.missing),
+        offPage: Boolean(focus.data) && !signalItems.some(item => item.id === focusId),
+        onClear: () => navigate({ page: 'source' }, true),
+        onOpenTicket: id => leaveTo({ page: 'execution', id }),
+        onOpenThread: key => leaveTo({ page: 'trigger', id: key }) })
+      : null,
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
@@ -386,18 +571,50 @@ function LiveSourcePage() {
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
       : null,
-    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
-    signals.data
-      ? h(Section, { title: pt(t, 'src.signals'), count: signalItems.length,
-        badge: labelTotal > 0
-          ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
-            correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
-            missedWake: Number(labelCounts.missed_wake) || 0 }))
-          : null,
-        action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
-          pt(t, 'src.signalsRefresh')) },
-        signalItems.length ? h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
-          onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy })
-          : h(Hint, null, pt(t, 'src.signalsEmpty')))
-      : null)
+    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it. The section itself
+    // must not vanish while the first load is pending or a poll failed, so it keeps its heading and renders a skeleton
+    // or the retryable error instead (P2).
+    signalsOff
+      ? null
+      : h('div', { 'aria-busy': signals.loading ? 'true' : undefined },
+        h(Section, { title: pt(t, 'src.signals'),
+          count: signals.data ? (Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length) : undefined,
+          badge: signals.data && labelTotal > 0
+            ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
+              correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
+              missedWake: Number(labelCounts.missed_wake) || 0 }))
+            : null,
+          action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
+            pt(t, 'src.signalsRefresh')) },
+          h('div', { className: 'sa-filters' },
+            h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
+              onChange: event => setSigQuery(event?.target?.value ?? '') }),
+            h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
+              onChange: event => setSigRepo(event?.target?.value ?? '') }),
+            h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
+              onChange: event => setSigReason(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
+              onChange: event => setSigFrom(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
+              onChange: event => setSigTo(event?.target?.value ?? '') }),
+            h(SegmentedControl, { options: [
+              { value: 'all', label: pt(t, 'decisionFilter.all') },
+              ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
+            value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
+          signals.error ? h(ErrorState, { error: signals.error, onRetry: signals.reload }) : null,
+          !signals.data
+            ? signals.error ? null : h(Skeleton, { rows: 3 })
+            : signalItems.length ? h(Fragment, null,
+              h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+                onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy,
+                focusId, onOpenTicket: id => leaveTo({ page: 'execution', id }) }),
+              h('div', { className: 'sa-pagination' },
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
+                  onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
+                h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
+                  from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
+                  total: Number(signals.data.total) || signalItems.length })),
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
+                  onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
+              : h(Hint, null, pt(t, 'src.signalsEmpty')))))
 }

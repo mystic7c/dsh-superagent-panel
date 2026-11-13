@@ -24,6 +24,8 @@ const { DICTS, PAGE_TEXT } = load(order)
 
 const fragments = order.filter(name => name !== '06-i18n.js' && name !== '21-localtext.js')
 const used = new Map()
+const definitions = new Map()
+const duplicateKeys = []
 for (const name of fragments) {
   const text = readFileSync(join(src, name), 'utf8')
   const patterns = [/\bt\(\s*'([^']+)'/g, /\bpt\(\s*t\s*,\s*'([^']+)'/g, /\bvalueLabel\(\s*t\s*,\s*'([^']+)'/g]
@@ -31,6 +33,34 @@ for (const name of fragments) {
     for (const match of text.matchAll(pattern)) {
       if (!used.has(match[1])) used.set(match[1], new Set())
       used.get(match[1]).add(name)
+    }
+  }
+  // A conditional key (`pt(t, flag ? 'a' : 'b')`) is invisible to the direct-string patterns above; both branches are
+  // real keys, so collect them as well (this is how a missing `repos.enable` pair slipped through before).
+  const ternary = [/\bpt\(\s*t\s*,\s*[^?\n]*\?\s*'([^']+)'\s*:\s*'([^']+)'/g,
+    /\bt\(\s*[^?\n]*\?\s*'([^']+)'\s*:\s*'([^']+)'/g]
+  for (const pattern of ternary) {
+    for (const match of text.matchAll(pattern)) {
+      for (const key of [match[1], match[2]]) {
+        if (!used.has(key)) used.set(key, new Set())
+        used.get(key).add(name)
+      }
+    }
+  }
+  // PAGE_TEXT is one flat namespace assembled with Object.assign; a key defined twice silently drops the first
+  // definition. Only scan inside the `Object.assign(PAGE_TEXT, { … })` blocks: other `'key': [` maps in the same
+  // fragment (status shapes, provider labels) are deliberately separate namespaces.
+  const local = new Set()
+  let inBlock = false
+  for (const line of text.split('\n')) {
+    if (!inBlock && /^Object\.assign\(PAGE_TEXT,\s*\{\s*$/.test(line)) { inBlock = true; continue }
+    if (inBlock && /^\}\)\s*$/.test(line)) { inBlock = false; continue }
+    if (!inBlock) continue
+    for (const match of line.matchAll(/^ {2}'([a-z][\w.-]*)':\s*\[/g)) {
+      const key = match[1]
+      if (local.has(key)) duplicateKeys.push([key, `${name} (defined twice)`])
+      else if (definitions.has(key)) duplicateKeys.push([key, `${definitions.get(key)} + ${name}`])
+      else { local.add(key); definitions.set(key, name) }
     }
   }
 }
@@ -51,9 +81,13 @@ if (missing.length) {
   console.error(`Missing keys (${missing.length}):`)
   for (const [key, files] of missing.sort()) console.error(`  ${key}  ← ${files}`)
 }
+if (duplicateKeys.length) {
+  console.error(`Duplicate PAGE_TEXT keys (${duplicateKeys.length}):`)
+  for (const [key, where] of duplicateKeys.sort()) console.error(`  ${key}  ← ${where}`)
+}
 if (malformed.length) console.error('Malformed PAGE_TEXT pairs:', malformed.join(', '))
 if (onlyZh.length) console.error('Keys only in zh:', onlyZh.join(', '))
 if (onlyEn.length) console.error('Keys only in en:', onlyEn.join(', '))
-const failures = missing.length + malformed.length + onlyZh.length + onlyEn.length
+const failures = missing.length + duplicateKeys.length + malformed.length + onlyZh.length + onlyEn.length
 console.log(`${failures ? 'FAIL' : 'OK'}: ${used.size} literal keys used, ${Object.keys(DICTS.zh).length} shared keys, ${localKeys.size} page-local keys`)
 process.exit(failures ? 1 : 0)

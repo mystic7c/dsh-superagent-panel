@@ -120,6 +120,53 @@ function isExternal(url) {
   } catch { return false }
 }
 
+/** Only an absolute http(s) URL may be written into an href. Everything else (javascript:, data:, relative paths)
+    is rendered as inert text: URLs shown here come from live.json, GitLab and Octo payloads. */
+function safeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
+}
+
+/* ---------- shareable URL state (deep links) ----------
+   The panel lives inside a host SPA that owns the address bar, so it only ever claims a fragment of its own
+   (`#<prefix>=<json>`; anything else belongs to the host). Reads and writes are best-effort: an opaque origin can
+   throw on history, and a host is free to rewrite the URL at any moment, which must never break the panel. */
+
+/** Longest fragment this panel agrees to decode: a route is a few hundred characters, so anything bigger is not ours. */
+const HASH_STATE_MAX = 4096
+
+/** Build the fragment for `value`; the exact string is also what `writeHashState` compares against and returns. */
+function hashStateFragment(prefix, value) {
+  return `#${prefix}=${encodeURIComponent(JSON.stringify(value))}`
+}
+
+/** Decode the JSON object stored by this panel under `#<prefix>=`; `undefined` for a foreign, absent or corrupt one. */
+function readHashState(prefix) {
+  try {
+    if (typeof location === 'undefined') return undefined
+    const hash = String(location.hash ?? '')
+    const marker = `#${prefix}=`
+    if (!hash.startsWith(marker) || hash.length > HASH_STATE_MAX) return undefined
+    const value = JSON.parse(decodeURIComponent(hash.slice(marker.length)))
+    return value && typeof value === 'object' ? value : undefined
+  } catch { return undefined }
+}
+
+/** Rewrite the panel's fragment in place and return it, or `undefined` when the URL was left alone. `replaceState`
+    (never hash assignment) keeps the host's back/forward entries untouched; a non-empty fragment that is not ours is
+    the host's own state and is preserved rather than overwritten. */
+function writeHashState(prefix, value) {
+  try {
+    if (typeof location === 'undefined' || typeof history === 'undefined' || typeof history.replaceState !== 'function') return undefined
+    const marker = `#${prefix}=`
+    const current = String(location.hash ?? '')
+    if (current && !current.startsWith(marker)) return undefined
+    const next = hashStateFragment(prefix, value)
+    if (current === next) return next
+    history.replaceState(history.state, '', `${location.pathname}${location.search}${next}`)
+    return next
+  } catch { return undefined }
+}
+
 
 // ---- 05-style.js ----
 /* Panel stylesheet rendered into the panel subtree. Every color is a Harness theme token (`--dsw-alias-*`); sizing
@@ -148,6 +195,11 @@ const PANEL_CSS = `
   --sa-r-lg: 12px;
   --sa-r-pill: 999px;
   --sa-line: var(--dsw-alias-border-l2);
+  /* Single sticky offset: the topbar height every sticky/scroll-margin rule derives from (audit M1/M9). */
+  --sa-sticky-top: 64px;
+  /* Raised surface (menus, modals). --dsw-alias-bg-overlay is a tint, not an elevation: in the dark theme it resolves
+     to bluish-700, where secondary text lands at 3.85:1. layer-3 is the real elevated fill in both themes. */
+  --sa-surface-raised: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-overlay));
   --sa-focus: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary));
   /* Text-only tokens raised to WCAG AA on the panel's light surfaces: the theme's tertiary label is 3.71:1 and its
      link colour 4.23:1 on white, so meta text and links mix in a little of the primary label. Shape/fill uses of the
@@ -170,12 +222,13 @@ const PANEL_CSS = `
 /* Permanent chrome: title/status row + six tabs. It never scrolls; only the scroll body below it does. */
 .sa-topbar { position: relative; z-index: 4; flex: 0 0 auto; display: flex; flex-direction: column;
   gap: var(--sa-sp-24); padding-top: var(--sa-sp-32); background: var(--dsw-alias-bg-base, transparent); }
-.sa-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; scroll-padding: 64px 0 72px;
-  padding: 0 0 var(--sa-sp-32); }
+.sa-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; scroll-padding: var(--sa-sticky-top) 0 var(--sa-sp-24); overscroll-behavior: contain;
+  touch-action: pan-y; padding: 0 0 var(--sa-sp-32); }
+.sa-scroll:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-main { display: flex; flex-direction: column; gap: var(--sa-sp-24); min-width: 0; min-height: 320px;
   padding-top: var(--sa-sp-24); }
 .sa-section { display: flex; flex-direction: column; gap: var(--sa-sp-8); min-width: 0; }
-.sa-section { scroll-margin-top: 80px; }
+.sa-section { scroll-margin-top: calc(var(--sa-sticky-top) + var(--sa-sp-16)); }
 .sa-detail-nav { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; flex-wrap: wrap;
   gap: var(--sa-sp-2) var(--sa-sp-4); padding: var(--sa-sp-4) 0; background: var(--dsw-alias-bg-base, transparent);
   border-bottom: 0.5px solid var(--sa-line); }
@@ -198,6 +251,12 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+.sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
+.sa-repo-diff { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8) var(--sa-sp-12); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-layer-2); }
+.sa-diff-row { display: flex; align-items: baseline; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-diff-label { min-width: 96px; color: var(--dsw-alias-label-secondary); }
+.sa-diff-old { color: var(--sa-label-tertiary); text-decoration: line-through; overflow-wrap: anywhere; }
+.sa-diff-new { color: var(--sa-success-text); overflow-wrap: anywhere; }
 /* The queue's control row: stage filter chips lead, view chrome closes it behind a hairline divider. */
 .sa-list-bar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between;
   gap: var(--sa-sp-8) var(--sa-sp-16); min-width: 0; }
@@ -211,7 +270,7 @@ const PANEL_CSS = `
 .sa-head { position: relative; z-index: 3; display: flex; align-items: flex-start; justify-content: space-between;
   gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; }
 .sa-head-title { min-width: 0; display: flex; align-items: baseline; gap: var(--sa-sp-12); flex-wrap: wrap; }
-.sa-title { margin: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; color: var(--dsw-alias-label-primary); }
+.sa-title { margin: 0; font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600; color: var(--dsw-alias-label-primary); }
 .sa-head-actions, .sa-header-actions, .sa-head-tools { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-mobile-tools { display: none; }
 .sa-global-status { display: inline-flex; align-items: center; gap: var(--sa-sp-4); font-size: var(--sa-fs-meta);
@@ -239,13 +298,13 @@ const PANEL_CSS = `
 /* A non-zero count is an answer, a zero is noise: only >0 gets the body size/weight (critique #8/#24). */
 .sa-count:not([data-empty='true']) { font-size: var(--sa-fs-body); font-weight: 500; color: var(--dsw-alias-label-secondary); }
 .sa-badge { display: inline-flex; align-items: center; padding: 0 var(--sa-sp-8); border: 0.5px solid var(--sa-line);
-  border-radius: var(--sa-r-pill); font-size: var(--sa-fs-caption); line-height: 1.6; color: var(--sa-label-tertiary); }
+  border-radius: var(--sa-r-pill); font-size: var(--sa-fs-caption); min-height: 18px; line-height: 1.4; color: var(--sa-label-tertiary); }
 
 /* ---------- buttons / icon buttons ---------- */
 .sa-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sa-sp-4); border: none;
   border-radius: var(--sa-r-sm); background: transparent; padding: 0 var(--sa-sp-12); color: var(--dsw-alias-label-primary);
   font: inherit; font-size: var(--sa-fs-body); line-height: 1; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.sa-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.sa-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .sa-btn:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-btn-md { height: 32px; }
 .sa-btn-sm { height: 28px; padding: 0 var(--sa-sp-8); font-size: var(--sa-fs-meta); }
@@ -259,11 +318,11 @@ const PANEL_CSS = `
 .sa-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 85%, var(--dsw-alias-label-primary)); }
 .sa-btn-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; }
 .sa-icon-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px;
-  padding: 0; border: none; border-radius: var(--sa-r-sm); background: transparent; color: var(--dsw-alias-label-secondary);
+  padding: 0; border: none; border-radius: var(--sa-r-md); background: transparent; color: var(--dsw-alias-label-secondary);
   cursor: pointer; }
 .sa-icon-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-icon-btn:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .sa-icon-btn[data-variant='outline'] { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md);
   background: transparent; }
 .sa-icon-btn[data-variant='outline']:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
@@ -271,7 +330,7 @@ const PANEL_CSS = `
 .sa-menu { position: relative; display: inline-flex; flex: none; }
 .sa-menu-pop { position: absolute; top: calc(100% + var(--sa-sp-4)); z-index: 40; min-width: 184px; max-width: 320px;
   padding: var(--sa-sp-4); display: flex; flex-direction: column; gap: var(--sa-sp-2);
-  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-overlay);
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--sa-surface-raised);
   box-shadow: var(--dsw-elevation-prominent); }
 .sa-menu-pop[data-align='end'] { right: 0; }
 /* An open row menu must escape the row's stacking context: later rows paint their action buttons above it otherwise. */
@@ -282,14 +341,15 @@ const PANEL_CSS = `
   padding: var(--sa-sp-4) var(--sa-sp-8); border: 0; border-radius: var(--sa-r-sm); background: transparent;
   color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--sa-fs-body); line-height: 1.4; text-align: left;
   white-space: nowrap; cursor: pointer; }
-.sa-menu-item:hover:not(:disabled), .sa-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); outline: none; }
+.sa-menu-item:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); outline: var(--sa-focus); outline-offset: -2px; }
 .sa-menu-item:disabled { color: var(--sa-label-tertiary); cursor: not-allowed; }
 .sa-menu-trigger[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-menu-item-icon { display: inline-flex; flex: none; color: var(--dsw-alias-menu-icon, var(--dsw-alias-label-secondary)); }
 
 /* ---------- tags / pills / segmented ---------- */
 .sa-tag { display: inline-flex; align-items: center; flex: none; border-radius: var(--sa-r-pill); padding: 0 var(--sa-sp-8);
-  font-size: var(--sa-fs-caption); line-height: 1.6; font-weight: 500; white-space: nowrap; }
+  font-size: var(--sa-fs-caption); min-height: 18px; line-height: 1.4; font-weight: 500; white-space: nowrap; }
 .sa-tag[data-tone='outline'] { border: 0.5px solid var(--sa-line); color: var(--sa-label-tertiary); }
 .sa-tag[data-tone='neutral'] { background: var(--dsw-alias-bg-layer-2, transparent); color: var(--dsw-alias-label-secondary); }
 .sa-tag[data-tone='quiet'] { color: var(--sa-label-tertiary); }
@@ -307,7 +367,7 @@ const PANEL_CSS = `
 .sa-segment:hover:not(:disabled), .sa-segment[aria-checked='true'] { color: var(--dsw-alias-label-primary); }
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
-.sa-segment:disabled { cursor: default; opacity: 0.4; }
+.sa-segment:disabled { cursor: default; opacity: 0.55; }
 
 /* Variant: stage filter chips. Each stage is one pill and the active one is the only tinted surface, so the row reads
    as "which slice of the queue" rather than as a second tab bar (the page tabs already own that shape). */
@@ -324,7 +384,6 @@ const PANEL_CSS = `
    tertiary colour (5.5:1) carries both states and the active chip inherits the selected label colour. */
 .sa-chip-count { font-size: var(--sa-fs-caption); font-weight: 400; line-height: 1.4; opacity: 1;
   color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
-.sa-chip-count[data-zero='true'] { opacity: 1; }
 .sa-segmented-chips .sa-segment[aria-checked='true'] .sa-chip-count { color: inherit; opacity: 1; }
 
 /* View pickers: the two view settings are labelled outline buttons that open a two-option menu, so the row states
@@ -335,7 +394,8 @@ const PANEL_CSS = `
 .sa-menu-picker > svg { color: var(--sa-label-tertiary); flex: none; }
 .sa-menu-picker:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-menu-picker[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
-.sa-menu-item-label { flex: 1; min-width: 0; }
+.sa-menu-item-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-menu-item-note { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--sa-label-tertiary); }
 .sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
 
 /* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
@@ -357,8 +417,8 @@ const PANEL_CSS = `
 .sa-spin { animation: sa-spin 1s linear infinite; transform-origin: 50% 50%; }
 
 /* ---------- list rows (tickets, threads, decisions) ---------- */
-.sa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
-.sa-row { position: relative; min-width: 0; border-radius: var(--sa-r-md); padding: var(--sa-sp-8) 0;
+.sa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.sa-row { position: relative; min-width: 0; border-radius: var(--sa-r-md); padding: var(--sa-sp-8) 0 10px;
   display: flex; flex-wrap: wrap; gap: var(--sa-sp-4) var(--sa-sp-12); align-items: flex-start; }
 .sa-row + .sa-row { border-top: 0.5px solid var(--sa-line); border-top-left-radius: 0; border-top-right-radius: 0; }
 .sa-row.sa-link:hover, .sa-row-openable:hover, .sa-row[role='button']:hover {
@@ -367,6 +427,9 @@ const PANEL_CSS = `
 /* Search results are real <button> rows; strip the platform button chrome so they read like every other .sa-row. */
 button.sa-row { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .sa-row[role='button']:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+/* AC-07: a signal opened from the Eval log is outlined in the list, so the located record is findable at a glance. */
+.sa-row-focus { outline: var(--sa-focus); outline-offset: -2px;
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 /* A selected thread row paints a background; give its content an inset so the tint does not run under the text. */
 .sa-list .sa-row[role='button'] { padding-left: var(--sa-sp-8); padding-right: var(--sa-sp-8); }
 /* The whole-row affordance is mouse-only; keyboard opens through this title button, which is a sibling of the row's
@@ -379,8 +442,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-row-title { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; font-size: var(--sa-fs-title);
   line-height: 1.35; font-weight: 500; }
 .sa-row-title > span, .sa-row-title > a { min-width: 0; }
-.sa-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-2) var(--sa-sp-8); color: var(--dsw-alias-label-secondary);
-  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+.sa-row-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-2) var(--sa-sp-8);
+  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums; }
 .sa-row-quote { font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-secondary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sa-row-actions { position: relative; z-index: 1; display: flex; align-items: center; gap: var(--sa-sp-4); flex: none;
@@ -408,7 +472,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-exec-queue .sa-row { display: flex; flex-wrap: wrap; align-items: flex-start; }
   .sa-exec-queue .sa-row-actions { order: 2; margin-left: auto; }
   /* Keep the cause/MR visible: it becomes a full-width third line instead of being deleted with the column. */
-  .sa-exec-queue .sa-row-evidence { display: flex; order: 3; flex: 1 1 100%; padding-left: 28px;
+  .sa-exec-queue .sa-row-evidence { display: flex; order: 3; flex: 1 1 100%; padding-left: calc(16px + var(--sa-sp-12));
     white-space: normal; overflow: visible; text-overflow: clip; color: var(--dsw-alias-label-secondary); }
   .sa-queue-head { display: none; }
 }
@@ -439,13 +503,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-stats { display: flex; flex-wrap: wrap; gap: var(--sa-sp-12) var(--sa-sp-24); padding: var(--sa-sp-4) 0; }
 .sa-stat { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 88px; }
 .sa-stat-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--sa-label-tertiary); }
-.sa-stat-value { font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary); }
+.sa-stat-value { font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--dsw-alias-label-primary); }
 .sa-funnel { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 0; }
 .sa-funnel-steps { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0; }
 .sa-funnel-step { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 68px; }
-.sa-funnel-value { font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sa-funnel-value { font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sa-funnel-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--sa-label-tertiary); }
-.sa-funnel-arrow { flex: none; display: inline-flex; align-items: center; height: calc(var(--sa-fs-page) * 1.3);
+.sa-funnel-arrow { flex: none; display: inline-flex; align-items: center; height: calc(var(--sa-fs-page) * 1.4);
   color: var(--sa-label-tertiary); font-size: var(--sa-fs-body); line-height: 1; }
 .sa-funnel-summary { margin: 0; font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-funnel-foot { flex-basis: 100%; font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--sa-label-tertiary); }
@@ -455,7 +519,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-executor-load-col { flex: 1 1 360px; min-width: 0; }
 .sa-executor-recent { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; margin-left: auto;
   gap: var(--sa-sp-4) var(--sa-sp-8); flex: 0 1 auto; font-size: var(--sa-fs-meta); line-height: 1.4;
-  color: var(--dsw-alias-label-secondary); }
+  color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
 .sa-loadbar { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 0; }
 .sa-loadbar-track { box-sizing: border-box; width: 100%; max-width: 100%; height: 8px; border-radius: var(--sa-r-pill);
   background: var(--dsw-alias-bg-layer-2, var(--dsw-alias-border-l2)); overflow: hidden; }
@@ -464,7 +528,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-loadbar-fill[data-tone='error'] { background: var(--dsw-alias-state-error-primary); }
 .sa-loadbar-fill[data-tone='idle'] { background: var(--dsw-alias-label-tertiary); }
 .sa-loadbar-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
-  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
+  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); font-variant-numeric: tabular-nums; }
 
 /* ---------- one automation state line ---------- */
 .sa-automation { display: flex; align-items: center; gap: var(--sa-sp-12); flex-wrap: wrap;
@@ -540,7 +604,6 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   background: var(--dsw-alias-bg-layer-1, transparent); }
 .sa-card-head { display: flex; align-items: center; gap: var(--sa-sp-8); min-height: 28px; flex-wrap: wrap; }
 .sa-card-title { min-width: 0; font-size: var(--sa-fs-title); line-height: 1.35; font-weight: 600; }
-.sa-cards { display: flex; flex-direction: column; gap: var(--sa-sp-8); }
 /* Source page: one section per category, two cards per row so a short card no longer leaves a long empty band. */
 .sa-source-groups { display: flex; flex-direction: column; gap: var(--sa-sp-16); min-width: 0; }
 .sa-cards-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-12);
@@ -549,16 +612,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .sa-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
-.sa-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sa-sp-12); }
-
-/* ---------- two-column content blocks (overview: 24h funnel + executor) ---------- */
-.sa-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sa-sp-24); align-items: start; }
 
 /* ---------- panes (trigger: list + detail; settings: nav + form) ---------- */
 .sa-panes { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
 .sa-pane-aside { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); align-self: start;
-  position: sticky; top: 0; max-height: calc(100vh - 160px); overflow-y: auto; }
+  position: sticky; top: 0; max-height: calc(var(--sa-sticky-top) + var(--sa-sp-32) * 3); overflow-y: auto;
+  overscroll-behavior: contain; }
 .sa-settings { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-settings-nav { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
 /* Content group inside the settings body: one concept's fields, vertical rhythm (used by 60-settings). */
@@ -574,7 +634,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* Reference-only groups (evaluation catalog, prompt brief) sit below a divider in the settings rail: the navigation
    promises what can be changed first, and keeps read-only context reachable. */
 .sa-settings-nav-sep { margin: var(--sa-sp-8) var(--sa-sp-12) var(--sa-sp-4); border-top: 0.5px solid var(--sa-line); }
-.sa-settings-nav-label { padding: 0 var(--sa-sp-12); font-size: var(--sa-fs-caption); line-height: 1.6;
+.sa-settings-nav-label { padding: 0 var(--sa-sp-12); font-size: var(--sa-fs-caption); line-height: 1.4;
   color: var(--sa-label-tertiary); }
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
@@ -617,18 +677,27 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-sender-list { display: flex; flex-wrap: wrap; gap: var(--sa-sp-4) var(--sa-sp-8); min-width: 0; }
 .sa-sender-chip { display: inline-flex; align-items: center; gap: var(--sa-sp-4); max-width: 100%;
   padding: 2px var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-pill);
-  font-size: var(--sa-fs-meta); line-height: 1.6; color: var(--dsw-alias-label-secondary); }
+  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-sender-chip .sa-mono { font-size: var(--sa-fs-meta); color: var(--dsw-alias-label-primary); }
-.sa-sender-remove { border: 0; background: none; padding: 0; margin: 0; color: var(--sa-label-tertiary);
+.sa-sender-remove { position: relative; border: 0; background: none; padding: 0; margin: 0; color: var(--sa-label-tertiary);
   font: inherit; line-height: 1; cursor: pointer; }
+/* The glyph stays 12px; the pointer target is the 24px minimum (WCAG 2.5.8) around it. */
+.sa-sender-remove::before { content: ''; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px;
+  transform: translate(-50%, -50%); }
 .sa-sender-remove:hover { color: var(--dsw-alias-state-error-primary); }
-.sa-sender-remove:focus-visible { outline: var(--sa-focus); outline-offset: 1px; border-radius: 2px; }
+.sa-sender-remove:focus-visible { outline: var(--sa-focus); outline-offset: 1px; border-radius: var(--sa-r-sm); }
 
 /* ---------- forms ---------- */
 .sa-form { display: flex; flex-direction: column; gap: var(--sa-sp-24); min-width: 0; }
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+.sa-route-controls { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); }
+.sa-route-preview { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8);
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md);
+  background: var(--dsw-alias-bg-layer-1, transparent); }
+.sa-route-preview p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
+.sa-route-preview .sa-error { color: var(--sa-danger-text); }
 /* A number/time field is as wide as its value, not the card (T20). */
 .sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
@@ -637,7 +706,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   padding: 0 var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm);
   background: var(--dsw-alias-bg-layer-1, transparent); color: var(--dsw-alias-label-primary); }
 .sa-input:hover { border-color: var(--dsw-alias-border-l3, var(--sa-line)); }
-.sa-input:focus-within { border-color: var(--dsw-alias-brand-primary); }
+.sa-input:focus-within { border-color: var(--dsw-alias-brand-primary); outline: var(--sa-focus); outline-offset: -1px; }
 .sa-input-full { width: 100%; }
 .sa-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary);
   font: inherit; font-size: var(--sa-fs-body); align-self: stretch; }
@@ -650,19 +719,22 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-sm); padding: var(--sa-sp-8) var(--sa-sp-12); font: inherit; font-size: var(--sa-fs-body);
   line-height: 1.5; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1, transparent); resize: vertical; }
 .sa-textarea:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-switch { position: relative; flex: none; width: 40px; height: 24px; padding: 0; border: 0; border-radius: var(--sa-r-pill);
-  cursor: pointer; background: var(--dsw-alias-border-l2); transition: background 140ms ease; }
-.sa-switch[aria-checked='true'] { background: var(--dsw-alias-brand-primary); }
-.sa-switch:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
-.sa-switch:disabled { cursor: not-allowed; opacity: 0.4; }
+/* A real checkbox with role="switch" under a visible track: it keeps native keyboard/screen-reader semantics and lets
+   the caller wrap track + text in one <label>, so the label text and the track are a single hit target. */
+.sa-switch { position: relative; display: inline-flex; align-items: center; flex: none; padding: 0; }
+.sa-switch-input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; pointer-events: none; }
+.sa-switch-track { position: relative; display: inline-block; flex: none; width: 40px; height: 24px;
+  border-radius: var(--sa-r-pill); background: var(--dsw-alias-border-l2); transition: background 140ms ease; }
+/* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list, but
+   it is still 24px tall (WCAG 2.5.8 minimum). */
+.sa-switch-compact .sa-switch-track { width: 36px; }
+.sa-switch-input:checked + .sa-switch-track { background: var(--dsw-alias-brand-primary); }
+.sa-switch-input:focus-visible + .sa-switch-track { outline: var(--sa-focus); outline-offset: 2px; }
+.sa-switch-input:disabled + .sa-switch-track { opacity: 0.4; cursor: not-allowed; }
 .sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
-  background: var(--dsw-alias-label-primary-foreground); transition: left 140ms ease; }
-.sa-switch[aria-checked='true'] .sa-switch-thumb { left: 18px; }
-/* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list. */
-/* Slimmer than the settings switch but still a 24px-tall target (WCAG 2.5.8 minimum). */
-.sa-switch-compact { width: 36px; height: 24px; }
-.sa-switch-compact .sa-switch-thumb { width: 20px; height: 20px; }
-.sa-switch-compact[aria-checked='true'] .sa-switch-thumb { left: 14px; }
+  background: var(--dsw-alias-label-primary-foreground); transition: transform 140ms ease; }
+.sa-switch-input:checked + .sa-switch-track .sa-switch-thumb { transform: translateX(16px); }
+.sa-switch-compact .sa-switch-input:checked + .sa-switch-track .sa-switch-thumb { transform: translateX(12px); }
 
 /* ---------- empty / error / skeleton ---------- */
 .sa-empty { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-12); padding: var(--sa-sp-16); }
@@ -688,7 +760,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   gap: var(--sa-sp-8); flex-wrap: wrap; padding: var(--sa-sp-12) 0; background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1));
   border-top: 0.5px solid var(--sa-line); }
 .sa-savebar-text { margin-right: auto; font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
-.sa-savebar[data-state='error'] .sa-savebar-text { color: var(--dsw-alias-state-error-primary); }
+.sa-savebar[data-state='error'] .sa-savebar-text { color: var(--sa-danger-text); }
 .sa-savebar-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-card > .sa-savebar { margin: 0 calc(-1 * var(--sa-sp-16)) calc(-1 * var(--sa-sp-16)); padding: var(--sa-sp-12) var(--sa-sp-16); }
 
@@ -710,6 +782,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-code { font-family: var(--ds-font-family-code, Menlo, monospace); font-size: var(--sa-fs-meta); padding: 0 var(--sa-sp-4);
   border-radius: var(--sa-r-sm); background: var(--dsw-alias-bg-layer-2, transparent); }
 .sa-pre { margin: 0; padding: var(--sa-sp-12); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-layer-2, transparent);
+  overscroll-behavior: contain;
   font-family: var(--ds-font-family-code, Menlo, monospace); font-size: var(--sa-fs-meta); line-height: 1.5;
   white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; }
 .sa-pre ins { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 18%, transparent); text-decoration: none; }
@@ -721,12 +794,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-diff { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); overflow: auto;
   background: var(--dsw-alias-bg-layer-2, transparent); max-height: min(62vh, 640px); }
 .sa-diff pre { margin: 0; padding: var(--sa-sp-8) 0; font-family: var(--ds-font-family-code, Menlo, monospace);
-  font-size: var(--sa-fs-caption); line-height: 1.55; }
+  font-size: var(--sa-fs-caption); line-height: 1.5; }
+.sa-diff { overscroll-behavior: contain; }
 .sa-diff-line { display: block; padding: 0 var(--sa-sp-12); white-space: pre; }
 .sa-diff-add { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent); }
 .sa-diff-del { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent); }
 .sa-diff-hunk { background: color-mix(in srgb, var(--dsw-alias-brand-primary) 10%, transparent); color: var(--sa-info-text); }
-.sa-diff-meta { color: var(--dsw-alias-label-tertiary); }
+.sa-diff-meta { color: var(--sa-label-tertiary); }
 .sa-diff-file { background: var(--dsw-alias-bg-layer-1, transparent); border-top: 0.5px solid var(--sa-line);
   font-weight: 600; }
 .sa-diff-file:first-child { border-top: 0; }
@@ -760,7 +834,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-md li:last-child { margin-bottom: 0; }
 .sa-md-heading { font-weight: 600; }
 .sa-event-text { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(100%, 640px); }
 .sa-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -776,18 +850,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-page-head-top { display: flex; align-items: center; }
 .sa-page-head-top > .sa-btn { margin-left: calc(-1 * var(--sa-sp-8)); }
 .sa-page-head-main { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; width: 100%; }
-.sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+.sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
 .sa-page-head-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
 /* Sign-off fact that rides on the title row: quiet meta text plus its jump link, never a full-width line. */
 .sa-page-head-note { display: inline-flex; align-items: center; gap: var(--sa-sp-8); font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-page-head-meta { display: flex; align-items: center; gap: var(--sa-sp-4) var(--sa-sp-12); flex-wrap: wrap;
-  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+  font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums; }
 
 /* ---------- disclosure ---------- */
 .sa-disclosure { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
-.sa-disclosure-row { display: flex; align-items: center; gap: var(--sa-sp-8); padding: var(--sa-sp-4) 0; cursor: pointer;
-  min-height: 28px; border-radius: var(--sa-r-sm); }
+.sa-disclosure-row { display: flex; align-items: center; gap: var(--sa-sp-8); width: 100%; padding: var(--sa-sp-4) 0;
+  cursor: pointer; min-height: 28px; border: 0; border-radius: var(--sa-r-sm); background: transparent;
+  color: inherit; font: inherit; text-align: left; }
 .sa-disclosure-row:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-disclosure-lead { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--sa-label-tertiary); }
 .sa-disclosure-icon, .sa-disclosure-chevron { display: inline-flex; align-items: center; }
@@ -806,7 +882,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   color: var(--dsw-alias-label-secondary); }
 .sa-event-quiet .sa-event-text { color: var(--sa-label-tertiary); }
 .sa-event-foot { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; font-size: var(--sa-fs-meta);
-  line-height: 1.4; color: var(--sa-label-tertiary); }
+  line-height: 1.4; color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
 .sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
   margin: 0; padding: 0; list-style: none; }
 /* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
@@ -857,32 +933,38 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* ---------- modal / tooltip / toast ---------- */
 .sa-modal-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: var(--sa-sp-24); }
 .sa-modal-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1, color-mix(in srgb, var(--dsw-alias-bg-base) 45%, transparent)); }
-.sa-modal { position: relative; width: min(560px, 100%); max-height: min(80vh, 720px); overflow: auto;
-  border-radius: var(--sa-r-lg); padding: var(--sa-sp-16) var(--sa-sp-24) var(--sa-sp-16); background: var(--dsw-alias-bg-overlay);
+.sa-modal { position: relative; display: flex; flex-direction: column; gap: var(--sa-sp-12);
+  width: min(560px, 100%); max-height: min(80vh, 720px); overflow: auto; overscroll-behavior: contain;
+  border-radius: var(--sa-r-lg); padding: var(--sa-sp-16) var(--sa-sp-24) var(--sa-sp-16); background: var(--sa-surface-raised);
   color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); animation: sa-modal-in 120ms ease-out; }
 .sa-modal:focus { outline: none; }
+.sa-modal:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-modal-header { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-12); }
 .sa-modal-header h2 { margin: 0; font-size: var(--sa-fs-title); line-height: 1.35; font-weight: 600; }
 .sa-modal-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
   border: 0; border-radius: var(--sa-r-sm); background: transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .sa-modal-close:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-modal-close:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-modal-description { margin: var(--sa-sp-8) 0 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-secondary); }
-.sa-modal-body { margin-top: var(--sa-sp-12); }
-.sa-modal-footer { margin-top: var(--sa-sp-16); display: flex; justify-content: flex-end; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-modal-description { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-secondary); }
+.sa-modal-body { margin-top: 0; }
+.sa-modal-footer { margin-top: 0; display: flex; justify-content: flex-end; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);
   border-radius: var(--sa-r-md, 8px); background: var(--dsw-alias-toast-bg, var(--dsw-alias-bg-overlay));
-  color: var(--dsw-alias-label-primary-foreground); box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-toast-label, var(--dsw-alias-label-primary-foreground)); box-shadow: var(--dsw-elevation-prominent);
   font-size: var(--sa-fs-body, 13px); line-height: 1.5; overflow-wrap: anywhere; }
-.sa-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0;
+.sa-info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0;
   border: 0; background: none; color: var(--sa-label-tertiary); cursor: help; }
+/* Same trick as the chip remove: 16px icon, 24px target. */
+.sa-info::before { content: ''; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px;
+  transform: translate(-50%, -50%); }
 .sa-info:hover, .sa-info:focus-visible { color: var(--dsw-alias-label-secondary); }
 .sa-info:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
-.sa-info-warn { color: var(--dsw-alias-state-warn-primary); }
+.sa-info-warn { color: var(--sa-warn-text); }
 .sa-tooltip { position: fixed; z-index: 1100; width: max-content; max-width: min(320px, calc(100vw - var(--sa-sp-24, 24px)));
   padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-radius: var(--sa-r-sm, 4px);
-  background: var(--dsw-alias-tooltip-bg, var(--dsw-alias-bg-overlay)); color: var(--dsw-alias-label-primary-foreground);
+  background: var(--dsw-alias-tooltip-bg, var(--dsw-alias-bg-overlay));
+  color: var(--dsw-alias-tooltip-label, var(--dsw-alias-label-primary-foreground));
   font-size: var(--sa-fs-meta, 12px); line-height: 1.4; overflow-wrap: break-word; pointer-events: none;
   box-shadow: var(--dsw-elevation-prominent); }
 
@@ -930,8 +1012,19 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 @keyframes sa-modal-in { from { opacity: 0; transform: translateY(4px); } }
 @media (prefers-reduced-motion: reduce) {
   .sa-spin, .sa-modal { animation: none; }
-  .sa-switch, .sa-switch-thumb { transition: none; }
+  .sa-switch-track, .sa-switch-thumb { transition: none; }
 }
+
+/* ---------- utilities ---------- */
+/* Announced by screen readers, invisible on screen: used for copy confirmations and other live-region results. */
+.sa-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Touch targets: no double-tap zoom delay and no grey tap flash on the panel's own controls. */
+.sa-btn, .sa-icon-btn, .sa-tab, .sa-segment, .sa-menu-item, .sa-menu-picker, .sa-detail-jump, .sa-row-openable,
+.sa-textlink, .sa-switch-track, .sa-switch-row { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+/* Headlines wrap on phrase boundaries instead of leaving one orphan word on the last line. */
+.sa-title, .sa-section-title, .sa-page-head-title, .sa-card-title, .sa-empty-title, .sa-error-state-title,
+.sa-modal-header h2, .sa-setup-title { text-wrap: balance; }
 
 /* ---------- narrow (≤960 container): single column, tighter page padding ---------- */
 @container (max-width: 960px) {
@@ -950,7 +1043,6 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
   .sa-list-bar { gap: var(--sa-sp-8) var(--sa-sp-12); }
   .sa-pane-aside { position: static; max-height: none; overflow: visible; }
-  .sa-grid3 { grid-template-columns: minmax(0, 1fr); }
   .sa-tabs { gap: var(--sa-sp-16); }
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
@@ -1640,7 +1732,9 @@ function markdownBlocks(text) {
     const bullet = /^\s*[-*+]\s+(.*)$/.exec(line)
     // Ordered markers: `1.` and `1)` need a space (so "2.5 倍" stays prose), the Chinese `1、` may follow directly.
     const ordered = /^\s*(\d+)(?:[.)]\s+|、\s*)(.+)$/.exec(line)
-    if (heading) { flush(); flushList(); blocks.push({ kind: 'heading', text: heading[2] }) }
+    // The level travels with the block so the renderer can keep the document outline instead of flattening every
+    // heading into one styled paragraph.
+    if (heading) { flush(); flushList(); blocks.push({ kind: 'heading', level: heading[1].length, text: heading[2] }) }
     else if (bullet) { flush(); if (!list || list.ordered) { flushList(); list = { kind: 'list', ordered: false, items: [] } } list.items.push(bullet[1]) }
     else if (ordered) { flush(); if (!list || !list.ordered) { flushList(); list = { kind: 'list', ordered: true, items: [] } } list.items.push(ordered[2]) }
     else if (!line.trim()) { flush(); flushList() }
@@ -1752,12 +1846,15 @@ function SegmentedControl({ options = [], value, onChange, label, disabled, clas
     options.map(option => h('button', { key: option.value, type: 'button', role: 'radio', 'aria-checked': option.value === value,
       'data-value': String(option.value), title: option.title, disabled: disabled || option.disabled,
       tabIndex: option.value === value || (value === undefined && option === selectable[0]) ? 0 : -1, className: 'sa-segment',
-      onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label)))
+      onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label,
+      option.description ? h('span', { className: 'sa-sr-only' }, option.description) : null)))
 }
 
-function Input({ icon, className, inputRef, ...rest }) {
+/** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
+    identifier fields (repo, branch, ref, path) default to spellCheck=false so the browser stops underlining them. */
+function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
   return h('span', { className: cx('sa-input', className) }, icon !== undefined ? h('span', { className: 'sa-input-icon' }, controlIcon(icon, 14)) : null,
-    h('input', { ref: inputRef, ...rest }))
+    h('input', { ref: inputRef, spellCheck: spellCheck ?? false, ...rest, 'aria-label': rest['aria-label'] ?? label }))
 }
 
 function Select({ options = [], value, onChange, label, className, disabled }) {
@@ -1766,9 +1863,15 @@ function Select({ options = [], value, onChange, label, className, disabled }) {
     options.map(option => h('option', { key: option.value, value: option.value, disabled: option.disabled }, option.label)))
 }
 
-function Switch({ checked, onChange, label, className, disabled }) {
-  return h('button', { type: 'button', role: 'switch', 'aria-checked': checked, 'aria-label': label,
-    className: cx('sa-switch', className), disabled, onClick: () => onChange(!checked) }, h('span', { className: 'sa-switch-thumb' }))
+/** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
+    hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
+    visible text lives outside the label (it may be omitted when the text is inside). */
+function Switch({ checked, onChange, label, className, disabled, inputRef }) {
+  return h('span', { className: cx('sa-switch', className) },
+    h('input', { ref: inputRef, type: 'checkbox', role: 'switch', className: 'sa-switch-input',
+      checked: Boolean(checked), disabled, 'aria-label': typeof label === 'string' ? label : undefined,
+      onChange: event => onChange(event.target.checked) }),
+    h('span', { className: 'sa-switch-track', 'aria-hidden': 'true' }, h('span', { className: 'sa-switch-thumb' })))
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
@@ -1853,8 +1956,7 @@ function InfoTip({ text, icon = 'question', warn }) {
  */
 function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
   return h('div', { className: 'sa-disclosure', 'data-open': open || undefined },
-    h('div', { className: 'sa-disclosure-row', role: 'button', tabIndex: 0, 'aria-expanded': open, onClick: onToggle,
-      onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onToggle() } } },
+    h('button', { type: 'button', className: 'sa-disclosure-row', 'aria-expanded': open, onClick: onToggle },
       icon ? h('span', { className: 'sa-disclosure-icon' }, controlIcon(icon, 14)) : null,
       h('span', { className: 'sa-disclosure-title' }, title),
       !open && collapsedContent
@@ -1970,7 +2072,10 @@ function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
         'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
         title: item.title, className: 'sa-menu-item', onClick: () => choose(item) },
         item.icon !== undefined ? h('span', { className: 'sa-menu-item-icon' }, controlIcon(item.icon, 14)) : null,
-        h('span', { className: 'sa-menu-item-label' }, item.label),
+        h('span', { className: 'sa-menu-item-label' },
+          h('span', null, item.label),
+          // A disabled entry explains itself in the menu itself instead of only in a hover title (A3).
+          item.note !== undefined ? h('span', { className: 'sa-menu-item-note' }, item.note) : null),
         item.checked ? h('span', { className: 'sa-menu-item-check' }, h(Icon, { name: 'check', size: 14 })) : null))) : null)
 }
 
@@ -2001,9 +2106,13 @@ function CopyButton({ value, label }) {
     } catch { /* clipboard may be blocked by permissions; the value stays selectable */ }
   }
   const text = label ?? t('copy')
-  return h(Button, { variant: 'ghost', size: 'sm', className: 'sa-copy-btn', 'aria-label': text, title: text,
-    icon: h(Icon, { name: copied ? 'check' : 'copy', size: 14 }), onClick: () => { void copy() } },
-    copied ? t('copied') : text)
+  // The button keeps the action as its accessible name; the copy result is announced through a live region so a
+  // screen-reader user hears "copied" without the button (or the row) being renamed under them.
+  return h(Fragment, null,
+    h(Button, { variant: 'ghost', size: 'sm', className: 'sa-copy-btn', 'aria-label': text, title: text,
+      icon: h(Icon, { name: copied ? 'check' : 'copy', size: 14 }), onClick: () => { void copy() } },
+      copied ? t('copied') : text),
+    h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, copied ? t('copied') : ''))
 }
 
 
@@ -2179,7 +2288,7 @@ function KeyValues({ rows, className }) {
 
 function Inlines({ parts, depth = 0 }) {
   return h(Fragment, null, parts.map((part, index) => part.kind === 'bold' ? h('strong', { key: index }, part.text)
-    : part.kind === 'code' ? h('code', { key: index, className: 'sa-code' }, part.text)
+    : part.kind === 'code' ? h('code', { key: index, className: 'sa-code', translate: 'no' }, part.text)
     // Link labels can carry their own inline markup (`[`file.sql`](path)`); parse the label instead of printing its
     // backticks literally. An autolinked URL's label is the URL itself, so a second parse yields the same link again:
     // nested rendering therefore stops after one level. Without that stop a bare URL recursed until the heap died.
@@ -2188,7 +2297,7 @@ function Inlines({ parts, depth = 0 }) {
         h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     // A repository-relative target (a changed file, a spec doc) has no URL inside the app shell: show the label as
     // reference text with the target in the tooltip instead of linking somewhere that 404s.
-    : part.kind === 'ref' ? h('span', { key: index, className: 'sa-code', title: part.url },
+    : part.kind === 'ref' ? h('span', { key: index, className: 'sa-code', title: part.url, translate: 'no' },
       depth > 0 ? part.text : h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     : h(Fragment, { key: index }, part.text)))
 }
@@ -2201,11 +2310,16 @@ function MarkdownLite({ text }) {
         h('div', { className: 'sa-md-code-head' },
           h('span', { className: 'sa-md-code-lang' }, block.lang || 'code'),
           h(CopyButton, { value: block.text })),
-        h('pre', { className: 'sa-md-pre' }, block.text))
+        h('pre', { className: 'sa-md-pre', translate: 'no' }, block.text))
     }
     if (block.kind === 'list') return h(block.ordered ? 'ol' : 'ul', { key: index },
       block.items.map((item, at) => h('li', { key: at }, h(Inlines, { parts: inlines(item) }))))
-    return h('p', { key: index, className: block.kind === 'heading' ? 'sa-md-heading' : undefined }, h(Inlines, { parts: inlines(block.text) }))
+    // Markdown headings keep their rank in the document outline: the page already owns h2, so `#`/`##` land on h3 and
+    // deeper levels step down from there instead of every heading collapsing into a styled paragraph.
+    if (block.kind === 'heading') {
+      return h(`h${Math.min(6, 2 + (block.level ?? 2))}`, { key: index, className: 'sa-md-heading' }, h(Inlines, { parts: inlines(block.text) }))
+    }
+    return h('p', { key: index }, h(Inlines, { parts: inlines(block.text) }))
   }))
 }
 
@@ -2220,8 +2334,9 @@ function ClampText({ text, limit = 480, lines = 8 }) {
       onClick: () => setOpen(!open) }, open ? t('collapse') : t('expand')) : null)
 }
 
-/** Destructive/irreversible action behind a confirmation dialog that states the consequence. */
-function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', icon }) {
+/** Destructive/irreversible action behind a confirmation dialog that states the consequence. `confirmLabel` names the
+    action on the button ("Publish MR", "Delete branch and ignore"); the generic "Confirm" is only the fallback. */
+function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant = 'ghost', icon }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const confirm = useAction(onConfirm)
@@ -2231,13 +2346,17 @@ function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', ic
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setOpen(false) }, t('cancel')),
         h(Button, { variant: variant === 'danger' ? 'danger' : 'primary', disabled: confirm.busy,
-          onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, t('confirm'))) }))
+          onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, confirmLabel ?? t('confirm'))) }))
 }
 
-/** External link; new tab only for links that leave this origin. */
+/** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
+    (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
+    payloads, so an unchecked scheme would be a stored-XSS sink. */
 function ExternalLink({ href, children, icon = 'external' }) {
-  const external = isExternal(href)
-  return h('a', { className: 'sa-inline-link', href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
+  const safe = safeHttpUrl(href)
+  if (!safe) return h('span', { className: 'sa-inline-link' }, children)
+  const external = isExternal(safe)
+  return h('a', { className: 'sa-inline-link', href: safe, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
     icon ? h(Icon, { name: icon, size: 13 }) : null, icon ? ' ' : null, children)
 }
 
@@ -2282,7 +2401,7 @@ function ErrorState({ error, onRetry }) {
     h('div', { className: 'sa-error-state-body' },
       h('p', { className: 'sa-error-state-title' }, message || t('unknown')),
       h('p', { className: 'sa-error-state-hint' }, t('errorHint')),
-      raw && raw !== message ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, raw)) : null),
+      raw && raw !== message ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, raw)) : null),
     onRetry ? h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }), onClick: onRetry }, t('retry')) : null)
 }
 
@@ -2336,7 +2455,7 @@ function RawValue({ label, text, json, openLabel }) {
       h(CopyButton, { value, label: t('copy') }),
       h(Button, { variant: 'ghost', size: 'sm', 'aria-expanded': open, onClick: () => setOpen(!open) },
         open ? t('collapse') : (openLabel ?? t('expand')))),
-    open ? h('pre', { className: 'sa-pre sa-raw-body' }, value) : null)
+    open ? h('pre', { className: 'sa-pre sa-raw-body', translate: 'no' }, value) : null)
 }
 
 /** Lightweight disclosure row for secondary content. */
@@ -2403,12 +2522,36 @@ function pt(t, key, values) {
 
 // ---- 25-router.js ----
 /* Panel routes: one tab per domain page, records addressed by id/key. A deep-linked record (ticket id on
-   overview/execution, thread key on trigger) is kept in the route; the location survives a page reload through
-   sessionStorage. */
+   overview/execution, thread key on trigger) is kept in the route. The location survives a reload twice: the URL
+   fragment is the shareable copy (`#sa={"page":...,"id":...}`), sessionStorage is the fallback for hosts that rewrite
+   or strip the fragment. */
 
 const TABS = ['overview', 'source', 'trigger', 'eval', 'execution', 'settings']
 const HOME = { page: 'overview' }
 const ROUTE_ID_MAX = 200
+const ROUTE_KEY = 'superagent-panel/route'
+/** This panel's fragment prefix. Any other fragment belongs to the host SPA and is neither read nor overwritten. */
+const ROUTE_HASH = 'sa'
+/** Optional in-view route fields (execution `stage`, settings `group`/`focus`) are bounded strings, so a pasted link
+    restores the same view and a crafted fragment cannot grow the route without limit. */
+const ROUTE_FIELD_MAX = 120
+const ROUTE_FIELDS_MAX = 8
+const CORE_ROUTE_KEYS = new Set(['page', 'id', 'run'])
+const ROUTE_FIELD_KEY = /^[a-zA-Z][\w.-]{0,23}$/
+
+/** Keep the non-core keys a page put on the route (in-view filters/sections) without accepting arbitrary values. */
+function routeFields(value) {
+  const fields = {}
+  if (!value || typeof value !== 'object') return fields
+  let kept = 0
+  for (const [key, raw] of Object.entries(value)) {
+    if (kept >= ROUTE_FIELDS_MAX) break
+    if (CORE_ROUTE_KEYS.has(key) || !ROUTE_FIELD_KEY.test(key) || typeof raw !== 'string' || !raw.trim()) continue
+    fields[key] = raw.trim().slice(0, ROUTE_FIELD_MAX)
+    kept += 1
+  }
+  return fields
+}
 
 /** Keep a stored/linked route only when the page is one of ours; a record id is kept as a bounded string. */
 function parseRoute(value) {
@@ -2416,19 +2559,53 @@ function parseRoute(value) {
   if (!TABS.includes(page)) return undefined
   const raw = value?.id
   const id = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, ROUTE_ID_MAX) : undefined
-  return id ? { page, id } : { page }
+  // An optional run pins the run an Eval/source record points at; the detail scrolls to it without changing the page.
+  const rawRun = value?.run
+  const run = typeof rawRun === 'string' && rawRun.trim() ? rawRun.trim().slice(0, ROUTE_ID_MAX) : undefined
+  const fields = routeFields(value)
+  // A pinned run only makes sense with the record it belongs to (unchanged pre-deep-link behaviour).
+  return { page, ...(id ? { id } : {}), ...(id && run ? { run } : {}), ...fields }
 }
-const ROUTE_KEY = 'superagent-panel/route'
+
+/** Same screen: page, record id and pinned run all match (decides whether a stored back stack belongs to a link). */
+const sameRoute = (a, b) => Boolean(a && b) && a.page === b.page
+  && (a.id ?? '') === (b.id ?? '') && (a.run ?? '') === (b.run ?? '')
+
+/** Same route value including the in-view fields: used to ignore a `hashchange` that does not move the panel. */
+function routeEquivalent(a, b) {
+  const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
+  for (const key of keys) {
+    if (String(a?.[key] ?? '') !== String(b?.[key] ?? '')) return false
+  }
+  return true
+}
+
+/** The route in the address bar, when the fragment is this panel's; `undefined` for the host's own fragments. */
+const routeFromHash = () => parseRoute(readHashState(ROUTE_HASH))
+
+/* Captured once, when the bundle is evaluated (i.e. on a real page load), so the initial hash is read before the host's
+   router has a chance to rewrite it. The panel can remount inside the host SPA later; by then the tab's sessionStorage
+   copy is newer (the host may have stripped our fragment), so the link is released after the first mount and every later
+   mount falls back to the remembered route. */
+const LINKED_ROUTE = routeFromHash()
+let linkedRoutePending = Boolean(LINKED_ROUTE)
+/** Set once App has mounted: subsequent mounts prefer the in-tab route memory over the page-load fragment. */
+function releaseLinkedRoute() { linkedRoutePending = false }
+
 function initialLocation() {
-  try {
-    const stored = JSON.parse(sessionStorage.getItem(ROUTE_KEY) ?? 'null')
-    const route = parseRoute(stored?.route)
-    if (route) return { route, stack: Array.isArray(stored.stack) ? stored.stack.flatMap(item => parseRoute(item) ?? []) : [] }
-  } catch { /* route memory is a convenience */ }
-  return { route: HOME, stack: [] }
+  let stored
+  try { stored = JSON.parse(sessionStorage.getItem(ROUTE_KEY) ?? 'null') } catch { stored = undefined }
+  const route = parseRoute(stored?.route)
+  const stack = Array.isArray(stored?.stack) ? stored.stack.flatMap(item => parseRoute(item) ?? []) : []
+  // A shared link wins on a cold open; a reload of a screen this panel itself linked keeps its back stack.
+  if (linkedRoutePending && LINKED_ROUTE) return { route: LINKED_ROUTE, stack: route && sameRoute(route, LINKED_ROUTE) ? stack : [] }
+  return route ? { route, stack } : { route: HOME, stack: [] }
 }
 function remember(location) {
   try { sessionStorage.setItem(ROUTE_KEY, JSON.stringify(location)) } catch { /* private mode: ignore */ }
+  // Mirror the route into the panel's own fragment so a reload or a pasted URL lands on the same screen. replaceState
+  // keeps the host's history untouched; if the host strips the fragment, sessionStorage above still carries the route.
+  writeHashState(ROUTE_HASH, location.route)
 }
 /** Header back-button label: a record id reads as its noun, otherwise the destination tab. */
 const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
@@ -2450,8 +2627,10 @@ Object.assign(PAGE_TEXT, {
   'search.threads': ['线程', 'Threads'],
   'search.triggers': ['消息', 'Messages'],
   'search.showCount': ['{count} 条', '{count}'],
+  'search.resultCount': ['找到 {count} 条结果', '{count} results'],
   'actions.search': ['搜索', 'Search'],
   'actions.more': ['更多操作', 'More actions'],
+  'shell.scrollLabel': ['页面内容', 'Page content'],
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
@@ -2490,17 +2669,24 @@ function GlobalStatus() {
   const onlyEnginePending = data.config?.enabled !== true && setup.done === setup.total - 1
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
-  const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
+  // Outside the live region below: the poll rewrites this every 30s, and announcing the timestamp would interrupt the
+  // reader on a fixed cadence without telling it anything new. The full time stays available on hover (`title`).
+  const updated = h('span', { 'aria-hidden': 'true', title: fullTime(updatedAt, t.lang) || undefined },
     pt(t, 'dataUpdatedAt', { time: clock }))
-  return h('div', { className: 'sa-global-status', role: 'status', title: error ? errorText(error) : undefined,
-    style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
-      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
-    h(StatusIcon, { state: health.state, size: 14, spin: health.state === 'ongoing' }),
+  // Only the sentence whose text actually changes ("运行中 · 需要你处理 2 件") is a live region, so updates are announced
+  // when the state or the counts move and not on every poll. inline-flex reproduces the flex gap inside the status line.
+  const sentence = h('span', { role: 'status', 'aria-live': 'polite',
+    style: { display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sa-sp-8)' } },
     h('span', null, pt(t, health.labelKey)),
     h('span', { 'aria-hidden': 'true' }, '·'),
     h('span', { className: pending > 0 ? 'sa-status-pending' : undefined }, pt(t, 'shell.pending', { count: pending })),
     active > 0 ? h('span', { 'aria-hidden': 'true' }, '·') : null,
-    active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
+    active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null)
+  return h('div', { className: 'sa-global-status', title: error ? errorText(error) : undefined,
+    style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
+      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
+    h(StatusIcon, { state: health.state, size: 14, spin: health.state === 'ongoing' }),
+    sentence,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
     setup.done < setup.total && !onlyEnginePending
@@ -2548,7 +2734,16 @@ function GlobalSearch({ open, onClose }) {
     }, 220)
     return () => { active = false; clearTimeout(timer) }
   }, [open, query, call])
-  const go = route => { navigate(route); onClose() }
+  // Picking a result closes the palette; Modal's unmount cleanup would hand focus back to the header search button and
+  // strand a keyboard user outside the screen they just opened (section B :113). Move focus to the page body instead:
+  // the named scroll region announces the new screen, and a single Tab reaches the first control of the new page
+  // (usually its back button/title action) without re-tabbing the whole chrome.
+  const go = route => {
+    navigate(route)
+    onClose()
+    if (typeof requestAnimationFrame !== 'function') return
+    requestAnimationFrame(() => document.querySelector('.sa-scroll')?.focus())
+  }
   const groups = result ? [
     { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => h('button', {
       key: ticket.id, type: 'button', className: 'sa-row sa-row-openable',
@@ -2575,6 +2770,12 @@ function GlobalSearch({ open, onClose }) {
       h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, trigger.text || trigger.id)),
       trigger.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: trigger.at })) : null)) },
   ].filter(group => group.items.length) : []
+  // A6: the palette's async result needs a live region. Announce only the settled outcome (N results / nothing matched)
+  // — never the result list itself — and stay silent while a newer query is in flight or an error owns `role=alert`.
+  const found = result ? Number(result.total ?? groups.reduce((sum, group) => sum + group.items.length, 0)) : 0
+  const announcement = !busy && !failure && result
+    ? (found > 0 ? pt(t, 'search.resultCount', { count: found }) : pt(t, 'search.noResults'))
+    : ''
   const body = !query.trim()
     ? h(Hint, null, pt(t, 'search.hint'))
     : failure
@@ -2585,15 +2786,19 @@ function GlobalSearch({ open, onClose }) {
           ? h(Hint, null, pt(t, 'search.noResults'))
           : h('div', { className: 'sa-search-groups' }, groups.map(group => h('section', { key: group.key, className: 'sa-section' },
             h('h3', { className: 'sa-ledger-title' }, pt(t, group.titleKey),
-              h('span', { className: 'sa-count' }, pt(t, 'search.showCount', { count: group.items.length }))),
+              h('span', { className: 'sa-count', 'data-empty': group.items.length === 0 ? 'true' : undefined },
+                pt(t, 'search.showCount', { count: group.items.length }))),
             h('div', { className: 'sa-list' }, group.items.map(group.render)))))
   return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal',
     // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
     restoreTo: () => document.getElementById('sa-search-trigger') },
-    h(Input, { inputRef, icon: 'search', className: 'sa-input-full',
-      value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
-      onChange: event => setQuery(event.target.value) }),
-    h('div', { className: 'sa-modal-body' }, body))
+    h('form', { role: 'search', 'aria-label': pt(t, 'search.title'), onSubmit: event => event.preventDefault() },
+      h(Input, { inputRef, icon: 'search', className: 'sa-input-full', type: 'search', name: 'q', autoComplete: 'off',
+        value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
+        'aria-busy': busy ? 'true' : undefined,
+        onChange: event => setQuery(event.target.value) })),
+    h('div', { className: 'sa-modal-body', 'aria-busy': busy ? 'true' : undefined }, body,
+      h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, announcement)))
 }
 
 /** Page header: title, the one global status line, the two fixed status actions (check / refresh), then the glossary. */
@@ -2622,7 +2827,8 @@ function Header({ onOpenSearch }) {
         h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
           title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
         h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
-          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
+          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, 'aria-busy': poll.busy ? 'true' : undefined,
+          onClick: () => { void poll.run() } }),
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
           title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
         h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
@@ -2719,7 +2925,10 @@ function PanelShell({ location, openTab }) {
             h(SegmentedTabs, { items: TABS.map((value, index) => ({ value, label: t(`tab.${value}`), id: `sa-tab-${value}`,
               panelId: 'sa-page', title: `${t(`tab.${value}`)} · Alt+${index + 1}`, shortcut: `Alt+${index + 1}` })),
               value: location.route.page, onChange: openTab, label: t('pageLabel') })) : null),
-        h('div', { ref: scroller, className: 'sa-scroll' },
+        // The body is the only scroll container, and a plain overflow div is not keyboard-scrollable in Safari: make it a
+        // named region so it can take focus and arrow keys/page keys reach the page body.
+        h('div', { ref: scroller, className: 'sa-scroll', tabIndex: 0, role: 'region',
+          'aria-label': pt(t, 'shell.scrollLabel') },
           h(PanelBoundary, null, h(Pages, { route: location.route }))),
         h(GlobalSearch, { open: searchOpen, onClose: () => setSearchOpen(false) }))))
 }
@@ -2728,6 +2937,22 @@ function PanelShell({ location, openTab }) {
 function App({ openSession, t }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
+  // The page-load fragment only seeds this first mount. A later remount inside the host SPA reads the remembered route
+  // instead, so a fragment the host stripped or rewrote after boot cannot drag the panel back to an older screen.
+  useEffect(() => { releaseLinkedRoute() }, [])
+  // Deep links: a pasted URL or a host rewrite of `#sa=…` moves the panel in place, without a reload. Our own writes go
+  // through replaceState and never fire `hashchange`, so this cannot loop with `remember`. A foreign fragment (the host
+  // SPA's own state) is ignored, and a known page without a record resets to that tab's root. Compared with the whole
+  // route value so an in-view field (execution stage, settings group) from a shared link is applied too.
+  useEffect(() => {
+    const onHashChange = () => {
+      const route = routeFromHash()
+      if (!route) return
+      setLocation(current => routeEquivalent(current.route, route) ? current : { route, stack: [] })
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   const move = useCallback(next => setLocation(current => next(current)), [])
   const navigate = useCallback((route, replace = false) => move(current => ({ route,
     stack: replace ? current.stack : [...current.stack, current.route].slice(-20) })), [move])
@@ -2754,8 +2979,13 @@ function useEngineActions(call) {
     poll: ({ dryRun = true } = {}) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
     checkUat: async () => (await call('POST engine/uat-check')).uat,
+    // Draft routing preview (AC-01): same resolver as execution, no Ticket/run/write side effects.
+    previewRoute: ({ title, body, selection } = {}) => call('POST engine/route',
+      { body: { title, body, ...(selection ? { selection } : {}) } }),
     // `repoId` routes a manual Ticket to one of the configured repositories (contract §12.2); omitted = defaultRepo.
-    createTicket: ({ title, body, repoId }) => call('POST engine/ticket', { body: { title, body, ...(repoId ? { repoId } : {}) } }),
+    // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
+    createTicket: ({ title, body, repoId, route }) => call('POST engine/ticket',
+      { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
     runTicket: (id, { dryRun = true, wait = false } = {}) => call('POST engine/ticket/:id/run', { id, body: { dryRun, wait } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
     refreshCi: (id) => call('POST engine/ticket/:id/ci', { id }),
@@ -2773,6 +3003,8 @@ function useEngineActions(call) {
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
+    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
+    stopTicket: (id, { note } = {}) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),
     // P1 (§8.1): recent raw signals, read by the Source page (status/source/limit are optional filters).
@@ -2796,12 +3028,15 @@ function useEngineActions(call) {
     patchSettings: (patch) => call('POST engine/settings', { body: patch }),
     // Store one repository's GitLab token in the token file live.json declares for it (never echoed back).
     saveRepoToken: (repoId, token) => call('POST engine/repo/:id/token', { id: repoId, body: { token } }),
+    // AC-11: read-only probe; the server runs no configured gate and writes nothing.
+    testConfig: repoId => call('POST engine/config/test', { body: { repoId } }),
     // Store the Octo bot token in the file live.json declares; same no-echo contract as the repo token.
     saveOctoToken: (token) => call('POST engine/octo/token', { body: { token } }),
     // Read-only list of the bot's Octo groups, used by the settings picker.
     listOctoGroups: () => call('GET engine/octo/groups'),
     // Add one repository definition to live.json; the token is saved separately on the repo card.
     addRepo: (repo, { makeDefault = false } = {}) => call('POST engine/repos', { body: { repo, makeDefault } }),
+    updateRepo: (repoId, patch) => call('POST engine/repo/:id', { id: repoId, body: { patch } }),
     // Saved live.json versions and rollback; entries are configuration-only (no token values).
     settingsHistory: () => call('GET engine/settings/history'),
     restoreSettings: id => call(`POST engine/settings/history/${encodeURIComponent(id)}/restore`),
@@ -3010,7 +3245,7 @@ Object.assign(PAGE_TEXT, {
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
-    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
+    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidencePrWaiting: ['已推送，等待创建 PR', 'Pushed; waiting for PR'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
     evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
     evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
@@ -3089,7 +3324,11 @@ Object.assign(PAGE_TEXT, {
     dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'], refreshCi: ['刷新 CI', 'Refresh CI'],
     verify: ['核对合并/UAT', 'Verify merge/UAT'], originLink: ['来源触发', 'Origin trigger'],
     retryUnavailable: ['执行器未启用，只能干跑。', 'The executor is disabled; dry run only.'],
-    stopUnavailable: ['当前引擎还没有停止接口。', 'The engine has no stop endpoint yet.'],
+    stopUnavailable: ['当前没有可停止的执行。', 'There is no active run to stop.'],
+    stopping: ['正在停止…', 'Stopping…'], stopConfirm: ['请求停止这个工单？已完成的动作会保留，之后不会再提交、推送或发布。',
+      'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
+    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
+      'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
     publishUnavailable: ['缺少推送权限、执行器未启用或没有 GitLab token。', 'Push is not allowed, the executor is off, or the GitLab token is missing.'],
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
@@ -3158,12 +3397,20 @@ Object.assign(PAGE_TEXT, {
   'auto.daily': ['每天 {time}', 'Daily {time}'],
   'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
   'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.dispatchPaused': ['派发已暂停（保留队列）', 'Dispatch is paused (queue kept)'],
   'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
   'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
   'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
   'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.repoDisabled': ['仓库已停用，不再派发新任务', 'The repository is disabled; no new work is dispatched'],
+  'auto.skip.noRepo': ['工单没有可用的仓库', 'No repository is available for this Ticket'],
   'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
   // push mode records only the GitHub `/pull/new/` URL: the PR itself is opened by `.github/workflows/auto-pr.yml`.
+  'ticket.prWaiting': ['已推送，等待创建 PR', 'Pushed; waiting for PR'],
+  'ticket.prState': ['PR 状态', 'PR state'],
+  'ticket.acceptState': ['人工验收', 'Human acceptance'],
+  'ticket.acceptedYes': ['已通过', 'Accepted'],
+  'ticket.acceptedNo': ['未验收', 'Not accepted'],
   'mr.pushHint': ['这个 PR 由推送后的 auto-pr workflow 自动创建；合并状态由目标分支历史判定。',
     'This PR is created automatically by the post-push auto-pr workflow; merge state comes from the target branch history.'],
   // P2-7: GitLab observation upgrades shown on the MR card.
@@ -3210,6 +3457,19 @@ Object.assign(PAGE_TEXT, {
     resumeDone: ['已恢复处理。', 'Processing resumed.'],
     configReloaded: ['配置已重载。', 'Configuration reloaded.'],
   },
+  // Stage rail: the colour-coded icon is aria-hidden, so each step also prints its state word (WIG 1.4.1).
+  'railState.done': ['完成', 'Done'],
+  'railState.ongoing': ['进行中', 'Ongoing'],
+  'railState.warning': ['有警告', 'Warning'],
+  'railState.error': ['失败', 'Failed'],
+  'railState.idle': ['未开始', 'Not started'],
+  // Polled ticket list: announce the count that changed, never the whole list (WIG A6).
+  'list.status': ['共 {count} 张工单', '{count} tickets'],
+  // Manual create form: a placeholder is not a label (WIG B).
+  'st.titleLabel': ['工单标题', 'Ticket title'],
+  'st.bodyLabel': ['需求正文', 'Request body'],
+  // A raw run error opens in a fold instead of stretching the row (WIG B).
+  'run.rawError': ['原始错误', 'Raw error'],
 })
 
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
@@ -3296,14 +3556,20 @@ function automationChip(t, ticket) {
   if (!automation || automation.enabled !== true || automation.mode === 'off') return null
   const label = automationSummaryText(t, automation)
   if (!label) return null
-  return h(Tag, { key: 'automation', tone: 'info',
-    title: automation.nextAt ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) }) : undefined },
-  label)
+  const nextAt = automation.nextAt
+    ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) })
+    : ''
+  // The next run used to live in a title tooltip only (no touch, no keyboard): a focusable InfoTip exposes it.
+  return h(Fragment, { key: 'automation' },
+    h(Tag, { tone: 'info' }, label),
+    nextAt ? h(InfoTip, { key: 'automation-next', text: nextAt }) : null)
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
-const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
-  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
+  'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions',
+  'repo-disabled': 'auto.skip.repoDisabled', 'no-repo': 'auto.skip.noRepo', due: 'auto.skip.due' }
 function autoSkipReasonText(t, reason) {
   const key = AUTO_SKIP_KEYS[String(reason ?? '')]
   return key ? pt(t, key) : String(reason ?? '')
@@ -3382,6 +3648,11 @@ function ticketStatus(ticket) {
   const acceptance = ticketAcceptanceOf(ticket)
   if (acceptance.state === 'accepted') {
     return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  // AC-03: a stop that has been requested but not yet confirmed is its own visible state. Leaving the chip on
+  // "执行中" was indistinguishable from a run that is not stopping, and the stop action is already disabled.
+  if (ticket?.stopRequested) {
+    return { ...view, acceptance, labelKey: 'ticket.stopping', needsHuman: false, primary: 'none' }
   }
   return { ...view, acceptance }
 }
@@ -3518,6 +3789,7 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
         disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
       h(ConfirmButton, {
         label: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
+        confirmLabel: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
         title: onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle'),
         message: onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage'),
         variant: 'primary', icon: 'play', onConfirm: onStart,
@@ -3698,7 +3970,7 @@ function failureLabel(t, error) {
  * shipped it, the Chinese cause of a failed run, or the current run's age — exactly one of those, never a status or a
  * result a chip already states (P0 §3.6.4: state + acceptance/result + time are the row's whole information budget).
  */
-function ticketEvidence(t, ticket, view) {
+function ticketEvidence(t, ticket, view, now = Date.now()) {
   const links = ticket?.links ?? {}
   const assignments = Array.isArray(ticket?.assignments) ? ticket.assignments : []
   // A parked gate: the gate's name is the evidence a person needs; the state and the wait are on the chips.
@@ -3710,20 +3982,37 @@ function ticketEvidence(t, ticket, view) {
   const recovered = view?.group === 'done' || ['merged', 'deployed'].includes(ticket?.status)
   if (failed && !recovered) {
     const raw = String(failed.report?.text ?? '')
-    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
+    const cause = failureLabel(t, raw)
+    // The full error was tooltip-only (no touch, no keyboard): the short cause stays visible and the raw text sits
+    // behind a focusable info control when it says more than the sentence. The wrapper lifts it above the row's
+    // stretched link overlay so it stays operable.
+    return h(Fragment, null,
+      raw.trim() && raw.trim() !== cause
+        ? h('span', { style: { position: 'relative', zIndex: 1 } }, h(InfoTip, { text: raw }))
+        : null,
+      h('span', null, pt(t, 'row.evidenceCause', { cause })))
   }
   const mr = links.mergeRequest ?? {}
-  // push mode has a PR URL but no iid until the repo's auto-pr workflow opens it; the URL alone is still evidence.
+  // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
+  // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
+  // A merged/deployed Ticket is past that stage: saying "waiting for PR" beside a 已合并 tag contradicts the state.
+  const merged = ['merged', 'deployed'].includes(ticket?.status)
+    || links.verification?.merged === true || links.acceptance?.ok === true
+  const prWaiting = !merged && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
-    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid }) : pt(t, 'row.evidencePr')
-    return mr.webUrl
-      ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
-        title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
+    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
+      : merged ? pt(t, 'ticket.mergedYes')
+        : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
+    const href = safeHttpUrl(mr.webUrl)
+    return href
+      ? h('a', { className: 'sa-inline-link sa-mono', href, target: '_blank', rel: 'noopener noreferrer',
+        title: href, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
+  if (merged) return h('span', { className: 'sa-mono' }, pt(t, 'ticket.mergedYes'))
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
-    const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
+    const minutes = Math.max(0, Math.floor((now - Date.parse(running.startedAt)) / 60_000))
     return pt(t, 'row.evidenceRunning', { minutes })
   }
   return ''
@@ -3737,7 +4026,7 @@ function ticketEvidence(t, ticket, view) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
-function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra }) {
+function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
   const { t, navigate, notify } = usePanel()
   const model = usePanelData()
   const act = actions ?? model?.actions
@@ -3778,16 +4067,26 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
     refreshCi: () => { void refreshCi.run() },
     dryRun: () => { void dryRun.run() },
     publish: () => setPending({ kind: 'publish' }),
-    external: () => window.open(primary.href, '_blank', 'noopener'),
     detail: open,
   }
-  const primaryButton = primary ? h(Button, { variant: 'primary', size: 'sm', disabled: Boolean(busyOf[primary.kind]),
-    title: primary.kind === 'publish' && !canPublish ? pt(t, 'ticket.publishUnavailable') : undefined,
-    onClick: event => { event.stopPropagation(); branches[primary.kind]() } }, pt(t, primary.labelKey)) : null
+  const externalHref = primary?.kind === 'external' ? safeHttpUrl(primary.href) : ''
+  // A real link, not window.open: middle-click, Cmd-click and copy-link keep working, and it is keyboard reachable
+  // (`.sa-btn` is class-based, so an <a> with the same classes renders as the same primary button).
+  const primaryButton = !primary ? null
+    : primary.kind === 'external'
+      ? externalHref
+        ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm', href: externalHref, target: '_blank',
+          rel: 'noopener noreferrer', style: { textDecoration: 'none' },
+          onClick: event => event.stopPropagation() }, pt(t, primary.labelKey))
+        // An unsafe URL never becomes a link; the same action degrades to opening the detail.
+        : h(Button, { variant: 'primary', size: 'sm',
+          onClick: event => { event.stopPropagation(); open() } }, pt(t, primary.labelKey))
+      : h(Button, { variant: 'primary', size: 'sm', disabled: Boolean(busyOf[primary.kind]),
+        onClick: event => { event.stopPropagation(); branches[primary.kind]() } }, pt(t, primary.labelKey))
   const allItems = [
     { key: 'dryRun', label: pt(t, 'menu.dryRun'), onSelect: () => { void dryRun.run() }, disabled: dryRun.busy },
     { key: 'publish', label: pt(t, 'menu.publish'), onSelect: () => setPending({ kind: 'publish' }),
-      disabled: publish.busy || !canPublish, title: canPublish ? undefined : pt(t, 'ticket.publishUnavailable') },
+      disabled: publish.busy || !canPublish },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), onSelect: () => { void refreshCi.run() }, disabled: refreshCi.busy || !hasMr },
     { key: 'verify', label: pt(t, 'menu.verify'), onSelect: () => { void verify.run() }, disabled: verify.busy },
     ...view.group === 'failed'
@@ -3804,6 +4103,10 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   })
   const stopInner = { onClick: event => event.stopPropagation(),
     onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() } }
+  // The unavailable-publish reason is shared by the primary button and the ⋯ menu entry: one focusable info control
+  // instead of a title tooltip (unreachable on touch, and a disabled menu item cannot take focus at all).
+  const publishUnavailableTip = !canPublish && items.some(item => item.key === 'publish')
+    ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null
   // Multi-repository panels say which repository a Ticket belongs to; a plain text span, not a Tag, so the three-tag
   // budget of the row stays for state and result.
   const repoList = panelRepos(data)
@@ -3838,30 +4141,36 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   if (showRepo) chips.push(h('span', { key: 'repo', className: 'sa-hint' }, String(repoName)))
   if (extra) chips.push(h('span', { key: 'extra', className: 'sa-hint' }, extra))
 
-  // The row itself is a plain div (mouse convenience); the title is a real <button> so keyboard users get one focus
-  // stop, and the primary/⋯ controls are siblings of it — never buttons nested inside a role=button row (G6). The
-  // evidence rail is the third track of the execution ledger; other pages hide it via CSS and keep the flex row.
-  const evidence = ticketEvidence(t, ticket, view)
+  // The title is a real <button> so keyboard users get one focus stop, and the primary/⋯ controls are siblings of it —
+  // never buttons nested inside a role=button row (G6). The evidence rail is the third track of the execution ledger;
+  // other pages hide it via CSS and keep the flex row.
+  const evidence = ticketEvidence(t, ticket, view, now)
   return h('li', null,
-    h('div', { className: 'sa-row sa-row-openable', onClick: open },
+    // The row div is not the click target any more: the title is a real button carrying `.sa-open`, whose stretched
+    // `::after` covers the whole row, so the row's primary action is one keyboard-reachable button (WIG: div click).
+    h('div', { className: 'sa-row sa-row-openable' },
       h(StatusIcon, { state: rowIconState, size: 16 }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
-          h('button', { type: 'button', className: 'sa-row-open',
+          h('button', { type: 'button', className: 'sa-row-open sa-open',
             'aria-label': `${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`,
-            onClick: event => { event.stopPropagation(); open() } },
-          h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            onClick: open },
+          h('span', { className: 'sa-ellipsis' },
             ticket.title || pt(t, 'row.untitled')))),
         h('div', { className: 'sa-row-meta' }, chips)),
       h('span', { className: 'sa-row-evidence' }, evidence),
       h('div', { className: 'sa-row-actions', ...stopInner },
+        publishUnavailableTip,
         primaryButton,
         compact || !items.length ? null : h(Menu, { label: pt(t, 'menu.label'), items, align: 'end' }))),
     h(Modal, { open: Boolean(pending), onClose: () => setPending(null), title: pt(t, 'ticket.publish'),
       closeLabel: t('close'), description: pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: publish.busy, onClick: () => { void publish.run() } }, t('confirm'))) }),
+        // Pending actions name the verb, never the generic 确认; the dialog closes only when the action succeeded.
+        h(Button, { variant: 'primary', disabled: publish.busy,
+          onClick: () => { void publish.run().then(done => { if (done) setPending(null) }) } },
+          pt(t, 'ticket.publish'))) }),
     h(Modal, { open: dismissOpen, onClose: () => setDismissOpen(false), title: pt(t, 'detail.dismissTitle'),
       closeLabel: t('close'),
       description: pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
@@ -3869,15 +4178,22 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setDismissOpen(false) }, t('cancel')),
         h(Button, { variant: 'primary', disabled: dismiss.busy,
-          onClick: async () => { await dismiss.run(); setDismissOpen(false) } }, t('confirm'))) }))
+          onClick: async () => { if (await dismiss.run()) setDismissOpen(false) } }, pt(t, 'detail.dismiss'))) }))
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
-function TicketList({ tickets, page = 'execution', actions, reload }) {
+function TicketList({ tickets, page = 'execution', actions, reload, now }) {
+  const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
-  if (!list.length) return null
-  return h('ul', { className: 'sa-list' }, list.map(ticket =>
-    h(TicketRow, { key: ticket.id, ticket, page, actions, reload })))
+  // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
+  // mounted when the list empties, so "0 tickets" is announced too instead of the region vanishing mid-announcement.
+  const status = h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' },
+    pt(t, 'list.status', { count: list.length }))
+  if (!list.length) return status
+  return h(Fragment, null,
+    status,
+    h('ul', { className: 'sa-list' }, list.map(ticket =>
+      h(TicketRow, { key: ticket.id, ticket, page, actions, reload, now }))))
 }
 
 // Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
@@ -3913,12 +4229,18 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
+const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
+
 function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [repoId, setRepoId] = useState(undefined)
+  const [deliverable, setDeliverable] = useState('')
+  const [backend, setBackend] = useState('')
+  const [preview, setPreview] = useState()
+  const [previewError, setPreviewError] = useState()
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState()
   const [failure, setFailure] = useState()
@@ -3926,13 +4248,39 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const repos = panelRepos(data)
   const defaultRepo = panelDefaultRepo(data)
   const usableRepo = repos.some(repo => repo.id === repoId) ? repoId : defaultRepo
+  const selection = { ...(backend ? { backend } : {}), ...(deliverable ? { deliverable } : {}) }
+  const selectionKey = JSON.stringify(selection)
+  // Draft preview: the operator sees the automatic judgement (deliverable / capabilities / backend) before creating,
+  // and any manual choice is previewed through the same resolver the executor uses — so the preview cannot promise a
+  // route the run then refuses.
+  useEffect(() => {
+    if (!`${title}${body}`.trim()) { setPreview(undefined); setPreviewError(undefined); return }
+    let alive = true
+    const timer = setTimeout(() => {
+      const actions = model?.actions
+      if (!actions?.previewRoute) return
+      actions.previewRoute({ title: title.trim(), body: body.trim() || undefined, selection })
+        .then(result => { if (alive) { setPreview(result); setPreviewError(undefined) } })
+        .catch(error => { if (alive) { setPreview(undefined); setPreviewError(error) } })
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [title, body, selectionKey])
+  const route = preview?.route
+  const capabilityText = (route?.capabilities ?? []).map(capability =>
+    pt(t, ROUTE_CAP_KEYS[capability] ?? capability)).join(' · ') || '—'
+  // Before the first preview arrives, offer the declared backends so the operator can pick one immediately; the
+  // preview response then narrows the list to the enabled set.
+  const enabledBackends = preview?.options?.backends
+    ?? (typeof ROUTE_BACKENDS !== 'undefined' ? ROUTE_BACKENDS.map(backend => backend.value) : ['dsh', 'codex', 'claude'])
+  const backendOptions = [{ value: '', label: pt(t, 'st.routeAuto') },
+    ...enabledBackends.map(value => ({ value, label: value }))]
   const submit = async () => {
     if (busy || !title.trim()) return
     setBusy(true)
     setFailure(undefined)
     try {
       const response = await model.actions.createTicket({ title: title.trim(), body: body.trim() || undefined,
-        repoId: usableRepo || undefined })
+        repoId: usableRepo || undefined, route: Object.keys(selection).length ? selection : undefined })
       // POST engine/ticket answers { ticket }; accept a bare ticket too so a future host shape change cannot hide the
       // created state (and onDone callers get the Ticket, not the envelope).
       const ticket = response?.ticket ?? response
@@ -3947,7 +4295,8 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
       setBusy(false)
     }
   }
-  return h('div', { className: 'sa-field' },
+  // A real form: Enter submits, every field carries a name, and title/body get a visible label (a placeholder is not one).
+  return h('form', { className: 'sa-field', onSubmit: event => { event.preventDefault(); void submit() } },
     heading ? h('span', { className: 'sa-field-head' }, pt(t, 'st.manualTitle')) : null,
     heading ? h(Hint, null, pt(t, 'st.manualHint')) : null,
     repos.length
@@ -3958,17 +4307,46 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
           onChange: next => setRepoId(next) }),
         h(Hint, null, pt(t, 'st.manualRepoHint', { name: repos.find(repo => repo.id === defaultRepo)?.name ?? defaultRepo ?? '—' })))
       : null,
-    h(Input, { value: title, placeholder: pt(t, 'st.titlePh'), 'aria-label': pt(t, 'st.titlePh'), disabled: busy,
+    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-title' }, pt(t, 'st.titleLabel')),
+    h(Input, { id: 'sa-manual-title', name: 'title', value: title, placeholder: pt(t, 'st.titlePh'), disabled: busy,
       onChange: event => setTitle(event.target.value) }),
-    h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
-      'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-body' }, pt(t, 'st.bodyLabel')),
+    h('textarea', { id: 'sa-manual-body', name: 'body', className: 'sa-textarea', rows: 3, value: body,
+      placeholder: pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    // Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
+    // Ticket by the host; an unsupported combination is warned about here and rejected by the executor.
+    h('div', { className: 'sa-route-controls' },
+      h(Select, { label: pt(t, 'st.routeDeliverable'), value: deliverable, disabled: busy,
+        options: [{ value: '', label: pt(t, 'st.routeAuto') },
+          { value: 'change', label: pt(t, 'st.routeChange') },
+          { value: 'report', label: pt(t, 'st.routeReport') }],
+        onChange: next => setDeliverable(next) }),
+      h(Select, { label: pt(t, 'st.routeBackend'), value: backend, disabled: busy, options: backendOptions,
+        onChange: next => setBackend(next) })),
+    route
+      ? h('div', { className: 'sa-route-preview' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreviewTitle')),
+        h('p', null,
+          `${pt(t, `detail.workType.${route.workType}`)} · `,
+          `${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `,
+          `${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `,
+          `${pt(t, 'st.routeBackend')}: ${route.backend}`,
+          route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`),
+        route.unsupported
+          ? h('p', { className: 'sa-error' }, pt(t, 'st.routeUnsupported', { caps: route.unsupported }))
+          : null)
+      : null,
+    previewError ? h(Hint, { tone: 'warning' }, pt(t, 'st.routePreviewFailed')) : null,
+    Object.keys(selection).length
+      ? h(Hint, null, pt(t, 'st.routeManualHint'))
+      : null,
     // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
     // give a modal caller an explicit cancel next to it (critique 2026-11-11).
     h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
       onCancel ? h(Button, { variant: 'ghost', size: 'md', onClick: onCancel }, t('cancel')) : null,
-      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }),
-        disabled: busy || !title.trim(), onClick: () => { void submit() } }, pt(t, 'st.create'))),
-    created?.id ? h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }), type: 'submit',
+        disabled: busy || !title.trim(), 'aria-busy': busy ? 'true' : undefined }, pt(t, 'st.create'))),
+    created?.id ? h('div', { className: 'sa-actions', role: 'status', 'aria-live': 'polite' },
       h(StatusText, { state: 'done' }, pt(t, 'st.created')),
       h('code', { className: 'sa-mono' }, shortId(created.id, 10))) : null,
     failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
@@ -3995,7 +4373,7 @@ function FunnelBar({ flow }) {
     h('div', { className: 'sa-funnel-steps' }, steps.flatMap((step, index) => [
       index ? h('span', { key: `arrow-${step.key}`, className: 'sa-funnel-arrow', 'aria-hidden': 'true' }, '→') : null,
       h('div', { key: step.key, className: 'sa-funnel-step' },
-        h('span', { className: 'sa-funnel-value' }, String(step.value)),
+        h('span', { className: 'sa-funnel-value' }, ovCount(step.value, t.lang)),
         h('span', { className: 'sa-funnel-label' }, pt(t, step.labelKey))),
     ]),
       contextOnly > 0 ? h('span', { className: 'sa-funnel-branch' }, pt(t, 'funnelBranch', { count: contextOnly })) : null),
@@ -4061,9 +4439,10 @@ function GateSummary({ ticket }) {
   return h('div', { className: 'sa-gates' },
     gates.map((gate, index) => {
       const ok = gate.exitCode === 0 && !gate.timedOut
-      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
-        'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate' },
         h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+        // The passed/failed word is visible text, not an aria-label on a plain span (ignored by many screen readers).
+        h('span', { className: 'sa-hint' }, pt(t, ok ? 'gate.passed' : 'gate.failed')),
         ok ? null : h('span', { className: 'sa-hint' },
           gate.timedOut ? pt(t, 'gate.timedOut')
             : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
@@ -4105,17 +4484,20 @@ function StageRail({ ticket, detail = false }) {
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
       result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
-        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, 'row.evidencePr') : '' },
+        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, !mergeRequest.iid && (mergeRequest.pending === true || Boolean(mergeRequest.webUrl)) ? 'row.evidencePrWaiting' : 'row.evidencePr') : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
   ]
   return h('ol', { className: detail ? 'sa-rail sa-rail-detail' : 'sa-rail' },
+    // The stage name carries no state: the state icon is aria-hidden and colour-coded, so each step also prints its
+    // state word (done/ongoing/warning/error/idle) in the result slot. Never colour-only (WIG 1.4.1).
     stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
       h(detail ? 'span' : 'div', { className: 'sa-rail-dot' },
         h(StatusIcon, { state: stage.state, size: 14 }),
         h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`)),
-        detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null))))
+        h('span', { className: 'sa-rail-result' },
+          [pt(t, `railState.${stage.state}`), detail ? stage.result : ''].filter(Boolean).join(' · '))))))
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
@@ -4129,7 +4511,10 @@ function MergeRequestCard({ ticket }) {
   // push mode records only the GitHub `/pull/new/` URL before any PR number exists; the URL alone is MR evidence.
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
+  const delivered = merged || ['merged', 'deployed'].includes(ticket?.status) || links.acceptance?.ok === true
   const rows = []
+  const prWaiting = !delivered && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
   if (mr.state) rows.push([pt(t, 'ticket.mrState'), providerStateText(t, MR_STATE_KEYS, mr.state)])
@@ -4137,6 +4522,8 @@ function MergeRequestCard({ ticket }) {
   if (!mr.state && verification.merged === true) rows.push([pt(t, 'ticket.mergeState'), pt(t, 'ticket.mergedYes')])
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
+  // AC-05: acceptance is its own evidence even when the deliverable is a pushed branch.
+  rows.push([pt(t, 'ticket.acceptState'), links.acceptance?.ok === true ? pt(t, 'ticket.acceptedYes') : pt(t, 'ticket.acceptedNo')])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
   // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
   const draft = mr.draft === true || mr.workInProgress === true
@@ -4172,8 +4559,13 @@ function UatCard({ ticket }) {
   if (verification.sha) rows.push([pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, liveShortId(verification.sha, 8))])
   if (verification.merged !== undefined) rows.push([pt(t, 'ticket.mergeState'),
     pt(t, verification.merged ? 'ticket.mergedYes' : 'ticket.mergedNo')])
-  if (verification.uat) rows.push([pt(t, 'ticket.uatReachable'),
-    verification.uat.ok ? `✓ ${verification.uat.status ?? ''}`.trim() : `✗ ${verification.uat.error ?? ''}`.trim()])
+  if (verification.uat) {
+    // A mark alone reads as a bare "✓" when the provider sent no status: the reachability word is always visible.
+    const uatState = pt(t, verification.uat.ok ? 'ticket.uatReachable' : 'ticket.uatUnreachable')
+    const uatDetail = verification.uat.ok ? verification.uat.status : verification.uat.error
+    const uatMark = verification.uat.ok ? '✓ ' : '✗ '
+    rows.push([pt(t, 'ticket.uatReachable'), `${uatMark}${uatState}${uatDetail ? ` · ${uatDetail}` : ''}`])
+  }
   if (verification.changed !== undefined) rows.push([pt(t, 'ticket.uatChange'),
     verification.changed ? pt(t, 'ticket.uatChanged') : pt(t, 'ticket.uatSame')])
   // History uses the one absolute stamp the rest of the detail page uses (T7); relative time is only for
@@ -4197,8 +4589,8 @@ function UatCard({ ticket }) {
 // The six page fragments are being rewritten against the new components above; until every page lands, keep the
 // old composition seams alive so an intermediate build cannot blank a page with a ReferenceError.
 function LiveFrame({ children }) { return h(Fragment, null, children) }
-function LiveTicketList({ tickets, page = 'overview', actions, reload }) {
-  return h(TicketList, { tickets, page, actions, reload })
+function LiveTicketList({ tickets, page = 'overview', actions, reload, now }) {
+  return h(TicketList, { tickets, page, actions, reload, now })
 }
 function LiveRunRows({ runs, limit = Infinity }) {
   const { t } = usePanel()
@@ -4206,13 +4598,19 @@ function LiveRunRows({ runs, limit = Infinity }) {
   if (!list.length) return h(Hint, null, t('empty'))
   return h('ul', { className: 'sa-list' }, list.map(run => {
     const view = runView(t, run)
+    const cause = run.error ? failureLabel(t, run.error) : ''
+    const raw = run.error ? String(run.error) : ''
     return h('li', { key: run.id, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
           h('span', null, view.label),
           h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
-        run.error ? h('p', { className: 'sa-error' }, String(run.error)) : null))
+        // A raw worker error can be a whole stack: the short cause stays inline and the untruncated text folds.
+        run.error ? h('p', { className: 'sa-error' }, cause) : null,
+        run.error && raw.trim() !== cause
+          ? h(Folded, { summary: pt(t, 'run.rawError') }, h(ClampText, { text: raw }))
+          : null))
   }))
 }
 function LiveStatusTags({ engine, config }) {
@@ -4322,6 +4720,11 @@ Object.assign(PAGE_TEXT, {
     'Triggers: {manual} manual · {auto} automatic · {timed} timed'],
   'ov.q.acceptance': ['验收：{rounds} 轮 · 通过 {rate}%', 'Acceptance: {rounds} rounds · {rate}% passed'],
   'ov.q.openExecution': ['去执行页', 'Open Execution'],
+
+  // ---- folded runtime details: a 30-group cursor row stays two lines until it is expanded ------------------------
+  'ov.cursorMore': ['其余 {count} 个', '{count} more'],
+  // The poll cadence can be absent on an older host: the summary cannot promise a number it does not have.
+  'ov.summaryAlt': ['轮询间隔未知 · 更新于 {time}', 'Poll interval unknown · updated {time}'],
 })
 
 const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
@@ -4348,12 +4751,13 @@ function useOverviewNow(intervalMs = 1000) {
   return now
 }
 
-const ovPad = value => String(value).padStart(2, '0')
-/** `MM-DD HH:mm` — enough for an absolute stamp without the seconds a 30s model cannot promise. */
+// The hand-built `MM-DD HH:mm` was the same string in both languages and bypassed the locale's digit/order rules.
+const ovStampFormatter = lang => new Intl.DateTimeFormat(lang === 'en' ? 'en' : 'zh-CN',
+  { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 function ovStamp(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return `${ovPad(date.getMonth() + 1)}-${ovPad(date.getDate())} ${ovPad(date.getHours())}:${ovPad(date.getMinutes())}`
+  return ovStampFormatter(PANEL_LANG).format(date)
 }
 const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en' ? 'en' : 'zh-CN')
 const ovClip = (value, limit = 64) => {
@@ -4519,7 +4923,9 @@ function LiveOverviewPage({ route }) {
     notify(pt(t, 'automation.started'))
   }, { reload })
   const [runtimeOpen, setRuntimeOpen] = useState(false)
-  const now = useOverviewNow(1000)
+  // The page used to re-render every second just to keep a countdown fresh; only the pulse/countdown read this clock,
+  // so a 5 s beat keeps it honest without repainting the whole desk each second (WIG P2).
+  const now = useOverviewNow(5000)
   // The previous visit is read once (this render) and written after it: reading it in an effect would already see
   // the new value and every visit would claim "nothing new".
   const [lastSeen] = useState(ovReadLastSeen)
@@ -4597,10 +5003,10 @@ function LiveOverviewPage({ route }) {
   // The one panel-wide "data updated" clock is the header's; the folded summary repeats the same client read time
   // without seconds, and the engine's own poll time lives only in the expanded KeyValues (#2/#23).
   const clock = hhmm(updatedAt, t.lang) || '—'
-  const pollSeconds = config.pollSeconds ?? '—'
-  const cursorText = Object.entries(engine.channelCursors ?? {})
+  const pollSeconds = config.pollSeconds
+  const pollSecondsKnown = pollSeconds !== undefined && pollSeconds !== null && pollSeconds !== ''
+  const cursorPairs = Object.entries(engine.channelCursors ?? {})
     .map(([chat, seq]) => `${config.octo?.chatTitles?.[chat] ?? String(chat).slice(0, 8)}@${seq}`)
-    .join(' / ')
 
   // The engine error and the paused switch are also derivable through `problemsOf`, but this page renders both as
   // their own state block right above the desk; listing them twice would say the same thing in two places (§4.2).
@@ -4652,7 +5058,9 @@ function LiveOverviewPage({ route }) {
   const lifetime = engine.events ?? {}
   const activeText = activeTickets.length
     ? pt(t, 'ov.pulseActive', { count: activeTickets.length, progress: progressOf(activeTickets[0]) })
-    : pt(t, 'ov.pulseIdleActive')
+    : paused ? pt(t, 'ov.pulsePaused')
+      : config.enabled === false ? pt(t, 'ov.pulseOff')
+        : pt(t, 'ov.pulseIdleActive')
   const pulseRows = [
     [pt(t, 'ov.pulseEngine'), h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-8)' } },
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
@@ -4679,22 +5087,24 @@ function LiveOverviewPage({ route }) {
 
   // P2-9 run quality card: KPI line, at most three failure causes (each jumps to Execution) and one small metric line.
   const qualitySection = quality
-    ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title') },
+    ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title'),
+      // One section-level jump replaces the identical per-row button a failure list used to repeat (WIG P3).
+      action: quality.failures.length
+        ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
+          pt(t, 'ov.q.openExecution'))
+        : undefined },
       quality.total > 0
         ? h(Fragment, null,
           h('p', { style: { margin: '0 0 var(--sa-sp-8)', fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
             pt(t, 'ov.q.kpi', { runs: quality.total, rate: quality.rate, avg: quality.avgText, repaired: quality.repaired })),
           quality.failures.length
             ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } },
-              h('p', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
+              h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
               h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
                 h(StatusIcon, { state: 'error', size: 14, spin: false }),
                 h('div', { className: 'sa-row-main' },
                   h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, item.reason || '—')),
-                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count })))),
-                h('div', { className: 'sa-row-actions' },
-                  h(Button, { variant: 'ghost', size: 'sm',
-                    onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.q.openExecution')))))))
+                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count }))))))))
             : null,
           (quality.triggerText || quality.acceptanceText)
             ? h('p', { className: 'sa-hint' }, [quality.triggerText, quality.acceptanceText].filter(Boolean).join(' · '))
@@ -4704,11 +5114,19 @@ function LiveOverviewPage({ route }) {
           h('span', { className: 'sa-hint' }, pt(t, 'ov.q.empty'))))
     : null
 
+  const cursorMore = cursorPairs.slice(3)
   const runtimeRows = [
     [pt(t, 'ov.runState'), h(StatusText, { state: health.state }, pt(t, health.labelKey))],
-    [pt(t, 'ov.pollInterval'), pt(t, 'ov.seconds', { value: pollSeconds })],
+    // A missing cadence used to render as "— 秒": show the dash itself, not a sentence around a placeholder.
+    [pt(t, 'ov.pollInterval'), pollSecondsKnown ? pt(t, 'ov.seconds', { value: pollSeconds }) : '—'],
     [pt(t, 'ov.engineLastPoll'), engine.lastPollAt ? h(When, { at: engine.lastPollAt }) : '—'],
-    [pt(t, 'ov.cursor'), cursorText || String(engine.cursor ?? 0)],
+    [pt(t, 'ov.cursor'), cursorPairs.length
+      ? h(Fragment, null, cursorPairs.slice(0, 3).join(' / '),
+        cursorMore.length
+          ? h(Folded, { summary: pt(t, 'ov.cursorMore', { count: cursorMore.length }) },
+            h('span', { className: 'sa-mono' }, cursorMore.join(' / ')))
+          : null)
+      : String(engine.cursor ?? 0)],
     [pt(t, 'ov.autoVerify'), pt(t, 'ov.autoVerifyValue', { value: engine.autoVerifySeconds ?? '—' })],
     [pt(t, 'ov.counts'), pt(t, 'ov.countsValue', { tickets: counts.tickets ?? 0,
       runs: counts.runs ?? 0, triggers: counts.triggers ?? 0 })],
@@ -4733,7 +5151,7 @@ function LiveOverviewPage({ route }) {
     h('span', { style: { flex: '0 1 auto', minWidth: 0, fontSize: 'var(--sa-fs-body)', lineHeight: 1.5,
       color: 'var(--dsw-alias-label-primary)' } }, pt(t, 'ov.idleTitle')),
     h(Button, { variant: 'outline', size: 'sm',
-      onClick: () => navigate(handled > 0 ? { page: 'execution' } : { page: 'source' }) },
+      onClick: () => navigate(handled > 0 ? { page: 'execution', stage: 'done' } : { page: 'source' }) },
     pt(t, handled > 0 ? 'actions.viewHandled' : 'actions.openSource')))
 
   // Legacy desk (hosts without `inbox`): the latest 20 status-derived Ticket rows; the count may exceed the list.
@@ -4741,23 +5159,31 @@ function LiveOverviewPage({ route }) {
   const legacyNeedsBody = legacyTickets.length
     ? h(Fragment, null,
       h('ul', { className: 'sa-list' }, legacyTickets.map(ticket =>
-        h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true }))),
+        h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true, now }))),
       moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount })) : null)
     : legacyHumanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount }))
       : null
   // Inbox desk (P0): one row per blocking item — kind icon, title, summary and the one step that settles it (open the
   // Ticket or the Source). Count = rendered rows; a count without rows (list still loading) says so instead of lying.
+  // The whole row used to be a click-only div: not focusable, not operable from the keyboard and not announced as a
+  // control (WIG P1). The title is now a real button whose stretched overlay (`.sa-open::after`) covers the row, and
+  // the explicit action button keeps its own clickable layer above it.
   const inboxRows = blockingItems.length
     ? h('ul', { className: 'sa-list' }, blockingItems.map(item => h('li', { key: item.id },
-      h('div', { className: 'sa-row sa-row-openable', onClick: () => openInboxItem(item) },
+      h('div', { className: 'sa-row sa-row-openable' },
         h(Icon, { name: ovInboxIcon(item), size: 16 }),
         h('div', { className: 'sa-row-main' },
-          h('div', { className: 'sa-row-title' }, h('span', null, String(item.title ?? ''))),
+          h('div', { className: 'sa-row-title' },
+            h('button', { type: 'button', className: 'sa-row-open sa-open',
+              title: String(item.title ?? '') || undefined,
+              'aria-label': `${String(item.title ?? '') || item.id} — ${pt(t, ovInboxActionKey(item))}`,
+              onClick: () => openInboxItem(item) },
+            h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—'))),
           item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
         h('div', { className: 'sa-row-actions' },
           h(Button, { variant: 'outline', size: 'sm',
-            onClick: event => { event.stopPropagation(); openInboxItem(item) } }, pt(t, ovInboxActionKey(item))))))))
+            onClick: () => openInboxItem(item) }, pt(t, ovInboxActionKey(item))))))))
     : humanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount }))
       : null
@@ -4803,7 +5229,7 @@ function LiveOverviewPage({ route }) {
     activeTickets.length ? h(Section, { title: pt(t, 'ov.running'), count: activeTickets.length,
       action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
         pt(t, 'actions.openExecution')) },
-      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload })) : null,
+      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload, now })) : null,
 
     // 3. System problems: each row keeps its own next step; an empty list hides the whole block.
     problems.length ? h(Section, { title: pt(t, 'ov.problems'), count: problems.length },
@@ -4812,7 +5238,8 @@ function LiveOverviewPage({ route }) {
           h(StatusIcon, { state: problem.severity === 'error' ? 'error' : 'warning', size: 16 }),
           h('div', { className: 'sa-row-main' },
             h('div', { className: 'sa-row-title' }, h('span', null, problem.title)),
-            problem.detail ? h('div', { className: 'sa-row-meta' }, problem.detail) : null),
+            problem.detail ? h('div', { className: 'sa-row-meta' },
+              h(ClampText, { text: String(problem.detail), limit: 300, lines: 2 })) : null),
           h('div', { className: 'sa-row-actions' },
             problem.action ? h(Button, { variant: 'outline', size: 'sm',
               onClick: () => runProblem(problem) }, pt(t, problem.action.labelKey)) : null)))))) : null,
@@ -4827,7 +5254,7 @@ function LiveOverviewPage({ route }) {
           // The policy ledger is a second reading of the same window and stays visible even when the 24h flow is
           // empty but decisions exist (an empty funnel is not proof that nothing was judged).
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)', marginTop: 'var(--sa-sp-8)' } },
-            h('p', { className: 'sa-ledger-title' }, pt(t, 'ov.rulesTitle')),
+            h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.rulesTitle')),
             ruleLedger.rows.length
               ? h('div', { className: 'sa-ledger' }, ruleLedger.rows.map(row =>
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
@@ -4857,8 +5284,9 @@ function LiveOverviewPage({ route }) {
     // 5. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
     h(DisclosureRow, { title: pt(t, 'ov.runtime'), open: runtimeOpen,
       onToggle: () => setRuntimeOpen(open => !open),
-      collapsedContent: h('span', { className: 'sa-hint' }, pt(t, 'ov.summary', {
-        seconds: pollSeconds, time: clock })) },
+      collapsedContent: h('span', { className: 'sa-hint' },
+        pollSecondsKnown ? pt(t, 'ov.summary', { seconds: pollSeconds, time: clock })
+          : pt(t, 'ov.summaryAlt', { time: clock })) },
       h(KeyValues, { rows: runtimeRows })))
 }
 
@@ -4894,8 +5322,9 @@ Object.assign(PAGE_TEXT, {
   'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
     'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   // A repository card is enabled by the executor switch, not the engine switch: say the switch that actually enables it.
-  'src.disabledRepo': ['已禁用：打开「启用执行器」（设置→运行）并保存。',
-    'Disabled: turn on “Executor enabled” under Settings → Runtime and save.'],
+  // The repo itself is on; do not call it "disabled" while only the executor is off.
+  'src.disabledRepo': ['执行器未启用：打开「启用执行器」（设置→运行）并保存。',
+    'Executor off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -4922,10 +5351,32 @@ Object.assign(PAGE_TEXT, {
   'src.signalTicket': ['查看工单', 'Open Ticket'],
   'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
   'src.signalsRefresh': ['刷新', 'Refresh'],
+  'src.signalSearch': ['搜索原始信号', 'Search raw signals'],
+  'src.signalRepo': ['按仓库筛选', 'Filter by repository'],
+  'src.signalRepoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'src.signalReasonFilter': ['按原因筛选', 'Filter by reason'],
+  'src.signalReasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'src.signalFrom': ['开始日期', 'From date'],
+  'src.signalTo': ['结束日期', 'To date'],
+  'src.signalSearchPlaceholder': ['文本、来源或原因…', 'Text, source or reason…'],
+  'src.signalFilter': ['信号状态', 'Signal status'],
+  'src.signalPageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'src.prev': ['上一页', 'Previous'],
+  'src.next': ['下一页', 'Next'],
   // ---- P2-8: human quality labels on raw signals ----------------------------------------------------------------
   'src.labelsSummary': ['正确 {correct} · 误报 {falseWake} · 漏报 {missedWake}',
     '{correct} correct · {falseWake} false wake · {missedWake} missed'],
   'src.labelMenu': ['标注判定', 'Label this signal'],
+  // ---- P1 AC-07: a signal deep link from the Eval log; the row may be filtered out or already cleaned up ----
+  'src.focusTitle': ['定位的原始信号', 'Located signal'],
+  'src.focusMissing': ['这条原始信号已不在信号日志中（可能已清理），原文不可用。',
+    'This signal is no longer in the raw log (it may have been cleared), so its text is unavailable.'],
+  'src.focusMissingHint': ['它关联的工单或线程可能仍然可用。', 'Any Ticket or Thread it produced may still be available.'],
+  'src.focusOffPage': ['这条信号不在当前筛选结果中，下面是它的记录。',
+    'This signal is not in the current filter result; its record is shown below.'],
+  'src.focusOpenThread': ['查看线程', 'Open Thread'],
+  'src.focusClear': ['清除定位', 'Clear link'],
+  'src.focusMissingTag': ['不可用', 'unavailable'],
   'src.labelSaved': ['已标注：{label}', 'Labelled: {label}'],
   'signalLabel.correct': ['正确', 'Correct'], 'signalLabel.false_wake': ['误报', 'False wake'],
   'signalLabel.missed_wake': ['漏报', 'Missed wake'], 'signalLabel.cleared': ['已清理', 'Cleared'],
@@ -4963,11 +5414,11 @@ function sourceStatRows(source) {
 function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
-  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono' }, String(config.project))])
+  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
   if (config.baseUrl) rows.push([pt(t, 'repo.baseUrl'), h(ExternalLink, { href: String(config.baseUrl), icon: null }, String(config.baseUrl))])
-  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono' }, String(config.targetBranch))])
+  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
   rows.push([pt(t, 'repo.token'), config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')])
-  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono' }, String(repo.repo))])
+  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo))])
   if (repo?.baseBranch || config.targetBranch) {
     rows.push([pt(t, 'repo.branches'), `${repo?.baseBranch ?? '—'} → ${config.targetBranch ?? '—'}`])
   }
@@ -5046,7 +5497,7 @@ const signalLabelText = (t, label) => {
 }
 
 /** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
-function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
+function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
   const { t, navigate } = usePanel()
   return h('ul', { className: 'sa-list' }, items.map(item => {
     const status = String(item?.status ?? '')
@@ -5055,7 +5506,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
     const statusKey = `src.signalStatus.${status}`
     const statusLabel = pt(t, statusKey)
     const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
-    return h('li', { key: item.id, className: 'sa-row' },
+    return h('li', { key: item.id, id: `sa-signal-${item.id}`,
+      className: item.id === focusId ? 'sa-row sa-row-focus' : 'sa-row' },
       h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
@@ -5063,7 +5515,7 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
           h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
         (item?.source || reason || at)
           ? h('div', { className: 'sa-row-meta' },
-            item?.source ? h('span', { className: 'sa-mono' }, String(item.source)) : null,
+            item?.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(item.source)) : null,
             reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
             at ? h(When, { at }) : null,
             labels.length
@@ -5075,7 +5527,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
           : null),
       h('div', { className: 'sa-row-actions' },
         item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
-          onClick: () => navigate({ page: 'execution', id: item.ticketId }) }, pt(t, 'src.signalTicket')) : null,
+          onClick: () => (onOpenTicket ? onOpenTicket(item.ticketId) : navigate({ page: 'execution', id: item.ticketId })) },
+        pt(t, 'src.signalTicket')) : null,
         signalReplayable(item) ? h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: busy,
           onClick: () => onReplay(item) }, pt(t, 'src.signalReplay')) : null,
         // A host that returns `labels` supports the P2-8 endpoint; an older one gets no dead menu entry.
@@ -5087,8 +5540,82 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
   }))
 }
 
-function LiveSourcePage() {
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function srcDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
+const SRC_SCROLL_KEY = 'superagent-panel/source-scroll'
+
+/** The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07). */
+function sourceScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberSourceScroll() {
+  const y = sourceScrollTop()
+  if (y > 0) try { sessionStorage.setItem(SRC_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreSourceScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(SRC_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+
+/** P1 AC-07: the Eval log links here with a signal id. The raw row may be filtered out of the current page or already
+    cleaned up, so the link answers with a located-signal card (or an explicit cleaned-up notice) instead of nothing. */
+function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenThread }) {
+  const { t } = usePanel()
+  const signal = view?.signal ?? {}
+  const status = String(signal.status ?? '')
+  const reason = signalReasonText(t, signal)
+  const at = signal.receivedAt ?? signal.occurredAt
+  const ticketId = view?.ticket?.id ?? signal.ticketId
+  const threadKey = view?.trigger?.threads?.[0] ?? signal.scopeKey
+  if (missing) {
+    return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+      h('div', { className: 'sa-card-head' },
+        h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+        h(Tag, { tone: 'warning' }, pt(t, 'src.focusMissingTag'))),
+      h(Hint, null, pt(t, 'src.focusMissing')),
+      h('p', { className: 'sa-hint' }, pt(t, 'src.focusMissingHint')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+  }
+  const statusKey = `src.signalStatus.${status}`
+  const statusLabel = pt(t, statusKey)
+  return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+    h('div', { className: 'sa-card-head' },
+      h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14 }),
+      h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+      h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel)),
+    h('div', { className: 'sa-row-title' },
+      String(signal.textPreview ?? signal.candidate?.text ?? signal.payload?.text ?? '') || pt(t, 'src.signalPreviewEmpty')),
+    h('div', { className: 'sa-row-meta' },
+      signal.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(signal.source)) : null,
+      reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
+      at ? h(When, { at }) : null),
+    offPage ? h(Hint, null, pt(t, 'src.focusOffPage')) : null,
+    h('div', { className: 'sa-actions' },
+      ticketId ? h(Button, { variant: 'outline', size: 'sm', onClick: () => onOpenTicket(ticketId) },
+        pt(t, 'src.signalTicket')) : null,
+      threadKey ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => onOpenThread(threadKey) },
+        pt(t, 'src.focusOpenThread')) : null,
+      h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+}
+
+function LiveSourcePage({ route }) {
   const { t, navigate, notify } = usePanel()
+  const focusId = typeof route?.id === 'string' && route.id.trim() ? route.id.trim() : ''
   const { data, error, reload, actions } = usePanelData()
   const [uat, setUat] = useState()
   const [uatBusy, setUatBusy] = useState(false)
@@ -5108,7 +5635,83 @@ function LiveSourcePage() {
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
-  const signals = useLiveResource('engine/signals', { limit: 20 }, 30000, { enabled: !signalsOff })
+  const srcInitial = useRef((() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const offset = Number(params.get('srcOffset') ?? 0)
+      const status = params.get('srcStatus') || 'all'
+      return { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
+        repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
+        from: params.get('srcFrom') || '', to: params.get('srcTo') || '',
+        offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+    } catch { return { q: '', status: 'all', repo: '', reason: '', from: '', to: '', offset: 0 } }
+  })())
+  const [sigQuery, setSigQuery] = useState(srcInitial.current.q)
+  const [sigQ, setSigQ] = useState(srcInitial.current.q)
+  const [sigStatus, setSigStatus] = useState(srcInitial.current.status)
+  const [sigRepo, setSigRepo] = useState(srcInitial.current.repo)
+  const [sigReason, setSigReason] = useState(srcInitial.current.reason)
+  const [sigFrom, setSigFrom] = useState(srcInitial.current.from)
+  const [sigTo, setSigTo] = useState(srcInitial.current.to)
+  const [sigOffset, setSigOffset] = useState(srcInitial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepo); setSigReason(sigReason) }, 300)
+    return () => clearTimeout(timer)
+  }, [sigQuery, sigRepo, sigReason])
+  useEffect(() => { setSigOffset(0) }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (sigQ) url.searchParams.set('srcQ', sigQ); else url.searchParams.delete('srcQ')
+      if (sigStatus !== 'all') url.searchParams.set('srcStatus', sigStatus); else url.searchParams.delete('srcStatus')
+      for (const [key, param, value] of [['srcRepo', 'srcRepo', sigRepo], ['srcReason', 'srcReason', sigReason],
+        ['srcFrom', 'srcFrom', sigFrom], ['srcTo', 'srcTo', sigTo]]) {
+        if (value) url.searchParams.set(key, value); else url.searchParams.delete(param)
+      }
+      if (sigOffset > 0) url.searchParams.set('srcOffset', String(sigOffset)); else url.searchParams.delete('srcOffset')
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo, sigOffset])
+  useEffect(() => {
+    const restore = () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const status = params.get('srcStatus') || 'all'
+        setSigQuery(params.get('srcQ') || ''); setSigQ(params.get('srcQ') || '')
+        setSigStatus(Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all')
+        setSigRepo(params.get('srcRepo') || ''); setSigReason(params.get('srcReason') || '')
+        setSigFrom(params.get('srcFrom') || ''); setSigTo(params.get('srcTo') || '')
+        const offset = Number(params.get('srcOffset') ?? 0)
+        setSigOffset(Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const signals = useLiveResource('engine/signals', { q: sigQ,
+    status: sigStatus === 'all' ? undefined : sigStatus, repo: sigRepo, reason: sigReason,
+    from: srcDayBound(sigFrom), to: srcDayBound(sigTo, true), offset: sigOffset, limit: 20 },
+  30000, { enabled: !signalsOff })
+  // AC-07: a link from the Eval log carries a signal id; resolve it even when the current filter/page does not hold it.
+  const focus = useLiveResource('engine/signal/:id', { id: focusId }, 30000, { enabled: Boolean(focusId) })
+  const leaveTo = useCallback(next => { rememberSourceScroll(); navigate(next) }, [navigate])
+  // Leaving the page (a Ticket/Thread link or a tab switch) remembers the list position; coming back restores it unless
+  // the route asks for one specific signal, which scrolls there instead.
+  useEffect(() => () => { rememberSourceScroll() }, [])
+  const restoredSourceScroll = useRef(false)
+  useEffect(() => {
+    if (restoredSourceScroll.current || !signals.data || focusId) return
+    restoredSourceScroll.current = true
+    window.requestAnimationFrame(restoreSourceScroll)
+  }, [signals.data, focusId])
+  const scrolledFocus = useRef('')
+  useEffect(() => {
+    if (!focusId || !focus.data || scrolledFocus.current === focusId) return
+    const node = document.getElementById(`sa-signal-${focusId}`) ?? document.getElementById('sa-located-signal')
+    if (!node) return
+    scrolledFocus.current = focusId
+    if (typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
+  }, [focusId, focus.data, signals.data])
   useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
   const label = useAction(async (signal, labelId) => {
     await actions.labelSignal(signal.id, labelId)
@@ -5119,7 +5722,7 @@ function LiveSourcePage() {
     const ticket = result?.ticket
     if (ticket?.id) {
       notify(pt(t, 'src.signalReplayTicket'))
-      navigate({ page: 'execution', id: ticket.id })
+      leaveTo({ page: 'execution', id: ticket.id })
       return
     }
     notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
@@ -5150,7 +5753,7 @@ function LiveSourcePage() {
 
   const enabled = sources.filter(source => source.enabled).length
   const lastAt = sources.map(source => source.lastAt).filter(Boolean).sort().at(-1)
-  const clock = lastAt ? (hhmmss(lastAt, t.lang) || '').slice(0, 5) : ''
+  const clock = lastAt ? hhmm(lastAt, t.lang) : ''
   const summary = clock
     ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
     : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
@@ -5170,11 +5773,14 @@ function LiveSourcePage() {
       return [
         // Unified action vocabulary (critique §3): 检查新消息 = dry-run poll, with the message icon and no
         // white primary fill, so it reads the same as the header action instead of a generic refresh button.
-        h(Button, { key: 'poll', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-          // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
-          disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
-          title: !source.enabled && data.config?.octo?.tokenConfigured !== true ? pt(t, 'src.checkNeedsToken') : undefined,
-          onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+        // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
+        h(Fragment, { key: 'poll' },
+          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+            disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
+            onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+          // A disabled control still has to say why: the reason is a focusable tip, not a title tooltip (A3).
+          !source.enabled && data.config?.octo?.tokenConfigured !== true
+            ? h(InfoTip, { text: pt(t, 'src.checkNeedsToken'), warn: true }) : null),
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
           onClick: focusFiltered }, pt(t, 'src.action.filtered')),
       ]
@@ -5239,6 +5845,13 @@ function LiveSourcePage() {
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
         onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
       : null,
+    focusId && (focus.data || focus.error?.missing)
+      ? h(LocatedSignal, { view: focus.data, missing: Boolean(focus.error?.missing),
+        offPage: Boolean(focus.data) && !signalItems.some(item => item.id === focusId),
+        onClear: () => navigate({ page: 'source' }, true),
+        onOpenTicket: id => leaveTo({ page: 'execution', id }),
+        onOpenThread: key => leaveTo({ page: 'trigger', id: key }) })
+      : null,
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
@@ -5252,20 +5865,52 @@ function LiveSourcePage() {
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
       : null,
-    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
-    signals.data
-      ? h(Section, { title: pt(t, 'src.signals'), count: signalItems.length,
-        badge: labelTotal > 0
-          ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
-            correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
-            missedWake: Number(labelCounts.missed_wake) || 0 }))
-          : null,
-        action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
-          pt(t, 'src.signalsRefresh')) },
-        signalItems.length ? h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
-          onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy })
-          : h(Hint, null, pt(t, 'src.signalsEmpty')))
-      : null)
+    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it. The section itself
+    // must not vanish while the first load is pending or a poll failed, so it keeps its heading and renders a skeleton
+    // or the retryable error instead (P2).
+    signalsOff
+      ? null
+      : h('div', { 'aria-busy': signals.loading ? 'true' : undefined },
+        h(Section, { title: pt(t, 'src.signals'),
+          count: signals.data ? (Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length) : undefined,
+          badge: signals.data && labelTotal > 0
+            ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
+              correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
+              missedWake: Number(labelCounts.missed_wake) || 0 }))
+            : null,
+          action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
+            pt(t, 'src.signalsRefresh')) },
+          h('div', { className: 'sa-filters' },
+            h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
+              onChange: event => setSigQuery(event?.target?.value ?? '') }),
+            h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
+              onChange: event => setSigRepo(event?.target?.value ?? '') }),
+            h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
+              onChange: event => setSigReason(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
+              onChange: event => setSigFrom(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
+              onChange: event => setSigTo(event?.target?.value ?? '') }),
+            h(SegmentedControl, { options: [
+              { value: 'all', label: pt(t, 'decisionFilter.all') },
+              ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
+            value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
+          signals.error ? h(ErrorState, { error: signals.error, onRetry: signals.reload }) : null,
+          !signals.data
+            ? signals.error ? null : h(Skeleton, { rows: 3 })
+            : signalItems.length ? h(Fragment, null,
+              h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+                onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy,
+                focusId, onOpenTicket: id => leaveTo({ page: 'execution', id }) }),
+              h('div', { className: 'sa-pagination' },
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
+                  onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
+                h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
+                  from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
+                  total: Number(signals.data.total) || signalItems.length })),
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
+                  onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
+              : h(Hint, null, pt(t, 'src.signalsEmpty')))))
 }
 
 
@@ -5294,6 +5939,17 @@ Object.assign(PAGE_TEXT, {
     'Set up a Source and send one message; Threads will appear here.'],
   'trg.emptyAction': ['去来源页', 'Open Source'],
   'trg.noneInFilter': ['这个筛选下没有线程。', 'No Thread matches this filter.'],
+  'trg.search': ['搜索线程', 'Search Threads'],
+  'trg.searchPlaceholder': ['标题、来源或会话 key…', 'Title, source or chat key…'],
+  'trg.repo': ['按仓库筛选', 'Filter by repository'],
+  'trg.repoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'trg.reason': ['按原因筛选', 'Filter by reason'],
+  'trg.reasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'trg.from': ['开始日期', 'From date'],
+  'trg.to': ['结束日期', 'To date'],
+  'trg.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'trg.prev': ['上一页', 'Previous'],
+  'trg.next': ['下一页', 'Next'],
   'trg.showAll': ['查看全部', 'Show all'],
   'trg.threadFallback.octo': ['Octo 会话', 'Octo conversation'],
   'trg.threadFallback.other': ['未命名线程', 'Untitled Thread'],
@@ -5440,21 +6096,40 @@ function ThreadDetailView({ threadKey, showBack }) {
   return ThreadDetail({ key: threadKey, threadKey, id: threadKey, showBack })
 }
 
-/** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. */
-function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
+/** ↑/↓/Home/End move focus between the row buttons; the row buttons themselves keep native Enter/Space activation.
+    Only one row is in the Tab order (roving tabindex), so a 50-row page is one Tab stop, not fifty (WIG A4/P2). */
+function threadRowKeyDown(event) {
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+  const edge = event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : ''
+  if (!step && !edge) return
+  const buttons = [...(event.currentTarget.closest('ul')?.querySelectorAll('button.sa-row-open') ?? [])]
+  if (!buttons.length) return
+  event.preventDefault()
+  const index = buttons.indexOf(event.currentTarget)
+  const target = edge === 'first' ? buttons[0]
+    : edge === 'last' ? buttons[buttons.length - 1]
+      : buttons[Math.max(0, Math.min(buttons.length - 1, index + step))]
+  target?.focus()
+}
+
+/** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. The open action
+    is one real `<button>` whose `::after` covers the whole row (the `.sa-open` pattern), so the row is a list item with
+    native semantics instead of a `<li role="button">` (P1/A4). */
+function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tabbable = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
   return h('li', {
-    className: 'sa-row',
-    role: 'button',
-    tabIndex: 0,
-    'aria-current': selected ? 'true' : undefined,
-    onClick: onOpen,
-    onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen() } },
-    style: selected ? { background: 'var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2))' } : undefined,
+    className: 'sa-row sa-row-openable',
+    // `.sa-list .sa-row[role='button']` used to give every thread row its 8px inset; the row is a plain list item now,
+    // so keep the same inset from the shared spacing token.
+    style: { paddingLeft: 'var(--sa-sp-8)', paddingRight: 'var(--sa-sp-8)',
+      ...(selected ? { background: 'var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2))' } : null) },
   },
   h('div', { className: 'sa-row-main' },
-    h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig))),
+    h('div', { className: 'sa-row-title' },
+      h('button', { type: 'button', className: 'sa-row-open sa-open', tabIndex: tabbable ? 0 : -1,
+        'aria-current': selected ? 'true' : undefined, onClick: onOpen, onKeyDown: threadRowKeyDown },
+      h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig)))),
     h('div', { className: 'sa-row-meta' },
       h('span', { className: 'sa-actions' },
         h(Icon, { name: THREAD_SOURCE_ICON[row.source] ?? 'message', size: 12 }),
@@ -5465,11 +6140,115 @@ function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
       h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
+const TRG_PAGE_SIZE = 50
+const TRG_SCROLL_KEY = 'superagent-panel/trigger-scroll'
+
+/** The panel scrolls inside `.sa-scroll`; remember the list position so opening a Ticket/Thread can return to it. */
+function triggerScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberTriggerScroll() {
+  const y = triggerScrollTop()
+  if (y > 0) try { sessionStorage.setItem(TRG_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreTriggerScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(TRG_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+// The filter is part of the same deep-link state as the text filters (A5): a reload/back must restore the visible
+// slice, not silently drop back to the default one.
+const TRG_URL_KEYS = { filter: 'trgFilter', q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom',
+  to: 'trgTo', offset: 'trgOffset' }
+function trgUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
+    const filter = params.get(TRG_URL_KEYS.filter)
+    return { filter: THREAD_FILTERS.includes(filter) ? filter : THREAD_FILTERS[0],
+      q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
+      reason: params.get(TRG_URL_KEYS.reason) || '', from: params.get(TRG_URL_KEYS.from) || '',
+      to: params.get(TRG_URL_KEYS.to) || '', offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { filter: THREAD_FILTERS[0], q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function trgDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
-  const [filter, setFilter] = useState('subscribed')
-  const { data, error, reload } = useLiveResource('engine/threads', { filter })
+  const initial = useRef(trgUrlState())
+  const [filter, setFilter] = useState(initial.current.filter)
+  const [query, setQuery] = useState(initial.current.q)
+  const [q, setQ] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [offset, setOffset] = useState(initial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepo(repo); setReason(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  useEffect(() => { setOffset(0) }, [filter, q, repo, reason, from, to])
+  // Keep the filter (chip selection) plus the free-text filter in our own URL params; the host route (including the
+  // selected Thread) is untouched.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (filter !== THREAD_FILTERS[0]) url.searchParams.set(TRG_URL_KEYS.filter, filter)
+      else url.searchParams.delete(TRG_URL_KEYS.filter)
+      if (q) url.searchParams.set(TRG_URL_KEYS.q, q); else url.searchParams.delete(TRG_URL_KEYS.q)
+      for (const [key, value] of [['repo', repo], ['reason', reason], ['from', from], ['to', to]]) {
+        if (value) url.searchParams.set(TRG_URL_KEYS[key], value); else url.searchParams.delete(TRG_URL_KEYS[key])
+      }
+      if (offset > 0) url.searchParams.set(TRG_URL_KEYS.offset, String(offset))
+      else url.searchParams.delete(TRG_URL_KEYS.offset)
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [filter, q, repo, reason, from, to, offset])
+  useEffect(() => {
+    const restore = () => {
+      const next = trgUrlState()
+      setFilter(next.filter)
+      setQuery(next.q); setQ(next.q); setRepo(next.repo); setReason(next.reason)
+      setFrom(next.from); setTo(next.to); setOffset(next.offset)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, reload } = useLiveResource('engine/threads',
+    { filter, q, repo, reason, from: trgDayBound(from), to: trgDayBound(to, true), offset, limit: TRG_PAGE_SIZE })
+  // AC-07: opening a Thread in the single-pane layout (or a Ticket from its detail) hides/replaces the list; the
+  // position is remembered before that and restored when the list is shown again.
+  const previousRouteId = useRef(route?.id)
+  useEffect(() => {
+    const had = previousRouteId.current
+    const has = route?.id
+    previousRouteId.current = has
+    if (had && !has) window.requestAnimationFrame(restoreTriggerScroll)
+    else if (!had && has) rememberTriggerScroll()
+  }, [route?.id])
+  useEffect(() => () => { rememberTriggerScroll() }, [])
+  const restoredTriggerScroll = useRef(false)
+  useEffect(() => {
+    if (restoredTriggerScroll.current || !data) return
+    restoredTriggerScroll.current = true
+    window.requestAnimationFrame(restoreTriggerScroll)
+  }, [data])
   // The watched-chat titles live on the shared status model; they turn a raw octo key into a readable list title.
   const { data: status } = usePanelData()
   const octoConfig = status?.config?.octo
@@ -5477,6 +6256,12 @@ function LiveTriggerPage({ route }) {
   const items = Array.isArray(data?.items) ? data.items : []
   const counts = data?.counts ?? {}
   const selected = routeId ?? items[0]?.key
+  // One Tab stop for the whole list: the selected row (or the first one) is the tabbable row; ↑/↓/Home/End move
+  // focus between rows so 50 rows do not add 50 tab stops (P2).
+  const tabbableKey = items.some(row => row.key === selected) ? selected : items[0]?.key
+  // While the 300ms debounce catches up the list still shows the previous result; expose that to assistive tech
+  // instead of silently swapping rows under it (P3).
+  const filtering = query !== q
 
   const chooseFilter = (value) => {
     if (value === filter) return
@@ -5498,21 +6283,46 @@ function LiveTriggerPage({ route }) {
   if (data === undefined) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 
   const options = THREAD_FILTERS.map(value => ({ value, label: pt(t, `trg.filter.${value}`),
-    title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
+    title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }),
+    description: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
+  const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
   const list = h('div', { className: 'sa-pane sa-pane-aside' },
-    h(Section, { title: pt(t, 'trg.title'), count: items.length,
+    h(Section, { title: pt(t, 'trg.title'), count: total,
       action: h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'trg.refresh'),
         onClick: () => { void reload() } }) },
       h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter'),
         className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'trg.searchPlaceholder'), label: pt(t, 'trg.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
+      h('div', { 'aria-busy': filtering ? 'true' : undefined },
+        h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, filtering ? t('loading') : ''),
+        items.length
+          ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
+            // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
+            // with no visible detail would otherwise promise a state the screen is not showing.
+            selected: compact ? row.key === routeId : row.key === selected,
+            tabbable: row.key === tabbableKey,
+            onOpen: () => openThread(row.key), octoConfig })))
+          : h(Hint, null, pt(t, 'trg.noneInFilter'))),
       items.length
-        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
-          // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
-          // with no visible detail would otherwise promise a state the screen is not showing.
-          selected: compact ? row.key === routeId : row.key === selected,
-          onOpen: () => openThread(row.key), octoConfig })))
-        : h(Hint, null, pt(t, 'trg.noneInFilter'))))
+        ? h('div', { className: 'sa-pagination' },
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset <= 0,
+            onClick: () => setOffset(Math.max(0, offset - TRG_PAGE_SIZE)) }, pt(t, 'trg.prev')),
+          h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'trg.pageInfo', { from: pageFrom, to: pageTo, total })),
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset + items.length >= total,
+            onClick: () => setOffset(offset + TRG_PAGE_SIZE) }, pt(t, 'trg.next')))
+        : null))
   const detail = h('div', { className: 'sa-pane' },
     selected
       ? h(ThreadDetailView, { threadKey: selected, showBack: compact })
@@ -5743,10 +6553,14 @@ function ThreadTimeline({ triggers, decisions }) {
     h('ol', { className: 'sa-timeline' }, shown.map(trigger => {
       const decision = byId.get(trigger.disposition?.decisionId)
       const view = dispositionView(trigger, decision)
+      const actor = actorDisplay(t, trigger.actor)
       return h('li', { key: trigger.id, className: 'sa-event' },
         h('div', { className: 'sa-event-actor' },
           h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', { title: actorDisplay(t, trigger.actor).title }, actorDisplay(t, trigger.actor).text),
+          // The short id is the visible label; the full raw id stays available through a real focusable InfoTip instead
+          // of a hover-only title, so keyboard/screen-reader users get it too (A3).
+          h('span', null, actor.text),
+          actor.title ? h(InfoTip, { text: actor.title }) : null,
           h(When, { at: trigger.at })),
         h('div', { className: 'sa-event-text' }, (() => {
           const message = readableMarkers(t, trigger.text ?? '')
@@ -5800,7 +6614,7 @@ function ThreadDetail(props) {
   return h(Fragment, null,
     h(PageHead, { title: threadDisplayTitle(t, thread, threadKey, chatTitles), showBack: props?.showBack !== false,
       meta: h(Fragment, null,
-        h('span', { className: 'sa-mono' }, thread.source ?? ''),
+        h('span', { className: 'sa-mono', translate: 'no' }, thread.source ?? ''),
         threadKey ? h(CopyButton, { value: threadKey, label: pt(t, 'thread.copyKey') }) : null,
         h(When, { at: thread.lastAt ?? thread.createdAt })) }),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
@@ -5830,6 +6644,10 @@ Object.assign(PAGE_TEXT, {
   'ev.windowAll': ['全部时间', 'All time'],
   'ev.window24h': ['24 小时', 'Last 24h'],
   'ev.refresh': ['刷新记录', 'Refresh'],
+  'ev.search': ['搜索记录', 'Search evaluations'],
+  'ev.searchPlaceholder': ['消息、原因或工单标题…', 'Message, reason or Ticket title…'],
+  'ev.repo': ['仓库', 'Repository'],
+  'ev.repoPlaceholder': ['全部仓库', 'All repositories'],
   'ev.emptyTitle': ['还没有评估记录。', 'No evaluation yet.'],
   'ev.emptyHint': ['触发一条消息后，这里会记录引擎为什么做/不做。', 'Send a message to a watched group; this page records why the engine did or did not take the work.'],
   'ev.emptyAction': ['去看触发页', 'Open Triggers'],
@@ -5865,6 +6683,20 @@ Object.assign(PAGE_TEXT, {
   'ev.humanIgnore': ['忽略', 'ignore'],
   'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
     'Hybrid mode: the model takes part in intake (repo_task opens, risky blocks, the rest goes to review).'],
+  'ev.reason': ['原因筛选', 'Reason'],
+  'ev.reasonPlaceholder': ['原因关键字，如 rate-limit', 'Reason keyword, e.g. rate-limit'],
+  'ev.from': ['开始日期', 'From date'],
+  'ev.to': ['结束日期', 'To date'],
+  'ev.viewLabel': ['评估视图', 'View'],
+  'ev.viewAll': ['全部', 'All'],
+  'ev.viewDivergence': ['模型分歧', 'Model divergence'],
+  'ev.viewOverride': ['人工改判', 'Human override'],
+  'ev.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'ev.prev': ['上一页', 'Previous'],
+  'ev.next': ['下一页', 'Next'],
+  'ev.signal': ['原始信号', 'Signal'],
+  'ev.thread': ['线程', 'Thread'],
+  'ev.run': ['运行', 'Run'],
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
@@ -5873,6 +6705,15 @@ const evalKindLabel = (t, kind) => kind === 'all' ? pt(t, 'decisionFilter.all') 
 
 /** Strength vocabulary is closed; an unknown value falls back to the raw string instead of a missing key. */
 const EVAL_STRENGTHS = ['explicit', 'inferred']
+
+/** Locale-correct percent formatting for the model probability (P2): `Intl` instead of hand-built `${round(p*100)}%`. */
+const EVAL_PERCENT_FORMAT = {
+  en: new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 0 }),
+  zh: new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 0 }),
+}
+function evalPercent(t, value) {
+  return (EVAL_PERCENT_FORMAT[t.lang] ?? EVAL_PERCENT_FORMAT.en).format(value)
+}
 
 /** Human label for the decision model's shadow verdict; unknown values stay visible as the raw string. */
 function evalShadowVerdict(t, verdict) {
@@ -5890,9 +6731,9 @@ function evalModelTag(t, decision) {
   const title = [pt(t, shadow ? 'ev.shadowHint' : 'ev.modelHint'), model.model, model.category, model.questions]
     .filter(Boolean).join(' · ')
   const risk = typeof model.riskP === 'number'
-    ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(model.riskP * 100)}%` })}` : ''
+    ? ` · ${pt(t, 'ev.shadowRisk', { p: evalPercent(t, model.riskP) })}` : ''
   if (model.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))
-  const probability = typeof model.p === 'number' ? `${Math.round(model.p * 100)}%` : '?'
+  const probability = typeof model.p === 'number' ? evalPercent(t, model.p) : '?'
   const tone = model.verdict === 'accept' ? 'info' : model.verdict === 'reject' ? 'warning' : 'quiet'
   return h(Tag, { tone, title: `${title}${risk}` },
     pt(t, 'ev.shadow', { p: probability, verdict: evalShadowVerdict(t, model.verdict) }))
@@ -5918,8 +6759,15 @@ function evalGroupKey(decision) {
   // A request can be judged more than once (re-evaluation, duplicate accept) and produce different Tickets. The group
   // identity is the request + judgement, not the Ticket id, so those rows collapse and every Ticket stays visible in
   // the row's ticket list instead of being hidden behind a separate ×N (C32).
+  // A different signal, model opinion or human decision is different evidence, even when kind/reason/strength match.
+  // Folding those rows hid the evidence behind the first record (review P2 AC-06).
+  const model = decision.shadow ?? decision.model
+  const human = decision.humanReview
   return JSON.stringify([decision.kind, decision.preview, decision.threadKey,
-    decision.strength, hit, rules.length - hit, decision.reason ?? null])
+    decision.strength, hit, rules.length - hit, decision.reason ?? null,
+    decision.signalId ?? null,
+    model ? [model.status ?? null, model.verdict ?? null, model.model ?? null, model.riskP ?? null] : null,
+    human ? [human.code ?? null, human.outcome ?? null, human.answer ?? null] : null])
 }
 
 /** Newest-first groups of decisions that differ only by time; order follows the first (newest) occurrence. */
@@ -5938,7 +6786,7 @@ function groupEvalDecisions(items) {
 
 /** One decision row: the message it judged as the title, the shape-coded outcome as a leading tag, then reason,
     strength, rule hit count and the Ticket link on one meta line, followed by the folded rule-by-rule result. */
-function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
+function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLinks = []) {
   const view = decisionKindView(decision)
   const label = pt(t, view.labelKey)
   const kindLabel = label === view.labelKey ? String(view.kind) : label
@@ -5953,6 +6801,8 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
   const contextOnly = reasons.some(item => item && typeof item === 'object' && item.code === 'contextOnly')
   const preview = evalMessagePreview(decision)
   const unavailable = view.kind === 'unavailable'
+  // The visible hint is the accessible description for the (disabled) dismiss action, so the reason is not title-only (A3).
+  const dismissHintId = `sa-eval-dismiss-${decision.id ?? 'row'}`
   return h('li', { key: decision.id },
     h('div', { className: 'sa-row' },
       h(StatusIcon, { state: view.state, size: 16 }),
@@ -5964,8 +6814,17 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           h('span', { style: { flex: '1 1 0%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
             preview || pt(t, 'ev.noPreview'))),
         h('div', { className: 'sa-row-meta' },
+          // In-app navigation has no URL to point at, so these are real buttons, not `<a href="#">` fake links (A4).
           decision.threadKey
-            ? h('span', { className: 'sa-mono sa-hint', title: decision.threadKey }, liveShortId(decision.threadKey, 10)) : null,
+            ? h('button', { type: 'button', className: 'sa-mono sa-textlink',
+              title: `${pt(t, 'ev.thread')} · ${decision.threadKey}`,
+              onClick: () => navigate({ page: 'trigger', id: decision.threadKey }) },
+            liveShortId(decision.threadKey, 10)) : null,
+          decision.signalId
+            ? h('button', { type: 'button', className: 'sa-mono sa-textlink',
+              title: `${pt(t, 'ev.signal')} · ${decision.signalId}`,
+              onClick: () => navigate({ page: 'source', id: decision.signalId }) },
+            liveShortId(decision.signalId, 10)) : null,
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
@@ -5979,23 +6838,31 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
           decision.at ? h(When, { at: decision.at }) : null,
           ticketIds.length
             ? h(Fragment, null,
-              ticketIds.map(id => h('a', { key: id, href: '#', className: 'sa-mono sa-inline-link', title: id,
-                onClick: event => { event.preventDefault(); navigate({ page: 'execution', id }) } }, liveShortId(id, 8))),
+              ticketIds.map(id => h('button', { key: id, type: 'button', className: 'sa-mono sa-textlink', title: id,
+                onClick: () => navigate({ page: 'execution', id }) }, liveShortId(id, 8))),
               h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) },
                 pt(t, 'ev.openTicket')))
             : null,
+          runLinks.length
+            ? h('span', { className: 'sa-row-meta' },
+              runLinks.map(link => h('button', { key: link.runId ?? link.ticketId, type: 'button',
+                className: 'sa-mono sa-textlink',
+                title: link.runId ? `${pt(t, 'ev.run')} · ${link.runId}` : link.ticketId,
+                onClick: () => navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) },
+              link.runId ? `${pt(t, 'ev.run')} ${liveShortId(link.runId, 8)}` : liveShortId(link.ticketId, 8))))
+            : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
-        unavailable ? h('p', { className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
+        unavailable ? h('p', { id: dismissHintId, className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
         h(Folded, { summary: rules.length ? pt(t, 'thread.rulesDetail') : pt(t, 'ev.detail') },
           rules.length ? h(ThreadRuleRows, { rules }) : h(Hint, null, pt(t, 'ev.noRules')),
           h(RawValue, { label: pt(t, 'ev.raw'), json: decision }))),
       unavailable ? h('div', { className: 'sa-row-actions' },
-        h(Button, { variant: 'ghost', size: 'sm', disabled: true, title: pt(t, 'ev.dismissHint') }, pt(t, 'ev.dismiss')),
+        h(Button, { variant: 'ghost', size: 'sm', disabled: true, 'aria-describedby': dismissHintId }, pt(t, 'ev.dismiss')),
         h(InfoTip, { text: pt(t, 'ev.dismissHint'), warn: true })) : null))
 }
 
 /** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
+function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
   const noRecords = (counts.all ?? 0) === 0
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
@@ -6006,21 +6873,132 @@ function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
       action: h(Button, { variant: 'outline', size: 'sm', onClick: () => setRange('all') }, pt(t, 'ev.windowAll')) })
   }
   return h(EmptyState, { icon: 'filter', title: pt(t, 'ev.emptyFilterTitle'), hint: pt(t, 'ev.emptyFilterHint'),
-    action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
+    action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { clearAll(); setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
+}
+
+const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
+  reason: 'evalReason', from: 'evalFrom', to: 'evalTo', view: 'evalView', offset: 'evalOffset' }
+const EVAL_PAGE_SIZE = 25
+const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
+const EVAL_VIEWS = ['all', 'divergence', 'override']
+
+/** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
+function evalUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
+    return { kind: params.get(EVAL_URL_KEYS.kind) || 'all', range: params.get(EVAL_URL_KEYS.range) || 'all',
+      q: params.get(EVAL_URL_KEYS.q) || '', repo: params.get(EVAL_URL_KEYS.repo) || '',
+      reason: params.get(EVAL_URL_KEYS.reason) || '', from: params.get(EVAL_URL_KEYS.from) || '',
+      to: params.get(EVAL_URL_KEYS.to) || '',
+      view: EVAL_VIEWS.includes(params.get(EVAL_URL_KEYS.view)) ? params.get(EVAL_URL_KEYS.view) : 'all',
+      offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 } }
+}
+
+function rememberEvalFilters(next) {
+  try {
+    const url = new URL(window.location.href)
+    for (const [key, param] of Object.entries(EVAL_URL_KEYS)) {
+      const value = next[key]
+      if (!value || value === 'all' || value === 0) url.searchParams.delete(param)
+      else url.searchParams.set(param, String(value))
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  } catch { /* a host without history still keeps the in-memory filters */ }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function dateBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
 function LiveEvalPage() {
   const { t, navigate } = usePanel()
-  const [kind, setKind] = useState('all')
-  const [range, setRange] = useState('all')
-  const { data, error, loading, reload } = useLiveResource('engine/decisions', { kind, window: range })
+  const initial = useRef(evalUrlState())
+  const [kind, setKind] = useState(initial.current.kind)
+  const [range, setRange] = useState(initial.current.range)
+  const [query, setQuery] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [view, setView] = useState(initial.current.view)
+  const [offset, setOffset] = useState(initial.current.offset)
+  const [q, setQ] = useState(initial.current.q)
+  const [repoFilter, setRepoFilter] = useState(initial.current.repo)
+  const [reasonFilter, setReasonFilter] = useState(initial.current.reason)
+  // Debounce only the free-text fields: one request per pause, while selects apply immediately.
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepoFilter(repo); setReasonFilter(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  // Any filter change starts at the first page; otherwise a stale offset can land past the new total. The first mount
+  // must keep the page restored from the URL, and a popstate restore must not be reset to page 1 (review P1 AC-07).
+  const firstFilterRun = useRef(true)
+  const restoringFilters = useRef(false)
+  useEffect(() => {
+    if (firstFilterRun.current) { firstFilterRun.current = false; return }
+    if (restoringFilters.current) { restoringFilters.current = false; return }
+    setOffset(0)
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view])
+  useEffect(() => {
+    rememberEvalFilters({ kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view, offset })
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view, offset])
+  // Back/forward restores the filters from the URL; the host route keeps working because only our own params move.
+  useEffect(() => {
+    const restore = () => {
+      const next = evalUrlState()
+      restoringFilters.current = true
+      setKind(next.kind); setRange(next.range); setQuery(next.q); setQ(next.q)
+      setRepo(next.repo); setRepoFilter(next.repo); setReason(next.reason); setReasonFilter(next.reason)
+      setFrom(next.from); setTo(next.to); setView(next.view); setOffset(next.offset)
+      // If the restored URL equals the current state no filter effect runs; clear the guard so the next real change
+      // still resets the page.
+      setTimeout(() => { restoringFilters.current = false }, 0)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, loading, reload } = useLiveResource('engine/decisions',
+    { kind, window: range, q, repo: repoFilter, reason: reasonFilter,
+      from: dateBound(from), to: dateBound(to, true), view, offset, limit: EVAL_PAGE_SIZE })
   const refresh = useCallback(() => { void reload() }, [reload])
+  // Opening a Ticket/thread/signal leaves the page; remember where the list was so going back lands on the same row.
+  const openFromEval = useCallback(route => {
+    try {
+      // The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07).
+      const scroller = document.querySelector('.sa-scroll')
+      const y = scroller ? scroller.scrollTop : window.scrollY
+      sessionStorage.setItem(EVAL_SCROLL_KEY, String(y))
+    } catch { /* private mode */ }
+    navigate(route)
+  }, [navigate])
+  const restoredScroll = useRef(false)
+  useEffect(() => {
+    if (restoredScroll.current || !data) return
+    restoredScroll.current = true
+    try {
+      const y = Number(sessionStorage.getItem(EVAL_SCROLL_KEY) ?? 0)
+      if (Number.isFinite(y) && y > 0) window.requestAnimationFrame(() => {
+        const scroller = document.querySelector('.sa-scroll')
+        if (scroller) scroller.scrollTop = y
+        else window.scrollTo(0, y)
+      })
+    } catch { /* private mode */ }
+  }, [data])
   if (loading && !data) return h(Skeleton, { rows: 5 })
   if (!data) return h(ErrorState, { error, onRetry: reload })
 
   const items = Array.isArray(data.items) ? data.items : []
   const counts = data.counts ?? {}
   const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
+  const hasPrev = offset > 0
+  const hasNext = offset + items.length < total
   // A kind earns a pill only when it can produce a list: `all`, every non-zero kind, and the active kind (so switching
   // the window never traps a selection on a hidden kind). Counts stay in the section header, not in the pills (C11).
   const kindOptions = EVAL_KINDS
@@ -6035,16 +7013,38 @@ function LiveEvalPage() {
       h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
       h(SegmentedControl, { options: [{ value: 'all', label: pt(t, 'ev.windowAll') }, { value: '24h', label: pt(t, 'ev.window24h') }],
         value: range, onChange: setRange, label: pt(t, 'ev.windowLabel'), className: 'sa-segmented-chips' }),
+      h(SegmentedControl, { options: EVAL_VIEWS.map(value => ({ value, label: pt(t, `ev.view${value === 'all' ? 'All' : value === 'divergence' ? 'Divergence' : 'Override'}`) })),
+        value: view, onChange: setView, label: pt(t, 'ev.viewLabel'), className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'ev.searchPlaceholder'), label: pt(t, 'ev.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'ev.repoPlaceholder'), label: pt(t, 'ev.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'ev.reasonPlaceholder'), label: pt(t, 'ev.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'ev.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       h('div', { className: 'sa-actions' },
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h(Section, { title: pt(t, 'ev.title'), count: items.length },
+    h(Section, { title: pt(t, 'ev.title'), count: total },
       items.length
         ? h(Fragment, null,
-          total > items.length ? h(Hint, null, pt(t, 'ev.more', { total, shown: items.length })) : null,
           h('ul', { className: 'sa-list' }, groupEvalDecisions(items).map(group =>
-            evalDecisionRow(t, navigate, group.decision, group.count, group.ticketIds))))
-        : evalEmptyState(t, navigate, counts, kind, range, setKind, setRange)))
+            evalDecisionRow(t, openFromEval, group.decision, group.count, group.ticketIds,
+              group.decision.runs ?? []))),
+          h('div', { className: 'sa-pagination' },
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasPrev,
+              onClick: () => setOffset(Math.max(0, offset - EVAL_PAGE_SIZE)) }, pt(t, 'ev.prev')),
+            h('span', { className: 'sa-hint', role: 'status' },
+              pt(t, 'ev.pageInfo', { from: pageFrom, to: pageTo, total })),
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasNext,
+              onClick: () => setOffset(offset + EVAL_PAGE_SIZE) }, pt(t, 'ev.next'))))
+        : evalEmptyState(t, openFromEval, counts, kind, range, setKind, setRange, () => {
+          setQuery(''); setRepo(''); setReason(''); setFrom(''); setTo(''); setView('all')
+          setQ(''); setRepoFilter(''); setReasonFilter(''); setOffset(0)
+        })))
 }
 
 
@@ -6172,6 +7172,13 @@ function ExecutionQueuePage({ route }) {
   useEffect(() => {
     if (route?.stage && EXEC_STAGES.includes(route.stage)) setStage(route.stage)
   }, [route?.stage])
+  // The stage filter is in-view state, so mirror it into the route object the shell already keeps: back/forward then
+  // restores the visible slice instead of resetting it (A5). Replacing the entry keeps filtering out of the history
+  // stack. (A reload still narrows the route to page/id in 25-router.js, so it falls back to the whole queue.)
+  const chooseStage = value => {
+    setStage(value)
+    navigate({ page: 'execution', ...(value === 'all' ? {} : { stage: value }) }, true)
+  }
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
   const [execView, setExecView] = useState(execReadView)
@@ -6259,7 +7266,7 @@ function ExecutionQueuePage({ route }) {
     h(EmptyState, { icon: 'inbox', title: pt(t, 'ex.emptyTitle'), hint: pt(t, 'ex.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
         pt(t, 'ex.createTicket')) }))
-  const clearFilters = () => { setStage('all'); updateView({ showDone: true }) }
+  const clearFilters = () => { chooseStage('all'); updateView({ showDone: true }) }
   const stageEmptyState = h(Section, { title: pt(t, 'ex.tickets'), count: 0 },
     h(EmptyState, { icon: 'filter', title: pt(t, 'ex.filterEmptyTitle'),
       action: h(Button, { variant: 'outline', size: 'sm', onClick: clearFilters }, pt(t, 'ex.clearFilters')) }))
@@ -6288,7 +7295,7 @@ function ExecutionQueuePage({ route }) {
   const listBar = tickets.length
     ? h('div', { className: 'sa-list-bar' },
       h('div', { className: 'sa-list-stage' },
-        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+        h(SegmentedControl, { options: stageOptions, value: stage, onChange: chooseStage, label: pt(t, 'ex.filterLabel'),
           className: 'sa-segmented-chips' })),
       h('div', { className: 'sa-viewbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
         h(Menu, { label: pt(t, 'ex.groupByLabel'),
@@ -6312,10 +7319,10 @@ function ExecutionQueuePage({ route }) {
               onSelect: () => updateView({ sort: 'created' }) },
           ] }),
         h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
-        h('span', { className: 'sa-switch-field' },
+        h('label', { className: 'sa-switch-field' },
           h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),
           h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
-            label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
+            className: 'sa-switch-compact' }))))
     : null
   const queueBody = stage === 'dismissed'
     ? h('div', { className: 'sa-exec-queue' },
@@ -6332,7 +7339,8 @@ function ExecutionQueuePage({ route }) {
       h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
         className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
       doneOverflow ? h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
+        h(Button, { variant: 'outline', size: 'sm', 'aria-expanded': doneExpanded,
+          onClick: () => setDoneExpanded(value => !value) },
           pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null)
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
@@ -6363,22 +7371,27 @@ function ExecutionQueuePage({ route }) {
         h('div', { className: 'sa-executor-recent' },
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
-            h(When, { at: recentRun.startedAt }),
+            h(When, { at: recentRun.startedAt ?? recentRun.at }),
             h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
             // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
             runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
             recentRun.error
-              ? h('span', { className: 'sa-hint', title: String(recentRun.error) },
-                pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) }))
+              ? h(Fragment, null,
+                // The failure cause stays visible; the raw error is supplementary detail behind a real focusable InfoTip
+                // rather than a hover-only title (A3).
+                h('span', { className: 'sa-hint' },
+                  pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) })),
+                h(InfoTip, { text: String(recentRun.error), warn: true }))
               : null,
+            // In-app navigation has no URL to point at, so these are real buttons, not `<a href="#">` fake links (A4).
             recentRun.ticketId
-              ? h('a', { href: '#', className: 'sa-inline-link',
-                onClick: event => { event.preventDefault(); navigate({ page: 'execution', id: recentRun.ticketId }) } },
-                pt(t, 'ex.recentTicket'))
+              ? h('button', { type: 'button', className: 'sa-textlink',
+                onClick: () => navigate({ page: 'execution', id: recentRun.ticketId }) },
+              pt(t, 'ex.recentTicket'))
               : null) : null,
-          h('a', { href: '#', className: 'sa-inline-link',
-            onClick: event => { event.preventDefault(); navigate({ page: 'overview' }) } },
-            pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
+          h('button', { type: 'button', className: 'sa-textlink',
+            onClick: () => navigate({ page: 'overview' }) },
+          pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
       status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
@@ -6407,7 +7420,7 @@ function ExecutionQueuePage({ route }) {
 /** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
     arrives from the Overview's watch items, which deep-link the dismissed slice). */
 function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage, { route })
+  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution', focusRun: route.run }) : h(ExecutionQueuePage, { route })
 }
 
 
@@ -6417,6 +7430,15 @@ Object.assign(PAGE_TEXT, {
   'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
   'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
   'wf.review': ['独立验收', 'Independent review'],
+  // Host workflow state and stage status are backend enums; render them through these keys (unknown values stay raw).
+  'wf.statePending': ['待开始', 'Pending'], 'wf.stateRunning': ['进行中', 'Running'],
+  'wf.stateAssess': ['评估中', 'Assessing'], 'wf.statePlan': ['规划中', 'Planning'],
+  'wf.stateImplement': ['实现中', 'Implementing'], 'wf.stateGates': ['闸门检查中', 'Checking gates'],
+  'wf.stateReview': ['评审中', 'Reviewing'], 'wf.stateBlocked': ['已阻塞', 'Blocked'],
+  'wf.stateReady': ['已就绪', 'Ready'],
+  'wf.stagePending': ['等待', 'Pending'], 'wf.stageRunning': ['进行中', 'Running'],
+  'wf.stageCompleted': ['已完成', 'Completed'], 'wf.stageFailed': ['失败', 'Failed'],
+  'wf.stageBlocked': ['已阻塞', 'Blocked'],
 })
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
@@ -6535,6 +7557,41 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptLinePending': ['待你验收', 'Waiting for your sign-off'],
   'detail.acceptLineAccepted': ['已验收 · {time}', 'Accepted · {time}'],
   'detail.acceptLineRejected': ['已打回 · {time}', 'Rejected · {time}'],
+  'detail.evidenceTitle': ['交付证据', 'Delivery evidence'],
+  'detail.evidenceEmpty': ['这段交付还没有持久化的证据（旧工单或尚未跑完）。缺少历史时不推断“已修复”。',
+    'No persisted evidence for this delivery yet (an older Ticket or a run that has not delivered). Missing history never means “fixed”.'],
+  'detail.evidenceRound': ['第 {round} 轮', 'Round {round}'],
+  'detail.evidenceFiles': ['{count} 个文件', '{count} files'],
+  'detail.evidenceGates': ['闸门 {passed}/{total}', 'Gates {passed}/{total}'],
+  'detail.evidenceCompare': ['与上一轮对比：新增 {added}，删除 {removed}，修改 {changed}；闸门变化 {gates} 项。',
+    'Compared with the previous round: +{added} added, -{removed} removed, {changed} changed; {gates} gate change(s).'],
+  'detail.evidencePlatform': ['推送 {pushed} · PR {pr} · 合并 {merged} · 部署 {deployed} · 验收 {accepted}',
+    'pushed {pushed} · PR {pr} · merged {merged} · deployed {deployed} · accepted {accepted}'],
+  'detail.evidenceYes': ['是', 'yes'],
+  'detail.evidenceBranch': ['分支', 'Branch'],
+  'detail.evidenceFilesLabel': ['改动文件', 'Changed files'],
+  'detail.evidenceSummary': ['本轮 worker 总结', 'Worker summary for this round'],
+  'detail.evidenceNoHistory': ['只有这一轮证据，无法比较上一轮；不推断“已修复”。',
+    'Only this round is on file; there is no previous round to compare, so nothing is claimed as fixed.'],
+  'detail.evidenceNo': ['否', 'no'],
+  'detail.evidenceRequirements': ['验收要求变化：新增 {added}；移除 {removed}。',
+    'Acceptance requirements changed: added {added}; removed {removed}.'],
+  'detail.evidenceNotRerun': ['未重跑：{names}。这些结果不能算本轮已通过。',
+    'Not re-run: {names}. These results cannot count as passing in this round.'],
+  'detail.evidenceDeploy': ['部署 commit {sha}', 'Deployment commit {sha}'],
+  'detail.evidenceIncomplete': ['证据不完整：上一轮文件列表截断 {previousOmitted} 项、脱敏 {previousRedacted} 项；本轮截断 {currentOmitted} 项、脱敏 {currentRedacted} 项。缺失项不当作删除。',
+    'Incomplete evidence: the previous file list lost {previousOmitted} to truncation and {previousRedacted} to redaction; this round lost {currentOmitted} and {currentRedacted}. Missing entries are not counted as deletions.'],
+  'detail.evidenceUncertain': ['无法确认新增 {added}、删除 {removed}：对应轮次的文件列表不完整。',
+    'Additions ({added}) and deletions ({removed}) cannot be confirmed: the file list on that side is incomplete.'],
+  'detail.evidencePatchTruncated': ['本轮 patch 已截断（保留 {bytes}\u00A0字节），不是完整改动。',
+    'This round\'s patch was truncated ({bytes}\u00A0bytes kept); it is not the full change.'],
+  'detail.evidenceBaseline': ['基线已变化（{from} → {to}），上一轮的闸门结果不能直接沿用。',
+    'The baseline changed ({from} → {to}); the previous round\'s gate results cannot be reused as-is.'],
+  'detail.evidenceUnfinished': ['本轮仍未通过：{names}。',
+    'Still not passing in this round: {names}.'],
+  'detail.evidenceStale': ['以下闸门沿用了旧代码的结果，需要重跑：{names}。',
+    'These gates reused results from older code and must be re-run: {names}.'],
+  'detail.evidenceNone': ['无', 'none'],
   'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
   'detail.acceptLineView': ['查看验收', 'View acceptance'],
 
@@ -6615,8 +7672,13 @@ Object.assign(PAGE_TEXT, {
   'detail.resumeTitle': ['继续这个中断的运行？', 'Resume this interrupted run?'],
   'detail.resumeConfirm': ['会从中断的检查点继续；没有检查点时重跑整单：{title}',
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
+  'detail.stoppedHint': ['上一次运行已按人工请求停止，工作树与检查点保留，可以继续执行。',
+    'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
+  'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
+  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只从停下的那一步继续（失败的一步，或验收要求修改后的下一轮返工），通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
+    'Finished assessment, implementation and gates are kept: only the stage where it stopped runs again (the failed one, or the next repair round after a rejection), then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -6630,7 +7692,7 @@ Object.assign(PAGE_TEXT, {
   'auto.at': ['每天时间', 'Time of day'],
   'auto.atHint': ['本机本地时间，格式 HH:mm。', 'Local machine time, HH:mm.'],
   'auto.maxExecutions': ['执行次数上限', 'Execution limit'],
-  'auto.maxExecutionsPlaceholder': ['不限', 'Unlimited'],
+  'auto.maxExecutionsPlaceholder': ['例如：10', 'e.g. 10'],
   'auto.maxExecutionsHint': ['留空表示不限；只统计自动触发的次数。', 'Leave empty for unlimited; only automatic runs are counted.'],
   'auto.save': ['保存自动化', 'Save automation'],
   'auto.saved': ['自动化已保存。', 'Automation saved.'],
@@ -6662,6 +7724,27 @@ Object.assign(PAGE_TEXT, {
   'detail.repairFailed': ['失败', 'Failed'],
   'detail.repairExhausted': ['已用尽', 'Exhausted'],
   'detail.repairNone': ['未触发', 'Not triggered'],
+
+  // ---- WIG a11y/UX audit (2026-11-13): action-specific confirms and the small copy fixes --------------------------
+  'detail.confirmRetry': ['重试执行', 'Retry run'],
+  'detail.confirmPublish': ['发布并开 MR', 'Publish and open MR'],
+  'detail.confirmStop': ['终止工单', 'Stop Ticket'],
+  'detail.confirmDismiss': ['忽略并删除分支', 'Dismiss and delete branch'],
+  'detail.confirmResume': ['从断点继续', 'Resume from checkpoint'],
+  'detail.confirmGateRelease': ['放行闸门', 'Release gate'],
+  'detail.confirmAcceptPass': ['确认验收通过', 'Accept delivery'],
+  'detail.confirmAcceptFail': ['确认打回', 'Reject delivery'],
+  'detail.prNone': ['无', 'none'],
+  'detail.answerLabel': ['你的回答', 'Your answer'],
+  'detail.dismissCleanupFailed': ['已忽略该工单，但清理失败：{reason}。本地分支或工作树可能仍在，请手动清理。',
+    'Ticket dismissed, but cleanup failed: {reason}. The local branch or worktree may still exist; clean it up manually.'],
+  'auto.intervalInvalid': ['间隔必须是 10–1440 之间的整数分钟。', 'Interval must be a whole number of minutes between 10 and 1440.'],
+  'auto.atInvalid': ['时间格式应为 HH:mm。', 'Time must use the HH:mm format.'],
+  'auto.maxExecutionsInvalid': ['执行次数上限应为 1–10000 的整数，或留空。',
+    'Execution limit must be a whole number between 1 and 10000, or empty.'],
+  'auto.saving': ['保存中…', 'Saving…'],
+  'ticket.traceCountOmitted': ['执行轨迹（共 {count} 条，显示最近 {shown} 条）',
+    'Execution trace ({count} total, latest {shown} shown)'],
 })
 
 /** Run step name → PAGE_TEXT key suffix; gate steps are labelled with their gate name. */
@@ -6697,18 +7780,25 @@ function ticketGateLabel(t, name) {
 /** run step state → status shape. */
 const STEP_STATE = { ok: 'done', running: 'ongoing', failed: 'error', pending: 'idle' }
 
-/** Absolute short stamp for the detail timeline and the acceptance line: `MM-DD HH:mm`; the full time goes in title. */
-function ticketStamp(value) {
+/** Absolute short stamp for the detail timeline and the acceptance line; the full time goes in title. */
+function ticketStamp(value, lang) {
   const date = new Date(value ?? '')
   if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : ''
-  const pad = number => String(number).padStart(2, '0')
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  // Intl keeps the stamp consistent with when/fullTime and follows the active language (it used to be a hand-rolled
+  // fixed `MM-DD HH:mm`, which ignored the English locale entirely).
+  return new Intl.DateTimeFormat(timeLocale(lang), { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
+/** Scrolls stay instant for reduced-motion users; the shared util helper is owned by another file, so this one is local. */
+function ticketReduceMotion() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 /** Timeline timestamps are read as absolute times first (critique #11): no "20 小时前" at the start of a row. */
 function TicketStamp({ at }) {
   const { t } = usePanel()
-  return h('time', { dateTime: at, title: fullTime(at, t.lang) }, ticketStamp(at))
+  return h('time', { dateTime: at, title: fullTime(at, t.lang) }, ticketStamp(at, t.lang))
 }
 
 /**
@@ -6747,7 +7837,7 @@ function ticketEvents(t, ticket, runs) {
       // The `error` step repeats run.error, and a reconcile step can carry the same English cause; map any known
       // failure wording to the Chinese cause, keeping the raw text on hover (C9).
       const rawDetail = String(step.message ?? step.error ?? step.branch
-        ?? (step.exitCode !== undefined ? `exit ${step.exitCode}` : ''))
+        ?? (step.exitCode !== undefined ? pt(t, 'gate.exitCode', { code: step.exitCode }) : ''))
       const mapped = failureKnown(rawDetail)
       const detail = mapped ? failureLabel(t, rawDetail) : rawDetail
       add({ at: step.at, stepName: step.name, state: STEP_STATE[step.state] ?? 'idle', detail,
@@ -6782,7 +7872,7 @@ function TicketTimeline({ ticket, runs }) {
     events.length > TIMELINE_RECENT
       ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.timelineRecent', { count: shown.length, total: events.length }))
       : null,
-    h('ol', { className: 'sa-timeline' }, shown.map((event, index) => h('li', { key: index, className: 'sa-event' },
+    h('ol', { id: 'sa-timeline-events', className: 'sa-timeline' }, shown.map((event, index) => h('li', { key: index, className: 'sa-event' },
       h('div', { className: 'sa-event-actor' },
         h(StatusIcon, { state: event.state, size: 14 }),
         h(TicketStamp, { at: event.at }),
@@ -6797,6 +7887,7 @@ function TicketTimeline({ ticket, runs }) {
     events.length > TIMELINE_RECENT
       ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)' } },
         h(Button, { variant: 'ghost', size: 'sm', icon: expanded ? 'chevron-up' : 'chevron-down',
+          'aria-expanded': expanded, 'aria-controls': 'sa-timeline-events',
           onClick: () => setExpanded(value => !value) },
         expanded ? pt(t, 'ticket.timelineCollapse') : pt(t, 'ticket.timelineShowAll', { count: events.length })))
       : null)
@@ -6812,23 +7903,41 @@ const TRACE_KINDS = {
 }
 const TRACE_LIMIT = 80
 
+/**
+ * Folded renders its children even while closed; a trace of up to 80 rows should build its DOM only once opened
+ * (audit P3). Markup and classes mirror the shared Folded, which stays untouched for the other pages.
+ */
+function TicketLazyFolded({ summary, children }) {
+  const [open, setOpen] = useState(false)
+  return h('details', { className: 'sa-folded', onToggle: event => setOpen(event.currentTarget.open) },
+    h('summary', { className: 'sa-folded-summary' }, h(Icon, { name: 'chevron-right', size: 14 }), h('span', null, summary)),
+    open ? h('div', { className: 'sa-folded-body' }, children) : null)
+}
+
 /** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
 function RunTrace({ run }) {
   const { t } = usePanel()
   const trace = Array.isArray(run?.trace) ? run.trace.filter(event => event && typeof event === 'object') : []
   if (!trace.length) return null
   const shown = trace.slice(-TRACE_LIMIT)
-  return h(Folded, { summary: pt(t, 'ticket.traceCount', { count: shown.length }) },
+  const omitted = trace.length - shown.length
+  // The title counts every event and names the omitted tail instead of silently rendering "the last 80" (audit P3).
+  const summary = omitted > 0
+    ? pt(t, 'ticket.traceCountOmitted', { count: trace.length, shown: shown.length })
+    : pt(t, 'ticket.traceCount', { count: trace.length })
+  return h(TicketLazyFolded, { summary },
     h('ol', { className: 'sa-timeline' }, shown.map((event, index) => {
       const kind = TRACE_KINDS[event.type] ?? { icon: 'circle', state: 'idle', labelKey: 'ticket.traceAssistant' }
-      const summary = typeof event.summary === 'string' ? event.summary.slice(0, 300) : ''
+      const full = typeof event.summary === 'string' ? event.summary : ''
+      // A clipped summary says so and keeps the full text reachable on hover/focus (audit P3).
+      const text = full.length > 300 ? `${full.slice(0, 300)}…` : full
       return h('li', { key: index, className: 'sa-event' },
         h('div', { className: 'sa-event-actor' },
           h(StatusIcon, { state: kind.state, size: 13, spin: false }),
           typeof event.at === 'string' && event.at ? h(TicketStamp, { at: event.at }) : null,
           h('span', null, pt(t, kind.labelKey)),
           event.name ? h('span', { className: 'sa-mono sa-hint' }, String(event.name)) : null),
-        summary ? h('p', { className: 'sa-event-text' }, summary) : null)
+        text ? h('p', { className: 'sa-event-text', title: full.length > 300 ? full : undefined }, text) : null)
     })))
 }
 
@@ -6928,7 +8037,8 @@ function TicketGateResults({ ticket, record }) {
     const ok = gate.exitCode === 0 && !gate.timedOut
     const policy = gateOnFailOf(gate, record)
     // The label gets its outcome as a text alternative: shape+colour alone leaves a screen reader with a bare name.
-    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
+    // `role="group"` makes that label a valid accessible name on a generic span (aria-label alone on a span is ignored).
+    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate', role: 'group',
       'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
       h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
       ok ? null : h('span', { className: 'sa-hint' },
@@ -6944,7 +8054,8 @@ function TicketGateResults({ ticket, record }) {
   return h(Fragment, null,
     h('div', { className: 'sa-gates' },
       pending
-        ? h('span', { className: 'sa-gate' },
+        ? h('span', { className: 'sa-gate', role: 'group',
+          'aria-label': `${ticketGateLabel(t, pending.name)} · ${pt(t, 'detail.gatePendingTag')}` },
           h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
           h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
         : null,
@@ -7022,7 +8133,7 @@ function AcceptanceRecordCard({ record }) {
                 h(Tag, { tone: onFailOfCheck(check) === 'auto_repair' ? 'info' : 'outline',
                   title: pt(t, onFailOfCheck(check) === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
                 pt(t, GATE_ONFAIL_KEYS[onFailOfCheck(check)])),
-                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, `exit ${check.exitCode}`) : null,
+                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, pt(t, 'gate.exitCode', { code: check.exitCode })) : null,
                 check.timedOut ? h(Tag, { tone: 'warning' }, pt(t, 'runStop.timeout')) : null),
               check.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(check.note))) : null,
               outputTail
@@ -7096,7 +8207,7 @@ function TicketRunRows({ runs }) {
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
     const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
-    return h('li', { key: run.id, className: 'sa-row' },
+    return h('li', { key: run.id, id: `sa-run-${run.id}`, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
@@ -7215,7 +8326,8 @@ function DiffCard({ state = {}, onRetry }) {
   const files = Array.isArray(data.files) ? data.files : []
   const additions = files.reduce((total, file) => total + (Number(file.additions) || 0), 0)
   const deletions = files.reduce((total, file) => total + (Number(file.deletions) || 0), 0)
-  const limit = `${Math.max(1, Math.round((Number(data.bytes) || 0) / 1024))} KB`
+  // Locale number formatting and a non-breaking space keep the size from wrapping away from its unit (audit P3).
+  const limit = `${new Intl.NumberFormat(timeLocale(t.lang)).format(Math.max(1, Math.round((Number(data.bytes) || 0) / 1024)))}\u00A0KB`
   const omitted = Number(data.omitted) || 0
   const filePath = typeof data.path === 'string' && data.path ? data.path : (typeof state.path === 'string' ? state.path : '')
   const pathRow = filePath ? h('div', { className: 'sa-mono', style: { overflowWrap: 'anywhere' } }, filePath) : null
@@ -7240,6 +8352,21 @@ function failureHint(t, error, steps) {
   if (/timed out/i.test(text)) return pt(t, 'detail.failedTimeout')
   if (/gate/i.test(text) || steps.some(step => step.startsWith(pt(t, 'ticket.step.gate')))) return pt(t, 'detail.failedGate')
   return pt(t, 'detail.failedGeneric')
+}
+
+/** Host workflow state → localized text; an unknown value stays visible instead of leaking a backend enum (audit P2). */
+const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
+  plan: 'wf.statePlan', implement: 'wf.stateImplement', gates: 'wf.stateGates', review: 'wf.stateReview',
+  blocked: 'wf.stateBlocked', ready: 'wf.stateReady' }
+const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
+  failed: 'wf.stageFailed', blocked: 'wf.stageBlocked' }
+function ticketWorkflowStateLabel(t, status) {
+  const key = WORKFLOW_STATE_KEYS[String(status ?? '')]
+  return key ? pt(t, key) : String(status ?? '—')
+}
+function ticketWorkflowStageLabel(t, status) {
+  const key = WORKFLOW_STAGE_KEYS[String(status ?? '')]
+  return key ? pt(t, key) : String(status ?? '—')
 }
 
 /** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
@@ -7272,15 +8399,46 @@ function AutomationCard({ ticket, onSaved }) {
   const [form, setForm] = useState(() => automationFormOf(automation))
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState(undefined)
+  // Audit P2: invalid numbers are explained at the field that produced them, and the focus moves to the first one.
+  const [fieldErrors, setFieldErrors] = useState({})
+  const intervalRef = useRef(null)
+  const atRef = useRef(null)
+  const maxExecutionsRef = useRef(null)
   // Re-sync only when the stored config actually changed (a poll of unchanged data never wipes a half-typed form).
   useEffect(() => { setForm(automationFormOf(automation)) }, [signature])
   // A Ticket without a stored config still needs an entry point to opt in; only the terminal "put away" states hide
   // the card (a dismissed/closed Ticket will never run again by schedule).
-  const update = patch => setForm(previous => ({ ...previous, ...patch }))
-  const setMode = mode => setForm(previous => ({ ...previous, mode,
-    enabled: mode === 'off' ? false : (previous.mode === mode ? previous.enabled : true) }))
+  const update = patch => { setForm(previous => ({ ...previous, ...patch })); setFieldErrors({}) }
+  const setMode = mode => {
+    setFieldErrors({})
+    setForm(previous => ({ ...previous, mode,
+      enabled: mode === 'off' ? false : (previous.mode === mode ? previous.enabled : true) }))
+  }
+  const validate = () => {
+    const errors = {}
+    if (form.mode === 'heartbeat') {
+      const minutes = Number(form.intervalMinutes)
+      if (!Number.isInteger(minutes) || minutes < 10 || minutes > 1440) errors.intervalMinutes = pt(t, 'auto.intervalInvalid')
+    }
+    if (form.mode === 'schedule' && !/^\d{2}:\d{2}$/.test(String(form.at ?? ''))) errors.at = pt(t, 'auto.atInvalid')
+    const limit = String(form.maxExecutions ?? '').trim()
+    if (limit !== '') {
+      const max = Number(limit)
+      if (!Number.isInteger(max) || max < 1 || max > 10000) errors.maxExecutions = pt(t, 'auto.maxExecutionsInvalid')
+    }
+    return errors
+  }
   const save = async () => {
     if (saving || !act?.setAutomation) return
+    // Audit P2: the host used to receive Number('')/NaN/out-of-range values, with only a generic failure afterwards.
+    const errors = validate()
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      const first = errors.intervalMinutes ? intervalRef : errors.at ? atRef : maxExecutionsRef
+      first.current?.focus()
+      return
+    }
+    setFieldErrors({})
     setSaving(true)
     setFailure(undefined)
     try {
@@ -7330,9 +8488,10 @@ function AutomationCard({ ticket, onSaved }) {
       h('div', { className: 'sa-card' },
       h('div', { className: 'sa-card-head' },
         h('span', { className: 'sa-card-title' }, automationSummaryText(t, stored) || pt(t, 'auto.modeOff')),
-        h('span', { className: 'sa-actions' },
+        h('label', { className: 'sa-actions' },
           h('span', { className: 'sa-hint' }, pt(t, 'auto.enabled')),
-          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }), label: pt(t, 'auto.enabled') }))),
+          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }),
+            label: pt(t, 'auto.enabled') }))),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'auto.mode')),
         h(SegmentedControl, { value: form.mode, onChange: setMode, label: pt(t, 'auto.mode'),
@@ -7342,28 +8501,36 @@ function AutomationCard({ ticket, onSaved }) {
       heartbeat
         ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.interval')),
-          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes,
-            'aria-label': pt(t, 'auto.interval'), onChange: event => update({ intervalMinutes: event.target.value }) }),
+          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes, inputRef: intervalRef,
+            'aria-label': pt(t, 'auto.interval'), 'aria-invalid': fieldErrors.intervalMinutes ? true : undefined,
+            onChange: event => update({ intervalMinutes: event.target.value }) }),
+          fieldErrors.intervalMinutes ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.intervalMinutes) : null,
           h('small', null, pt(t, 'auto.intervalHint')))
         : null,
       schedule
         ? h('div', { className: 'sa-field sa-field-narrow' },
           h('span', { className: 'sa-field-head' }, pt(t, 'auto.at')),
-          h(Input, { type: 'time', value: form.at, 'aria-label': pt(t, 'auto.at'),
+          h(Input, { type: 'time', value: form.at, inputRef: atRef, 'aria-label': pt(t, 'auto.at'),
+            'aria-invalid': fieldErrors.at ? true : undefined,
             onChange: event => update({ at: event.target.value }) }),
+          fieldErrors.at ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.at) : null,
           h('small', null, pt(t, 'auto.atHint')))
         : null,
       h('div', { className: 'sa-field sa-field-narrow' },
         h('span', { className: 'sa-field-head' }, pt(t, 'auto.maxExecutions')),
-        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions,
+        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions, inputRef: maxExecutionsRef,
           placeholder: pt(t, 'auto.maxExecutionsPlaceholder'), 'aria-label': pt(t, 'auto.maxExecutions'),
+          'aria-invalid': fieldErrors.maxExecutions ? true : undefined,
           onChange: event => update({ maxExecutions: event.target.value }) }),
+        fieldErrors.maxExecutions ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.maxExecutions) : null,
         h('small', null, pt(t, 'auto.maxExecutionsHint'))),
       dirty || saving || failure
         ? h(Fragment, null,
           h('div', { className: 'sa-actions' },
-            h(Button, { variant: 'primary', size: 'sm', icon: 'check', disabled: saving || !act?.setAutomation,
-              onClick: () => { void save() } }, pt(t, 'auto.save')),
+            h(Button, { variant: 'primary', size: 'sm', icon: saving ? undefined : 'check',
+              disabled: saving || !act?.setAutomation, 'aria-busy': saving || undefined,
+              onClick: () => { void save() } },
+            saving ? h(Fragment, null, h(StatusIcon, { state: 'ongoing', size: 14 }), pt(t, 'auto.saving')) : pt(t, 'auto.save')),
             h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
           failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
         : null,
@@ -7386,10 +8553,102 @@ const DETAIL_JUMPS = [
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
 ]
 
-function TicketDetail({ id, page = 'execution' }) {
+/** A jump must land on a section this Ticket really renders: dismissed/closed hides automation, no gate result hides gates. */
+function ticketVisibleJumps(ticket, hasGateResults) {
+  const status = typeof ticket?.status === 'string' ? ticket.status : ''
+  return DETAIL_JUMPS.filter(jump => {
+    if (jump.id === 'sa-automation') return !['dismissed', 'closed'].includes(status)
+    if (jump.id === 'sa-ticket-gates') return Boolean(hasGateResults)
+    return true
+  })
+}
+
+/** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
+function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
+  const { t } = usePanel()
+  const rounds = Array.isArray(data?.rounds) ? data.rounds : []
+  // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
+  // recompute it from the rounds and quietly disagree (review P2 AC-08/AC-09).
+  const compare = useLiveResource('engine/evidence/:id/compare', { id }, 30000,
+    { enabled: Boolean(id) && rounds.length > 1 })
+  // A read still in flight or failed is not "no evidence yet" (audit P2): render the read's own state and retry it.
+  if (error && !data) return h(ErrorState, { error, onRetry })
+  if (loading && !data) return h(Skeleton, { rows: 2 })
+  if (!rounds.length) return h(Hint, null, pt(t, 'detail.evidenceEmpty'))
+  const latest = rounds.at(-1)
+  const diff = compare.data
+  const previous = rounds.length > 1 ? rounds.at(-2) : null
+  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed').length
+  const platform = latest.platform ?? {}
+  const incomplete = diff?.incomplete
+  const uncertain = diff?.filesUncertain
+  const incompleteLine = incomplete && (!incomplete.previous.fileList || !incomplete.current.fileList)
+    ? pt(t, 'detail.evidenceIncomplete', {
+      previousOmitted: incomplete.previous.filesOmitted, previousRedacted: incomplete.previous.filesRedacted,
+      currentOmitted: incomplete.current.filesOmitted, currentRedacted: incomplete.current.filesRedacted })
+    : ''
+  const uncertainAdded = (uncertain?.added ?? []).join('、')
+  const uncertainRemoved = (uncertain?.removed ?? []).join('、')
+  const requirementsAdded = diff?.acceptance?.added ?? []
+  const requirementsRemoved = diff?.acceptance?.removed ?? []
+  const unfinished = (diff?.gatesUnfinished ?? []).map(gate => gate.name)
+  return h('div', { className: 'sa-card' },
+    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'detail.evidenceTitle')),
+      h(Tag, { tone: 'neutral' }, pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length }))),
+    h(KeyValues, { rows: [
+      [pt(t, 'detail.evidenceBranch'), h('span', { className: 'sa-mono' }, latest.branch || '—')],
+      [pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, (latest.headSha ?? '—').slice(0, 8))],
+      [pt(t, 'detail.evidenceFilesLabel'), pt(t, 'detail.evidenceFiles', { count: (latest.files ?? []).length })],
+      [pt(t, 'ticket.gates'), pt(t, 'detail.evidenceGates', { passed, total: (latest.gates ?? []).length })],
+    ] }),
+    h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      pr: platform.pr ?? pt(t, 'detail.prNone'), merged: platform.merged ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      deployed: platform.deployed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })),
+    diff
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
+        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length }))
+      : rounds.length < 2
+        ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNoHistory'))
+        : null,
+    incompleteLine ? h('p', { className: 'sa-hint' }, incompleteLine) : null,
+    uncertainAdded || uncertainRemoved
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUncertain', {
+        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') }))
+      : null,
+    latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePatchTruncated', {
+        bytes: new Intl.NumberFormat(timeLocale(t.lang)).format(Number(latest.patch?.bytes ?? previous?.patch?.bytes ?? 0)) }))
+      : null,
+    diff?.baseline?.changed
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceBaseline', {
+        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) }))
+      : null,
+    unfinished.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') }))
+      : null,
+    diff?.gatesStale?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') }))
+      : null,
+    diff?.gatesNotRun?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') }))
+      : null,
+    requirementsAdded.length || requirementsRemoved.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceRequirements', {
+        added: requirementsAdded.join('；') || pt(t, 'detail.evidenceNone'),
+        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') }))
+      : null,
+    platform.deployCommit
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) }))
+      : null,
+    latest.workerSummary ? h(Folded, { summary: pt(t, 'detail.evidenceSummary') }, h('p', null, latest.workerSummary)) : null)
+}
+
+function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
+  const evidence = useLiveResource('engine/evidence/:id', { id }, 30000)
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
@@ -7402,9 +8661,17 @@ function TicketDetail({ id, page = 'execution' }) {
   const [diffOpen, setDiffOpen] = useState(false)
   const [diff, setDiff] = useState({})
   useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
+  // AC-07: an Eval/source record's run link opens this page pinned to that run; scroll to it once the ledger loads.
+  const focusedRun = useRef(null)
+  useEffect(() => {
+    if (!focusRun || focusedRun.current === focusRun) return
+    const node = document.getElementById(`sa-run-${focusRun}`)
+    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
+  }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
   const [revisionText, setRevisionText] = useState('')
+  const [revisionError, setRevisionError] = useState(false)
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
@@ -7412,16 +8679,28 @@ function TicketDetail({ id, page = 'execution' }) {
     const node = headRef.current ?? document.querySelector('.sa-page-head')
     const root = document.querySelector('.sa-scroll')
     if (!node || !root) return undefined
-    const update = () => {
+    // Audit P3: one read per animation frame, and a state write only when the threshold actually flips (a scroll
+    // event used to force two layouts and two renders per frame).
+    let frame = 0
+    let stuck = false
+    const measure = () => {
+      frame = 0
       const head = node.getBoundingClientRect()
       const scroll = root.getBoundingClientRect()
       // The compact context appears only once the real PageHead is under the sticky nav (a small overlap margin keeps
       // it from flickering at the boundary).
-      setHeadStuck(head.bottom <= scroll.top + 8)
+      const next = head.bottom <= scroll.top + 8
+      if (next === stuck) return
+      stuck = next
+      setHeadStuck(next)
     }
-    update()
-    root.addEventListener('scroll', update, { passive: true })
-    return () => root.removeEventListener('scroll', update)
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
+    measure()
+    root.addEventListener('scroll', schedule, { passive: true })
+    return () => {
+      root.removeEventListener('scroll', schedule)
+      if (frame) cancelAnimationFrame(frame)
+    }
   }, [id, data])
   const act = model?.actions
   const refreshAll = useCallback(async () => { await Promise.all([model?.reload?.(), reload()]) }, [model, reload])
@@ -7439,9 +8718,11 @@ function TicketDetail({ id, page = 'execution' }) {
   }
   const revision = useAction(async () => {
     const text = String(revisionText ?? '').trim()
-    if (!text) { notify(pt(t, 'ticket.revisionRequired')); return }
+    // The submit button stays clickable when empty (audit P3): this inline reason is the explanation, not a silent no-op.
+    if (!text) { setRevisionError(true); return }
     await act.addRevision(id, text)
     setRevisionText('')
+    setRevisionError(false)
     notify(pt(t, 'ticket.revisionStarted'))
   }, { reload: refreshAll })
   const dryRun = useAction(() => act.runTicket(id, { dryRun: true, wait: false }), { reload: refreshAll })
@@ -7468,7 +8749,9 @@ function TicketDetail({ id, page = 'execution' }) {
   const dismiss = useAction(async () => {
     const result = await act.dismissTicket(id, '手动忽略')
     const cleanup = result?.cleanup ?? result?.ticket?.links?.cleanup
-    notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
+    // Audit P2: a failed cleanup still leaves the branch/worktree behind, so do not claim they were deleted.
+    notify(pt(t, cleanup ? (cleanup.failed ? 'detail.dismissCleanupFailed' : 'detail.dismissRecorded') : 'detail.dismissRecordedBare',
+      { reason: cleanup?.failed ?? '' }))
     return cleanup
   }, { reload: refreshAll })
   // P0 gate decisions (contract §3.2): release skips the gate and delivers, retry re-runs the gates, stop fails the
@@ -7481,15 +8764,19 @@ function TicketDetail({ id, page = 'execution' }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
   const [answerText, setAnswerText] = useState('')
+  // A click on an empty answer explains itself inline instead of leaving a silently disabled button (audit P3).
+  const [answerError, setAnswerError] = useState(false)
   // P1-3: rejection intents are optional checkboxes next to the reject button.
   const [rejectIntents, setRejectIntents] = useState([])
   const answer = useAction(async () => {
     const text = String(answerText ?? '').trim()
-    if (!text) { notify(pt(t, 'detail.answerRequired')); return }
+    if (!text) { setAnswerError(true); return }
     await act.answerTicket(id, text)
     setAnswerText('')
+    setAnswerError(false)
     notify(pt(t, 'detail.answerSent'))
   }, { reload: refreshAll })
   // Which confirmation dialog the ⋯ menu opened (`publish` / `retry`); mirrors TicketRow's menu behavior (critique #4).
@@ -7500,6 +8787,11 @@ function TicketDetail({ id, page = 'execution' }) {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       // An open dialog/menu owns Escape; the trigger wrapper itself is always in the DOM, so test the role.
       if (document.querySelector('.sa-modal') || document.querySelector('[role="menu"]')) return
+      // Audit P1: Escape inside a field cancels that field (blur) instead of navigating away and losing the draft;
+      // only a key pressed outside editable content is the page-level "go back".
+      const target = typeof Element !== 'undefined' && event.target instanceof Element ? event.target : null
+      const editable = target ? target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])') : null
+      if (editable) { editable.blur(); return }
       back()
     }
     document.addEventListener('keydown', onKeyDown)
@@ -7511,7 +8803,12 @@ function TicketDetail({ id, page = 'execution' }) {
     if (typeof IntersectionObserver === 'undefined') return undefined
     const root = document.querySelector('.sa-scroll')
     if (!root) return undefined
-    const nodes = DETAIL_JUMPS.map(jump => document.getElementById(jump.id)).filter(Boolean)
+    // Same filtered list as the jump row (audit P2): a hidden section is neither linked nor observed.
+    const ticket = data?.ticket ?? {}
+    const runs = Array.isArray(data?.runs) ? data.runs : []
+    const gates = latestGatesOf({ ...ticket, runs })
+    const hasGates = gates.gates.length > 0 || Boolean(ticket.pendingGate ?? gates.run?.pendingGate)
+    const nodes = ticketVisibleJumps(ticket, hasGates).map(jump => document.getElementById(jump.id)).filter(Boolean)
     if (!nodes.length) return undefined
     const observer = new IntersectionObserver(entries => {
       const visible = entries.filter(entry => entry.isIntersecting)
@@ -7548,7 +8845,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const hasGateResults = gateView.gates.length > 0 || Boolean(parkedGate)
   // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
   const latestRun = latestRunFor(ticket, runs)
-  const interrupted = latestRun?.status === 'interrupted'
+  // AC-04: a stopped run keeps its checkpoint too, so the same resume action serves interrupted and stopped runs.
+  const interrupted = latestRun?.status === 'interrupted' || latestRun?.status === 'stopped'
   // A run in flight has nothing to launch: the dry-run action belongs to the ⋯ menu, not the primary slot (T3).
   const running = latestRun?.status === 'running' || ticket.status === 'working'
   const awaitingAnswer = ticket.status === 'awaiting-answer'
@@ -7598,8 +8896,12 @@ function TicketDetail({ id, page = 'execution' }) {
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
   if (routePreview) {
+    // Deliverable, required capabilities and backend are separate facts: a read-only report is not "the same route"
+    // as a code change, and an operator override must be visible as such.
+    const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
+      `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
@@ -7629,7 +8931,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const busy = { dryRun: dryRun.busy, retry: retry.busy, publish: publish.busy, refreshCi: refreshCi.busy, verify: verify.busy }
   // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
   // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
+  const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
+    || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
+  // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
+  const workflowResumable = failed && ticket.workflowResumable === true
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
   const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
@@ -7637,20 +8943,29 @@ function TicketDetail({ id, page = 'execution' }) {
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
     ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.answer'))
+      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }, pt(t, 'primary.answer'))
     : failed
     ? canRun
-      ? h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
-        message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
-        onConfirm: async () => { await retry.run() } })
-      : h(Button, { variant: 'primary', size: 'sm', disabled: true, title: pt(t, 'ticket.retryUnavailable') }, pt(t, 'ticket.retry'))
+      // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
+      ? workflowResumable
+        ? h(ConfirmButton, { label: pt(t, 'detail.resume'), title: pt(t, 'detail.resumeWorkflowTitle'),
+          message: pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'play',
+          confirmLabel: pt(t, 'detail.confirmResume'), onConfirm: async () => { await resume.run() } })
+        : h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
+          message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
+          confirmLabel: pt(t, 'detail.confirmRetry'), onConfirm: async () => { await retry.run() } })
+      // A disabled control still has to say why; the reason is a focusable InfoTip next to it, not a title tooltip.
+      : h(Fragment, null,
+        h(Button, { variant: 'primary', size: 'sm', disabled: true }, pt(t, 'ticket.retry')),
+        h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }))
     : accepted
-      // An accepted Ticket has nothing left to run: open the merged MR when there is one, otherwise only the ⋯ menu stays.
-      ? (mrUrl ? h(Button, { variant: 'primary', size: 'sm',
-        onClick: () => { window.open(mrUrl, '_blank', 'noopener') } }, pt(t, 'primary.openMr')) : null)
+      // An accepted Ticket has nothing left to run: the merged MR is a real link, otherwise only the ⋯ menu stays.
+      ? (safeHttpUrl(mrUrl) ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm',
+        href: safeHttpUrl(mrUrl), target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' } },
+        pt(t, 'primary.openMr')) : null)
       : needsAcceptance
         ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) },
+          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) },
         pt(t, 'primary.accept'))
         // A parked gate already carries all three decisions in the banner above this row, and running work has
         // nothing to launch — both states keep only the ⋯ menu, so the page never shows a second button that either
@@ -7659,46 +8974,67 @@ function TicketDetail({ id, page = 'execution' }) {
           ? null
           // P1-5: an interrupted run is resumable, so it outranks the generic dry-run action.
           : interrupted
-            ? h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
-              title: canRun ? undefined : pt(t, 'ticket.retryUnavailable'),
-              onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume'))
+            ? h(Fragment, null,
+              h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
+                onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume')),
+              !canRun ? h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }) : null)
             : dryRunReady
-              ? h(Button, { variant: 'primary', size: 'sm', icon: 'external',
-                disabled: busy.publish || !canPush, title: canPush ? undefined : pt(t, 'ticket.publishUnavailable'),
-                onClick: () => setPending('publish') }, pt(t, 'menu.publish'))
-              : h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
-                title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable'),
-                onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun'))
+              ? h(Fragment, null,
+                h(Button, { variant: 'primary', size: 'sm', icon: 'external',
+                  disabled: busy.publish || !canPush,
+                  onClick: () => setPending('publish') }, pt(t, 'menu.publish')),
+                !canPush ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null)
+              : h(Fragment, null,
+                h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
+                  onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun')),
+                !canRun ? h(InfoTip, { text: pt(t, 'ticket.dryRunUnavailable'), warn: true }) : null)
   const menuItems = [
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
       disabled: busy.refreshCi || !hasMr },
     { key: 'dryRun', label: pt(t, 'ticket.dryRun'), icon: 'play', onSelect: () => { void dryRun.run() },
-      disabled: busy.dryRun || !canRun, title: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
+      disabled: busy.dryRun || !canRun, note: canRun ? undefined : pt(t, 'ticket.dryRunUnavailable') },
     // The publish entry only lives here when it is not already the primary action.
     ...(dryRunReady ? [] : [{ key: 'publish', label: pt(t, 'menu.publish'), icon: 'external',
       onSelect: () => setPending('publish'), disabled: busy.publish || !canPush,
-      title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
+      note: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
-      disabled: busy.retry || !canRun, title: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
-    { key: 'stop', label: pt(t, 'menu.stop'), icon: 'stop', onSelect: () => {}, disabled: true, title: pt(t, 'ticket.stopUnavailable') },
+      disabled: busy.retry || !canRun, note: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
+    { key: 'stop', label: pt(t, ticket.stopRequested ? 'ticket.stopping' : 'menu.stop'), icon: 'stop',
+      onSelect: () => setPending('stop'), disabled: stopRun.busy || !activeRun || Boolean(ticket.stopRequested),
+      note: !activeRun ? pt(t, 'ticket.stopUnavailable') : ticket.stopRequested ? pt(t, 'ticket.stopping') : undefined },
     ...failed ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
   ]
   const runPending = async action => { const done = await action.run(); if (done) setPending(null) }
+  const confirmActionLabels = {
+    retry: pt(t, 'detail.confirmRetry'),
+    publish: pt(t, 'detail.confirmPublish'),
+    stop: pt(t, 'detail.confirmStop'),
+    // Only promise a deletion when there is a branch/worktree to delete.
+    dismiss: ticket.links?.branch || ticket.links?.worktree
+      ? pt(t, 'detail.confirmDismiss') : pt(t, 'detail.dismiss'),
+  }
   const confirmDialog = pending
     ? h(Modal, { open: true, onClose: () => setPending(null),
-      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle') : pt(t, 'ticket.publishTitle'),
+      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
+        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle'),
       closeLabel: t('close'),
       description: pending === 'retry'
         ? pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })
+        : pending === 'stop'
+          ? pt(t, 'ticket.stopConfirm')
         : pending === 'dismiss'
           ? pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
             branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })
           : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss : busy.publish,
-          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
+        // The confirm button names the action it destroys; a destructive one (stop/dismiss) is styled as such.
+        h(Button, { variant: pending === 'dismiss' || pending === 'stop' ? 'danger' : 'primary',
+          disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
+          : pending === 'stop' ? stopRun.busy : busy.publish,
+          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
+            : pending === 'stop' ? stopRun : publish) } }, confirmActionLabels[pending] ?? t('confirm'))) })
     : null
 
   // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
@@ -7753,11 +9089,13 @@ function TicketDetail({ id, page = 'execution' }) {
           h(ConfirmButton, { label: pt(t, 'detail.gateRelease'), title: pt(t, 'detail.gateReleaseTitle'),
             message: pt(t, 'detail.gateReleaseConfirm', { name: ticketGateLabel(t, pendingGate?.name),
               title: ticket.title ?? ticket.id }),
+            confirmLabel: pt(t, 'detail.confirmGateRelease'),
             variant: 'primary', icon: 'play', onConfirm: async () => { await gateRelease.run() } }),
           h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: gateRetry.busy,
             onClick: () => { void gateRetry.run() } }, pt(t, 'detail.gateRetry')),
           h(ConfirmButton, { label: pt(t, 'detail.gateStop'), title: pt(t, 'detail.gateStopTitle'),
             message: pt(t, 'detail.gateStopConfirm', { title: ticket.title ?? ticket.id }),
+            confirmLabel: pt(t, 'detail.confirmStop'),
             variant: 'danger', icon: 'stop', onConfirm: async () => { await gateStop.run() } }))))
     : null
   // P1-4 answer banner: the worker asked a question, so the one thing on screen is the question and the answer box.
@@ -7773,21 +9111,29 @@ function TicketDetail({ id, page = 'execution' }) {
         answerOptions.length
           ? h('div', { className: 'sa-actions' },
             h('span', { className: 'sa-hint' }, pt(t, 'detail.answerOptions')),
-            answerOptions.map((option, index) => h(Button, { key: index, variant: 'outline', size: 'sm',
-              onClick: () => setAnswerText(option) }, option)))
+            answerOptions.map((option, index) => h(Button, { key: index, size: 'sm',
+              variant: answerText === option ? 'primary' : 'outline',
+              'aria-pressed': answerText === option,
+              onClick: () => { setAnswerText(option); setAnswerError(false) } }, option)))
           : null,
-        h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
-          h('textarea', { className: 'sa-textarea', rows: 2, value: answerText,
-            placeholder: pt(t, 'detail.answerPlaceholder'), 'aria-label': pt(t, 'detail.answerPlaceholder'),
-            onChange: event => setAnswerText(event.target.value) }),
-          h(Button, { variant: 'primary', size: 'sm', icon: 'message',
-            disabled: answer.busy || !String(answerText ?? '').trim(),
-            onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit'))),
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
+          h('label', { htmlFor: 'sa-answer-input', className: 'sa-hint' }, pt(t, 'detail.answerLabel')),
+          h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
+            h('textarea', { id: 'sa-answer-input', name: 'answer', autoComplete: 'off',
+              className: 'sa-textarea', rows: 2, value: answerText,
+              placeholder: pt(t, 'detail.answerPlaceholder'),
+              'aria-invalid': answerError ? true : undefined,
+              onChange: event => { setAnswerText(event.target.value); setAnswerError(false) } }),
+            h(Button, { variant: 'primary', size: 'sm', icon: 'message',
+              disabled: answer.busy,
+              onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit')))),
+        answerError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'detail.answerRequired')) : null,
         previousAnswers.length
           ? h(Folded, { summary: pt(t, 'detail.answerHistory', { count: previousAnswers.length }) },
             h('ul', { className: 'sa-list' }, previousAnswers.map((entry, index) => h('li', { key: index, className: 'sa-row' },
               h('div', { className: 'sa-row-main' },
-                h('div', { className: 'sa-row-title' }, h('span', null, String(entry.answer ?? ''))),
+                h('div', { className: 'sa-row-title' },
+                  h('span', { style: { whiteSpace: 'pre-wrap' } }, String(entry.answer ?? ''))),
                 entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
           : null))
     : null
@@ -7799,13 +9145,15 @@ function TicketDetail({ id, page = 'execution' }) {
       h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
         h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
           interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
+        h('p', { className: 'sa-hint' }, pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint'))))
     : null
-  const jumps = DETAIL_JUMPS
+  // A jump is only offered for a section this Ticket actually renders (dismissed/closed hide automation, a Ticket
+  // without gate results hides the gates section) — the observer below uses the same filtered list.
+  const jumps = ticketVisibleJumps(ticket, hasGateResults)
   const jumpTo = id => {
     setActiveJump(id)
     const node = document.getElementById(id)
-    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start' })
+    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
   }
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
@@ -7817,8 +9165,8 @@ function TicketDetail({ id, page = 'execution' }) {
     : h('span', { className: 'sa-page-head-note' },
       h('span', null, acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
         : acceptanceView.state === 'accepted'
-          ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at) || '—' })
-          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at) || '—' })),
+          ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })
+          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })),
       needsAcceptance ? null
         : h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
           pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
@@ -7828,6 +9176,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const headActions = h(Fragment, null,
     acceptanceNote,
     primaryAction,
+    // AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only.
+    activeRun && !ticket.stopRequested
+      ? h(Button, { size: 'sm', variant: 'ghost', icon: 'stop', disabled: stopRun.busy, onClick: () => setPending('stop') },
+        pt(t, 'menu.stop'))
+      : null,
     h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
       text: primaryAction ? undefined : pt(t, 'menu.label') }))
 
@@ -7858,9 +9211,11 @@ function TicketDetail({ id, page = 'execution' }) {
       headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
 
     ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
-      h('p', null, ticket.workflow.status),
+      // The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked".
+      h('p', null, ticketWorkflowStateLabel(t, ticket.workflow.status),
+        ticket.workflow.detail ? h('span', { className: 'sa-hint' }, ` · ${ticket.workflow.detail}`) : null),
       ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
-        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${stage.status}` },
+        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}` },
         h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },
           stage.error ?? JSON.stringify(stage.result ?? {}, null, 2))))) : null,
 
@@ -7887,11 +9242,11 @@ function TicketDetail({ id, page = 'execution' }) {
         h('div', { className: 'sa-changes-side' },
           h('div', { className: 'sa-actions' },
             h('span', { className: 'sa-hint' }, pt(t, 'ticket.changedFiles')),
-            h('span', { className: 'sa-count' }, String(changes.files.length))),
+            h('span', { className: 'sa-count', 'data-empty': changes.files.length === 0 ? 'true' : undefined }, String(changes.files.length))),
           changes.files.length
             ? h(Fragment, null,
               // Each file name is the entry point to its own patch (only available while the worktree exists).
-              h('ul', { className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
+              h('ul', { id: 'sa-changed-files', className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
                 .map((file, index) => h('li', { key: index, className: 'sa-row' },
                   h('button', { type: 'button', className: 'sa-file-diff',
                     title: pt(t, 'ticket.diffOpenFile', { path: file }),
@@ -7900,6 +9255,7 @@ function TicketDetail({ id, page = 'execution' }) {
               changes.files.length > CHANGES_FILES_RECENT
                 ? h('div', { className: 'sa-actions' },
                   h(Button, { variant: 'ghost', size: 'sm', icon: filesExpanded ? 'chevron-up' : 'chevron-down',
+                    'aria-expanded': filesExpanded, 'aria-controls': 'sa-changed-files',
                     onClick: () => setFilesExpanded(value => !value) },
                   pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })))
                 : null)
@@ -7909,17 +9265,23 @@ function TicketDetail({ id, page = 'execution' }) {
               h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
             : null,
           h('div', { className: 'sa-revision', style: { marginTop: 'var(--sa-sp-8)' } },
-            h('div', { className: 'sa-actions' }, h('span', { className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
+            h('div', { className: 'sa-actions' },
+              h('label', { htmlFor: 'sa-revision-input', className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
             revisionBlocked
               ? h(Hint, null, pt(t, revisionBlocked === 'answer' ? 'ticket.revisionAwaitingAnswer'
                 : revisionBlocked === 'working' ? 'ticket.revisionWorking' : 'ticket.revisionEnded'))
               : h(Fragment, null,
-                h('textarea', { className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
-                  placeholder: pt(t, 'ticket.revisionPlaceholder'), 'aria-label': pt(t, 'ticket.revisionTitle'),
-                  disabled: revision.busy, onChange: event => setRevisionText(event.target.value) }),
+                h('textarea', { id: 'sa-revision-input', name: 'revision', autoComplete: 'off',
+                  className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
+                  placeholder: pt(t, 'ticket.revisionPlaceholder'),
+                  'aria-invalid': revisionError ? true : undefined,
+                  disabled: revision.busy,
+                  onChange: event => { setRevisionText(event.target.value); setRevisionError(false) } }),
+                revisionError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'ticket.revisionRequired')) : null,
                 h('div', { className: 'sa-actions' },
+                  // Clickable while empty, so the click gets the inline reason instead of a dead disabled button (audit P3).
                   h(Button, { variant: 'primary', size: 'sm', icon: 'play',
-                    disabled: revision.busy || !String(revisionText ?? '').trim(),
+                    disabled: revision.busy,
                     onClick: () => { void revision.run() } }, pt(t, 'ticket.revisionSubmit'))),
                 h(Hint, null, pt(t, 'ticket.revisionHint'))),
             revisions.length
@@ -7935,6 +9297,8 @@ function TicketDetail({ id, page = 'execution' }) {
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
     h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
+      // AC-08/09: durable evidence lives next to (not inside) the acceptance record.
+      h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(DeliveryEvidenceCard, { data: evidence.data, id, loading: evidence.loading, error: evidence.error, onRetry: evidence.reload })),
       // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
@@ -7974,9 +9338,11 @@ function TicketDetail({ id, page = 'execution' }) {
           h('div', { className: 'sa-actions' },
             h(ConfirmButton, { label: pt(t, 'ticket.acceptPass'), title: pt(t, 'ticket.acceptPassTitle'),
               message: pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id }),
+              confirmLabel: pt(t, 'detail.confirmAcceptPass'),
               variant: 'primary', icon: 'decision', onConfirm: async () => { await acceptPass.run() } }),
             h(ConfirmButton, { label: pt(t, 'ticket.acceptFail'), title: pt(t, 'ticket.acceptFailTitle'),
               message: pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id }),
+              confirmLabel: pt(t, 'detail.confirmAcceptFail'),
               variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run(rejectIntents) } })))
         : !canAccept && !accepted && hasAcceptanceEvidence
           // Without evidence the empty-state sentence above already says what unlocks acceptance.
@@ -8020,7 +9386,29 @@ Object.assign(PAGE_TEXT, {
   'wf.simple': ['直接实现', 'Direct implementation'],
   'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
   'wf.implementer': ['实现后端', 'Implementation backend'],
-  'wf.hint': ['自动模式由 Codex 只读评估；复杂任务先规划，再实现、运行闸门及独立验收。最多返工两轮。', 'Auto mode uses read-only Codex assessment; complex tasks run planning, implementation, gates and independent review. At most two repair rounds.'],
+  'wf.reviewer': ['独立验收后端', 'Independent review backend'],
+  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行：Codex / Claude Code 的 CLI 会话，或 DSH 的独立只读会话。', 'Runs assessment, planning and the final review read-only: a Codex / Claude Code CLI session, or an independent read-only DSH session.'],
+  'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
+  'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
+  'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
+    'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
+  'wf.hint': ['自动模式先由验收后端只读评估；复杂任务按 规划 → 实现 → 闸门 → 独立验收 执行。返工预算在「运行」里调。', 'Auto mode uses a read-only assessment by the review backend; complex tasks run planning, implementation, gates and independent review. The repair budget lives under Run.'],
+  // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
+  'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
+  'st.routeDeliverable': ['交付目标', 'Deliverable'],
+  'st.routeBackend': ['执行后端', 'Backend'],
+  'st.routeAuto': ['自动', 'Auto'],
+  'st.routeChange': ['代码改动', 'Code change'],
+  'st.routeReport': ['只读报告', 'Read-only report'],
+  'st.routeCapabilities': ['所需能力', 'Capabilities'],
+  'st.routeCapEdit': ['改文件', 'Edit files'],
+  'st.routeCapExec': ['跑命令', 'Run commands'],
+  'st.routeCapWeb': ['联网', 'Web access'],
+  'st.routeCapReport': ['报告/提问', 'Report/questions'],
+  'st.routeManualHint': ['人工选择会随工单保存并用于后续运行；能力上限仍然生效，不能把测试交给不会执行命令的后端。',
+    'A manual choice is saved on the Ticket and used by later runs; capability limits still apply, so a backend that cannot run commands cannot take a verification Ticket.'],
+  'st.routeUnsupported': ['当前后端缺少能力：{caps}', 'The chosen backend lacks: {caps}'],
+  'st.routePreviewFailed': ['暂时无法预览路由，仍可直接创建。', 'Routing preview is unavailable; you can still create the Ticket.'],
 })
 /* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
    right column edits one group at a time. What runs the work is split out of the executor groups: `run` owns how work
@@ -8068,6 +9456,54 @@ Object.assign(PAGE_TEXT, {
   'st.capClaudeResume': ['-p 一次性会话', '-p one-shot session'],
   'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
   'repos.add': ['添加仓库', 'Add repository'],
+  'repos.disabledTag': ['已停用', 'Disabled'],
+  'repos.enable': ['启用仓库', 'Enable repository'],
+  'repos.disable': ['停用仓库', 'Disable repository'],
+  'repos.enableTitle': ['启用仓库 {name}？', 'Enable repository {name}?'],
+  'repos.disableTitle': ['停用仓库 {name}？', 'Disable repository {name}?'],
+  'repos.enableMessage': ['启用后该仓库重新接收新工单，并按闸门与验收设置执行。', 'When enabled, this repository takes new Tickets again under its gates and acceptance settings.'],
+  'repos.disableMessage': ['停用后不再接收或派发新任务，历史记录保留；正在执行的任务不受影响。', 'When disabled, it takes no new work; history is kept and running work is unaffected.'],
+  'repos.enableSaved': ['仓库 {name} 已启用。', 'Repository {name} enabled.'],
+  'repos.disableSaved': ['仓库 {name} 已停用。', 'Repository {name} disabled.'],
+  'repos.edit': ['编辑', 'Edit'],
+  'repos.editTitle': ['编辑仓库 {name}', 'Edit repository {name}'],
+  'repos.editHint': ['下面显示当前值：保存前先核对路径与闸门命令；停用后不再接收或派发新任务，历史记录保留。令牌不在此处回显。',
+    'Current values are shown below: check the path and gate commands before saving. A disabled repository takes no new work, while its history is kept. Tokens are never shown here.'],
+  'repos.editSaved': ['仓库配置已保存，历史版本已记录。', 'Repository saved; a history version was recorded.'],
+  'repos.editInvalid': ['闸门必须是有效的 JSON 数组。', 'Gates must be a valid JSON array.'],
+  'repos.editDiff': ['保存前差异', 'Changes to save'],
+  'repos.editNoChanges': ['尚未修改。', 'No changes yet.'],
+  'repos.editGateCount': ['{count} 个闸门', '{count} gates'],
+  'repos.gateName': ['闸门名称', 'Gate name'],
+  'repos.gateCommand': ['命令', 'Command'],
+  'repos.gateCwd': ['工作目录（相对仓库）', 'Working directory (repository-relative)'],
+  'repos.gateCwdPlaceholder': ['留空 = 仓库根目录', 'Empty = repository root'],
+  'repos.gateTimeout': ['超时（毫秒）', 'Timeout (ms)'],
+  'repos.gateOnFail': ['失败策略', 'Failure policy'],
+  'repos.gateOnFail.manual': ['人工处置', 'Manual'],
+  'repos.gateOnFail.auto_repair': ['自动返工', 'Auto repair'],
+  'repos.gateDryRun': ['干跑命令（可选）', 'Dry-run command (optional)'],
+  'repos.gateAdd': ['添加闸门', 'Add gate'],
+  'repos.gateRemove': ['删除这个闸门', 'Remove this gate'],
+  'repos.gateEmptyEditor': ['还没有闸门；保存后按默认闸门执行。', 'No gates yet; saving keeps the default gates.'],
+  'repos.gateDiff': ['闸门「{name}」', 'Gate “{name}”'],
+  'repos.gateFieldRequired': ['闸门名称和命令不能为空。', 'A gate needs a name and a command.'],
+  'repos.editGateInvalid': ['JSON 无效', 'invalid JSON'],
+  'repos.test': ['测试配置', 'Test configuration'],
+  'repos.testing': ['检查中…', 'Checking…'],
+  'repos.testOk': ['配置检查通过', 'Configuration check passed'],
+  'repos.testFail': ['配置检查未通过', 'Configuration check failed'],
+  'repos.check.config': ['配置文件', 'Config file'],
+  'repos.check.node': ['Node.js 运行时', 'Node.js runtime'],
+  'repos.check.repo': ['本地仓库', 'Local repository'],
+  'repos.check.token': ['平台令牌', 'Platform token'],
+  'repos.check.connection': ['平台连接', 'Platform connection'],
+  'repos.check.enabled': ['仓库启用', 'Repository enabled'],
+  'repos.testHint': ['只做固定的只读检查：配置文件、运行时、路径、令牌是否配置、平台连通性；不执行闸门、不建单、不启动 worker。',
+    'Runs only fixed read-only checks: config file, runtime, path, token presence and platform connectivity. It never runs gates, creates Tickets or starts workers.'],
+  'repos.gatesJson': ['闸门定义（JSON）', 'Gate definitions (JSON)'],
+  'repos.gatesJsonHint': ['每项包含 name/command，可选 cwd（相对仓库路径）、timeoutMs、onFail、dryRunCommand。目录越界或重复名称会被拒绝。',
+    'Each entry has name/command plus optional cwd (relative to the repository), timeoutMs, onFail and dryRunCommand. Escaping paths and duplicate names are rejected.'],
   'repos.addTitle': ['添加仓库', 'Add repository'],
   'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
     'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
@@ -8088,6 +9524,10 @@ Object.assign(PAGE_TEXT, {
   'repos.field.healthUrl': ['健康检查地址（可选）', 'Health URL (optional)'],
   'repos.field.makeDefault': ['设为默认仓库', 'Make default repository'],
   'repos.field.makeDefaultHint': ['手工建单和未绑定群会使用默认仓库。', 'Manual Tickets and unbound groups use the default repository.'],
+  'repos.required': ['请填写此项。', 'This field is required.'],
+  'repos.idInvalid': ['只能用小写字母、数字、点、下划线或短横线。', 'Use lowercase letters, digits, dots, underscores or dashes only.'],
+  'repos.urlInvalid': ['需要完整的 http(s) 地址。', 'Enter a full http(s) URL.'],
+  'repos.fixHint': ['修正标红字段后重试；服务器报错时会给出具体原因。', 'Fix the highlighted fields and try again; a server failure states its reason.'],
   'repos.kindWeb': ['Web / 常规', 'Web'],
   'repos.kindEbs': ['Oracle EBS', 'Oracle EBS'],
   'repos.verifyWebUat': ['Web UAT', 'Web UAT'],
@@ -8126,7 +9566,6 @@ Object.assign(PAGE_TEXT, {
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
   'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写 chatId，保存后按引擎开关状态开始监听。',
     'Bind one repository to each watched group. Add a group from the list or paste a chat id; the engine watches it once enabled and saved.'],
-  'st.bindingChat': ['群 chatId', 'Group chat id'],
   'st.bindingTitle': ['群名称（可选）', 'Group name (optional)'],
   'st.bindingRepo': ['接单仓库', 'Repository'],
   'st.bindingAdd': ['添加绑定', 'Add binding'],
@@ -8222,7 +9661,6 @@ Object.assign(PAGE_TEXT, {
   'st.sendersHint': ['填写发送者的 Octo UID；关闭「允许任意人类」时只接受名单中的发送者。',
     'Enter the sender Octo UID; when “accept any human” is off, only listed senders are accepted.'],
   'st.sendersEmpty': ['还没有允许的发送者。', 'No allowed sender yet.'],
-  'st.senderPlaceholder': ['发送者 UID', 'Sender UID'],
   'st.addSender': ['添加', 'Add'],
   'st.removeSender': ['移除发送者 {sender}', 'Remove sender {sender}'],
   'st.anyHumanSendersHint': ['「允许任意人类」已开启，名单暂不参与判断；关闭后可继续编辑名单。',
@@ -8236,11 +9674,11 @@ Object.assign(PAGE_TEXT, {
   'st.cursors': ['群游标', 'Group cursors'],
   'st.lastPoll': ['最近轮询', 'Last poll'],
   'st.noSenders': ['没有允许发送者，也没有“允许任意人类”：轮询会被引擎拒绝。',
-    'No allowed senders and "accept any human" is off, so the engine rejects polling.'],
+    'No allowed senders and “accept any human” is off, so the engine rejects polling.'],
   'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写 chatId。',
     'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
   'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
-    '"Check for new messages" is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
+    '“Check for new messages” is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
   'st.probeAt': ['检查于 {time}', 'Checked {time}'],
   'st.probeSummary': ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）',
     'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
@@ -8250,8 +9688,20 @@ Object.assign(PAGE_TEXT, {
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
   'st.errDisabled': ['引擎未启用，请先在设置→来源打开「启用引擎」。', 'The engine is disabled; turn on “Engine enabled” under Settings → Source first.'],
   'st.errNoToken': ['Octo token 未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
-  'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and "accept any human" is off.'],
+  'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and “accept any human” is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
+  'st.reloading': ['重载中…', 'Reloading…'],
+  'st.probing': ['检查中…', 'Checking…'],
+  'st.senderPlaceholderExample': ['发送者 UID，如 oc_xxxx…', 'Sender UID, e.g. oc_xxxx…'],
+  'st.chatIdPlaceholder': ['群 chatId，如 oc_xxxx…', 'Group chat id, e.g. oc_xxxx…'],
+  'st.historyRestoreTitle': ['恢复这个历史版本？', 'Restore this version?'],
+  'st.historyRestoreMessage': ['恢复前会先把当前 live.json 备份为「恢复前的备份」，再用所选版本覆盖；正在运行的任务不受影响。',
+    'The current live.json is backed up as “before restore” first, then replaced by the chosen version; running work is unaffected.'],
+  'st.historyRestoreConfirm': ['恢复并先备份', 'Restore and back up first'],
+  'st.bindingRemoveTitle': ['移除这个监听群？', 'Remove this watched group?'],
+  'st.bindingRemoveMessage': ['移除后引擎不再读取该群；群游标会保留，重新绑定后从原位置继续。',
+    'The engine stops reading this group. Its cursor is kept, so re-binding resumes from the same position.'],
+  'st.bindingRemoveConfirm': ['移除绑定', 'Remove binding'],
   'st.reloadFailed': ['重载配置失败。', 'Reloading the config failed.'],
   'st.reloadedAt': ['已重载配置 {time}', 'Config reloaded {time}'],
 
@@ -8314,8 +9764,14 @@ Object.assign(PAGE_TEXT, {
   'st.allowReply': ['允许回群消息', 'Allow group replies'],
   'st.allowReplyHint': ['执行器把状态与结果回复到来源群。', 'The executor posts status and results back to the source group.'],
   'st.paused': ['暂停处理', 'Pause processing'],
-  'st.pausedHint': ['暂停后不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
-    'While paused: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedHint': ['总暂停：不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
+    'Total pause: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedIntake': ['暂停接单（保留游标）', 'Pause intake (keep cursor)'],
+  'st.pausedIntakeHint': ['不读取新消息，来源游标不前进：恢复后这些请求仍然会进来。已在跑的工单不受影响。',
+    'Reads no new messages and does not advance the source cursor, so they arrive after resuming. Running work is unaffected.'],
+  'st.pausedDispatch': ['暂停派发（保留队列）', 'Pause dispatch (keep queue)'],
+  'st.pausedDispatchHint': ['不自动开始新的工单；队列和在跑任务都保留，手工开始仍可用。',
+    'Starts no new Ticket automatically; the queue and running work are kept and manual starts still work.'],
   'st.mrMode': ['发布 MR 方式', 'MR creation mode'],
   'st.mrModeHint': ['api：用 GitLab API 建 MR；push：用 git push options 建 MR。',
     'api: create the MR through the GitLab API; push: create it with git push options.'],
@@ -8356,6 +9812,10 @@ Object.assign(PAGE_TEXT, {
   'st.bodyPh': ['正文（可选）', 'Body (optional)'],
   'st.create': ['建单', 'Create Ticket'],
   'st.created': ['已建单', 'Ticket created'],
+  'st.repairBudget': ['返工预算', 'Repair budget'],
+  'st.repairBudgetHint': ['0–6 轮，默认 2。分阶段流程里验收要求修改时最多自动返工几轮；用完会停下并说明原因，调大后可点「继续执行」接着返工。',
+    'Rounds from 0 to 6, default 2. How many implement→gates→review rounds a staged workflow may spend when its independent review keeps asking for changes; when spent the workflow stops and says why, and raising it lets Continue run the next round.'],
+  'st.repairBudgetInvalid': ['返工预算需为 0–6 的整数。', 'Repair budget must be an integer from 0 to 6.'],
 
   // ---- prompt group ----
   'st.briefNote': ['下面这段是最近一张工单实际发给 worker 的 brief（data.prompts.workerBrief），只读。',
@@ -8433,10 +9893,43 @@ const SETTINGS_GROUPS = [
     separate drafts and separate save bars even though all three patch `executor.*`. */
 const SETTINGS_SAVEABLE = ['source', 'review', 'run', 'worker', 'write']
 
+/** Draft mirror for the current tab: a reload or an accidental page switch must not silently drop unsaved edits. */
+const SETTINGS_DRAFT_CACHE = 'superagent-panel/settings-drafts'
+
+function draftHasKeys(draft) {
+  return Boolean(draft && typeof draft === 'object' && Object.keys(draft).length)
+}
+
+function readDraftCache() {
+  try {
+    const raw = window.sessionStorage.getItem(SETTINGS_DRAFT_CACHE)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    const restored = {}
+    for (const group of SETTINGS_SAVEABLE) {
+      if (draftHasKeys(parsed[group])) restored[group] = parsed[group]
+    }
+    return restored
+  } catch { return {} }
+}
+
+function writeDraftCache(drafts) {
+  try {
+    if (draftHasKeys(drafts)) window.sessionStorage.setItem(SETTINGS_DRAFT_CACHE, JSON.stringify(drafts))
+    else window.sessionStorage.removeItem(SETTINGS_DRAFT_CACHE)
+  } catch { /* storage can be unavailable (private mode); drafts then stay in memory only */ }
+}
+
 const settingsOmit = (object, key) => {
   const next = { ...(object ?? {}) }
   delete next[key]
   return next
+}
+
+/** Scroll a node into view where the DOM supports it; test DOMs may not implement scrollIntoView. */
+const revealNode = node => {
+  if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
 }
 
 /** Draft comparison: booleans by value, numbers/strings by their text form (the number input holds a string). */
@@ -8477,15 +9970,20 @@ function settingsPatchOf(group, draft) {
       if (key in draft) patch[key] = draft[key] === true
     }
     if ('paused' in draft) patch.paused = draft.paused === true
+    if ('pausedIntake' in draft) patch.pausedIntake = draft.pausedIntake === true
+    if ('pausedDispatch' in draft) patch.pausedDispatch = draft.pausedDispatch === true
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
     if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
+    // Repair budget shared by gate auto-repair and the staged review loop (0..6).
+    if ('executor.maxRepairRounds' in draft) patch['executor.maxRepairRounds'] = Number(draft['executor.maxRepairRounds'])
     for (const key of ['executor.workerBackend', 'executor.workerModel', 'executor.workerCommand']) {
       if (key in draft) patch[key] = draft[key]
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer',
+        'executor.reviewer', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -8535,26 +10033,47 @@ function settingsUatView(t, uat) {
 }
 
 /** One switch row of a group form: label (+ optional badge and info tip) and explanatory hint on the left, the switch
-    on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. */
+    on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. The hint is tied to
+    the switch with aria-describedby, so it is announced with the switch instead of only sitting next to it. */
+let settingsSwitchHintSeq = 0
 function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled, onChange }) {
-  return h('div', { className: 'sa-switch-row' },
-    h('div', { className: 'sa-switch-row-text' },
+  const inputRef = useRef(null)
+  const seqRef = useRef(null)
+  if (seqRef.current === null) { settingsSwitchHintSeq += 1; seqRef.current = settingsSwitchHintSeq }
+  const hintId = hint ? `sa-switch-hint-${seqRef.current}` : undefined
+  useEffect(() => {
+    const node = inputRef.current
+    if (!node) return
+    if (hintId) node.setAttribute('aria-describedby', hintId)
+    else node.removeAttribute('aria-describedby')
+  }, [hintId])
+  return h('label', { className: 'sa-switch-row' },
+    h('span', { className: 'sa-switch-row-text' },
       h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         label,
         badge ?? null,
         tip ? h(InfoTip, { text: tip, warn: tipWarn === true }) : null),
-      hint ? h(Hint, null, hint) : null),
-    h(Switch, { checked: Boolean(checked), label, disabled, onChange }))
+      // A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>.
+      hint ? h('span', { className: 'sa-hint', id: hintId, style: { display: 'block' } }, hint) : null),
+    h(Switch, { checked: Boolean(checked), label, disabled, inputRef, onChange }))
 }
 
-/** Result line for a one-shot action; the raw error is folded, never a bare stack. */
-function SettingsStatusLine({ view, note }) {
+/** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
+    check/reload/test result is announced when it appears, and aria-busy marks the trigger while work runs. */
+function SettingsStatusLine({ view, note, busy }) {
   const { t } = usePanel()
   if (!view) return null
-  return h('div', { className: 'sa-actions', style: { flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' } },
+  return h('div', {
+    className: 'sa-actions',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+    'aria-busy': busy ? 'true' : undefined,
+    style: { flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' },
+  },
     h(StatusText, { state: view.state }, view.text),
     note ? h('span', { className: 'sa-hint' }, note) : null,
-    view.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, view.raw)) : null)
+    view.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, view.raw)) : null)
 }
 
 /** Gate codes render through the shared gate labels when they are known, and stay raw when they are not. */
@@ -8566,9 +10085,10 @@ function settingsGateLabel(t, gate) {
 
 /** Gate names use the shared gate dictionary when known; unknown gates stay raw so operators can see them. */
 function repoGateLabel(t, gate) {
-  const key = `gate.${gate}`
+  const name = typeof gate === 'string' ? gate : gate?.name
+  const key = `gate.${name}`
   const label = pt(t, key)
-  return label === key ? String(gate) : label
+  return label === key ? String(name) : label
 }
 
 /** One repository card: read-only facts plus its own write-only token editor. Saving a token is the reversible edit;
@@ -8588,6 +10108,11 @@ const ROUTE_BACKENDS = [
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
 ]
+/** Staged-flow backends, mirroring lib/live/config.js: the implementer is the in-process DSH worker or Claude,
+    the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
+    enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
+const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
+const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
 const ROUTE_WORK_TYPES = [
   { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
   { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
@@ -8656,14 +10181,28 @@ function WorkerCapabilityCard({ currentBackend }) {
       }))))
 }
 
-function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
-  const { t } = usePanel()
+const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
+  token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
+
+function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
+  const { t, actions } = usePanel()
   const [token, setToken] = useState('')
+  const [test, setTest] = useState({ busy: false })
+  const runTest = async () => {
+    setTest({ busy: true })
+    try {
+      const result = await actions.testConfig(repo.id)
+      setTest({ busy: false, result })
+    } catch (error) {
+      setTest({ busy: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
-    [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono' }, String(repo.project)) : t('empty')],
-    [pt(t, 'repo.baseUrl'), repo.baseUrl ? h('span', { className: 'sa-mono' }, String(repo.baseUrl)) : t('empty')],
-    [pt(t, 'repo.localPath'), repo.repo ? h('span', { className: 'sa-mono' }, String(repo.repo)) : t('empty')],
+    [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.project)) : t('empty')],
+    [pt(t, 'repo.baseUrl'), repo.baseUrl ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.baseUrl)) : t('empty')],
+    [pt(t, 'repo.localPath'), repo.repo ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo)) : t('empty')],
     [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
     [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
     [pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repo.verifyMode)],
@@ -8674,15 +10213,36 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
       h('span', { className: 'sa-section-icon' }, h(Icon, { name: 'pull', size: 16 })),
       h('span', { className: 'sa-card-title' }, repo.name ?? repo.id),
       isDefault ? h(Tag, { tone: 'quiet' }, pt(t, 'repo.default')) : null,
+      repo.enabled === false ? h(Tag, { tone: 'warning' }, pt(t, 'repos.disabledTag')) : null,
       h(Tag, { tone: repo.tokenConfigured ? 'outline' : 'warning' },
         repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')),
       repo.name && repo.id && repo.name !== repo.id
-        ? h('span', { className: 'sa-mono sa-hint' }, String(repo.id)) : null),
+        ? h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(repo.id)) : null),
     h(KeyValues, { rows }),
+    h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'settings', size: 14 }),
+        onClick: () => onEdit?.(repo) }, pt(t, 'repos.edit')),
+      h(ConfirmButton, { label: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
+        title: pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle'),
+        message: pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id }),
+        // A generic "确定" would make the reader re-read the dialog body: the confirm button states the action.
+        confirmLabel: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
+        onConfirm: async () => { await onToggle?.(repo) } }),
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
+        disabled: test.busy, 'aria-busy': test.busy ? 'true' : undefined, onClick: () => { void runTest() } },
+      pt(t, test.busy ? 'repos.testing' : 'repos.test'))),
+    test.result || test.error
+      ? h('div', { className: 'sa-field', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true',
+        style: { marginTop: 'var(--sa-sp-8)' } },
+        h('span', { className: 'sa-field-head' }, pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')),
+        h(Hint, null, test.error ?? (test.result.checks ?? []).map(check =>
+          `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')),
+        h(Hint, null, pt(t, 'repos.testHint')))
+      : null,
     h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
       h('span', { className: 'sa-field-head' }, pt(t, 'repo.token')),
       h('div', { style: { display: 'flex', width: '100%', minWidth: 0 } },
-        h(Input, { type: 'password', autoComplete: 'new-password', value: token, disabled: tokenBusy, className: 'sa-input-full',
+        h(Input, { type: 'password', autoComplete: 'off', value: token, disabled: tokenBusy, className: 'sa-input-full',
           placeholder: pt(t, 'repos.tokenPlaceholder'), 'aria-label': pt(t, 'repos.tokenPlaceholder'),
           onChange: event => setToken(event.target.value) })),
       h('div', { className: 'sa-actions' },
@@ -8693,7 +10253,7 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
         repo.tokenConfigured
           // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
           ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'repos.tokenClearTitle'),
-            message: pt(t, 'repos.tokenClearMessage'),
+            message: pt(t, 'repos.tokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
             onConfirm: async () => {
               if (tokenBusy) return
               const cleared = await onSaveToken?.(repo, '')
@@ -8704,15 +10264,19 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
 }
 
 function LiveSettingsPage({ route }) {
-  const { t, notify } = usePanel()
+  const { t, notify, navigate } = usePanel()
   const { data, error, reload, actions } = usePanelData()
   const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
   const [active, setActive] = useState(requestedGroup)
-  const [drafts, setDrafts] = useState({})
+  // Editable groups keep a group-local draft. A draft that exists only in memory is lost on reload / tab close, so it
+  // is mirrored into sessionStorage and the tab warns before unloading while any group still has unsaved edits.
+  const [drafts, setDrafts] = useState(readDraftCache)
   const [savingGroup, setSavingGroup] = useState(null)
   const [saveErrors, setSaveErrors] = useState({})
+  const [fieldErrors, setFieldErrors] = useState({})
   const [savedTimes, setSavedTimes] = useState({})
   const savedTimers = useRef({})
+  const bodyRef = useRef(null)
   const [reloadState, setReloadState] = useState({ busy: false })
   const [probe, setProbe] = useState({ busy: false })
   const [uatState, setUatState] = useState({ busy: false })
@@ -8723,29 +10287,53 @@ function LiveSettingsPage({ route }) {
   const [octoGroupQuery, setOctoGroupQuery] = useState('')
   const [configSampleOpen, setConfigSampleOpen] = useState(false)
   const [repoModalOpen, setRepoModalOpen] = useState(false)
+  // AC-10: existing repositories stay editable without losing their id/history; the modal shows the current values.
+  const [repoEdit, setRepoEdit] = useState(undefined)
+  const [repoEditBusy, setRepoEditBusy] = useState(false)
+  const [repoEditError, setRepoEditError] = useState(undefined)
   const [repoForm, setRepoForm] = useState(emptyRepoForm)
   const [repoSaving, setRepoSaving] = useState(false)
   const [repoError, setRepoError] = useState(undefined)
+  const [repoFieldErrors, setRepoFieldErrors] = useState({})
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyEntries, setHistoryEntries] = useState([])
   const [historyBusy, setHistoryBusy] = useState(false)
   const [historyError, setHistoryError] = useState(undefined)
   const [senderDraft, setSenderDraft] = useState('')
   const [bindingForm, setBindingForm] = useState({ chatId: '', title: '', repoId: '' })
+  const [bindingError, setBindingError] = useState(undefined)
   const [bindingBusy, setBindingBusy] = useState(false)
   useEffect(() => () => {
     for (const timer of Object.values(savedTimers.current)) clearTimeout(timer)
   }, [])
+  // Keep the draft mirror in sync; clearing the last draft removes the key so a stale copy never comes back.
+  useEffect(() => { writeDraftCache(drafts) }, [drafts])
+  // Unsaved edits are the only client state that cannot be recovered after a reload: ask before leaving the tab.
+  useEffect(() => {
+    const dirty = SETTINGS_SAVEABLE.some(group => draftHasKeys(drafts[group]))
+    if (!dirty) return undefined
+    const onBeforeUnload = event => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [drafts])
   // Deep links from the setup checklist and system problems select the matching group. The effect only depends on
   // the requested group, so clicking the left rail afterwards is never overridden by an old route.
   useEffect(() => {
     if (route?.group && SETTINGS_GROUPS.some(group => group.id === route.group)) setActive(route.group)
   }, [route?.group])
-  // A setup step can point at one field inside a group; scroll it into view after the pane switched.
+  // A setup step can point at one field inside a group; scroll it into view and move focus there after the pane
+  // switched, so keyboard and screen-reader users land on the field instead of the top of the page.
   useEffect(() => {
     if (!route?.focus) return undefined
     const timer = setTimeout(() => {
-      document.getElementById(`sa-settings-${route.focus}`)?.scrollIntoView({ block: 'center' })
+      const target = document.getElementById(`sa-settings-${route.focus}`)
+      if (!target) return
+      revealNode(target)
+      const focusable = target.matches('input, select, textarea, button, a[href]')
+        ? target
+        : target.querySelector('input, select, textarea, button, a[href], [tabindex]')
+      const node = focusable ?? target
+      if (node && typeof node.focus === 'function') node.focus({ preventScroll: true })
     }, 120)
     return () => clearTimeout(timer)
   }, [route?.focus, active])
@@ -8833,10 +10421,42 @@ function LiveSettingsPage({ route }) {
       Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
   }
 
+  /** Field-level validation for the add-repository form: one message per field, so the modal can mark and focus it. */
+  const validateRepoForm = form => {
+    const errors = {}
+    const id = form.id.trim()
+    if (!id) errors.id = 'repos.required'
+    else if (!/^[a-z0-9._-]+$/.test(id)) errors.id = 'repos.idInvalid'
+    if (!form.path.trim()) errors.path = 'repos.required'
+    if (!form.baseBranch.trim()) errors.baseBranch = 'repos.required'
+    if (!form.targetBranch.trim()) errors.targetBranch = 'repos.required'
+    const urlOk = value => /^https?:\/\/\S+$/i.test(value.trim())
+    if (!form.baseUrl.trim()) errors.baseUrl = 'repos.required'
+    else if (!urlOk(form.baseUrl)) errors.baseUrl = 'repos.urlInvalid'
+    if (!form.project.trim()) errors.project = 'repos.required'
+    if (form.uatUrl.trim() && !urlOk(form.uatUrl)) errors.uatUrl = 'repos.urlInvalid'
+    if (form.healthUrl.trim() && !urlOk(form.healthUrl)) errors.healthUrl = 'repos.urlInvalid'
+    return errors
+  }
+
   /** Add one repository definition; the token is a separate write on the new card. */
   const submitRepo = async () => {
     if (repoSaving) return
     const form = repoForm
+    const clientErrors = validateRepoForm(form)
+    if (Object.keys(clientErrors).length) {
+      setRepoFieldErrors(clientErrors)
+      setRepoError(undefined)
+      const first = Object.keys(clientErrors)[0]
+      setTimeout(() => {
+        const node = document.getElementById(`sa-repo-field-${first}`)
+        if (!node) return
+        if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+        revealNode(node)
+      }, 0)
+      return
+    }
+    setRepoFieldErrors({})
     const repo = {
       id: form.id.trim(),
       name: form.name.trim() || form.id.trim(),
@@ -8864,7 +10484,56 @@ function LiveSettingsPage({ route }) {
       notify(pt(t, 'repos.saved'))
     } catch (failure) {
       setRepoError(errorText(failure))
+      // A server failure is not tied to one field: bring the banner into view and put focus on it, with advice.
+      setTimeout(() => {
+        const node = document.getElementById('sa-repo-error')
+        if (!node) return
+        revealNode(node)
+        if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+      }, 0)
     } finally { setRepoSaving(false) }
+  }
+
+  const openRepoEdit = (repo) => {
+    // AC-10: edit one gate field at a time instead of hand-writing the whole gates JSON. A deep clone keeps the form
+    // independent from the loaded config (cancel must not mutate it).
+    const gates = Array.isArray(repo.gates) ? JSON.parse(JSON.stringify(repo.gates)) : []
+    setRepoEdit({ id: repo.id, name: repo.name ?? repo.id, repo: repo.repo ?? '', gates })
+    setRepoEditError(undefined)
+  }
+  const editGate = (index, key, value) => {
+    setRepoEdit(previous => {
+      if (!previous) return previous
+      const gates = previous.gates.map((gate, position) => position === index ? { ...gate, [key]: value } : gate)
+      return { ...previous, gates }
+    })
+  }
+  const saveRepoEdit = async () => {
+    if (repoEditBusy || !repoEdit) return
+    const gates = repoEdit.gates.map(gate => {
+      const clean = { name: String(gate.name ?? '').trim(), command: String(gate.command ?? '').trim() }
+      if (gate.cwd) clean.cwd = String(gate.cwd).trim()
+      if (Number.isFinite(Number(gate.timeoutMs)) && Number(gate.timeoutMs) > 0) clean.timeoutMs = Number(gate.timeoutMs)
+      if (gate.onFail) clean.onFail = gate.onFail
+      if (gate.dryRunCommand) clean.dryRunCommand = String(gate.dryRunCommand).trim()
+      return clean
+    })
+    if (gates.some(gate => !gate.name || !gate.command)) { setRepoEditError(pt(t, 'repos.gateFieldRequired')); return }
+    setRepoEditBusy(true)
+    setRepoEditError(undefined)
+    try {
+      await actions.updateRepo(repoEdit.id, { name: repoEdit.name.trim() || repoEdit.id, repo: repoEdit.repo.trim(), gates })
+      await reload()
+      setRepoEdit(undefined)
+      notify(pt(t, 'repos.editSaved'))
+    } catch (failure) { setRepoEditError(errorText(failure)) } finally { setRepoEditBusy(false) }
+  }
+  const toggleRepo = async (repo) => {
+    try {
+      await actions.updateRepo(repo.id, { enabled: repo.enabled === false })
+      await reload()
+      notify(pt(t, repo.enabled === false ? 'repos.enableSaved' : 'repos.disableSaved', { name: repo.name ?? repo.id }))
+    } catch (failure) { notify(errorText(failure), 'error') }
   }
 
   /** Load saved live.json versions; the list contains configuration only, never tokens. */
@@ -8911,15 +10580,15 @@ function LiveSettingsPage({ route }) {
   // lives here as a read-only sub-section instead of owning a seventh navigation entry.
   const renderRepos = () => {
     const deployRows = [
-      [pt(t, 'st.configFile'), h('span', { className: 'sa-mono' }, config.file ?? t('empty'))],
+      [pt(t, 'st.configFile'), h('span', { className: 'sa-mono', translate: 'no' }, config.file ?? t('empty'))],
       [pt(t, 'st.configExists'), config.exists ? pt(t, 'st.fileExists') : pt(t, 'st.fileMissing')],
-      [pt(t, 'st.gitlabProject'), gitlab.project ? h('span', { className: 'sa-mono' }, gitlab.project) : t('empty')],
+      [pt(t, 'st.gitlabProject'), gitlab.project ? h('span', { className: 'sa-mono', translate: 'no' }, gitlab.project) : t('empty')],
       [pt(t, 'st.gitlabBase'), gitlab.baseUrl ? h(ExternalLink, { href: gitlab.baseUrl, icon: null }, gitlab.baseUrl) : t('empty')],
       [pt(t, 'st.branches'), `${config.baseBranch ?? t('empty')} → ${gitlab.targetBranch ?? t('empty')}`],
       [pt(t, 'st.uatUrl'), gitlab.uatUrl ? h(ExternalLink, { href: gitlab.uatUrl, icon: null }, gitlab.uatUrl) : t('empty')],
       [pt(t, 'st.healthUrl'), gitlab.healthUrl ? h(ExternalLink, { href: gitlab.healthUrl, icon: null }, gitlab.healthUrl) : t('empty')],
       [pt(t, 'st.gitlabToken'), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
     ]
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
@@ -8935,7 +10604,8 @@ function LiveSettingsPage({ route }) {
         ? h(Fragment, null,
           h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
           h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
-            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id }))))
+            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id,
+            onEdit: openRepoEdit, onToggle: toggleRepo }))))
         : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
           action: h('div', { className: 'sa-actions' },
             config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
@@ -8950,9 +10620,10 @@ function LiveSettingsPage({ route }) {
       h('div', { className: 'sa-actions' },
         reloadButton(),
         h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'external', size: 14 }), disabled: uatState.busy,
-          onClick: () => { void runUat() } }, pt(t, 'st.checkUat'))),
-      h(SettingsStatusLine, { view: reloadView }),
-      h(SettingsStatusLine, { view: uatState.view }))
+          'aria-busy': uatState.busy ? 'true' : undefined,
+          onClick: () => { void runUat() } }, uatState.busy ? pt(t, 'st.probing') : pt(t, 'st.checkUat'))),
+      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
+      h(SettingsStatusLine, { view: uatState.view, busy: uatState.busy }))
   }
 
   /** Rewrite the whole group→repository map (host validates consistency) and refresh the model. */
@@ -8968,10 +10639,16 @@ function LiveSettingsPage({ route }) {
       return false
     } finally { setBindingBusy(false) }
   }
-  const closeBindingForm = () => setBindingForm({ chatId: '', title: '', repoId: '' })
+  const closeBindingForm = () => { setBindingForm({ chatId: '', title: '', repoId: '' }); setBindingError(undefined) }
   const onAddBinding = async () => {
     const chatId = bindingForm.chatId.trim()
-    if (!chatId) { notify(pt(t, 'st.bindingChatRequired')); return }
+    if (!chatId) {
+      // The missing chat id is marked on the field (and announced there), not only in a transient toast.
+      setBindingError(pt(t, 'st.bindingChatRequired'))
+      setTimeout(() => document.getElementById('sa-field-binding-chat')?.focus(), 0)
+      return
+    }
+    setBindingError(undefined)
     const repoId = bindingForm.repoId || defaultRepoId
     const watched = [...new Set([...(octo.watchChatIds ?? []), chatId])]
     const titles = { ...(octo.chatTitles ?? {}), ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
@@ -8984,6 +10661,7 @@ function LiveSettingsPage({ route }) {
   /** Move one field into (or back out of) the group draft; editing clears a shown save failure for that group. */
   const editField = (group, key, value, initial) => {
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     setDrafts(previous => {
       const next = { ...(previous[group] ?? {}) }
       if (settingsSame(value, initial)) delete next[key]
@@ -8997,7 +10675,35 @@ function LiveSettingsPage({ route }) {
     delete savedTimers.current[group]
     setDrafts(previous => settingsOmit(previous, group))
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     setSavedTimes(previous => settingsOmit(previous, group))
+  }
+
+  /** A validation failure belongs on the field, not only in the bottom save bar: mark the input, point it at the
+      message and move focus there so the user can fix it without hunting. */
+  const failField = (group, field, messageKey) => {
+    setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => ({ ...previous, [group]: { field, messageKey } }))
+    setTimeout(() => {
+      const node = document.getElementById(`sa-field-${field}`)
+      if (!node) return
+      if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+      revealNode(node)
+    }, 0)
+  }
+
+  /** aria-invalid / aria-describedby for a numeric field that may currently fail validation. */
+  const fieldAria = (group, field, hintId) => {
+    const invalid = fieldErrors[group]?.field === field
+    const describedBy = [hintId, invalid ? `sa-field-${field}-error` : null].filter(Boolean).join(' ')
+    return { 'aria-invalid': invalid ? 'true' : undefined, 'aria-describedby': describedBy || undefined }
+  }
+
+  const fieldErrorMessage = (group, field) => {
+    const error = fieldErrors[group]
+    return error && error.field === field
+      ? h('p', { className: 'sa-error', id: `sa-field-${field}-error`, role: 'alert' }, pt(t, error.messageKey))
+      : null
   }
 
   /** Save one group: patch → model reload → 3s "saved" state; failures keep the draft for a retry. */
@@ -9006,22 +10712,28 @@ function LiveSettingsPage({ route }) {
     if (!draft || !Object.keys(draft).length || savingGroup) return
     const patch = settingsPatchOf(group, draft)
     if ('pollSeconds' in patch && (!Number.isFinite(patch.pollSeconds) || patch.pollSeconds < 2)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.pollInvalid')) } }))
+      failField(group, 'poll', 'st.pollInvalid')
       return
     }
     if ('executor.timeoutMs' in patch
       && (!Number.isFinite(patch['executor.timeoutMs']) || patch['executor.timeoutMs'] < 60_000
         || patch['executor.timeoutMs'] > 86_400_000)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.timeoutInvalid')) } }))
+      failField(group, 'timeout', 'st.timeoutInvalid')
+      return
+    }
+    if ('executor.maxRepairRounds' in patch && (!Number.isInteger(patch['executor.maxRepairRounds'])
+      || patch['executor.maxRepairRounds'] < 0 || patch['executor.maxRepairRounds'] > 6)) {
+      failField(group, 'repair', 'st.repairBudgetInvalid')
       return
     }
     if ('review.expireHours' in patch && (!Number.isInteger(patch['review.expireHours'])
       || patch['review.expireHours'] < 1 || patch['review.expireHours'] > 168)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.reviewExpireInvalid')) } }))
+      failField(group, 'expire', 'st.reviewExpireInvalid')
       return
     }
     setSavingGroup(group)
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     clearTimeout(savedTimers.current[group])
     delete savedTimers.current[group]
     setSavedTimes(previous => settingsOmit(previous, group))
@@ -9103,27 +10815,33 @@ function LiveSettingsPage({ route }) {
     const savedAt = savedTimes[group]
     const state = savingGroup === group ? 'saving' : stored ? 'error' : dirtyOf(group) ? 'dirty' : savedAt ? 'saved' : 'idle'
     if (state === 'idle') return null
+    // SaveBar has no disabled state; while any group is saving its save/retry actions would be silent no-ops
+    // (saveGroup returns early), so other groups only keep the local-only discard action.
+    const canSave = !savingGroup
     return h(Fragment, null,
       h(SaveBar, { state, savedAt, error: stored?.error, dirty: dirtyOf(group),
-        onSave: () => { void saveGroup(group) },
-        onRetry: () => { void saveGroup(group) },
+        onSave: canSave ? () => { void saveGroup(group) } : undefined,
+        onRetry: canSave ? () => { void saveGroup(group) } : undefined,
         onDiscard: () => discardGroup(group) }),
       stored ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
         h('div', { className: 'sa-actions' },
           h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-            disabled: savingGroup === group, onClick: () => { void recoverGroup(group) } }, pt(t, 'st.reloadConfig'))),
-        stored.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, stored.raw)) : null) : null)
+            disabled: Boolean(savingGroup), onClick: () => { void recoverGroup(group) } }, pt(t, 'st.reloadConfig'))),
+        stored.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, stored.raw)) : null) : null)
   }
 
   const reloadButton = () => h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-    disabled: reloadState.busy, onClick: () => { void reloadEngineConfig() } }, pt(t, 'st.reloadConfig'))
+    disabled: reloadState.busy, 'aria-busy': reloadState.busy ? 'true' : undefined,
+    onClick: () => { void reloadEngineConfig() } },
+  reloadState.busy ? pt(t, 'st.reloading') : pt(t, 'st.reloadConfig'))
 
   /** Write-only Octo token editor. An env-provided token is shown as read-only, because the file cannot override it. */
   const renderOctoToken = () => {
     const configured = octo.tokenConfigured === true
     const tokenSource = octo.tokenSource
-    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token' },
-      h('span', { className: 'sa-field-head' }, pt(t, 'st.octoToken'),
+    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token', tabIndex: -1,
+      style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
+      h('label', { className: 'sa-field-head', htmlFor: 'sa-field-octo-token' }, pt(t, 'st.octoToken'),
         configured
           ? h(Tag, { tone: tokenSource === 'env' ? 'info' : 'success' },
             tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk'))
@@ -9133,19 +10851,21 @@ function LiveSettingsPage({ route }) {
         : h(Fragment, null,
           h('div', { style: { display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
             h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-              h(Input, { className: 'sa-input-full', type: 'password', value: octoTokenDraft, autoComplete: 'off',
-                placeholder: pt(t, 'st.octoTokenPlaceholder'), 'aria-label': pt(t, 'st.octoTokenPlaceholder'),
+              h(Input, { id: 'sa-field-octo-token', className: 'sa-input-full', type: 'password', value: octoTokenDraft,
+                autoComplete: 'off', 'aria-describedby': 'sa-field-octo-token-hint',
+                placeholder: pt(t, 'st.octoTokenPlaceholder'),
                 disabled: octoTokenBusy,
                 onChange: event => setOctoTokenDraft(event.target.value) })),
             h(Button, { variant: 'outline', size: 'sm', disabled: octoTokenBusy || !octoTokenDraft.trim(),
+              'aria-busy': octoTokenBusy ? 'true' : undefined,
               onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
             octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
             configured
               ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'st.octoTokenClearTitle'),
-                message: pt(t, 'st.octoTokenClearMessage'),
+                message: pt(t, 'st.octoTokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
                 onConfirm: async () => { if (!octoTokenBusy) await saveOctoTokenFor('') } })
               : null),
-          h(Hint, null, pt(t, 'st.octoTokenHint'))))
+          h('p', { className: 'sa-hint', id: 'sa-field-octo-token-hint' }, pt(t, 'st.octoTokenHint'))))
   }
 
   /** Searchable group picker: fills the binding form, never writes a binding by itself. */
@@ -9169,7 +10889,7 @@ function LiveSettingsPage({ route }) {
                 onClick: () => chooseGroup(group) },
               h('span', { className: 'sa-group-option-main' },
                 h('span', { className: 'sa-group-option-name' }, group.name || String(group.id)),
-                h('span', { className: 'sa-mono sa-hint' }, String(group.id))),
+                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(group.id))),
               watched.has(String(group.id))
                 ? h(Tag, { tone: 'success' }, pt(t, 'st.groupsWatched'))
                 : h(Icon, { name: 'plus', size: 14 })))))
@@ -9183,23 +10903,25 @@ function LiveSettingsPage({ route }) {
     const senders = senderValuesOf(draft)
     const list = senders.length
       ? h('div', { className: 'sa-sender-list' }, senders.map(sender => h('span', { key: sender, className: 'sa-sender-chip' },
-        h('span', { className: 'sa-mono' }, sender),
+        h('span', { className: 'sa-mono', translate: 'no' }, sender),
         h('button', { type: 'button', className: 'sa-sender-remove', 'aria-label': pt(t, 'st.removeSender', { sender }),
           onClick: () => removeSender(sender) }, '×'))))
       : h(Hint, null, pt(t, 'st.sendersEmpty'))
     const add = h('div', { className: 'sa-actions' },
       h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-        h(Input, { className: 'sa-input-full', value: senderDraft, placeholder: pt(t, 'st.senderPlaceholder'),
-          'aria-label': pt(t, 'st.senderPlaceholder'), disabled: savingGroup === 'source',
+        h(Input, { id: 'sa-field-senders', className: 'sa-input-full', value: senderDraft,
+          placeholder: pt(t, 'st.senderPlaceholderExample'), 'aria-describedby': 'sa-field-senders-hint',
+          disabled: savingGroup === 'source',
           onChange: event => setSenderDraft(event.target.value),
           onKeyDown: event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } } })),
       h(Button, { variant: 'outline', size: 'sm', disabled: savingGroup === 'source' || !senderDraft.trim(),
         onClick: addSender }, pt(t, 'st.addSender')))
     return h('div', { className: 'sa-field' },
-      h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'),
-        allowAnyHuman ? h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')) : null),
+      allowAnyHuman
+        ? h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'), h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')))
+        : h('label', { className: 'sa-field-head', htmlFor: 'sa-field-senders' }, pt(t, 'st.senders')),
       allowAnyHuman ? h(Hint, null, pt(t, 'st.anyHumanSendersHint')) : h(Fragment, null, list, add),
-      allowAnyHuman ? null : h(Hint, null, pt(t, 'st.sendersHint')))
+      allowAnyHuman ? null : h('p', { className: 'sa-hint', id: 'sa-field-senders-hint' }, pt(t, 'st.sendersHint')))
   }
 
   // ---- source group -----------------------------------------------------------------------------------------
@@ -9230,25 +10952,29 @@ function LiveSettingsPage({ route }) {
         onChange: next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true) }),
       renderSenders(),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.pollSeconds')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-poll' }, pt(t, 'st.pollSeconds')),
         // The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18).
         h('div', { style: { display: 'flex', maxWidth: '420px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 2, step: 1, value: pollSeconds, style: { maxWidth: '420px' },
+          h(Input, { id: 'sa-field-poll', type: 'number', min: 2, step: 1, value: pollSeconds, style: { maxWidth: '420px' },
             disabled: savingGroup === 'source', 'aria-label': pt(t, 'st.pollSeconds'),
+            ...fieldAria('source', 'poll', 'sa-field-poll-hint'),
             onChange: event => editField('source', 'pollSeconds', event.target.value, String(config.pollSeconds ?? '')) })),
-        h(Hint, null, pt(t, 'st.pollSecondsHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-poll-hint' }, pt(t, 'st.pollSecondsHint')),
+        fieldErrorMessage('source', 'poll')),
       h(KeyValues, { rows }),
       !allowAnyHuman && !senders.length ? h('p', { className: 'sa-banner' }, pt(t, 'st.noSenders')) : null,
       chatNames.length ? null : h(Hint, null, pt(t, 'st.noChats')),
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }), disabled: probe.busy,
-          onClick: () => { void runProbe() } }, pt(t, 'actions.checkNow')),
+          'aria-busy': probe.busy ? 'true' : undefined,
+          onClick: () => { void runProbe() } }, probe.busy ? pt(t, 'st.probing') : pt(t, 'actions.checkNow')),
         reloadButton()),
       h(Hint, null, pt(t, 'st.probeHint')),
-      h(SettingsStatusLine, { view: probe.view,
+      h(SettingsStatusLine, { view: probe.view, busy: probe.busy,
         note: probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined }),
-      h(SettingsStatusLine, { view: reloadView }),
-      h('div', { className: 'sa-field', id: 'sa-settings-bindings' },
+      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
+      h('div', { className: 'sa-field', id: 'sa-settings-bindings', tabIndex: -1,
+        style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.bindings')),
         h(Hint, null, pt(t, 'st.bindingsHint')),
         h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
@@ -9265,29 +10991,40 @@ function LiveSettingsPage({ route }) {
             chatIds.map(chatId => h('div', { key: chatId, className: 'sa-switch-row' },
               h('div', { className: 'sa-switch-row-text' },
                 h('span', null, octo.chatTitles?.[chatId] ?? chatId),
-                h('span', { className: 'sa-mono sa-hint' }, String(chatId))),
+                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(chatId))),
               // The control row never wraps: the repository select and its 移除 button stay on one line (critique §27).
               h('div', { className: 'sa-actions', style: { flexWrap: 'nowrap', minWidth: 0 } },
                 h('div', { style: { flex: '0 1 240px', minWidth: 0 } },
                   h(Select, { label: pt(t, 'st.bindingRepo'), value: octo.chatRepos?.[chatId] ?? defaultRepoId,
                     options: repoOptions, disabled: bindingBusy,
                     onChange: next => { void applyBindings(chatIds, octo.chatTitles ?? {}, { ...(octo.chatRepos ?? {}), [chatId]: next }) } })),
-                h(Button, { variant: 'ghost', size: 'sm', style: { flex: '0 0 auto' }, disabled: bindingBusy,
-                  onClick: () => {
-                    const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
-                    const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
-                    void applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
-                  } }, pt(t, 'st.bindingRemove'))))))
+                h('span', { style: { flex: '0 0 auto' } },
+                  h(ConfirmButton, { label: pt(t, 'st.bindingRemove'), title: pt(t, 'st.bindingRemoveTitle'),
+                    message: pt(t, 'st.bindingRemoveMessage'), confirmLabel: pt(t, 'st.bindingRemoveConfirm'),
+                    onConfirm: async () => {
+                      // Removing a binding changes what the engine watches: confirm first, never delete on a stray click.
+                      if (bindingBusy) return
+                      const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
+                      const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
+                      await applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
+                    } }))))))
           : h(Hint, null, pt(t, 'st.bindingEmpty')),
         h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
-          h(Input, { value: bindingForm.chatId, placeholder: pt(t, 'st.bindingChat'), 'aria-label': pt(t, 'st.bindingChat'),
-            disabled: bindingBusy, onChange: event => setBindingForm(previous => ({ ...previous, chatId: event.target.value })) }),
+          h(Input, { id: 'sa-field-binding-chat', value: bindingForm.chatId, placeholder: pt(t, 'st.chatIdPlaceholder'),
+            'aria-invalid': bindingError ? 'true' : undefined,
+            'aria-describedby': bindingError ? 'sa-field-binding-chat-error' : undefined,
+            disabled: bindingBusy,
+            onChange: event => { setBindingError(undefined); setBindingForm(previous => ({ ...previous, chatId: event.target.value })) } }),
           h(Input, { value: bindingForm.title, placeholder: pt(t, 'st.bindingTitle'), 'aria-label': pt(t, 'st.bindingTitle'),
             disabled: bindingBusy, onChange: event => setBindingForm(previous => ({ ...previous, title: event.target.value })) }),
           h(Select, { label: pt(t, 'st.bindingRepo'), value: bindingForm.repoId || defaultRepoId, options: repoOptions,
             disabled: bindingBusy, onChange: next => setBindingForm(previous => ({ ...previous, repoId: next })) }),
           h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
-            disabled: bindingBusy || !bindingForm.chatId.trim(), onClick: () => { void onAddBinding() } }, pt(t, 'st.bindingAdd')))),
+            'aria-busy': bindingBusy ? 'true' : undefined,
+            disabled: bindingBusy || !bindingForm.chatId.trim(), onClick: () => { void onAddBinding() } }, pt(t, 'st.bindingAdd'))),
+        bindingError
+          ? h('p', { className: 'sa-error', id: 'sa-field-binding-chat-error', role: 'alert' }, bindingError)
+          : null),
       saveBarFor('source'))
   }
 
@@ -9347,18 +11084,21 @@ function LiveSettingsPage({ route }) {
             { value: 'uncertain', label: pt(t, 'st.reviewScopeUncertain') }],
           onChange: next => editField('review', 'review.scope', next, review.scope === 'uncertain' ? 'uncertain' : 'all') })),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewSenders')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-review-senders' }, pt(t, 'st.reviewSenders')),
         h('div', { style: { display: 'flex', maxWidth: '520px', minWidth: 0 } },
-          h(Input, { value: String(senders ?? ''), disabled: frozen, 'aria-label': pt(t, 'st.reviewSenders'),
+          h(Input, { id: 'sa-field-review-senders', value: String(senders ?? ''), disabled: frozen,
+            'aria-label': pt(t, 'st.reviewSenders'), 'aria-describedby': 'sa-field-review-senders-hint',
             onChange: event => editField('review', 'review.allowSenderIds', event.target.value, initialSenders) })),
-        h(Hint, null, pt(t, 'st.reviewSendersHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-review-senders-hint' }, pt(t, 'st.reviewSendersHint'))),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewExpire')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-expire' }, pt(t, 'st.reviewExpire')),
         h('div', { style: { display: 'flex', maxWidth: '220px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
+          h(Input, { id: 'sa-field-expire', type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
             'aria-label': pt(t, 'st.reviewExpire'),
+            ...fieldAria('review', 'expire', 'sa-field-expire-hint'),
             onChange: event => editField('review', 'review.expireHours', event.target.value, String(review.expireHours ?? 24)) })),
-        h(Hint, null, pt(t, 'st.reviewExpireHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-expire-hint' }, pt(t, 'st.reviewExpireHint')),
+        fieldErrorMessage('review', 'expire')),
       h(KeyValues, { rows: [
         [pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 }), ''],
       ] }),
@@ -9375,10 +11115,12 @@ function LiveSettingsPage({ route }) {
     const gateText = gates.length ? gates.map(gate => settingsGateLabel(t, gate)).join(t('listSeparator')) : t('empty')
     const timeout = Number(executor.timeoutMs)
     const timeoutMinutes = Number.isFinite(timeout) ? Math.round(timeout / 60000) : 25
+    // One budget shared by gate auto-repair and the staged review loop (0..6, default 2).
+    const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
-      [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono' }, config.repo) : t('empty')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono', translate: 'no' }, config.repo) : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
     ]
     const switchRow = (key, labelKey, hintKey, initial) => h(SettingsSwitchRow, {
       label: pt(t, labelKey), hint: pt(t, hintKey), checked: Boolean(field(key, initial)),
@@ -9390,6 +11132,8 @@ function LiveSettingsPage({ route }) {
       switchRow('executor.enabled', 'st.execEnabled', 'st.execEnabledHint', executor.enabled === true),
       switchRow('executor.autoRun', 'st.autoRun', 'st.autoRunHint', executor.autoRun === true),
       switchRow('paused', 'st.paused', 'st.pausedHint', config.paused === true || data.paused === true),
+      switchRow('pausedIntake', 'st.pausedIntake', 'st.pausedIntakeHint', config.pausedIntake === true),
+      switchRow('pausedDispatch', 'st.pausedDispatch', 'st.pausedDispatchHint', config.pausedDispatch === true),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.mrMode')),
         h(Select, { label: pt(t, 'st.mrMode'), disabled: frozen,
@@ -9398,18 +11142,35 @@ function LiveSettingsPage({ route }) {
           onChange: next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api') }),
         h(Hint, null, pt(t, 'st.mrModeHint'))),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.timeout')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-timeout' }, pt(t, 'st.timeout')),
         h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 1, max: 1440, step: 1,
+          h(Input, { id: 'sa-field-timeout', type: 'number', min: 1, max: 1440, step: 1,
             value: Number.isFinite(Number(field('executor.timeoutMs', timeout))) && field('executor.timeoutMs', timeout) !== ''
               ? Math.round(Number(field('executor.timeoutMs', timeout)) / 60000) : '',
             disabled: frozen, 'aria-label': pt(t, 'st.timeout'),
+            ...fieldAria('run', 'timeout', 'sa-field-timeout-hint'),
             placeholder: String(timeoutMinutes),
             onChange: event => {
               const raw = event.target.value
               editField('run', 'executor.timeoutMs', raw === '' ? '' : Number(raw) * 60000, timeout)
             } })),
-        h(Hint, null, pt(t, 'st.timeoutHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-timeout-hint' }, pt(t, 'st.timeoutHint')),
+        fieldErrorMessage('run', 'timeout')),
+      h('div', { className: 'sa-field' },
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-repair' }, pt(t, 'st.repairBudget')),
+        h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
+          h(Input, { id: 'sa-field-repair', type: 'number', min: 0, max: 6, step: 1,
+            value: field('executor.maxRepairRounds', repairBudget) === '' ? ''
+              : String(field('executor.maxRepairRounds', repairBudget)),
+            disabled: frozen, 'aria-label': pt(t, 'st.repairBudget'),
+            ...fieldAria('run', 'repair', 'sa-field-repair-hint'),
+            placeholder: String(repairBudget),
+            onChange: event => {
+              const raw = event.target.value
+              editField('run', 'executor.maxRepairRounds', raw === '' ? '' : Number(raw), repairBudget)
+            } })),
+        h('p', { className: 'sa-hint', id: 'sa-field-repair-hint' }, pt(t, 'st.repairBudgetHint')),
+        fieldErrorMessage('run', 'repair')),
       h(KeyValues, { rows }),
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
@@ -9435,6 +11196,9 @@ function LiveSettingsPage({ route }) {
     const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
     const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
+    const stagedOptions = (choices, current) => choices
+      .filter(choice => enabled.includes(choice.value) || choice.value === current)
+      .map(choice => ({ ...choice, disabled: !enabled.includes(choice.value) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
     const setRouting = next => editRouting({ ...routing, ...next })
@@ -9472,15 +11236,28 @@ function LiveSettingsPage({ route }) {
       settingsHeading(),
       h(Hint, null, pt(t, 'st.workerHint')),
       h('div', { className: 'sa-field' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'wf.title')),
         h(Select, { label: pt(t, 'wf.title'), disabled: frozen,
           value: draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off',
           options: ['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) })),
           onChange: value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off') }),
+        h(Hint, null, pt(t, 'wf.hint')),
+        h('span', { className: 'sa-field-head' }, pt(t, 'wf.implementer')),
         h(Select, { label: pt(t, 'wf.implementer'), disabled: frozen,
           value: draft['executor.implementer'] ?? executor.implementer ?? 'dsh',
-          options: [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }],
+          options: stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh'),
           onChange: value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh') }),
-        h(Hint, null, pt(t, 'wf.hint'))),
+        h('span', { className: 'sa-field-head' }, pt(t, 'wf.reviewer')),
+        h(Select, { label: pt(t, 'wf.reviewer'), disabled: frozen,
+          value: draft['executor.reviewer'] ?? executor.reviewer ?? 'codex',
+          options: stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'),
+          onChange: value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex') }),
+        h(Hint, null, pt(t, 'wf.reviewerHint')),
+        h('span', { className: 'sa-field-head' }, pt(t, 'wf.workerPreset')),
+        h(Input, { value: draft['executor.workerPreset'] ?? executor.workerPreset ?? '', disabled: frozen,
+          placeholder: pt(t, 'wf.workerPresetPlaceholder'), 'aria-label': pt(t, 'wf.workerPreset'),
+          onChange: event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '') }),
+        h(Hint, null, pt(t, 'wf.workerPresetHint'))),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.routingTitle')),
         h(Select, { label: pt(t, 'st.routingTitle'), disabled: frozen, value: visible,
@@ -9575,21 +11352,78 @@ function LiveSettingsPage({ route }) {
 
   // The rail promises what can be changed first: writable groups, then a divider + "参考" label + the read-only groups.
   // `data-reference` is the hook 05-style.js de-emphasises them with; the button keeps its usual label and dirty dot.
+  /** Selecting a group writes it into the panel route (so reload / deep links keep it) and starts the new group at its
+      top; tall and short groups otherwise inherit the previous scroll position mid-page. */
+  const selectGroup = id => {
+    if (id === active) return
+    setActive(id)
+    navigate({ page: 'settings', group: id }, true)
+    // Defer past the render, and stay defensive: scrollIntoView is not implemented in every test DOM.
+    setTimeout(() => {
+      const body = bodyRef.current
+      if (body && typeof body.scrollIntoView === 'function') body.scrollIntoView({ block: 'start' })
+    }, 0)
+  }
   const settingsNavButton = group => h('button', { key: group.id, type: 'button',
     className: 'sa-settings-group', 'aria-current': active === group.id ? 'true' : undefined,
     'data-reference': group.reference ? 'true' : undefined,
     // The title is always present (what the button opens) and only gains the dirty suffix while the draft is unsaved.
     title: dirtyGroups.has(group.id) ? `${pt(t, group.labelKey)} · ${pt(t, 'st.unsaved')}` : pt(t, group.labelKey),
-    onClick: () => setActive(group.id) },
+    onClick: () => selectGroup(group.id) },
     h(Icon, { name: group.icon, size: 14 }),
     h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
       pt(t, group.labelKey)),
+    // The dot is decorative; the unsaved state is also in the accessible name, not only in the title tooltip.
     dirtyGroups.has(group.id)
       ? h('span', { className: 'sa-count', style: { marginLeft: 'auto', color: 'var(--dsw-alias-state-warn-primary)' },
-        'aria-hidden': 'true' }, '●')
-      : null)
+        'aria-hidden': 'true', 'data-empty': 'true' }, '●')
+      : null,
+    dirtyGroups.has(group.id) ? h('span', { className: 'sa-sr-only' }, `· ${pt(t, 'st.unsaved')}`) : null)
   const writableGroups = SETTINGS_GROUPS.filter(group => !group.reference)
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
+
+  // Add-repository form: identifier fields get a stable id/name and no autofill or spellcheck; a failed validation
+  // marks the field it belongs to (aria-invalid + described-by) instead of only showing one banner at the bottom.
+  const repoFieldProps = (key, required) => ({
+    id: `sa-repo-field-${key}`,
+    name: key === 'path' ? 'repo' : key,
+    autoComplete: 'off',
+    'aria-required': required ? 'true' : undefined,
+    'aria-invalid': repoFieldErrors[key] ? 'true' : undefined,
+    'aria-describedby': repoFieldErrors[key] ? `sa-repo-field-${key}-error` : undefined,
+  })
+  const repoFieldError = key => repoFieldErrors[key]
+    ? h('small', { className: 'sa-error', id: `sa-repo-field-${key}-error`, role: 'alert' }, pt(t, repoFieldErrors[key]))
+    : null
+  const repoFieldEdit = (key, value) => {
+    setRepoFieldErrors(previous => settingsOmit(previous, key))
+    setRepoForm(previous => ({ ...previous, [key]: value }))
+  }
+
+  // AC-10: show what saving will change before the request leaves the panel. Compare against the loaded repository,
+  // not the draft, so a no-op save is visibly a no-op and token-only fields never enter the preview.
+  const repoEditRows = (() => {
+    if (!repoEdit) return []
+    const current = repos.find(item => item.id === repoEdit.id) ?? {}
+    const rows = []
+    const nameNow = current.name ?? current.id
+    if (repoEdit.name !== nameNow) rows.push([pt(t, 'repos.field.name'), nameNow, repoEdit.name])
+    const repoNow = current.repo ?? ''
+    if (repoEdit.repo !== repoNow) rows.push([pt(t, 'repos.field.repo'), repoNow, repoEdit.repo])
+    // Field-level gate diff: changing a command, cwd, timeout or failure policy must be visible, not hidden behind an
+    // unchanged gate count (review P2 AC-10).
+    const gatesBefore = Array.isArray(current.gates) ? current.gates : []
+    const gatesAfter = repoEdit.gates
+    const count = Math.max(gatesBefore.length, gatesAfter.length)
+    for (let index = 0; index < count; index += 1) {
+      const before = gatesBefore[index]
+      const after = gatesAfter[index]
+      if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) continue
+      rows.push([pt(t, 'repos.gateDiff', { name: after?.name || before?.name || `#${index + 1}` }),
+        before ? JSON.stringify(before) : '—', after ? JSON.stringify(after) : '—'])
+    }
+    return rows
+  })()
 
   return h(Fragment, null,
     h('div', { className: 'sa-settings-intro' },
@@ -9607,7 +11441,7 @@ function LiveSettingsPage({ route }) {
             h('span', { className: 'sa-settings-nav-label' }, pt(t, 'st.reference')),
             referenceGroups.map(settingsNavButton))
           : null),
-      h('div', { className: 'sa-settings-body' },
+      h('div', { className: 'sa-settings-body', ref: bodyRef },
         error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
         renderGroup())),
     historyOpen ? h(Modal, { open: true, onClose: () => { if (!historyBusy) setHistoryOpen(false) },
@@ -9622,9 +11456,73 @@ function LiveSettingsPage({ route }) {
           h('div', { className: 'sa-history-main' },
             h('span', { className: 'sa-history-label' }, historyLabel(entry)),
             h('span', { className: 'sa-hint' }, h(When, { at: entry.at }))),
-          h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
-            onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
+          h(ConfirmButton, { label: pt(t, 'st.historyRestore'), title: pt(t, 'st.historyRestoreTitle'),
+            message: pt(t, 'st.historyRestoreMessage'), confirmLabel: pt(t, 'st.historyRestoreConfirm'),
+            onConfirm: async () => { await restoreHistory(entry.id) } }))))
         : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
+    repoEdit ? h(Modal, { open: true, onClose: () => { if (!repoEditBusy) setRepoEdit(undefined) },
+      title: pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id }), closeLabel: t('close'), className: 'sa-repo-modal',
+      footer: h(Fragment, null,
+        h(Button, { variant: 'ghost', disabled: repoEditBusy, onClick: () => setRepoEdit(undefined) }, t('cancel')),
+        h(Button, { variant: 'primary', disabled: repoEditBusy, onClick: () => { void saveRepoEdit() } },
+          repoEditBusy ? t('saving') : t('save'))) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.editHint')),
+      h('div', { className: 'sa-repo-diff' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'repos.editDiff')),
+        repoEditRows.length
+          ? repoEditRows.map(([label, before, after], index) => h('div', { key: index, className: 'sa-diff-row' },
+            h('span', { className: 'sa-diff-label' }, label),
+            h('code', { className: 'sa-mono sa-diff-old', translate: 'no' }, before || '—'),
+            h('span', { className: 'sa-hint', 'aria-hidden': 'true' }, '→'),
+            h('code', { className: 'sa-mono sa-diff-new', translate: 'no' }, after || '—')))
+          : h('p', { className: 'sa-hint' }, pt(t, 'repos.editNoChanges'))),
+      h('div', { className: 'sa-form-grid' },
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.name, 'aria-label': pt(t, 'repos.field.name'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, name: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.repo, 'aria-label': pt(t, 'repos.field.repo'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, repo: event.target.value })) })),
+        h('div', { className: 'sa-field', style: { gridColumn: '1 / -1' } },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.gates')),
+          repoEdit.gates.length
+            ? repoEdit.gates.map((gate, index) => h('div', { key: index, className: 'sa-card',
+              style: { marginBottom: 8, padding: 10 } },
+              h('div', { className: 'sa-form-grid' },
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateName')),
+                  h(Input, { className: 'sa-input-full', value: gate.name ?? '', 'aria-label': pt(t, 'repos.gateName'),
+                    onChange: event => editGate(index, 'name', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCommand')),
+                  h(Input, { className: 'sa-input-full', value: gate.command ?? '', 'aria-label': pt(t, 'repos.gateCommand'),
+                    onChange: event => editGate(index, 'command', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCwd')),
+                  h(Input, { className: 'sa-input-full', value: gate.cwd ?? '', placeholder: pt(t, 'repos.gateCwdPlaceholder'),
+                    'aria-label': pt(t, 'repos.gateCwd'), onChange: event => editGate(index, 'cwd', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateTimeout')),
+                  h(Input, { className: 'sa-input-full', type: 'number', min: 1, value: gate.timeoutMs ?? '',
+                    'aria-label': pt(t, 'repos.gateTimeout'),
+                    onChange: event => editGate(index, 'timeoutMs', event.target.value) })),
+                h(Select, { label: pt(t, 'repos.gateOnFail'), value: gate.onFail ?? 'manual',
+                  options: [{ value: 'manual', label: pt(t, 'repos.gateOnFail.manual') },
+                    { value: 'auto_repair', label: pt(t, 'repos.gateOnFail.auto_repair') }],
+                  onChange: value => editGate(index, 'onFail', value) }),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateDryRun')),
+                  h(Input, { className: 'sa-input-full', value: gate.dryRunCommand ?? '',
+                    'aria-label': pt(t, 'repos.gateDryRun'), onChange: event => editGate(index, 'dryRunCommand', event.target.value) }))),
+              h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+                gates: previous.gates.filter((item, position) => position !== index) })) }, pt(t, 'repos.gateRemove'))))
+            : h('p', { className: 'sa-hint' }, pt(t, 'repos.gateEmptyEditor')),
+          h(Button, { variant: 'outline', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+            gates: [...previous.gates, { name: '', command: '', onFail: 'manual' }] })) }, pt(t, 'repos.gateAdd')),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.gatesJsonHint')))),
+      repoEditError ? h('p', { className: 'sa-banner sa-danger' }, repoEditError) : null) : null,
     repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
       title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
       footer: h(Fragment, null,
@@ -9636,12 +11534,16 @@ function LiveSettingsPage({ route }) {
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.id')),
           h(Input, { className: 'sa-input-full', value: repoForm.id, 'aria-label': pt(t, 'repos.field.id'),
-            onChange: event => setRepoForm(previous => ({ ...previous, id: event.target.value })) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint'))),
+            ...repoFieldProps('id', true),
+            onChange: event => repoFieldEdit('id', event.target.value) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint')),
+          repoFieldError('id')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
           h(Input, { className: 'sa-input-full', value: repoForm.name, 'aria-label': pt(t, 'repos.field.name'),
-            onChange: event => setRepoForm(previous => ({ ...previous, name: event.target.value })) })),
+            ...repoFieldProps('name', false),
+            onChange: event => repoFieldEdit('name', event.target.value) }),
+          repoFieldError('name')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.kind')),
           h(Select, { label: pt(t, 'repos.field.kind'), value: repoForm.kind,
@@ -9653,26 +11555,36 @@ function LiveSettingsPage({ route }) {
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
           h(Input, { className: 'sa-input-full', value: repoForm.path, 'aria-label': pt(t, 'repos.field.repo'),
             placeholder: '/Users/you/work/my-repo',
-            onChange: event => setRepoForm(previous => ({ ...previous, path: event.target.value })) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint'))),
+            ...repoFieldProps('path', true),
+            onChange: event => repoFieldEdit('path', event.target.value) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint')),
+          repoFieldError('path')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseBranch')),
           h(Input, { className: 'sa-input-full', value: repoForm.baseBranch, 'aria-label': pt(t, 'repos.field.baseBranch'),
-            onChange: event => setRepoForm(previous => ({ ...previous, baseBranch: event.target.value })) })),
+            ...repoFieldProps('baseBranch', true),
+            onChange: event => repoFieldEdit('baseBranch', event.target.value) }),
+          repoFieldError('baseBranch')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.targetBranch')),
           h(Input, { className: 'sa-input-full', value: repoForm.targetBranch, 'aria-label': pt(t, 'repos.field.targetBranch'),
-            onChange: event => setRepoForm(previous => ({ ...previous, targetBranch: event.target.value })) })),
+            ...repoFieldProps('targetBranch', true),
+            onChange: event => repoFieldEdit('targetBranch', event.target.value) }),
+          repoFieldError('targetBranch')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.baseUrl, 'aria-label': pt(t, 'repos.field.baseUrl'),
             placeholder: 'https://gitlab.example.com',
-            onChange: event => setRepoForm(previous => ({ ...previous, baseUrl: event.target.value })) })),
+            ...repoFieldProps('baseUrl', true),
+            onChange: event => repoFieldEdit('baseUrl', event.target.value) }),
+          repoFieldError('baseUrl')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.project')),
           h(Input, { className: 'sa-input-full', value: repoForm.project, 'aria-label': pt(t, 'repos.field.project'),
             placeholder: 'group/project',
-            onChange: event => setRepoForm(previous => ({ ...previous, project: event.target.value })) })),
+            ...repoFieldProps('project', true),
+            onChange: event => repoFieldEdit('project', event.target.value) }),
+          repoFieldError('project')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.verifyMode')),
           h(Select, { label: pt(t, 'repos.field.verifyMode'), value: repoForm.verifyMode,
@@ -9687,16 +11599,24 @@ function LiveSettingsPage({ route }) {
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.uatUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.uatUrl, 'aria-label': pt(t, 'repos.field.uatUrl'),
             placeholder: 'https://uat.example.com',
-            onChange: event => setRepoForm(previous => ({ ...previous, uatUrl: event.target.value })) })),
+            ...repoFieldProps('uatUrl', false),
+            onChange: event => repoFieldEdit('uatUrl', event.target.value) }),
+          repoFieldError('uatUrl')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.healthUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.healthUrl, 'aria-label': pt(t, 'repos.field.healthUrl'),
             placeholder: 'https://uat.example.com/health',
-            onChange: event => setRepoForm(previous => ({ ...previous, healthUrl: event.target.value })) }))),
+            ...repoFieldProps('healthUrl', false),
+            onChange: event => repoFieldEdit('healthUrl', event.target.value) }),
+          repoFieldError('healthUrl'))),
       h(SettingsSwitchRow, { label: pt(t, 'repos.field.makeDefault'), hint: pt(t, 'repos.field.makeDefaultHint'),
         checked: repoForm.makeDefault, disabled: repoSaving,
         onChange: next => setRepoForm(previous => ({ ...previous, makeDefault: next })) }),
-      repoError ? h('p', { className: 'sa-error', role: 'alert' }, repoError) : null) : null,
+      repoError
+        ? h(Fragment, null,
+          h('p', { className: 'sa-error', role: 'alert', id: 'sa-repo-error', tabIndex: -1 }, repoError),
+          h('p', { className: 'sa-hint' }, pt(t, 'repos.fixHint')))
+        : null) : null,
     configSampleOpen ? h(Modal, { open: true, onClose: () => setConfigSampleOpen(false),
       title: pt(t, 'repos.sampleTitle'), closeLabel: t('close'), className: 'sa-glossary-modal',
       footer: h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(false) }, t('close')) },
@@ -9705,7 +11625,7 @@ function LiveSettingsPage({ route }) {
         h('div', { className: 'sa-md-code-head' },
           h('span', { className: 'sa-md-code-lang' }, 'live.json'),
           h(CopyButton, { value: REPO_CONFIG_SAMPLE, label: pt(t, 'repos.sampleCopy') })),
-        h('pre', { className: 'sa-md-pre' }, REPO_CONFIG_SAMPLE))) : null)
+        h('pre', { className: 'sa-md-pre', translate: 'no' }, REPO_CONFIG_SAMPLE))) : null)
 }
 
 

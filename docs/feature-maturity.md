@@ -13,7 +13,7 @@
 **P2**：工单级自动执行（`automation`：fixed interval / 每天 HH:mm / maxExecutions / nextAt / lastSkipReason；触发原因 heartbeat|schedule）、
 GitLab 观察升级（MR headSha、只采用匹配 head 的 pipeline、不匹配写 `pipeline.stale` 不覆盖结论、draft/WIP 跳过、自动巡检 3 次/headSha——仅 CI 仓库；`verifyMode=manual` 的仓库一直巡检到 MR 合并/关闭）、
 signal 人工标注（correct/false_wake/missed_wake/cleared + 来源页标注菜单与计数）；
-**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..3，默认 1）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry 不自动修，publish 失败会把闸门证据交给 worker 自动修复并重跑（最多 `executor.maxRepairRounds` 轮，成功才继续 commit/push/MR）。设置→Worker 新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
+**P2 第二批**：gate 可配 `onFail:'manual'|'auto_repair'`（默认 manual）与 `executor.maxRepairRounds`（0..6，默认 1；分阶段返工默认 2，设置 → 运行「返工预算」可改）——失败门全为 auto_repair 且非 errored（超时/命令跑不起来）时，同一 worktree 自动跑 repair worker 并重跑 gates，每轮写 activity，最终记录 `run.repair`/`run.repairs` 与验收轮次 `onFail/repair`；retry 不自动修，publish 失败会把闸门证据交给 worker 自动修复并重跑（最多 `executor.maxRepairRounds` 轮，成功才继续 commit/push/MR）。设置→Worker 新增只读「运行后端能力」矩阵（DSH/Codex/Claude × 流式事件/审批/会话恢复/diff/报告工具）。
 **P2 第三批**：`GET engine/metrics?window=24h|7d|all` 聚合运行质量（成功/失败/停止/中断/等待、时长 avg/p50/p95、触发方式、停止原因、Top 失败原因、按仓库、验收轮次/通过率、信号与标注）；概览「运行质量」卡片。token/成本数据宿主尚未提供（`cost.available=false`）。
 失败原因结构化（`run.stopReason/errorCode`）、worker 执行事件轨迹（`run.trace`，≤80 条）、
 闸门失败暂停并由人「放行/重试该闸门/终止」、插件重载把中断运行标为 `interrupted` 并可「继续执行」（checkpoint：gates/commit/push/MR 阶段复用 worktree）、
@@ -43,7 +43,7 @@ worker task 按序携带最近 10 条修订，保留上一轮 worktree 改动）
 
 **未实现或旧模型**：GitHub/飞书来源；按模型阈值改判（hybrid）与 LLM 逐条评估（`eval.mode=llm` 仍只被配置层
 接受；本轮的 signal 判定仍是规则版，shadow 模型只记录意见）；
-线程订阅管理；任意工单停止（只有闸门暂停的工单可以终止）；requeue/重新评估；
+线程订阅管理；requeue/重新评估；（工单停止已实现：运行中经 worker/CLI 进程组信号取消并在提交、推送前检查，排队中直接终止；见「可用」一节）
 并发修订冲突检测（有本地快照回滚，但不做多端合并）；demo 种子；`gh` setup check；
 设置页的模型目录选择。README 旧版本把这些状态写反了，以上面清单为准。
 

@@ -31,7 +31,7 @@ function KeyValues({ rows, className }) {
 
 function Inlines({ parts, depth = 0 }) {
   return h(Fragment, null, parts.map((part, index) => part.kind === 'bold' ? h('strong', { key: index }, part.text)
-    : part.kind === 'code' ? h('code', { key: index, className: 'sa-code' }, part.text)
+    : part.kind === 'code' ? h('code', { key: index, className: 'sa-code', translate: 'no' }, part.text)
     // Link labels can carry their own inline markup (`[`file.sql`](path)`); parse the label instead of printing its
     // backticks literally. An autolinked URL's label is the URL itself, so a second parse yields the same link again:
     // nested rendering therefore stops after one level. Without that stop a bare URL recursed until the heap died.
@@ -40,7 +40,7 @@ function Inlines({ parts, depth = 0 }) {
         h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     // A repository-relative target (a changed file, a spec doc) has no URL inside the app shell: show the label as
     // reference text with the target in the tooltip instead of linking somewhere that 404s.
-    : part.kind === 'ref' ? h('span', { key: index, className: 'sa-code', title: part.url },
+    : part.kind === 'ref' ? h('span', { key: index, className: 'sa-code', title: part.url, translate: 'no' },
       depth > 0 ? part.text : h(Inlines, { parts: inlines(part.text), depth: depth + 1 }))
     : h(Fragment, { key: index }, part.text)))
 }
@@ -53,11 +53,16 @@ function MarkdownLite({ text }) {
         h('div', { className: 'sa-md-code-head' },
           h('span', { className: 'sa-md-code-lang' }, block.lang || 'code'),
           h(CopyButton, { value: block.text })),
-        h('pre', { className: 'sa-md-pre' }, block.text))
+        h('pre', { className: 'sa-md-pre', translate: 'no' }, block.text))
     }
     if (block.kind === 'list') return h(block.ordered ? 'ol' : 'ul', { key: index },
       block.items.map((item, at) => h('li', { key: at }, h(Inlines, { parts: inlines(item) }))))
-    return h('p', { key: index, className: block.kind === 'heading' ? 'sa-md-heading' : undefined }, h(Inlines, { parts: inlines(block.text) }))
+    // Markdown headings keep their rank in the document outline: the page already owns h2, so `#`/`##` land on h3 and
+    // deeper levels step down from there instead of every heading collapsing into a styled paragraph.
+    if (block.kind === 'heading') {
+      return h(`h${Math.min(6, 2 + (block.level ?? 2))}`, { key: index, className: 'sa-md-heading' }, h(Inlines, { parts: inlines(block.text) }))
+    }
+    return h('p', { key: index }, h(Inlines, { parts: inlines(block.text) }))
   }))
 }
 
@@ -72,8 +77,9 @@ function ClampText({ text, limit = 480, lines = 8 }) {
       onClick: () => setOpen(!open) }, open ? t('collapse') : t('expand')) : null)
 }
 
-/** Destructive/irreversible action behind a confirmation dialog that states the consequence. */
-function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', icon }) {
+/** Destructive/irreversible action behind a confirmation dialog that states the consequence. `confirmLabel` names the
+    action on the button ("Publish MR", "Delete branch and ignore"); the generic "Confirm" is only the fallback. */
+function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant = 'ghost', icon }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const confirm = useAction(onConfirm)
@@ -83,13 +89,17 @@ function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', ic
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setOpen(false) }, t('cancel')),
         h(Button, { variant: variant === 'danger' ? 'danger' : 'primary', disabled: confirm.busy,
-          onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, t('confirm'))) }))
+          onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, confirmLabel ?? t('confirm'))) }))
 }
 
-/** External link; new tab only for links that leave this origin. */
+/** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
+    (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
+    payloads, so an unchecked scheme would be a stored-XSS sink. */
 function ExternalLink({ href, children, icon = 'external' }) {
-  const external = isExternal(href)
-  return h('a', { className: 'sa-inline-link', href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
+  const safe = safeHttpUrl(href)
+  if (!safe) return h('span', { className: 'sa-inline-link' }, children)
+  const external = isExternal(safe)
+  return h('a', { className: 'sa-inline-link', href: safe, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
     icon ? h(Icon, { name: icon, size: 13 }) : null, icon ? ' ' : null, children)
 }
 
@@ -134,7 +144,7 @@ function ErrorState({ error, onRetry }) {
     h('div', { className: 'sa-error-state-body' },
       h('p', { className: 'sa-error-state-title' }, message || t('unknown')),
       h('p', { className: 'sa-error-state-hint' }, t('errorHint')),
-      raw && raw !== message ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, raw)) : null),
+      raw && raw !== message ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, raw)) : null),
     onRetry ? h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }), onClick: onRetry }, t('retry')) : null)
 }
 
@@ -188,7 +198,7 @@ function RawValue({ label, text, json, openLabel }) {
       h(CopyButton, { value, label: t('copy') }),
       h(Button, { variant: 'ghost', size: 'sm', 'aria-expanded': open, onClick: () => setOpen(!open) },
         open ? t('collapse') : (openLabel ?? t('expand')))),
-    open ? h('pre', { className: 'sa-pre sa-raw-body' }, value) : null)
+    open ? h('pre', { className: 'sa-pre sa-raw-body', translate: 'no' }, value) : null)
 }
 
 /** Lightweight disclosure row for secondary content. */

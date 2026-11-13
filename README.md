@@ -1,5 +1,9 @@
 # dsh-superagent-panel
 
+[![ci](https://github.com/mystic7c/dsh-superagent-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/mystic7c/dsh-superagent-panel/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](package.json)
+
 Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 插件：在 Web UI 里打开「超级智能体」面板，
 管理主动型编码智能体（Superagent）的工单、来源、触发、评估、执行器与部署配置。
 
@@ -7,29 +11,29 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.27**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
-运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
-[LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
-不随插件分发）。
+版本历史见 [CHANGELOG.md](CHANGELOG.md)，发布包见 [Releases](https://github.com/mystic7c/dsh-superagent-panel/releases)；
+0.4.13 起交付走 GitFlow：`feature/*` → `develop`，release/hotfix 走独立分支合入 `main`。
+运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。
 
 ## 功能
 
 | 页 | 内容 |
 |---|---|
 | 概览 | 值班摘要：**待办箱**（闸门/验收/干跑待发布/失败/来源/引擎，可已读）→ 正在执行 → 系统问题 → 24 小时漏斗、**运行质量**（成功率/平均耗时/自动修复/Top 失败原因）、策略规则与系统脉搏；首次使用时显示四步配置清单 |
-| 来源 | Octo 消息源与每个仓库的执行面：24h 到达/过滤/接单、被过滤消息、**原始信号（含跳过/忽略/失败，可重放，可人工标注正确/误报/漏报）**、健康检查、检查新消息 |
-| 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细 |
-| 评估 | 决定列表（接单/忽略）与命中规则；shadow 模式另显示模型意见；只读 |
-| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、**「已忽略」切片（失败后被人放弃的工单）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**、**追加要求（输入后自动干跑重跑，保留工作树改动）**、干跑完成后主行动为「发布 MR」；MR 卡显示「草稿」「过期 CI」提示 |
-| 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行（执行器开关、自动执行、暂停、MR 方式、执行超时）/ Worker（多后端启用、路由模式与任务类型偏好、模型/CLI 路径、能力矩阵）/ 写权限 / 仓库（token、新增仓库）/ 变更历史 可写；评估与提示词为只读参考 |
+| 来源 | Octo 消息源与每个仓库的执行面：24h 到达/过滤/接单、被过滤消息、**原始信号（含跳过/忽略/失败，可重放，可人工标注正确/误报/漏报；文本/状态/仓库/原因/时间范围筛选与分页）**、健康检查、检查新消息 |
+| 触发 | 线程列表与详情：评估过程、消息时间线、决定与规则明细；线程搜索、仓库/原因/时间范围筛选与分页 |
+| 评估 | 决定列表（接单/忽略）与命中规则；文本/仓库/原因/时间范围筛选、分页、模型分歧与人工改判视图，筛选写入 URL；shadow 模式另显示模型意见；只读 |
+| 执行 | 执行器负载、工单队列台账（等待人优先）、**视图选项（按阶段/按仓库、排序、显示已结束）**、**「已忽略」切片（失败后被人放弃的工单）**、手工建单、工单详情；**每张工单可配置自动执行（固定间隔 / 每天 HH:mm / 次数上限；显示下次运行与跳过原因）**；闸门失败停在「等人放行/重试该闸门/终止」，中断运行可「继续执行」，worker 提问可「回答」，运行中可请求停止（真正取消 worker/子进程后确认）；运行记录含 trigger/停止原因/handoff/执行轨迹/报告/验收轮次/活动流、**改动 diff（点文件名看该文件的 patch，按工作树按需读取）**、**追加要求（输入后自动干跑重跑，保留工作树改动）**、干跑完成后主行动为「发布 MR」；MR 卡显示「草稿」「过期 CI」提示 |
+| 设置 | 来源（Octo token、监听群、触发人名单、轮询、绑定）/ 运行（执行器开关、自动执行、接单/派发暂停、MR 方式、执行超时）/ Worker（多后端启用、路由模式与任务类型偏好、模型/CLI 路径、能力矩阵）/ 写权限 / 仓库（token、新增/编辑/停用仓库、保存前差异、只读测试配置）/ 变更历史 可写；评估与提示词为只读参考 |
 
 首次安装后状态为空（不是演示种子）。设置 → 来源里可完成 Octo token 保存、从群列表选择监听群、
 编辑允许的触发人并绑定仓库；设置 → 仓库可用向导新增仓库（本地路径、GitLab 项目、验证方式），再在仓库卡片上
-保存 GitLab token。闸门命令、超时、worktree 等更细的字段仍在 `live.json` 中配置；每次保存前会自动生成可回滚快照。
+保存 token；已有仓库可编辑名称/路径/闸门或停用，保存前展示差异。worktree 等更细的字段仍在 `live.json` 中配置；
+每次保存前会自动生成可回滚快照。
 
 ## 安装
 
-前置：DSH（含 Web UI）、Node.js ≥ 18。
+前置：DSH（含 Web UI）、Node.js ≥ 22。
 
 ```bash
 # 在 DSH 会话中让 agent 执行，或通过 Plugin Manager 安装该目录
@@ -64,10 +68,11 @@ plugin_manager install_bundle target=<本仓库目录>
 - 令牌文件：`octo.token` 与每个仓库的 `gitlab-*.token`（均为 600，面板不回显）。
 - 本插件没有演示种子：首次启动创建空状态；`POST /superagent/api/demo/reset` 只会清空回空状态。
 - 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、评估确认（启用/范围/允许回复的操作人/
-  有效期）、运行（执行器开关/自动执行/暂停/MR 方式/执行超时）、
-  Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
-  编辑/删除已有仓库、闸门命令、worktree、UAT/健康检查地址、gate `onFail/repairHint`、
-  `executor.maxRepairRounds` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
+  有效期）、运行（执行器开关/自动执行/暂停/MR 方式/执行超时/返工预算）、
+  Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径、独立验收后端、DSH worker 预设）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
+  仓库名称、路径、启停与闸门（名称、命令、目录、超时、失败策略、可选干跑命令）可直接在设置页编辑，保存前展示
+  字段级差异；worktree、UAT/健康检查地址、gate `repairHint` 等更细字段仍通过 `live.json` 配置；删除仓库仍在
+  `live.json` 中完成；工单自动化在工单详情页配置。
 - 手动 `live.json` 修改后，使用设置页「重载配置」让引擎重新读取。
 
 ## 进阶能力
@@ -101,18 +106,22 @@ CHANGELOG.md        版本与能力变更记录
 
 ## 开发与验证
 
+前置：Node.js ≥ 22。干净 clone 只需一次依赖安装（jsdom + React，仅用于渲染回归）：
+
 ```bash
+npm ci                                 # 安装 devDependencies（无运行时依赖）
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
-node scripts/build-client.mjs --check  # 校验产物是否最新
+node scripts/build-client.mjs --check  # 校验产物是否最新（CI 强制）
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 398 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 555 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 138/138）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 194/194；无 live.json 时用内置 fixture）
 node scripts/isolated-verify.mjs       # 隔离 DSH + Chrome headless CDP 实机验证（需本机 Chrome）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 
-`npm run test` 等价于 Host 测试，`npm run verify` 等价于构建产物与 i18n 校验。`spec/` 与 `verification/` 是本地
+`npm run test` 等价于 Host 测试，`npm run verify` 等价于构建产物与 i18n 校验。前七条在干净 clone 上都能跑，
+CI 也跑这七条；最后两条需要本机桌面 DSH + Chrome，属于发布前的人工闸门。`spec/` 与 `verification/` 是本地
 设计/验收材料（gitignore），不随插件分发。
 
 改客户端后刷新页面；改 Host 半（`index.js`/`lib`）后在 Plugin Manager 里禁用→启用该插件（或重启 DSH）。

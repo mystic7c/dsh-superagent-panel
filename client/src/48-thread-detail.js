@@ -214,10 +214,14 @@ function ThreadTimeline({ triggers, decisions }) {
     h('ol', { className: 'sa-timeline' }, shown.map(trigger => {
       const decision = byId.get(trigger.disposition?.decisionId)
       const view = dispositionView(trigger, decision)
+      const actor = actorDisplay(t, trigger.actor)
       return h('li', { key: trigger.id, className: 'sa-event' },
         h('div', { className: 'sa-event-actor' },
           h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', { title: actorDisplay(t, trigger.actor).title }, actorDisplay(t, trigger.actor).text),
+          // The short id is the visible label; the full raw id stays available through a real focusable InfoTip instead
+          // of a hover-only title, so keyboard/screen-reader users get it too (A3).
+          h('span', null, actor.text),
+          actor.title ? h(InfoTip, { text: actor.title }) : null,
           h(When, { at: trigger.at })),
         h('div', { className: 'sa-event-text' }, (() => {
           const message = readableMarkers(t, trigger.text ?? '')
@@ -271,7 +275,7 @@ function ThreadDetail(props) {
   return h(Fragment, null,
     h(PageHead, { title: threadDisplayTitle(t, thread, threadKey, chatTitles), showBack: props?.showBack !== false,
       meta: h(Fragment, null,
-        h('span', { className: 'sa-mono' }, thread.source ?? ''),
+        h('span', { className: 'sa-mono', translate: 'no' }, thread.source ?? ''),
         threadKey ? h(CopyButton, { value: threadKey, label: pt(t, 'thread.copyKey') }) : null,
         h(When, { at: thread.lastAt ?? thread.createdAt })) }),
     error ? h(ErrorState, { error, onRetry: reload }) : null,

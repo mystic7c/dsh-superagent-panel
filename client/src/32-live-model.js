@@ -8,8 +8,13 @@ function useEngineActions(call) {
     poll: ({ dryRun = true } = {}) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
     checkUat: async () => (await call('POST engine/uat-check')).uat,
+    // Draft routing preview (AC-01): same resolver as execution, no Ticket/run/write side effects.
+    previewRoute: ({ title, body, selection } = {}) => call('POST engine/route',
+      { body: { title, body, ...(selection ? { selection } : {}) } }),
     // `repoId` routes a manual Ticket to one of the configured repositories (contract §12.2); omitted = defaultRepo.
-    createTicket: ({ title, body, repoId }) => call('POST engine/ticket', { body: { title, body, ...(repoId ? { repoId } : {}) } }),
+    // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
+    createTicket: ({ title, body, repoId, route }) => call('POST engine/ticket',
+      { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
     runTicket: (id, { dryRun = true, wait = false } = {}) => call('POST engine/ticket/:id/run', { id, body: { dryRun, wait } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
     refreshCi: (id) => call('POST engine/ticket/:id/ci', { id }),
@@ -27,6 +32,8 @@ function useEngineActions(call) {
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
+    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
+    stopTicket: (id, { note } = {}) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),
     // P1 (§8.1): recent raw signals, read by the Source page (status/source/limit are optional filters).
@@ -50,12 +57,15 @@ function useEngineActions(call) {
     patchSettings: (patch) => call('POST engine/settings', { body: patch }),
     // Store one repository's GitLab token in the token file live.json declares for it (never echoed back).
     saveRepoToken: (repoId, token) => call('POST engine/repo/:id/token', { id: repoId, body: { token } }),
+    // AC-11: read-only probe; the server runs no configured gate and writes nothing.
+    testConfig: repoId => call('POST engine/config/test', { body: { repoId } }),
     // Store the Octo bot token in the file live.json declares; same no-echo contract as the repo token.
     saveOctoToken: (token) => call('POST engine/octo/token', { body: { token } }),
     // Read-only list of the bot's Octo groups, used by the settings picker.
     listOctoGroups: () => call('GET engine/octo/groups'),
     // Add one repository definition to live.json; the token is saved separately on the repo card.
     addRepo: (repo, { makeDefault = false } = {}) => call('POST engine/repos', { body: { repo, makeDefault } }),
+    updateRepo: (repoId, patch) => call('POST engine/repo/:id', { id: repoId, body: { patch } }),
     // Saved live.json versions and rollback; entries are configuration-only (no token values).
     settingsHistory: () => call('GET engine/settings/history'),
     restoreSettings: id => call(`POST engine/settings/history/${encodeURIComponent(id)}/restore`),
