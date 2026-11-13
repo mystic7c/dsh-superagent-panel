@@ -37,7 +37,7 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 node --check index.js                              # Host 半语法
 node scripts/build-client.mjs --check               # 客户端产物是否最新（改了 client/src 先跑 node scripts/build-client.mjs）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量，当前 398 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（依赖 /tmp/sa-harness）
 ```
 
@@ -77,5 +77,5 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
   合入集成分支（分支取自 `baseBranch`）。
 - 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并进 `develop` 后自动转 `merged`，再由人验收。
 - 发布由人做：`develop` → `main` 的 PR 合并（merge commit），打 tag `vX.Y.Z`；本机安装只认 `main` 的打包
-  tarball——显式安装新 tarball（`scripts/local-install.mjs`）后重载插件，stable clone 仅作回滚参考。不要直接向
+  tarball——显式安装新 tarball（`scripts/local-install.mjs`）后重载插件。不要直接向
   `main`/`develop` 推改动（bootstrap 例外，由维护者执行）。
