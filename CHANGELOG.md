@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.5] — 2026-11-14
+
+### 变更
+- `client/src/34-live-ui.js` 从 `h(...)` 迁移到 JSX（P2 第四步，issue #34）：`AutomationBar`、`TicketRow`、
+  `TicketList`、`TicketGroups`、`ManualTicketForm`、`FunnelBar`、`ExecutorLoad`、`GateSummary`、`StageRail`、
+  `MergeRequestCard`、`UatCard`、`ticketEvidence`、`rowAcceptanceChip`、`automationChip`、`PilotStatusTag`、
+  `TicketStatusTag` 以及三个过渡 shim 只改写法，输出逐节点等价。
+- `StageRail` 的 `span`/`div` 二选一改成大写变量 `const Dot = detail ? 'span' : 'div'`；`TicketGroups` 的
+  `className` 分支与 `TicketList` 的常驻 live region 保持原有开关逻辑。
+- 产物 485,946 → 486,055 字节（+109），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
 ## [0.5.4] — 2026-11-14
 
 ### 变更
