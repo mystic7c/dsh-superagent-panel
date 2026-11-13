@@ -12,8 +12,10 @@ Object.assign(PAGE_TEXT, {
   'search.threads': ['线程', 'Threads'],
   'search.triggers': ['消息', 'Messages'],
   'search.showCount': ['{count} 条', '{count}'],
+  'search.resultCount': ['找到 {count} 条结果', '{count} results'],
   'actions.search': ['搜索', 'Search'],
   'actions.more': ['更多操作', 'More actions'],
+  'shell.scrollLabel': ['页面内容', 'Page content'],
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
@@ -52,17 +54,24 @@ function GlobalStatus() {
   const onlyEnginePending = data.config?.enabled !== true && setup.done === setup.total - 1
   // Seconds belong to the detail views; the status document is refreshed every 30s, so the header reads HH:mm only.
   const clock = hhmm(updatedAt, t.lang) || '—'
-  const updated = h('span', { title: fullTime(updatedAt, t.lang) || undefined },
+  // Outside the live region below: the poll rewrites this every 30s, and announcing the timestamp would interrupt the
+  // reader on a fixed cadence without telling it anything new. The full time stays available on hover (`title`).
+  const updated = h('span', { 'aria-hidden': 'true', title: fullTime(updatedAt, t.lang) || undefined },
     pt(t, 'dataUpdatedAt', { time: clock }))
-  return h('div', { className: 'sa-global-status', role: 'status', title: error ? errorText(error) : undefined,
-    style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
-      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
-    h(StatusIcon, { state: health.state, size: 14, spin: health.state === 'ongoing' }),
+  // Only the sentence whose text actually changes ("运行中 · 需要你处理 2 件") is a live region, so updates are announced
+  // when the state or the counts move and not on every poll. inline-flex reproduces the flex gap inside the status line.
+  const sentence = h('span', { role: 'status', 'aria-live': 'polite',
+    style: { display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sa-sp-8)' } },
     h('span', null, pt(t, health.labelKey)),
     h('span', { 'aria-hidden': 'true' }, '·'),
     h('span', { className: pending > 0 ? 'sa-status-pending' : undefined }, pt(t, 'shell.pending', { count: pending })),
     active > 0 ? h('span', { 'aria-hidden': 'true' }, '·') : null,
-    active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null,
+    active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null)
+  return h('div', { className: 'sa-global-status', title: error ? errorText(error) : undefined,
+    style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
+      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
+    h(StatusIcon, { state: health.state, size: 14, spin: health.state === 'ongoing' }),
+    sentence,
     h('span', { 'aria-hidden': 'true' }, '·'),
     updated,
     setup.done < setup.total && !onlyEnginePending
@@ -110,7 +119,16 @@ function GlobalSearch({ open, onClose }) {
     }, 220)
     return () => { active = false; clearTimeout(timer) }
   }, [open, query, call])
-  const go = route => { navigate(route); onClose() }
+  // Picking a result closes the palette; Modal's unmount cleanup would hand focus back to the header search button and
+  // strand a keyboard user outside the screen they just opened (section B :113). Move focus to the page body instead:
+  // the named scroll region announces the new screen, and a single Tab reaches the first control of the new page
+  // (usually its back button/title action) without re-tabbing the whole chrome.
+  const go = route => {
+    navigate(route)
+    onClose()
+    if (typeof requestAnimationFrame !== 'function') return
+    requestAnimationFrame(() => document.querySelector('.sa-scroll')?.focus())
+  }
   const groups = result ? [
     { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => h('button', {
       key: ticket.id, type: 'button', className: 'sa-row sa-row-openable',
@@ -137,6 +155,12 @@ function GlobalSearch({ open, onClose }) {
       h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, trigger.text || trigger.id)),
       trigger.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: trigger.at })) : null)) },
   ].filter(group => group.items.length) : []
+  // A6: the palette's async result needs a live region. Announce only the settled outcome (N results / nothing matched)
+  // — never the result list itself — and stay silent while a newer query is in flight or an error owns `role=alert`.
+  const found = result ? Number(result.total ?? groups.reduce((sum, group) => sum + group.items.length, 0)) : 0
+  const announcement = !busy && !failure && result
+    ? (found > 0 ? pt(t, 'search.resultCount', { count: found }) : pt(t, 'search.noResults'))
+    : ''
   const body = !query.trim()
     ? h(Hint, null, pt(t, 'search.hint'))
     : failure
@@ -147,15 +171,19 @@ function GlobalSearch({ open, onClose }) {
           ? h(Hint, null, pt(t, 'search.noResults'))
           : h('div', { className: 'sa-search-groups' }, groups.map(group => h('section', { key: group.key, className: 'sa-section' },
             h('h3', { className: 'sa-ledger-title' }, pt(t, group.titleKey),
-              h('span', { className: 'sa-count' }, pt(t, 'search.showCount', { count: group.items.length }))),
+              h('span', { className: 'sa-count', 'data-empty': group.items.length === 0 ? 'true' : undefined },
+                pt(t, 'search.showCount', { count: group.items.length }))),
             h('div', { className: 'sa-list' }, group.items.map(group.render)))))
   return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal',
     // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
     restoreTo: () => document.getElementById('sa-search-trigger') },
-    h(Input, { inputRef, icon: 'search', className: 'sa-input-full',
-      value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
-      onChange: event => setQuery(event.target.value) }),
-    h('div', { className: 'sa-modal-body' }, body))
+    h('form', { role: 'search', 'aria-label': pt(t, 'search.title'), onSubmit: event => event.preventDefault() },
+      h(Input, { inputRef, icon: 'search', className: 'sa-input-full', type: 'search', name: 'q', autoComplete: 'off',
+        value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
+        'aria-busy': busy ? 'true' : undefined,
+        onChange: event => setQuery(event.target.value) })),
+    h('div', { className: 'sa-modal-body', 'aria-busy': busy ? 'true' : undefined }, body,
+      h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, announcement)))
 }
 
 /** Page header: title, the one global status line, the two fixed status actions (check / refresh), then the glossary. */
@@ -184,7 +212,8 @@ function Header({ onOpenSearch }) {
         h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
           title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
         h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
-          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, onClick: () => { void poll.run() } }),
+          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, 'aria-busy': poll.busy ? 'true' : undefined,
+          onClick: () => { void poll.run() } }),
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
           title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
         h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
@@ -281,7 +310,10 @@ function PanelShell({ location, openTab }) {
             h(SegmentedTabs, { items: TABS.map((value, index) => ({ value, label: t(`tab.${value}`), id: `sa-tab-${value}`,
               panelId: 'sa-page', title: `${t(`tab.${value}`)} · Alt+${index + 1}`, shortcut: `Alt+${index + 1}` })),
               value: location.route.page, onChange: openTab, label: t('pageLabel') })) : null),
-        h('div', { ref: scroller, className: 'sa-scroll' },
+        // The body is the only scroll container, and a plain overflow div is not keyboard-scrollable in Safari: make it a
+        // named region so it can take focus and arrow keys/page keys reach the page body.
+        h('div', { ref: scroller, className: 'sa-scroll', tabIndex: 0, role: 'region',
+          'aria-label': pt(t, 'shell.scrollLabel') },
           h(PanelBoundary, null, h(Pages, { route: location.route }))),
         h(GlobalSearch, { open: searchOpen, onClose: () => setSearchOpen(false) }))))
 }
@@ -290,6 +322,22 @@ function PanelShell({ location, openTab }) {
 function App({ openSession, t }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
+  // The page-load fragment only seeds this first mount. A later remount inside the host SPA reads the remembered route
+  // instead, so a fragment the host stripped or rewrote after boot cannot drag the panel back to an older screen.
+  useEffect(() => { releaseLinkedRoute() }, [])
+  // Deep links: a pasted URL or a host rewrite of `#sa=…` moves the panel in place, without a reload. Our own writes go
+  // through replaceState and never fire `hashchange`, so this cannot loop with `remember`. A foreign fragment (the host
+  // SPA's own state) is ignored, and a known page without a record resets to that tab's root. Compared with the whole
+  // route value so an in-view field (execution stage, settings group) from a shared link is applied too.
+  useEffect(() => {
+    const onHashChange = () => {
+      const route = routeFromHash()
+      if (!route) return
+      setLocation(current => routeEquivalent(current.route, route) ? current : { route, stack: [] })
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
   const move = useCallback(next => setLocation(current => next(current)), [])
   const navigate = useCallback((route, replace = false) => move(current => ({ route,
     stack: replace ? current.stack : [...current.stack, current.route].slice(-20) })), [move])

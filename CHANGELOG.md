@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.4.37] — 2026-11-13
+
+真浏览器点检（隔离 DSH web 实例 + 真实工单数据）发现的漏项：触发页的三个筛选分段把「条数」只写在 `title`
+里，键盘与读屏都拿不到（WIG A3 同类问题在 0.4.36 清扫时漏掉了这一处）。
+
+### 内容
+- `SegmentedControl` 支持 `option.description`，渲染为按钮内的 `.sa-sr-only` 文案，因此可访问名变成
+  「已订阅 4 条」；`45-trigger.js` 的三个筛选项同时传 `title`（悬停仍显示）与 `description`（读屏/语音输入可见）。
+- 其余 0.4.36 改动在真机同路径点检中表现正常（见 `verification/ui-review-team.md` 的「真机点检」一节）。
+
+### 验证
+- `node scripts/build-client.mjs`（22 fragments，11672 行）、`node scripts/check-keys.mjs`（967 literal / 513 shared /
+  1359 page-local）、`node --test lib/store.test.js lib/live/*.test.js`（555 pass）、`node scripts/render-check.mjs` 全绿；
+  隔离实例里重载后 `.sa-segment` 的可访问名已含条数。
+
+## [0.4.36] — 2026-11-13
+
+按 Web Interface Guidelines 全渲染层审查（89 条）与 CSS 设计审查（14 条）逐条修复；不改变页面信息架构，只修
+语义、键盘路径、对比度与 token 契约。
+
+### 内容
+- 组件层：`Input` 的 `label` 真正成为可访问名（不再泄漏成 DOM 属性）并默认 `spellCheck=false`；`Switch` 换成
+  `<input role="switch">` + 可见 track（调用方用 `<label>` 包裹文案，整行可点）；`DisclosureRow` 改成真 `<button>`；
+  `CopyButton` 用 `role=status` 播报「已复制」；`ConfirmButton` 支持动作级 `confirmLabel`；`MarkdownLite` 输出真
+  h3–h6（`07-md.js` 保留 heading 级别）。
+- 对比度/token：修掉不存在的 `--sa-radius-8`、`--dsw-alias-border-secondary`、`--dsw-alias-bg-secondary`、
+  `--dsw-alias-label-error`；toast/tooltip 改用 `--dsw-alias-toast-label`/`--dsw-alias-tooltip-label`；状态文本统一
+  走 `--sa-danger-text`/`--sa-warn-text`/`--sa-success-text`/`--sa-label-tertiary`。
+- 焦点与键盘：菜单项、输入框、`.sa-scroll` 都有可见焦点环；列表/队列/收件箱的行点击改成行内真按钮（`.sa-row-open`），
+  鼠标仍整行可点；消息列表加 roving tabindex + ↑/↓/Home/End。
+- 深链：路由（含 `stage`/`group`/`focus` 等视图内选择）写入自身 `#sa=` 片段并可在冷启动恢复，sessionStorage 仍是
+  兜底；宿主 URL 不属于本插件时不读不写。
+- 语义与播报：搜索面板改成 `role=search` 表单并播报结果数；异步结果（列表刷新、保存、复制、建单、评测）统一
+  `role=status`/`aria-busy`；`data-empty` 写到计数元素，配合 `.sa-count` 的尺寸契约。
+- 文案与校验：破坏性操作使用动作级确认文案；设置页数字/时间/必填字段有字段级错误与 `aria-invalid`；设置草稿存入
+  sessionStorage 并在离开前提示；`title` 不再作为唯一信息来源（改用可见提示或 focusable InfoTip）。
+- 样式细节：行高收敛到 1/1.35/1.4/1.5，列表分隔线上下对称，sticky 偏移统一 `--sa-sticky-top`，删除死规则
+  （`.sa-cards`/`.sa-grid2`/`.sa-grid3`/`.sa-chip-count[data-zero]`），补 `overscroll-behavior`、
+  `touch-action`、`text-wrap: balance` 与 `prefers-reduced-motion`。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 11670 行）；`node scripts/check-keys.mjs`
+（967 literal / 513 shared / 1359 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。审查清单与逐条状态见 `verification/ui-review-team.md`。
+
 ## [0.4.35] — 2026-11-13
 
 收口 0.4.34 遗留的运行质量口径、事件队列 ack/cursor、持久化掉电与证据排序问题。
