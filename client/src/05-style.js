@@ -74,6 +74,12 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+.sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
+.sa-repo-diff { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8) var(--sa-sp-12); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--sa-radius-8); background: var(--dsw-alias-bg-layer-2); }
+.sa-diff-row { display: flex; align-items: baseline; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-diff-label { min-width: 96px; color: var(--dsw-alias-label-secondary); }
+.sa-diff-old { color: var(--dsw-alias-label-tertiary); text-decoration: line-through; overflow-wrap: anywhere; }
+.sa-diff-new { color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary)); overflow-wrap: anywhere; }
 /* The queue's control row: stage filter chips lead, view chrome closes it behind a hairline divider. */
 .sa-list-bar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between;
   gap: var(--sa-sp-8) var(--sa-sp-16); min-width: 0; }
@@ -243,6 +249,9 @@ const PANEL_CSS = `
 /* Search results are real <button> rows; strip the platform button chrome so they read like every other .sa-row. */
 button.sa-row { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .sa-row[role='button']:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+/* AC-07: a signal opened from the Eval log is outlined in the list, so the located record is findable at a glance. */
+.sa-row-focus { outline: var(--sa-focus); outline-offset: -2px;
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 /* A selected thread row paints a background; give its content an inset so the tint does not run under the text. */
 .sa-list .sa-row[role='button'] { padding-left: var(--sa-sp-8); padding-right: var(--sa-sp-8); }
 /* The whole-row affordance is mouse-only; keyboard opens through this title button, which is a sibling of the row's
@@ -505,6 +514,12 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+.sa-route-controls { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); }
+.sa-route-preview { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8);
+  border: 1px solid var(--dsw-alias-border-secondary); border-radius: var(--sa-radius-8);
+  background: var(--dsw-alias-bg-secondary); }
+.sa-route-preview p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
+.sa-route-preview .sa-error { color: var(--dsw-alias-label-error); }
 /* A number/time field is as wide as its value, not the card (T20). */
 .sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }

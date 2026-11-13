@@ -59,7 +59,7 @@ Object.assign(PAGE_TEXT, {
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
-    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
+    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidencePrWaiting: ['已推送，等待创建 PR', 'Pushed; waiting for PR'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
     evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
     evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
@@ -138,7 +138,11 @@ Object.assign(PAGE_TEXT, {
     dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'], refreshCi: ['刷新 CI', 'Refresh CI'],
     verify: ['核对合并/UAT', 'Verify merge/UAT'], originLink: ['来源触发', 'Origin trigger'],
     retryUnavailable: ['执行器未启用，只能干跑。', 'The executor is disabled; dry run only.'],
-    stopUnavailable: ['当前引擎还没有停止接口。', 'The engine has no stop endpoint yet.'],
+    stopUnavailable: ['当前没有可停止的执行。', 'There is no active run to stop.'],
+    stopping: ['正在停止…', 'Stopping…'], stopConfirm: ['请求停止这个工单？已完成的动作会保留，之后不会再提交、推送或发布。',
+      'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
+    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
+      'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
     publishUnavailable: ['缺少推送权限、执行器未启用或没有 GitLab token。', 'Push is not allowed, the executor is off, or the GitLab token is missing.'],
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
@@ -207,12 +211,20 @@ Object.assign(PAGE_TEXT, {
   'auto.daily': ['每天 {time}', 'Daily {time}'],
   'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
   'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.dispatchPaused': ['派发已暂停（保留队列）', 'Dispatch is paused (queue kept)'],
   'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
   'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
   'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
   'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.repoDisabled': ['仓库已停用，不再派发新任务', 'The repository is disabled; no new work is dispatched'],
+  'auto.skip.noRepo': ['工单没有可用的仓库', 'No repository is available for this Ticket'],
   'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
   // push mode records only the GitHub `/pull/new/` URL: the PR itself is opened by `.github/workflows/auto-pr.yml`.
+  'ticket.prWaiting': ['已推送，等待创建 PR', 'Pushed; waiting for PR'],
+  'ticket.prState': ['PR 状态', 'PR state'],
+  'ticket.acceptState': ['人工验收', 'Human acceptance'],
+  'ticket.acceptedYes': ['已通过', 'Accepted'],
+  'ticket.acceptedNo': ['未验收', 'Not accepted'],
   'mr.pushHint': ['这个 PR 由推送后的 auto-pr workflow 自动创建；合并状态由目标分支历史判定。',
     'This PR is created automatically by the post-push auto-pr workflow; merge state comes from the target branch history.'],
   // P2-7: GitLab observation upgrades shown on the MR card.
@@ -351,8 +363,10 @@ function automationChip(t, ticket) {
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
-const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
-  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
+  'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions',
+  'repo-disabled': 'auto.skip.repoDisabled', 'no-repo': 'auto.skip.noRepo', due: 'auto.skip.due' }
 function autoSkipReasonText(t, reason) {
   const key = AUTO_SKIP_KEYS[String(reason ?? '')]
   return key ? pt(t, key) : String(reason ?? '')
@@ -431,6 +445,11 @@ function ticketStatus(ticket) {
   const acceptance = ticketAcceptanceOf(ticket)
   if (acceptance.state === 'accepted') {
     return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  // AC-03: a stop that has been requested but not yet confirmed is its own visible state. Leaving the chip on
+  // "执行中" was indistinguishable from a run that is not stopping, and the stop action is already disabled.
+  if (ticket?.stopRequested) {
+    return { ...view, acceptance, labelKey: 'ticket.stopping', needsHuman: false, primary: 'none' }
   }
   return { ...view, acceptance }
 }
@@ -762,9 +781,12 @@ function ticketEvidence(t, ticket, view) {
     return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
   }
   const mr = links.mergeRequest ?? {}
-  // push mode has a PR URL but no iid until the repo's auto-pr workflow opens it; the URL alone is still evidence.
+  // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
+  // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
+  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
-    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid }) : pt(t, 'row.evidencePr')
+    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
+      : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
     return mr.webUrl
       ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
         title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
@@ -962,12 +984,18 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
+const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
+
 function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [repoId, setRepoId] = useState(undefined)
+  const [deliverable, setDeliverable] = useState('')
+  const [backend, setBackend] = useState('')
+  const [preview, setPreview] = useState()
+  const [previewError, setPreviewError] = useState()
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState()
   const [failure, setFailure] = useState()
@@ -975,13 +1003,39 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const repos = panelRepos(data)
   const defaultRepo = panelDefaultRepo(data)
   const usableRepo = repos.some(repo => repo.id === repoId) ? repoId : defaultRepo
+  const selection = { ...(backend ? { backend } : {}), ...(deliverable ? { deliverable } : {}) }
+  const selectionKey = JSON.stringify(selection)
+  // Draft preview: the operator sees the automatic judgement (deliverable / capabilities / backend) before creating,
+  // and any manual choice is previewed through the same resolver the executor uses — so the preview cannot promise a
+  // route the run then refuses.
+  useEffect(() => {
+    if (!`${title}${body}`.trim()) { setPreview(undefined); setPreviewError(undefined); return }
+    let alive = true
+    const timer = setTimeout(() => {
+      const actions = model?.actions
+      if (!actions?.previewRoute) return
+      actions.previewRoute({ title: title.trim(), body: body.trim() || undefined, selection })
+        .then(result => { if (alive) { setPreview(result); setPreviewError(undefined) } })
+        .catch(error => { if (alive) { setPreview(undefined); setPreviewError(error) } })
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [title, body, selectionKey])
+  const route = preview?.route
+  const capabilityText = (route?.capabilities ?? []).map(capability =>
+    pt(t, ROUTE_CAP_KEYS[capability] ?? capability)).join(' · ') || '—'
+  // Before the first preview arrives, offer the declared backends so the operator can pick one immediately; the
+  // preview response then narrows the list to the enabled set.
+  const enabledBackends = preview?.options?.backends
+    ?? (typeof ROUTE_BACKENDS !== 'undefined' ? ROUTE_BACKENDS.map(backend => backend.value) : ['dsh', 'codex', 'claude'])
+  const backendOptions = [{ value: '', label: pt(t, 'st.routeAuto') },
+    ...enabledBackends.map(value => ({ value, label: value }))]
   const submit = async () => {
     if (busy || !title.trim()) return
     setBusy(true)
     setFailure(undefined)
     try {
       const response = await model.actions.createTicket({ title: title.trim(), body: body.trim() || undefined,
-        repoId: usableRepo || undefined })
+        repoId: usableRepo || undefined, route: Object.keys(selection).length ? selection : undefined })
       // POST engine/ticket answers { ticket }; accept a bare ticket too so a future host shape change cannot hide the
       // created state (and onDone callers get the Ticket, not the envelope).
       const ticket = response?.ticket ?? response
@@ -1011,6 +1065,33 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
       onChange: event => setTitle(event.target.value) }),
     h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
       'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    // Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
+    // Ticket by the host; an unsupported combination is warned about here and rejected by the executor.
+    h('div', { className: 'sa-route-controls' },
+      h(Select, { label: pt(t, 'st.routeDeliverable'), value: deliverable, disabled: busy,
+        options: [{ value: '', label: pt(t, 'st.routeAuto') },
+          { value: 'change', label: pt(t, 'st.routeChange') },
+          { value: 'report', label: pt(t, 'st.routeReport') }],
+        onChange: next => setDeliverable(next) }),
+      h(Select, { label: pt(t, 'st.routeBackend'), value: backend, disabled: busy, options: backendOptions,
+        onChange: next => setBackend(next) })),
+    route
+      ? h('div', { className: 'sa-route-preview' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreviewTitle')),
+        h('p', null,
+          `${pt(t, `detail.workType.${route.workType}`)} · `,
+          `${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `,
+          `${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `,
+          `${pt(t, 'st.routeBackend')}: ${route.backend}`,
+          route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`),
+        route.unsupported
+          ? h('p', { className: 'sa-error' }, pt(t, 'st.routeUnsupported', { caps: route.unsupported }))
+          : null)
+      : null,
+    previewError ? h(Hint, { tone: 'warning' }, pt(t, 'st.routePreviewFailed')) : null,
+    Object.keys(selection).length
+      ? h(Hint, null, pt(t, 'st.routeManualHint'))
+      : null,
     // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
     // give a modal caller an explicit cancel next to it (critique 2026-11-11).
     h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
@@ -1154,7 +1235,7 @@ function StageRail({ ticket, detail = false }) {
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
       result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
-        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, 'row.evidencePr') : '' },
+        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, !mergeRequest.iid && (mergeRequest.pending === true || Boolean(mergeRequest.webUrl)) ? 'row.evidencePrWaiting' : 'row.evidencePr') : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
@@ -1179,6 +1260,8 @@ function MergeRequestCard({ ticket }) {
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
   const rows = []
+  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
   if (mr.state) rows.push([pt(t, 'ticket.mrState'), providerStateText(t, MR_STATE_KEYS, mr.state)])
@@ -1186,6 +1269,8 @@ function MergeRequestCard({ ticket }) {
   if (!mr.state && verification.merged === true) rows.push([pt(t, 'ticket.mergeState'), pt(t, 'ticket.mergedYes')])
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
+  // AC-05: acceptance is its own evidence even when the deliverable is a pushed branch.
+  rows.push([pt(t, 'ticket.acceptState'), links.acceptance?.ok === true ? pt(t, 'ticket.acceptedYes') : pt(t, 'ticket.acceptedNo')])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
   // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
   const draft = mr.draft === true || mr.workInProgress === true

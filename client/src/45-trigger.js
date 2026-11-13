@@ -22,6 +22,17 @@ Object.assign(PAGE_TEXT, {
     'Set up a Source and send one message; Threads will appear here.'],
   'trg.emptyAction': ['去来源页', 'Open Source'],
   'trg.noneInFilter': ['这个筛选下没有线程。', 'No Thread matches this filter.'],
+  'trg.search': ['搜索线程', 'Search Threads'],
+  'trg.searchPlaceholder': ['标题、来源或会话 key…', 'Title, source or chat key…'],
+  'trg.repo': ['按仓库筛选', 'Filter by repository'],
+  'trg.repoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'trg.reason': ['按原因筛选', 'Filter by reason'],
+  'trg.reasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'trg.from': ['开始日期', 'From date'],
+  'trg.to': ['结束日期', 'To date'],
+  'trg.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'trg.prev': ['上一页', 'Previous'],
+  'trg.next': ['下一页', 'Next'],
   'trg.showAll': ['查看全部', 'Show all'],
   'trg.threadFallback.octo': ['Octo 会话', 'Octo conversation'],
   'trg.threadFallback.other': ['未命名线程', 'Untitled Thread'],
@@ -193,11 +204,107 @@ function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
       h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
+const TRG_PAGE_SIZE = 50
+const TRG_SCROLL_KEY = 'superagent-panel/trigger-scroll'
+
+/** The panel scrolls inside `.sa-scroll`; remember the list position so opening a Ticket/Thread can return to it. */
+function triggerScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberTriggerScroll() {
+  const y = triggerScrollTop()
+  if (y > 0) try { sessionStorage.setItem(TRG_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreTriggerScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(TRG_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+const TRG_URL_KEYS = { q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom', to: 'trgTo',
+  offset: 'trgOffset' }
+function trgUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
+    return { q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
+      reason: params.get(TRG_URL_KEYS.reason) || '', from: params.get(TRG_URL_KEYS.from) || '',
+      to: params.get(TRG_URL_KEYS.to) || '', offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function trgDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
+  const initial = useRef(trgUrlState())
   const [filter, setFilter] = useState('subscribed')
-  const { data, error, reload } = useLiveResource('engine/threads', { filter })
+  const [query, setQuery] = useState(initial.current.q)
+  const [q, setQ] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [offset, setOffset] = useState(initial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepo(repo); setReason(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  useEffect(() => { setOffset(0) }, [filter, q, repo, reason, from, to])
+  // Keep the free-text filter in our own URL params; the host route (including the selected Thread) is untouched.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (q) url.searchParams.set(TRG_URL_KEYS.q, q); else url.searchParams.delete(TRG_URL_KEYS.q)
+      for (const [key, value] of [['repo', repo], ['reason', reason], ['from', from], ['to', to]]) {
+        if (value) url.searchParams.set(TRG_URL_KEYS[key], value); else url.searchParams.delete(TRG_URL_KEYS[key])
+      }
+      if (offset > 0) url.searchParams.set(TRG_URL_KEYS.offset, String(offset))
+      else url.searchParams.delete(TRG_URL_KEYS.offset)
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [q, repo, reason, from, to, offset])
+  useEffect(() => {
+    const restore = () => {
+      const next = trgUrlState()
+      setQuery(next.q); setQ(next.q); setRepo(next.repo); setReason(next.reason)
+      setFrom(next.from); setTo(next.to); setOffset(next.offset)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, reload } = useLiveResource('engine/threads',
+    { filter, q, repo, reason, from: trgDayBound(from), to: trgDayBound(to, true), offset, limit: TRG_PAGE_SIZE })
+  // AC-07: opening a Thread in the single-pane layout (or a Ticket from its detail) hides/replaces the list; the
+  // position is remembered before that and restored when the list is shown again.
+  const previousRouteId = useRef(route?.id)
+  useEffect(() => {
+    const had = previousRouteId.current
+    const has = route?.id
+    previousRouteId.current = has
+    if (had && !has) window.requestAnimationFrame(restoreTriggerScroll)
+    else if (!had && has) rememberTriggerScroll()
+  }, [route?.id])
+  useEffect(() => () => { rememberTriggerScroll() }, [])
+  const restoredTriggerScroll = useRef(false)
+  useEffect(() => {
+    if (restoredTriggerScroll.current || !data) return
+    restoredTriggerScroll.current = true
+    window.requestAnimationFrame(restoreTriggerScroll)
+  }, [data])
   // The watched-chat titles live on the shared status model; they turn a raw octo key into a readable list title.
   const { data: status } = usePanelData()
   const octoConfig = status?.config?.octo
@@ -227,12 +334,25 @@ function LiveTriggerPage({ route }) {
 
   const options = THREAD_FILTERS.map(value => ({ value, label: pt(t, `trg.filter.${value}`),
     title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
+  const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
   const list = h('div', { className: 'sa-pane sa-pane-aside' },
-    h(Section, { title: pt(t, 'trg.title'), count: items.length,
+    h(Section, { title: pt(t, 'trg.title'), count: total,
       action: h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'trg.refresh'),
         onClick: () => { void reload() } }) },
       h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter'),
         className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'trg.searchPlaceholder'), label: pt(t, 'trg.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
         ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
@@ -240,7 +360,15 @@ function LiveTriggerPage({ route }) {
           // with no visible detail would otherwise promise a state the screen is not showing.
           selected: compact ? row.key === routeId : row.key === selected,
           onOpen: () => openThread(row.key), octoConfig })))
-        : h(Hint, null, pt(t, 'trg.noneInFilter'))))
+        : h(Hint, null, pt(t, 'trg.noneInFilter')),
+      items.length
+        ? h('div', { className: 'sa-pagination' },
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset <= 0,
+            onClick: () => setOffset(Math.max(0, offset - TRG_PAGE_SIZE)) }, pt(t, 'trg.prev')),
+          h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'trg.pageInfo', { from: pageFrom, to: pageTo, total })),
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset + items.length >= total,
+            onClick: () => setOffset(offset + TRG_PAGE_SIZE) }, pt(t, 'trg.next')))
+        : null))
   const detail = h('div', { className: 'sa-pane' },
     selected
       ? h(ThreadDetailView, { threadKey: selected, showBack: compact })

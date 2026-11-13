@@ -121,6 +121,41 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptLinePending': ['待你验收', 'Waiting for your sign-off'],
   'detail.acceptLineAccepted': ['已验收 · {time}', 'Accepted · {time}'],
   'detail.acceptLineRejected': ['已打回 · {time}', 'Rejected · {time}'],
+  'detail.evidenceTitle': ['交付证据', 'Delivery evidence'],
+  'detail.evidenceEmpty': ['这段交付还没有持久化的证据（旧工单或尚未跑完）。缺少历史时不推断“已修复”。',
+    'No persisted evidence for this delivery yet (an older Ticket or a run that has not delivered). Missing history never means "fixed".'],
+  'detail.evidenceRound': ['第 {round} 轮', 'Round {round}'],
+  'detail.evidenceFiles': ['{count} 个文件', '{count} files'],
+  'detail.evidenceGates': ['闸门 {passed}/{total}', 'Gates {passed}/{total}'],
+  'detail.evidenceCompare': ['与上一轮对比：新增 {added}，删除 {removed}，修改 {changed}；闸门变化 {gates} 项。',
+    'Compared with the previous round: +{added} added, -{removed} removed, {changed} changed; {gates} gate change(s).'],
+  'detail.evidencePlatform': ['推送 {pushed} · PR {pr} · 合并 {merged} · 部署 {deployed} · 验收 {accepted}',
+    'pushed {pushed} · PR {pr} · merged {merged} · deployed {deployed} · accepted {accepted}'],
+  'detail.evidenceYes': ['是', 'yes'],
+  'detail.evidenceBranch': ['分支', 'Branch'],
+  'detail.evidenceFilesLabel': ['改动文件', 'Changed files'],
+  'detail.evidenceSummary': ['本轮 worker 总结', 'Worker summary for this round'],
+  'detail.evidenceNoHistory': ['只有这一轮证据，无法比较上一轮；不推断“已修复”。',
+    'Only this round is on file; there is no previous round to compare, so nothing is claimed as fixed.'],
+  'detail.evidenceNo': ['否', 'no'],
+  'detail.evidenceRequirements': ['验收要求变化：新增 {added}；移除 {removed}。',
+    'Acceptance requirements changed: added {added}; removed {removed}.'],
+  'detail.evidenceNotRerun': ['未重跑：{names}。这些结果不能算本轮已通过。',
+    'Not re-run: {names}. These results cannot count as passing in this round.'],
+  'detail.evidenceDeploy': ['部署 commit {sha}', 'Deployment commit {sha}'],
+  'detail.evidenceIncomplete': ['证据不完整：上一轮文件列表截断 {previousOmitted} 项、脱敏 {previousRedacted} 项；本轮截断 {currentOmitted} 项、脱敏 {currentRedacted} 项。缺失项不当作删除。',
+    'Incomplete evidence: the previous file list lost {previousOmitted} to truncation and {previousRedacted} to redaction; this round lost {currentOmitted} and {currentRedacted}. Missing entries are not counted as deletions.'],
+  'detail.evidenceUncertain': ['无法确认新增 {added}、删除 {removed}：对应轮次的文件列表不完整。',
+    'Additions ({added}) and deletions ({removed}) cannot be confirmed: the file list on that side is incomplete.'],
+  'detail.evidencePatchTruncated': ['本轮 patch 已截断（保留 {bytes} 字节），不是完整改动。',
+    'This round\'s patch was truncated ({bytes} bytes kept); it is not the full change.'],
+  'detail.evidenceBaseline': ['基线已变化（{from} → {to}），上一轮的闸门结果不能直接沿用。',
+    'The baseline changed ({from} → {to}); the previous round\'s gate results cannot be reused as-is.'],
+  'detail.evidenceUnfinished': ['本轮仍未通过：{names}。',
+    'Still not passing in this round: {names}.'],
+  'detail.evidenceStale': ['以下闸门沿用了旧代码的结果，需要重跑：{names}。',
+    'These gates reused results from older code and must be re-run: {names}.'],
+  'detail.evidenceNone': ['无', 'none'],
   'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
   'detail.acceptLineView': ['查看验收', 'View acceptance'],
 
@@ -201,6 +236,8 @@ Object.assign(PAGE_TEXT, {
   'detail.resumeTitle': ['继续这个中断的运行？', 'Resume this interrupted run?'],
   'detail.resumeConfirm': ['会从中断的检查点继续；没有检查点时重跑整单：{title}',
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
+  'detail.stoppedHint': ['上一次运行已按人工请求停止，工作树与检查点保留，可以继续执行。',
+    'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
 
@@ -682,7 +719,7 @@ function TicketRunRows({ runs }) {
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
     const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
-    return h('li', { key: run.id, className: 'sa-row' },
+    return h('li', { key: run.id, id: `sa-run-${run.id}`, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
@@ -972,10 +1009,89 @@ const DETAIL_JUMPS = [
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
 ]
 
-function TicketDetail({ id, page = 'execution' }) {
+/** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
+function DeliveryEvidenceCard({ data, id }) {
+  const { t } = usePanel()
+  const rounds = Array.isArray(data?.rounds) ? data.rounds : []
+  // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
+  // recompute it from the rounds and quietly disagree (review P2 AC-08/AC-09).
+  const compare = useLiveResource('engine/evidence/:id/compare', { id }, 30000,
+    { enabled: Boolean(id) && rounds.length > 1 })
+  if (!rounds.length) return h(Hint, null, pt(t, 'detail.evidenceEmpty'))
+  const latest = rounds.at(-1)
+  const diff = compare.data
+  const previous = rounds.length > 1 ? rounds.at(-2) : null
+  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed').length
+  const platform = latest.platform ?? {}
+  const incomplete = diff?.incomplete
+  const uncertain = diff?.filesUncertain
+  const incompleteLine = incomplete && (!incomplete.previous.fileList || !incomplete.current.fileList)
+    ? pt(t, 'detail.evidenceIncomplete', {
+      previousOmitted: incomplete.previous.filesOmitted, previousRedacted: incomplete.previous.filesRedacted,
+      currentOmitted: incomplete.current.filesOmitted, currentRedacted: incomplete.current.filesRedacted })
+    : ''
+  const uncertainAdded = (uncertain?.added ?? []).join('、')
+  const uncertainRemoved = (uncertain?.removed ?? []).join('、')
+  const requirementsAdded = diff?.acceptance?.added ?? []
+  const requirementsRemoved = diff?.acceptance?.removed ?? []
+  const unfinished = (diff?.gatesUnfinished ?? []).map(gate => gate.name)
+  return h('div', { className: 'sa-card' },
+    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'detail.evidenceTitle')),
+      h(Tag, { tone: 'neutral' }, pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length }))),
+    h(KeyValues, { rows: [
+      [pt(t, 'detail.evidenceBranch'), h('span', { className: 'sa-mono' }, latest.branch || '—')],
+      [pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, (latest.headSha ?? '—').slice(0, 8))],
+      [pt(t, 'detail.evidenceFilesLabel'), pt(t, 'detail.evidenceFiles', { count: (latest.files ?? []).length })],
+      [pt(t, 'ticket.gates'), pt(t, 'detail.evidenceGates', { passed, total: (latest.gates ?? []).length })],
+    ] }),
+    h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      pr: platform.pr ?? 'none', merged: platform.merged ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      deployed: platform.deployed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })),
+    diff
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
+        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length }))
+      : rounds.length < 2
+        ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNoHistory'))
+        : null,
+    incompleteLine ? h('p', { className: 'sa-hint' }, incompleteLine) : null,
+    uncertainAdded || uncertainRemoved
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUncertain', {
+        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') }))
+      : null,
+    latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePatchTruncated', {
+        bytes: latest.patch?.bytes ?? previous?.patch?.bytes ?? 0 }))
+      : null,
+    diff?.baseline?.changed
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceBaseline', {
+        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) }))
+      : null,
+    unfinished.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') }))
+      : null,
+    diff?.gatesStale?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') }))
+      : null,
+    diff?.gatesNotRun?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') }))
+      : null,
+    requirementsAdded.length || requirementsRemoved.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceRequirements', {
+        added: requirementsAdded.join('；') || pt(t, 'detail.evidenceNone'),
+        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') }))
+      : null,
+    platform.deployCommit
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) }))
+      : null,
+    latest.workerSummary ? h(Folded, { summary: pt(t, 'detail.evidenceSummary') }, h('p', null, latest.workerSummary)) : null)
+}
+
+function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
+  const evidence = useLiveResource('engine/evidence/:id', { id }, 30000)
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
@@ -988,6 +1104,13 @@ function TicketDetail({ id, page = 'execution' }) {
   const [diffOpen, setDiffOpen] = useState(false)
   const [diff, setDiff] = useState({})
   useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
+  // AC-07: an Eval/source record's run link opens this page pinned to that run; scroll to it once the ledger loads.
+  const focusedRun = useRef(null)
+  useEffect(() => {
+    if (!focusRun || focusedRun.current === focusRun) return
+    const node = document.getElementById(`sa-run-${focusRun}`)
+    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: 'smooth' }) }
+  }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
   const [revisionText, setRevisionText] = useState('')
@@ -1067,6 +1190,7 @@ function TicketDetail({ id, page = 'execution' }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
   const [answerText, setAnswerText] = useState('')
   // P1-3: rejection intents are optional checkboxes next to the reject button.
@@ -1134,7 +1258,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const hasGateResults = gateView.gates.length > 0 || Boolean(parkedGate)
   // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
   const latestRun = latestRunFor(ticket, runs)
-  const interrupted = latestRun?.status === 'interrupted'
+  // AC-04: a stopped run keeps its checkpoint too, so the same resume action serves interrupted and stopped runs.
+  const interrupted = latestRun?.status === 'interrupted' || latestRun?.status === 'stopped'
   // A run in flight has nothing to launch: the dry-run action belongs to the ⋯ menu, not the primary slot (T3).
   const running = latestRun?.status === 'running' || ticket.status === 'working'
   const awaitingAnswer = ticket.status === 'awaiting-answer'
@@ -1184,8 +1309,12 @@ function TicketDetail({ id, page = 'execution' }) {
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
   if (routePreview) {
+    // Deliverable, required capabilities and backend are separate facts: a read-only report is not "the same route"
+    // as a code change, and an operator override must be visible as such.
+    const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
+      `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
@@ -1215,6 +1344,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const busy = { dryRun: dryRun.busy, retry: retry.busy, publish: publish.busy, refreshCi: refreshCi.busy, verify: verify.busy }
   // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
   // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
+  const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
+    || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
@@ -1267,24 +1398,31 @@ function TicketDetail({ id, page = 'execution' }) {
       title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
       disabled: busy.retry || !canRun, title: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
-    { key: 'stop', label: pt(t, 'menu.stop'), icon: 'stop', onSelect: () => {}, disabled: true, title: pt(t, 'ticket.stopUnavailable') },
+    { key: 'stop', label: pt(t, ticket.stopRequested ? 'ticket.stopping' : 'menu.stop'), icon: 'stop',
+      onSelect: () => setPending('stop'), disabled: stopRun.busy || !activeRun || Boolean(ticket.stopRequested),
+      title: !activeRun ? pt(t, 'ticket.stopUnavailable') : ticket.stopRequested ? pt(t, 'ticket.stopping') : undefined },
     ...failed ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
   ]
   const runPending = async action => { const done = await action.run(); if (done) setPending(null) }
   const confirmDialog = pending
     ? h(Modal, { open: true, onClose: () => setPending(null),
-      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle') : pt(t, 'ticket.publishTitle'),
+      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
+        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle'),
       closeLabel: t('close'),
       description: pending === 'retry'
         ? pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })
+        : pending === 'stop'
+          ? pt(t, 'ticket.stopConfirm')
         : pending === 'dismiss'
           ? pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
             branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })
           : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss : busy.publish,
-          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
+        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
+          : pending === 'stop' ? stopRun.busy : busy.publish,
+          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
+            : pending === 'stop' ? stopRun : publish) } }, t('confirm'))) })
     : null
 
   // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
@@ -1385,7 +1523,7 @@ function TicketDetail({ id, page = 'execution' }) {
       h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
         h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
           interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
+        h('p', { className: 'sa-hint' }, pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint'))))
     : null
   const jumps = DETAIL_JUMPS
   const jumpTo = id => {
@@ -1414,6 +1552,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const headActions = h(Fragment, null,
     acceptanceNote,
     primaryAction,
+    // AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only.
+    activeRun && !ticket.stopRequested
+      ? h(Button, { size: 'sm', variant: 'ghost', icon: 'stop', disabled: stopRun.busy, onClick: () => setPending('stop') },
+        pt(t, 'menu.stop'))
+      : null,
     h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
       text: primaryAction ? undefined : pt(t, 'menu.label') }))
 
@@ -1521,6 +1664,8 @@ function TicketDetail({ id, page = 'execution' }) {
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
     h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
+      // AC-08/09: durable evidence lives next to (not inside) the acceptance record.
+      h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(DeliveryEvidenceCard, { data: evidence.data, id })),
       // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))

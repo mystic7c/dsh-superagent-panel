@@ -12,6 +12,10 @@ Object.assign(PAGE_TEXT, {
   'ev.windowAll': ['全部时间', 'All time'],
   'ev.window24h': ['24 小时', 'Last 24h'],
   'ev.refresh': ['刷新记录', 'Refresh'],
+  'ev.search': ['搜索记录', 'Search evaluations'],
+  'ev.searchPlaceholder': ['消息、原因或工单标题…', 'Message, reason or Ticket title…'],
+  'ev.repo': ['仓库', 'Repository'],
+  'ev.repoPlaceholder': ['全部仓库', 'All repositories'],
   'ev.emptyTitle': ['还没有评估记录。', 'No evaluation yet.'],
   'ev.emptyHint': ['触发一条消息后，这里会记录引擎为什么做/不做。', 'Send a message to a watched group; this page records why the engine did or did not take the work.'],
   'ev.emptyAction': ['去看触发页', 'Open Triggers'],
@@ -47,6 +51,20 @@ Object.assign(PAGE_TEXT, {
   'ev.humanIgnore': ['忽略', 'ignore'],
   'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
     'Hybrid mode: the model takes part in intake (repo_task opens, risky blocks, the rest goes to review).'],
+  'ev.reason': ['原因筛选', 'Reason'],
+  'ev.reasonPlaceholder': ['原因关键字，如 rate-limit', 'Reason keyword, e.g. rate-limit'],
+  'ev.from': ['开始日期', 'From date'],
+  'ev.to': ['结束日期', 'To date'],
+  'ev.viewLabel': ['评估视图', 'View'],
+  'ev.viewAll': ['全部', 'All'],
+  'ev.viewDivergence': ['模型分歧', 'Model divergence'],
+  'ev.viewOverride': ['人工改判', 'Human override'],
+  'ev.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'ev.prev': ['上一页', 'Previous'],
+  'ev.next': ['下一页', 'Next'],
+  'ev.signal': ['原始信号', 'Signal'],
+  'ev.thread': ['线程', 'Thread'],
+  'ev.run': ['运行', 'Run'],
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
@@ -100,8 +118,15 @@ function evalGroupKey(decision) {
   // A request can be judged more than once (re-evaluation, duplicate accept) and produce different Tickets. The group
   // identity is the request + judgement, not the Ticket id, so those rows collapse and every Ticket stays visible in
   // the row's ticket list instead of being hidden behind a separate ×N (C32).
+  // A different signal, model opinion or human decision is different evidence, even when kind/reason/strength match.
+  // Folding those rows hid the evidence behind the first record (review P2 AC-06).
+  const model = decision.shadow ?? decision.model
+  const human = decision.humanReview
   return JSON.stringify([decision.kind, decision.preview, decision.threadKey,
-    decision.strength, hit, rules.length - hit, decision.reason ?? null])
+    decision.strength, hit, rules.length - hit, decision.reason ?? null,
+    decision.signalId ?? null,
+    model ? [model.status ?? null, model.verdict ?? null, model.model ?? null, model.riskP ?? null] : null,
+    human ? [human.code ?? null, human.outcome ?? null, human.answer ?? null] : null])
 }
 
 /** Newest-first groups of decisions that differ only by time; order follows the first (newest) occurrence. */
@@ -120,7 +145,7 @@ function groupEvalDecisions(items) {
 
 /** One decision row: the message it judged as the title, the shape-coded outcome as a leading tag, then reason,
     strength, rule hit count and the Ticket link on one meta line, followed by the folded rule-by-rule result. */
-function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
+function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLinks = []) {
   const view = decisionKindView(decision)
   const label = pt(t, view.labelKey)
   const kindLabel = label === view.labelKey ? String(view.kind) : label
@@ -147,7 +172,13 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
             preview || pt(t, 'ev.noPreview'))),
         h('div', { className: 'sa-row-meta' },
           decision.threadKey
-            ? h('span', { className: 'sa-mono sa-hint', title: decision.threadKey }, liveShortId(decision.threadKey, 10)) : null,
+            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.thread')} · ${decision.threadKey}`,
+              onClick: event => { event.preventDefault(); navigate({ page: 'trigger', id: decision.threadKey }) } },
+            liveShortId(decision.threadKey, 10)) : null,
+          decision.signalId
+            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.signal')} · ${decision.signalId}`,
+              onClick: event => { event.preventDefault(); navigate({ page: 'source', id: decision.signalId }) } },
+            liveShortId(decision.signalId, 10)) : null,
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
@@ -166,6 +197,14 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
               h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) },
                 pt(t, 'ev.openTicket')))
             : null,
+          runLinks.length
+            ? h('span', { className: 'sa-row-meta' },
+              runLinks.map(link => h('a', { key: link.runId ?? link.ticketId, href: '#', className: 'sa-mono sa-inline-link',
+                title: link.runId ? `${pt(t, 'ev.run')} · ${link.runId}` : link.ticketId,
+                onClick: event => { event.preventDefault()
+                  navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) } },
+              link.runId ? `${pt(t, 'ev.run')} ${liveShortId(link.runId, 8)}` : liveShortId(link.ticketId, 8))))
+            : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
         unavailable ? h('p', { className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
         h(Folded, { summary: rules.length ? pt(t, 'thread.rulesDetail') : pt(t, 'ev.detail') },
@@ -177,7 +216,7 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
 }
 
 /** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
+function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
   const noRecords = (counts.all ?? 0) === 0
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
@@ -191,18 +230,129 @@ function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
     action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
 }
 
+const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
+  reason: 'evalReason', from: 'evalFrom', to: 'evalTo', view: 'evalView', offset: 'evalOffset' }
+const EVAL_PAGE_SIZE = 25
+const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
+const EVAL_VIEWS = ['all', 'divergence', 'override']
+
+/** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
+function evalUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
+    return { kind: params.get(EVAL_URL_KEYS.kind) || 'all', range: params.get(EVAL_URL_KEYS.range) || 'all',
+      q: params.get(EVAL_URL_KEYS.q) || '', repo: params.get(EVAL_URL_KEYS.repo) || '',
+      reason: params.get(EVAL_URL_KEYS.reason) || '', from: params.get(EVAL_URL_KEYS.from) || '',
+      to: params.get(EVAL_URL_KEYS.to) || '',
+      view: EVAL_VIEWS.includes(params.get(EVAL_URL_KEYS.view)) ? params.get(EVAL_URL_KEYS.view) : 'all',
+      offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 } }
+}
+
+function rememberEvalFilters(next) {
+  try {
+    const url = new URL(window.location.href)
+    for (const [key, param] of Object.entries(EVAL_URL_KEYS)) {
+      const value = next[key]
+      if (!value || value === 'all' || value === 0) url.searchParams.delete(param)
+      else url.searchParams.set(param, String(value))
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  } catch { /* a host without history still keeps the in-memory filters */ }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function dateBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function LiveEvalPage() {
   const { t, navigate } = usePanel()
-  const [kind, setKind] = useState('all')
-  const [range, setRange] = useState('all')
-  const { data, error, loading, reload } = useLiveResource('engine/decisions', { kind, window: range })
+  const initial = useRef(evalUrlState())
+  const [kind, setKind] = useState(initial.current.kind)
+  const [range, setRange] = useState(initial.current.range)
+  const [query, setQuery] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [view, setView] = useState(initial.current.view)
+  const [offset, setOffset] = useState(initial.current.offset)
+  const [q, setQ] = useState(initial.current.q)
+  const [repoFilter, setRepoFilter] = useState(initial.current.repo)
+  const [reasonFilter, setReasonFilter] = useState(initial.current.reason)
+  // Debounce only the free-text fields: one request per pause, while selects apply immediately.
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepoFilter(repo); setReasonFilter(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  // Any filter change starts at the first page; otherwise a stale offset can land past the new total. The first mount
+  // must keep the page restored from the URL, and a popstate restore must not be reset to page 1 (review P1 AC-07).
+  const firstFilterRun = useRef(true)
+  const restoringFilters = useRef(false)
+  useEffect(() => {
+    if (firstFilterRun.current) { firstFilterRun.current = false; return }
+    if (restoringFilters.current) { restoringFilters.current = false; return }
+    setOffset(0)
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view])
+  useEffect(() => {
+    rememberEvalFilters({ kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view, offset })
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view, offset])
+  // Back/forward restores the filters from the URL; the host route keeps working because only our own params move.
+  useEffect(() => {
+    const restore = () => {
+      const next = evalUrlState()
+      restoringFilters.current = true
+      setKind(next.kind); setRange(next.range); setQuery(next.q); setQ(next.q)
+      setRepo(next.repo); setRepoFilter(next.repo); setReason(next.reason); setReasonFilter(next.reason)
+      setFrom(next.from); setTo(next.to); setView(next.view); setOffset(next.offset)
+      // If the restored URL equals the current state no filter effect runs; clear the guard so the next real change
+      // still resets the page.
+      setTimeout(() => { restoringFilters.current = false }, 0)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, loading, reload } = useLiveResource('engine/decisions',
+    { kind, window: range, q, repo: repoFilter, reason: reasonFilter,
+      from: dateBound(from), to: dateBound(to, true), view, offset, limit: EVAL_PAGE_SIZE })
   const refresh = useCallback(() => { void reload() }, [reload])
+  // Opening a Ticket/thread/signal leaves the page; remember where the list was so going back lands on the same row.
+  const openFromEval = useCallback(route => {
+    try {
+      // The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07).
+      const scroller = document.querySelector('.sa-scroll')
+      const y = scroller ? scroller.scrollTop : window.scrollY
+      sessionStorage.setItem(EVAL_SCROLL_KEY, String(y))
+    } catch { /* private mode */ }
+    navigate(route)
+  }, [navigate])
+  const restoredScroll = useRef(false)
+  useEffect(() => {
+    if (restoredScroll.current || !data) return
+    restoredScroll.current = true
+    try {
+      const y = Number(sessionStorage.getItem(EVAL_SCROLL_KEY) ?? 0)
+      if (Number.isFinite(y) && y > 0) window.requestAnimationFrame(() => {
+        const scroller = document.querySelector('.sa-scroll')
+        if (scroller) scroller.scrollTop = y
+        else window.scrollTo(0, y)
+      })
+    } catch { /* private mode */ }
+  }, [data])
   if (loading && !data) return h(Skeleton, { rows: 5 })
   if (!data) return h(ErrorState, { error, onRetry: reload })
 
   const items = Array.isArray(data.items) ? data.items : []
   const counts = data.counts ?? {}
   const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
+  const hasPrev = offset > 0
+  const hasNext = offset + items.length < total
   // A kind earns a pill only when it can produce a list: `all`, every non-zero kind, and the active kind (so switching
   // the window never traps a selection on a hidden kind). Counts stay in the section header, not in the pills (C11).
   const kindOptions = EVAL_KINDS
@@ -217,14 +367,36 @@ function LiveEvalPage() {
       h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
       h(SegmentedControl, { options: [{ value: 'all', label: pt(t, 'ev.windowAll') }, { value: '24h', label: pt(t, 'ev.window24h') }],
         value: range, onChange: setRange, label: pt(t, 'ev.windowLabel'), className: 'sa-segmented-chips' }),
+      h(SegmentedControl, { options: EVAL_VIEWS.map(value => ({ value, label: pt(t, `ev.view${value === 'all' ? 'All' : value === 'divergence' ? 'Divergence' : 'Override'}`) })),
+        value: view, onChange: setView, label: pt(t, 'ev.viewLabel'), className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'ev.searchPlaceholder'), label: pt(t, 'ev.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'ev.repoPlaceholder'), label: pt(t, 'ev.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'ev.reasonPlaceholder'), label: pt(t, 'ev.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'ev.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       h('div', { className: 'sa-actions' },
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h(Section, { title: pt(t, 'ev.title'), count: items.length },
+    h(Section, { title: pt(t, 'ev.title'), count: total },
       items.length
         ? h(Fragment, null,
-          total > items.length ? h(Hint, null, pt(t, 'ev.more', { total, shown: items.length })) : null,
           h('ul', { className: 'sa-list' }, groupEvalDecisions(items).map(group =>
-            evalDecisionRow(t, navigate, group.decision, group.count, group.ticketIds))))
-        : evalEmptyState(t, navigate, counts, kind, range, setKind, setRange)))
+            evalDecisionRow(t, openFromEval, group.decision, group.count, group.ticketIds,
+              group.decision.runs ?? []))),
+          h('div', { className: 'sa-pagination' },
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasPrev,
+              onClick: () => setOffset(Math.max(0, offset - EVAL_PAGE_SIZE)) }, pt(t, 'ev.prev')),
+            h('span', { className: 'sa-hint', role: 'status' },
+              pt(t, 'ev.pageInfo', { from: pageFrom, to: pageTo, total })),
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasNext,
+              onClick: () => setOffset(offset + EVAL_PAGE_SIZE) }, pt(t, 'ev.next'))))
+        : evalEmptyState(t, openFromEval, counts, kind, range, setKind, setRange, () => {
+          setQuery(''); setRepo(''); setReason(''); setFrom(''); setTo(''); setView('all')
+          setQ(''); setRepoFilter(''); setReasonFilter(''); setOffset(0)
+        })))
 }
