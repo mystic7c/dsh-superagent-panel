@@ -107,7 +107,7 @@ CHANGELOG.md        版本与能力变更记录
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
 node scripts/build-client.mjs --check  # 校验产物是否最新
 node --check index.js                  # Host 半语法检查
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 551 个）
+node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 555 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
 node scripts/render-check.mjs          # jsdom 渲染回归（当前 190/190）
 node scripts/isolated-verify.mjs       # 隔离 DSH + Chrome headless CDP 实机验证（需本机 Chrome）

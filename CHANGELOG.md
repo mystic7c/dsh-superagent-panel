@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.35] — 2026-11-13
+
+收口 0.4.34 遗留的运行质量口径、事件队列 ack/cursor、持久化掉电与证据排序问题。
+
+### 内容
+- 运行质量：24 小时失败数改为按 `runCategoryOf` 分类（`stopReason` 的 gate_failed/worker_failed 等与遗留
+  `status=failed` 同口径），不再只数 `status === 'failed'`。
+- 事件队列：只 ack 已处理（接单/忽略/跳过/指令消费）的事件；处理失败的事件留在队列并保持原 cursor；
+  UUID 形式的 `eventId` 会 ack 但不再把数字 cursor 归零（`Math.max(cursor, NaN)`）。
+- 持久化：新增 `lib/live/durable.js`，所有 temp+rename 写入在 rename 前 fsync 临时文件；掉电时不再可能留下
+  0 字节的 `live-state.json`/`acceptance.json`/`operations.json` 等。
+- 证据：人工决策（采纳/拒绝/覆盖）只推进 `updatedAt`，交付轮次的 `at` 不变，证据列表按最近处理排序。
+- 并发：`verifyTicket` 与 `refreshTicketCi` 也纳入工单锁，避免与执行/发布/回答重叠改同一张工单。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
+（938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。
+
 ## [0.4.34] — 2026-11-13
 
 按代码评审与实机点击评审收口：修掉 URL 注入、干跑消费上下文、发布/回答的并发与干跑语义，补齐实机暴露的
