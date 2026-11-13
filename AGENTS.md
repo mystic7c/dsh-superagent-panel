@@ -19,7 +19,8 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   `worker.js`（进程内 DSH worker）、`repo.js`（git 与分支守卫）、`config.js` + `repos.js` + `live-json.js`
   （live.json 与多仓库）、`octo.js`（群轮询）、`gitlab.js`（GitLab API）、`eval.js` / `judge.js`（接单评估）、
   以及 inbox/signals/operations/acceptance 等台账。
-- `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接；`client/index.js` 是**构建产物，必须提交**。
+- `client/src/*.js`：客户端源码，按文件名的数字前缀排序后拼接，再由 esbuild 压缩；`client/index.js` 与
+  `client/index.js.map` 是**构建产物，必须提交**。改源码后先 `node scripts/build-client.mjs`。
 - `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、
   `isolated-verify.mjs`、`local-install.mjs` 本机打包安装）。
 - `locale/`：插件清单文案（中/英）。

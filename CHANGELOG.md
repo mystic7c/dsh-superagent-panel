@@ -1,12 +1,30 @@
 # Changelog
 
+## [0.4.40] — 2026-11-14
+
+开源准备（P1）：客户端构建层从"手写拼接"换成 esbuild 压缩，产物契约与运行时行为都不变。
+
+### 内容
+- `scripts/build-client.mjs` 仍按文件名排序拼接 `client/src/*.js`、仍在同一个工厂作用域里包
+  `window.__ModuleLoader__.load`，但拼接结果交给 esbuild `transform`（不是 `bundle`）压缩：
+  `require('react')` 保持为 loader 调用，React 不进入产物。
+- 产物从 782,094 字节降到 485,801 字节（`client/index.js`），并生成 `client/index.js.map`（映射回片段源码）。
+  `--check` 现在逐字节校验**两个**文件，读产物的人可以先看 `client/src`，必要时用 map 对齐。
+- `esbuild@0.28.2` 精确锁定在 `devDependencies`：换版本会改变压缩字节，必须与重新生成的产物同一次提交。
+- 文档同步：README 的目录树与开发命令、CONTRIBUTING 的产物契约说明；`package.json` 的 `files` 增加 map。
+
+### 验证
+- 干净状态目录：`node scripts/render-check.mjs` 194 checks / 0 fail / 0 skipped（压缩后的产物照常挂载）。
+- `npm ci` 干净 clone 上 `node scripts/build-client.mjs --check` 逐字节一致；Host 测试 555 pass / 0 fail；
+  `node --check client/index.js` 通过；`scripts/check-keys.mjs` 不变。
+
 ## [0.4.39] — 2026-11-14
 
 开源准备（P0）：让一个干净 clone 能自查、能被外部贡献者读懂，并把仓库里的"内部习惯"与"外部契约"分开。
 功能行为不变，所有改动都在构建、测试与文档层。
 
 ### 内容
-- 新增 `LICENSE`（MIT）与 `.github/workflows/ci.yml`：Node 20/22 矩阵，`npm ci` 后跑 Host 语法、产物一致性、
+- 新增 `LICENSE`（MIT）与 `.github/workflows/ci.yml`：Node 22/24 矩阵，`npm ci` 后跑 Host 语法、产物一致性、
   双语 key、Host 测试与渲染回归五道门。
 - 渲染回归不再依赖 `/tmp/sa-harness`：`jsdom`/`react`/`react-dom` 改为 `devDependencies`（精确版本）并提交
   `package-lock.json`；`scripts/render-check.mjs` 缺依赖时提示 `npm ci` 并以 2 退出。
