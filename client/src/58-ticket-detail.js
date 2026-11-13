@@ -203,9 +203,9 @@ Object.assign(PAGE_TEXT, {
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
-  'detail.resumeWorkflowTitle': ['从失败的一步继续？', 'Continue from the failed stage?'],
-  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只重跑失败的那一步，通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
-    'Finished assessment, implementation and gates are kept: only the failed stage runs again, then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
+  'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
+  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只从停下的那一步继续（失败的一步，或验收要求修改后的下一轮返工），通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
+    'Finished assessment, implementation and gates are kept: only the stage where it stopped runs again (the failed one, or the next repair round after a rejection), then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -1454,7 +1454,9 @@ function TicketDetail({ id, page = 'execution' }) {
       headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
 
     ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
-      h('p', null, ticket.workflow.status),
+      // The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked".
+      h('p', null, ticket.workflow.status,
+        ticket.workflow.detail ? h('span', { className: 'sa-hint' }, ` · ${ticket.workflow.detail}`) : null),
       ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
         key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${stage.status}` },
         h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },

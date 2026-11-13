@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.4.29] — 2026-11-13
+
+分阶段流程停下来时不再只报「workflow blocked: blocked」，返工预算真正生效并且可以在设置里调大后接着返工。
+根因有三处：`runWorkflow` 达到返工上限时把 workflow 置为 blocked 但从不写原因，`executeWorkflow` 抛错时只能拿
+`reason ?? status`，于是用户只看到 `blocked`；`executeWorkflow` 调用 `runWorkflow`/`resumeWorkflow` 时没有把
+`config.executor.maxRepairRounds` 传进去，配置项只管到经典闸门自动修复，分阶段流程永远用默认 2；`workflowResumable`
+只认「最后阶段 failed」，评审要求修改（completed + changes_requested）把预算用完时界面连「继续执行」都不给。
+
+### 内容
+- `lib/live/workflow.js`：`deliver` 内统一经 `blocked(reason, detail)` 停单，写 `state.reason` 与一行
+  `state.detail`：规划遗留问题（带条数）、闸门失败（列出失败闸门）、review 明确 blocked、验收连续要求修改
+  （`review still requested changes after N repair round(s) (M findings); raise executor.maxRepairRounds to keep repairing`）、
+  候选在验收期间变化。导出 `blockedMessage(workflow)`；`resumeWorkflow` 在「最后是 completed changes_requested」时
+  校验 key 里的 plan/gates/digest 与当前候选一致、预算尚有余额，然后 `repairs += 1` 并接回交付循环跑下一轮。
+- `lib/live/workflow-worker.js`：`executeWorkflow` 把 `maxRepairRounds`（0–6，默认 2）传给两个入口；
+  `assertResumable` 接受上述「验收要求修改」的停点，预算不足时报同一句可读原因；失败时抛
+  `workflow blocked: ${blockedMessage(...)}`。
+- `lib/live/executor.js`：`resumableWorkflowOf` 带上预算；`resumeInterruptedTicket` 无法续跑时返回
+  `ticket … workflow blocked: <detail>`，不再只回 `has no interrupted run`。
+- `lib/live/repos.js`：`workflowResumable(ticket, maxRepairs)` 对「验收要求修改」的停点按预算余额判定，
+  `decorateTicket` 传入配置。
+- `lib/live/config.js`：`executor.maxRepairRounds` 上限 3 → 6（0–6，默认 2；经典闸门自动修复仍按 1 起步、
+  最多 3）。
+- 设置 → 运行新增「返工预算」数字输入（0–6，默认 2，含校验与说明）；工单详情的 workflow 行显示停单 detail，
+  「继续执行」确认文案覆盖「失败的一步」与「下一轮返工」两种续跑。
+- `package.json` 0.4.29；`client/index.js` 重建（22 fragments，9800 行）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（770 literal / 513 shared / 1152 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：438 通过，0 失败。新增 8 条：各种停点都写原因与可读 detail；
+  评审用尽预算后调大预算可续跑下一轮返工（阶段、repairs、verdict 序列）；候选变化拒绝续跑；`executeTicket` 在
+  预算耗尽时给出可读错误、调大后只多跑一轮 implement + review 并交付；`resumeInterruptedTicket` 仍拒但带原因；
+  配置 0–6 边界；`workflowResumable` 对 failed review / 预算余额 / 其它状态的判定。
+- `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
+
 ## [0.4.28] — 2026-11-13
 
 分阶段执行失败后可以从失败的那一步继续，不再整条重跑。之前的「继续执行」只识别被插件重载中断的运行，
