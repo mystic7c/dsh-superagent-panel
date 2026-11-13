@@ -6,7 +6,7 @@ Object.assign(PAGE_TEXT, {
   'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
   'wf.implementer': ['实现后端', 'Implementation backend'],
   'wf.reviewer': ['独立验收后端', 'Independent review backend'],
-  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行；Codex 或 Claude Code 的 CLI 会话。', 'Runs assessment, planning and the final review read-only through the Codex or Claude Code CLI.'],
+  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行：Codex / Claude Code 的 CLI 会话，或 DSH 的独立只读会话。', 'Runs assessment, planning and the final review read-only: a Codex / Claude Code CLI session, or an independent read-only DSH session.'],
   'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
   'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
   'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
@@ -590,7 +590,7 @@ const ROUTE_BACKENDS = [
     the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
     enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
 const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
-const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }]
+const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
 const ROUTE_WORK_TYPES = [
   { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
   { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
