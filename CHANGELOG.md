@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.3] — 2026-11-14
+
+### 变更
+- `client/src/20-widgets.js` 从 `h(...)` 迁移到 JSX（P2 第二步，issue #34）：`Section`、`KeyValues`、
+  `Inlines`、`MarkdownLite`、`ClampText`、`ConfirmButton`、`ExternalLink`、`PageHead`、`EmptyState`、
+  `ErrorState`、`Skeleton`、`SaveBar`、`RawValue`、`Folded`、`GlossaryButton`、`GlossaryModal` 只改写法，
+  输出保持逐节点等价：同样的 class 名、`data-*`、ARIA 属性与文本。
+- Markdown 标题与列表改用动态标签变量（`const Heading = \`h${...}\`、`const List = block.ordered ? 'ol' : 'ul'`），
+  JSX 里的组件名保持大写以免被当成字符串标签。
+- 产物：`client/index.js` 485,818 → 485,926 字节（+108，来自 JSX 编译后的辅助代码），契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0，真实 DSH 里六个页签都在。
+
 ## [0.5.2] — 2026-11-14
 
 ### 变更
