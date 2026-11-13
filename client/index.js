@@ -9419,9 +9419,10 @@ function settingsGateLabel(t, gate) {
 
 /** Gate names use the shared gate dictionary when known; unknown gates stay raw so operators can see them. */
 function repoGateLabel(t, gate) {
-  const key = `gate.${gate}`
+  const name = typeof gate === 'string' ? gate : gate?.name
+  const key = `gate.${name}`
   const label = pt(t, key)
-  return label === key ? String(gate) : label
+  return label === key ? String(name) : label
 }
 
 /** One repository card: read-only facts plus its own write-only token editor. Saving a token is the reversible edit;
