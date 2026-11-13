@@ -17,7 +17,11 @@
 
 `client/src` 按文件名的数字前缀排序后拼接进同一个工厂作用域，所以**文件名前缀是隐式的加载顺序契约**，
 新增文件请沿用现有段位（`05-`、`10-`、`15-`、`20-`…）。`client/index.js` 是构建产物且**必须提交**——
-CI 用 `node scripts/build-client.mjs --check` 逐字节校验。
+CI 用 `node scripts/build-client.mjs --check` 逐字节校验（`client/index.js` 与 `client/index.js.map` 两个文件）。
+
+产物由 esbuild 压缩（`transform`，不是 `bundle`）：`require('react')` 保持为 loader 调用，不打包进产物。
+esbuild 版本在 `devDependencies` 里**精确锁定**——换版本会改变压缩后的字节，属于一次需要重新生成产物的显式改动，
+请在同一个提交里说明并重跑 `--check`。
 
 ## 改动前必跑的四道门
 

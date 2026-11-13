@@ -97,7 +97,8 @@ lib/
                     运行台账（operations.js）、验收轮次（acceptance.js）、
                     worker 报告工具（worker-tools.js）、活动流（activities.js）、工单调度（schedule.js）
 client/src/*.js     客户端源码（有序纯 JS 片段，按文件名拼接）
-client/index.js     构建产物（单文件 ModuleLoader bundle）
+client/index.js     构建产物（单文件 ModuleLoader bundle，esbuild 压缩）
+client/index.js.map 构建产物的 sourcemap（映射回 client/src 片段）
 scripts/            构建与验收脚本（build-client / verify-panel / render-check …）
 locale/             插件清单文案（中/英）
 cordis.patch.yml    插件注册（insert 行）
@@ -106,11 +107,11 @@ CHANGELOG.md        版本与能力变更记录
 
 ## 开发与验证
 
-前置：Node.js ≥ 22。干净 clone 只需一次依赖安装（jsdom + React，仅用于渲染回归）：
+前置：Node.js ≥ 22。干净 clone 只需一次依赖安装（esbuild 用于构建，jsdom + React 仅用于渲染回归）：
 
 ```bash
 npm ci                                 # 安装 devDependencies（无运行时依赖）
-node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
+node scripts/build-client.mjs          # 从 client/src 生成 client/index.js（esbuild 压缩 + sourcemap）
 node scripts/build-client.mjs --check  # 校验产物是否最新（CI 强制）
 node --check index.js                  # Host 半语法检查
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 555 个）
