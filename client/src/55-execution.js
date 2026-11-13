@@ -356,5 +356,5 @@ function ExecutionQueuePage({ route }) {
 /** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
     arrives from the Overview's watch items, which deep-link the dismissed slice). */
 function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage, { route })
+  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution', focusRun: route.run }) : h(ExecutionQueuePage, { route })
 }

@@ -198,6 +198,12 @@ const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+.sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
+.sa-repo-diff { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8) var(--sa-sp-12); border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--sa-radius-8); background: var(--dsw-alias-bg-layer-2); }
+.sa-diff-row { display: flex; align-items: baseline; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-diff-label { min-width: 96px; color: var(--dsw-alias-label-secondary); }
+.sa-diff-old { color: var(--dsw-alias-label-tertiary); text-decoration: line-through; overflow-wrap: anywhere; }
+.sa-diff-new { color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary)); overflow-wrap: anywhere; }
 /* The queue's control row: stage filter chips lead, view chrome closes it behind a hairline divider. */
 .sa-list-bar { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between;
   gap: var(--sa-sp-8) var(--sa-sp-16); min-width: 0; }
@@ -367,6 +373,9 @@ const PANEL_CSS = `
 /* Search results are real <button> rows; strip the platform button chrome so they read like every other .sa-row. */
 button.sa-row { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
 .sa-row[role='button']:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+/* AC-07: a signal opened from the Eval log is outlined in the list, so the located record is findable at a glance. */
+.sa-row-focus { outline: var(--sa-focus); outline-offset: -2px;
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 /* A selected thread row paints a background; give its content an inset so the tint does not run under the text. */
 .sa-list .sa-row[role='button'] { padding-left: var(--sa-sp-8); padding-right: var(--sa-sp-8); }
 /* The whole-row affordance is mouse-only; keyboard opens through this title button, which is a sibling of the row's
@@ -629,6 +638,12 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+.sa-route-controls { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); }
+.sa-route-preview { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8);
+  border: 1px solid var(--dsw-alias-border-secondary); border-radius: var(--sa-radius-8);
+  background: var(--dsw-alias-bg-secondary); }
+.sa-route-preview p { margin: 0; color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
+.sa-route-preview .sa-error { color: var(--dsw-alias-label-error); }
 /* A number/time field is as wide as its value, not the card (T20). */
 .sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
@@ -2416,7 +2431,10 @@ function parseRoute(value) {
   if (!TABS.includes(page)) return undefined
   const raw = value?.id
   const id = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, ROUTE_ID_MAX) : undefined
-  return id ? { page, id } : { page }
+  // An optional run pins the run an Eval/source record points at; the detail scrolls to it without changing the page.
+  const rawRun = value?.run
+  const run = typeof rawRun === 'string' && rawRun.trim() ? rawRun.trim().slice(0, ROUTE_ID_MAX) : undefined
+  return id ? { page, id, ...(run ? { run } : {}) } : { page }
 }
 const ROUTE_KEY = 'superagent-panel/route'
 function initialLocation() {
@@ -2754,8 +2772,13 @@ function useEngineActions(call) {
     poll: ({ dryRun = true } = {}) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
     checkUat: async () => (await call('POST engine/uat-check')).uat,
+    // Draft routing preview (AC-01): same resolver as execution, no Ticket/run/write side effects.
+    previewRoute: ({ title, body, selection } = {}) => call('POST engine/route',
+      { body: { title, body, ...(selection ? { selection } : {}) } }),
     // `repoId` routes a manual Ticket to one of the configured repositories (contract §12.2); omitted = defaultRepo.
-    createTicket: ({ title, body, repoId }) => call('POST engine/ticket', { body: { title, body, ...(repoId ? { repoId } : {}) } }),
+    // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
+    createTicket: ({ title, body, repoId, route }) => call('POST engine/ticket',
+      { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
     runTicket: (id, { dryRun = true, wait = false } = {}) => call('POST engine/ticket/:id/run', { id, body: { dryRun, wait } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
     refreshCi: (id) => call('POST engine/ticket/:id/ci', { id }),
@@ -2773,6 +2796,8 @@ function useEngineActions(call) {
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
+    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
+    stopTicket: (id, { note } = {}) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),
     // P1 (§8.1): recent raw signals, read by the Source page (status/source/limit are optional filters).
@@ -2796,12 +2821,15 @@ function useEngineActions(call) {
     patchSettings: (patch) => call('POST engine/settings', { body: patch }),
     // Store one repository's GitLab token in the token file live.json declares for it (never echoed back).
     saveRepoToken: (repoId, token) => call('POST engine/repo/:id/token', { id: repoId, body: { token } }),
+    // AC-11: read-only probe; the server runs no configured gate and writes nothing.
+    testConfig: repoId => call('POST engine/config/test', { body: { repoId } }),
     // Store the Octo bot token in the file live.json declares; same no-echo contract as the repo token.
     saveOctoToken: (token) => call('POST engine/octo/token', { body: { token } }),
     // Read-only list of the bot's Octo groups, used by the settings picker.
     listOctoGroups: () => call('GET engine/octo/groups'),
     // Add one repository definition to live.json; the token is saved separately on the repo card.
     addRepo: (repo, { makeDefault = false } = {}) => call('POST engine/repos', { body: { repo, makeDefault } }),
+    updateRepo: (repoId, patch) => call('POST engine/repo/:id', { id: repoId, body: { patch } }),
     // Saved live.json versions and rollback; entries are configuration-only (no token values).
     settingsHistory: () => call('GET engine/settings/history'),
     restoreSettings: id => call(`POST engine/settings/history/${encodeURIComponent(id)}/restore`),
@@ -3010,7 +3038,7 @@ Object.assign(PAGE_TEXT, {
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
-    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
+    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidencePrWaiting: ['已推送，等待创建 PR', 'Pushed; waiting for PR'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
     evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
     evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
@@ -3089,7 +3117,11 @@ Object.assign(PAGE_TEXT, {
     dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'], refreshCi: ['刷新 CI', 'Refresh CI'],
     verify: ['核对合并/UAT', 'Verify merge/UAT'], originLink: ['来源触发', 'Origin trigger'],
     retryUnavailable: ['执行器未启用，只能干跑。', 'The executor is disabled; dry run only.'],
-    stopUnavailable: ['当前引擎还没有停止接口。', 'The engine has no stop endpoint yet.'],
+    stopUnavailable: ['当前没有可停止的执行。', 'There is no active run to stop.'],
+    stopping: ['正在停止…', 'Stopping…'], stopConfirm: ['请求停止这个工单？已完成的动作会保留，之后不会再提交、推送或发布。',
+      'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
+    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
+      'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
     publishUnavailable: ['缺少推送权限、执行器未启用或没有 GitLab token。', 'Push is not allowed, the executor is off, or the GitLab token is missing.'],
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
@@ -3158,12 +3190,20 @@ Object.assign(PAGE_TEXT, {
   'auto.daily': ['每天 {time}', 'Daily {time}'],
   'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
   'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.dispatchPaused': ['派发已暂停（保留队列）', 'Dispatch is paused (queue kept)'],
   'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
   'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
   'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
   'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.repoDisabled': ['仓库已停用，不再派发新任务', 'The repository is disabled; no new work is dispatched'],
+  'auto.skip.noRepo': ['工单没有可用的仓库', 'No repository is available for this Ticket'],
   'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
   // push mode records only the GitHub `/pull/new/` URL: the PR itself is opened by `.github/workflows/auto-pr.yml`.
+  'ticket.prWaiting': ['已推送，等待创建 PR', 'Pushed; waiting for PR'],
+  'ticket.prState': ['PR 状态', 'PR state'],
+  'ticket.acceptState': ['人工验收', 'Human acceptance'],
+  'ticket.acceptedYes': ['已通过', 'Accepted'],
+  'ticket.acceptedNo': ['未验收', 'Not accepted'],
   'mr.pushHint': ['这个 PR 由推送后的 auto-pr workflow 自动创建；合并状态由目标分支历史判定。',
     'This PR is created automatically by the post-push auto-pr workflow; merge state comes from the target branch history.'],
   // P2-7: GitLab observation upgrades shown on the MR card.
@@ -3302,8 +3342,10 @@ function automationChip(t, ticket) {
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
-const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
-  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
+  'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions',
+  'repo-disabled': 'auto.skip.repoDisabled', 'no-repo': 'auto.skip.noRepo', due: 'auto.skip.due' }
 function autoSkipReasonText(t, reason) {
   const key = AUTO_SKIP_KEYS[String(reason ?? '')]
   return key ? pt(t, key) : String(reason ?? '')
@@ -3382,6 +3424,11 @@ function ticketStatus(ticket) {
   const acceptance = ticketAcceptanceOf(ticket)
   if (acceptance.state === 'accepted') {
     return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  // AC-03: a stop that has been requested but not yet confirmed is its own visible state. Leaving the chip on
+  // "执行中" was indistinguishable from a run that is not stopping, and the stop action is already disabled.
+  if (ticket?.stopRequested) {
+    return { ...view, acceptance, labelKey: 'ticket.stopping', needsHuman: false, primary: 'none' }
   }
   return { ...view, acceptance }
 }
@@ -3713,9 +3760,12 @@ function ticketEvidence(t, ticket, view) {
     return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
   }
   const mr = links.mergeRequest ?? {}
-  // push mode has a PR URL but no iid until the repo's auto-pr workflow opens it; the URL alone is still evidence.
+  // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
+  // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
+  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
-    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid }) : pt(t, 'row.evidencePr')
+    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
+      : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
     return mr.webUrl
       ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
         title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
@@ -3913,12 +3963,18 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
+const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
+
 function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [repoId, setRepoId] = useState(undefined)
+  const [deliverable, setDeliverable] = useState('')
+  const [backend, setBackend] = useState('')
+  const [preview, setPreview] = useState()
+  const [previewError, setPreviewError] = useState()
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState()
   const [failure, setFailure] = useState()
@@ -3926,13 +3982,39 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const repos = panelRepos(data)
   const defaultRepo = panelDefaultRepo(data)
   const usableRepo = repos.some(repo => repo.id === repoId) ? repoId : defaultRepo
+  const selection = { ...(backend ? { backend } : {}), ...(deliverable ? { deliverable } : {}) }
+  const selectionKey = JSON.stringify(selection)
+  // Draft preview: the operator sees the automatic judgement (deliverable / capabilities / backend) before creating,
+  // and any manual choice is previewed through the same resolver the executor uses — so the preview cannot promise a
+  // route the run then refuses.
+  useEffect(() => {
+    if (!`${title}${body}`.trim()) { setPreview(undefined); setPreviewError(undefined); return }
+    let alive = true
+    const timer = setTimeout(() => {
+      const actions = model?.actions
+      if (!actions?.previewRoute) return
+      actions.previewRoute({ title: title.trim(), body: body.trim() || undefined, selection })
+        .then(result => { if (alive) { setPreview(result); setPreviewError(undefined) } })
+        .catch(error => { if (alive) { setPreview(undefined); setPreviewError(error) } })
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [title, body, selectionKey])
+  const route = preview?.route
+  const capabilityText = (route?.capabilities ?? []).map(capability =>
+    pt(t, ROUTE_CAP_KEYS[capability] ?? capability)).join(' · ') || '—'
+  // Before the first preview arrives, offer the declared backends so the operator can pick one immediately; the
+  // preview response then narrows the list to the enabled set.
+  const enabledBackends = preview?.options?.backends
+    ?? (typeof ROUTE_BACKENDS !== 'undefined' ? ROUTE_BACKENDS.map(backend => backend.value) : ['dsh', 'codex', 'claude'])
+  const backendOptions = [{ value: '', label: pt(t, 'st.routeAuto') },
+    ...enabledBackends.map(value => ({ value, label: value }))]
   const submit = async () => {
     if (busy || !title.trim()) return
     setBusy(true)
     setFailure(undefined)
     try {
       const response = await model.actions.createTicket({ title: title.trim(), body: body.trim() || undefined,
-        repoId: usableRepo || undefined })
+        repoId: usableRepo || undefined, route: Object.keys(selection).length ? selection : undefined })
       // POST engine/ticket answers { ticket }; accept a bare ticket too so a future host shape change cannot hide the
       // created state (and onDone callers get the Ticket, not the envelope).
       const ticket = response?.ticket ?? response
@@ -3962,6 +4044,33 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
       onChange: event => setTitle(event.target.value) }),
     h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
       'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    // Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
+    // Ticket by the host; an unsupported combination is warned about here and rejected by the executor.
+    h('div', { className: 'sa-route-controls' },
+      h(Select, { label: pt(t, 'st.routeDeliverable'), value: deliverable, disabled: busy,
+        options: [{ value: '', label: pt(t, 'st.routeAuto') },
+          { value: 'change', label: pt(t, 'st.routeChange') },
+          { value: 'report', label: pt(t, 'st.routeReport') }],
+        onChange: next => setDeliverable(next) }),
+      h(Select, { label: pt(t, 'st.routeBackend'), value: backend, disabled: busy, options: backendOptions,
+        onChange: next => setBackend(next) })),
+    route
+      ? h('div', { className: 'sa-route-preview' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreviewTitle')),
+        h('p', null,
+          `${pt(t, `detail.workType.${route.workType}`)} · `,
+          `${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `,
+          `${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `,
+          `${pt(t, 'st.routeBackend')}: ${route.backend}`,
+          route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`),
+        route.unsupported
+          ? h('p', { className: 'sa-error' }, pt(t, 'st.routeUnsupported', { caps: route.unsupported }))
+          : null)
+      : null,
+    previewError ? h(Hint, { tone: 'warning' }, pt(t, 'st.routePreviewFailed')) : null,
+    Object.keys(selection).length
+      ? h(Hint, null, pt(t, 'st.routeManualHint'))
+      : null,
     // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
     // give a modal caller an explicit cancel next to it (critique 2026-11-11).
     h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
@@ -4105,7 +4214,7 @@ function StageRail({ ticket, detail = false }) {
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
       result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
-        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, 'row.evidencePr') : '' },
+        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, !mergeRequest.iid && (mergeRequest.pending === true || Boolean(mergeRequest.webUrl)) ? 'row.evidencePrWaiting' : 'row.evidencePr') : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
@@ -4130,6 +4239,8 @@ function MergeRequestCard({ ticket }) {
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
   const rows = []
+  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
   if (mr.state) rows.push([pt(t, 'ticket.mrState'), providerStateText(t, MR_STATE_KEYS, mr.state)])
@@ -4137,6 +4248,8 @@ function MergeRequestCard({ ticket }) {
   if (!mr.state && verification.merged === true) rows.push([pt(t, 'ticket.mergeState'), pt(t, 'ticket.mergedYes')])
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
+  // AC-05: acceptance is its own evidence even when the deliverable is a pushed branch.
+  rows.push([pt(t, 'ticket.acceptState'), links.acceptance?.ok === true ? pt(t, 'ticket.acceptedYes') : pt(t, 'ticket.acceptedNo')])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
   // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
   const draft = mr.draft === true || mr.workInProgress === true
@@ -4922,10 +5035,32 @@ Object.assign(PAGE_TEXT, {
   'src.signalTicket': ['查看工单', 'Open Ticket'],
   'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
   'src.signalsRefresh': ['刷新', 'Refresh'],
+  'src.signalSearch': ['搜索原始信号', 'Search raw signals'],
+  'src.signalRepo': ['按仓库筛选', 'Filter by repository'],
+  'src.signalRepoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'src.signalReason': ['按原因筛选', 'Filter by reason'],
+  'src.signalReasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'src.signalFrom': ['开始日期', 'From date'],
+  'src.signalTo': ['结束日期', 'To date'],
+  'src.signalSearchPlaceholder': ['文本、来源或原因…', 'Text, source or reason…'],
+  'src.signalFilter': ['信号状态', 'Signal status'],
+  'src.signalPageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'src.prev': ['上一页', 'Previous'],
+  'src.next': ['下一页', 'Next'],
   // ---- P2-8: human quality labels on raw signals ----------------------------------------------------------------
   'src.labelsSummary': ['正确 {correct} · 误报 {falseWake} · 漏报 {missedWake}',
     '{correct} correct · {falseWake} false wake · {missedWake} missed'],
   'src.labelMenu': ['标注判定', 'Label this signal'],
+  // ---- P1 AC-07: a signal deep link from the Eval log; the row may be filtered out or already cleaned up ----
+  'src.focusTitle': ['定位的原始信号', 'Located signal'],
+  'src.focusMissing': ['这条原始信号已不在信号日志中（可能已清理），原文不可用。',
+    'This signal is no longer in the raw log (it may have been cleared), so its text is unavailable.'],
+  'src.focusMissingHint': ['它关联的工单或线程可能仍然可用。', 'Any Ticket or Thread it produced may still be available.'],
+  'src.focusOffPage': ['这条信号不在当前筛选结果中，下面是它的记录。',
+    'This signal is not in the current filter result; its record is shown below.'],
+  'src.focusOpenThread': ['查看线程', 'Open Thread'],
+  'src.focusClear': ['清除定位', 'Clear link'],
+  'src.focusMissingTag': ['不可用', 'unavailable'],
   'src.labelSaved': ['已标注：{label}', 'Labelled: {label}'],
   'signalLabel.correct': ['正确', 'Correct'], 'signalLabel.false_wake': ['误报', 'False wake'],
   'signalLabel.missed_wake': ['漏报', 'Missed wake'], 'signalLabel.cleared': ['已清理', 'Cleared'],
@@ -5046,7 +5181,7 @@ const signalLabelText = (t, label) => {
 }
 
 /** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
-function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
+function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
   const { t, navigate } = usePanel()
   return h('ul', { className: 'sa-list' }, items.map(item => {
     const status = String(item?.status ?? '')
@@ -5055,7 +5190,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
     const statusKey = `src.signalStatus.${status}`
     const statusLabel = pt(t, statusKey)
     const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
-    return h('li', { key: item.id, className: 'sa-row' },
+    return h('li', { key: item.id, id: `sa-signal-${item.id}`,
+      className: item.id === focusId ? 'sa-row sa-row-focus' : 'sa-row' },
       h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
@@ -5075,7 +5211,8 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
           : null),
       h('div', { className: 'sa-row-actions' },
         item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
-          onClick: () => navigate({ page: 'execution', id: item.ticketId }) }, pt(t, 'src.signalTicket')) : null,
+          onClick: () => (onOpenTicket ? onOpenTicket(item.ticketId) : navigate({ page: 'execution', id: item.ticketId })) },
+        pt(t, 'src.signalTicket')) : null,
         signalReplayable(item) ? h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: busy,
           onClick: () => onReplay(item) }, pt(t, 'src.signalReplay')) : null,
         // A host that returns `labels` supports the P2-8 endpoint; an older one gets no dead menu entry.
@@ -5087,8 +5224,82 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy }) {
   }))
 }
 
-function LiveSourcePage() {
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function srcDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
+const SRC_SCROLL_KEY = 'superagent-panel/source-scroll'
+
+/** The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07). */
+function sourceScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberSourceScroll() {
+  const y = sourceScrollTop()
+  if (y > 0) try { sessionStorage.setItem(SRC_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreSourceScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(SRC_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+
+/** P1 AC-07: the Eval log links here with a signal id. The raw row may be filtered out of the current page or already
+    cleaned up, so the link answers with a located-signal card (or an explicit cleaned-up notice) instead of nothing. */
+function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenThread }) {
+  const { t } = usePanel()
+  const signal = view?.signal ?? {}
+  const status = String(signal.status ?? '')
+  const reason = signalReasonText(t, signal)
+  const at = signal.receivedAt ?? signal.occurredAt
+  const ticketId = view?.ticket?.id ?? signal.ticketId
+  const threadKey = view?.trigger?.threads?.[0] ?? signal.scopeKey
+  if (missing) {
+    return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+      h('div', { className: 'sa-card-head' },
+        h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+        h(Tag, { tone: 'warning' }, pt(t, 'src.focusMissingTag'))),
+      h(Hint, null, pt(t, 'src.focusMissing')),
+      h('p', { className: 'sa-hint' }, pt(t, 'src.focusMissingHint')),
+      h('div', { className: 'sa-actions' },
+        h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+  }
+  const statusKey = `src.signalStatus.${status}`
+  const statusLabel = pt(t, statusKey)
+  return h('div', { className: 'sa-card', id: 'sa-located-signal' },
+    h('div', { className: 'sa-card-head' },
+      h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14 }),
+      h('span', { className: 'sa-card-title' }, pt(t, 'src.focusTitle')),
+      h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel)),
+    h('div', { className: 'sa-row-title' },
+      String(signal.textPreview ?? signal.candidate?.text ?? signal.payload?.text ?? '') || pt(t, 'src.signalPreviewEmpty')),
+    h('div', { className: 'sa-row-meta' },
+      signal.source ? h('span', { className: 'sa-mono' }, String(signal.source)) : null,
+      reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
+      at ? h(When, { at }) : null),
+    offPage ? h(Hint, null, pt(t, 'src.focusOffPage')) : null,
+    h('div', { className: 'sa-actions' },
+      ticketId ? h(Button, { variant: 'outline', size: 'sm', onClick: () => onOpenTicket(ticketId) },
+        pt(t, 'src.signalTicket')) : null,
+      threadKey ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => onOpenThread(threadKey) },
+        pt(t, 'src.focusOpenThread')) : null,
+      h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
+}
+
+function LiveSourcePage({ route }) {
   const { t, navigate, notify } = usePanel()
+  const focusId = typeof route?.id === 'string' && route.id.trim() ? route.id.trim() : ''
   const { data, error, reload, actions } = usePanelData()
   const [uat, setUat] = useState()
   const [uatBusy, setUatBusy] = useState(false)
@@ -5108,7 +5319,83 @@ function LiveSourcePage() {
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
-  const signals = useLiveResource('engine/signals', { limit: 20 }, 30000, { enabled: !signalsOff })
+  const srcInitial = useRef((() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const offset = Number(params.get('srcOffset') ?? 0)
+      const status = params.get('srcStatus') || 'all'
+      return { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
+        repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
+        from: params.get('srcFrom') || '', to: params.get('srcTo') || '',
+        offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+    } catch { return { q: '', status: 'all', repo: '', reason: '', from: '', to: '', offset: 0 } }
+  })())
+  const [sigQuery, setSigQuery] = useState(srcInitial.current.q)
+  const [sigQ, setSigQ] = useState(srcInitial.current.q)
+  const [sigStatus, setSigStatus] = useState(srcInitial.current.status)
+  const [sigRepo, setSigRepo] = useState(srcInitial.current.repo)
+  const [sigReason, setSigReason] = useState(srcInitial.current.reason)
+  const [sigFrom, setSigFrom] = useState(srcInitial.current.from)
+  const [sigTo, setSigTo] = useState(srcInitial.current.to)
+  const [sigOffset, setSigOffset] = useState(srcInitial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepo); setSigReason(sigReason) }, 300)
+    return () => clearTimeout(timer)
+  }, [sigQuery, sigRepo, sigReason])
+  useEffect(() => { setSigOffset(0) }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (sigQ) url.searchParams.set('srcQ', sigQ); else url.searchParams.delete('srcQ')
+      if (sigStatus !== 'all') url.searchParams.set('srcStatus', sigStatus); else url.searchParams.delete('srcStatus')
+      for (const [key, param, value] of [['srcRepo', 'srcRepo', sigRepo], ['srcReason', 'srcReason', sigReason],
+        ['srcFrom', 'srcFrom', sigFrom], ['srcTo', 'srcTo', sigTo]]) {
+        if (value) url.searchParams.set(key, value); else url.searchParams.delete(param)
+      }
+      if (sigOffset > 0) url.searchParams.set('srcOffset', String(sigOffset)); else url.searchParams.delete('srcOffset')
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo, sigOffset])
+  useEffect(() => {
+    const restore = () => {
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const status = params.get('srcStatus') || 'all'
+        setSigQuery(params.get('srcQ') || ''); setSigQ(params.get('srcQ') || '')
+        setSigStatus(Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all')
+        setSigRepo(params.get('srcRepo') || ''); setSigReason(params.get('srcReason') || '')
+        setSigFrom(params.get('srcFrom') || ''); setSigTo(params.get('srcTo') || '')
+        const offset = Number(params.get('srcOffset') ?? 0)
+        setSigOffset(Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0)
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const signals = useLiveResource('engine/signals', { q: sigQ,
+    status: sigStatus === 'all' ? undefined : sigStatus, repo: sigRepo, reason: sigReason,
+    from: srcDayBound(sigFrom), to: srcDayBound(sigTo, true), offset: sigOffset, limit: 20 },
+  30000, { enabled: !signalsOff })
+  // AC-07: a link from the Eval log carries a signal id; resolve it even when the current filter/page does not hold it.
+  const focus = useLiveResource('engine/signal/:id', { id: focusId }, 30000, { enabled: Boolean(focusId) })
+  const leaveTo = useCallback(next => { rememberSourceScroll(); navigate(next) }, [navigate])
+  // Leaving the page (a Ticket/Thread link or a tab switch) remembers the list position; coming back restores it unless
+  // the route asks for one specific signal, which scrolls there instead.
+  useEffect(() => () => { rememberSourceScroll() }, [])
+  const restoredSourceScroll = useRef(false)
+  useEffect(() => {
+    if (restoredSourceScroll.current || !signals.data || focusId) return
+    restoredSourceScroll.current = true
+    window.requestAnimationFrame(restoreSourceScroll)
+  }, [signals.data, focusId])
+  const scrolledFocus = useRef('')
+  useEffect(() => {
+    if (!focusId || !focus.data || scrolledFocus.current === focusId) return
+    const node = document.getElementById(`sa-signal-${focusId}`) ?? document.getElementById('sa-located-signal')
+    if (!node) return
+    scrolledFocus.current = focusId
+    if (typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
+  }, [focusId, focus.data, signals.data])
   useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
   const label = useAction(async (signal, labelId) => {
     await actions.labelSignal(signal.id, labelId)
@@ -5119,7 +5406,7 @@ function LiveSourcePage() {
     const ticket = result?.ticket
     if (ticket?.id) {
       notify(pt(t, 'src.signalReplayTicket'))
-      navigate({ page: 'execution', id: ticket.id })
+      leaveTo({ page: 'execution', id: ticket.id })
       return
     }
     notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
@@ -5239,6 +5526,13 @@ function LiveSourcePage() {
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
         onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
       : null,
+    focusId && (focus.data || focus.error?.missing)
+      ? h(LocatedSignal, { view: focus.data, missing: Boolean(focus.error?.missing),
+        offPage: Boolean(focus.data) && !signalItems.some(item => item.id === focusId),
+        onClear: () => navigate({ page: 'source' }, true),
+        onOpenTicket: id => leaveTo({ page: 'execution', id }),
+        onOpenThread: key => leaveTo({ page: 'trigger', id: key }) })
+      : null,
     h('div', { className: 'sa-source-groups' },
       imSources.length
         ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
@@ -5254,7 +5548,7 @@ function LiveSourcePage() {
       : null,
     // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
     signals.data
-      ? h(Section, { title: pt(t, 'src.signals'), count: signalItems.length,
+      ? h(Section, { title: pt(t, 'src.signals'), count: Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length,
         badge: labelTotal > 0
           ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
             correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
@@ -5262,8 +5556,33 @@ function LiveSourcePage() {
           : null,
         action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
           pt(t, 'src.signalsRefresh')) },
-        signalItems.length ? h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
-          onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy })
+        h('div', { className: 'sa-filters' },
+          h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
+            onChange: event => setSigQuery(event?.target?.value ?? '') }),
+          h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
+            onChange: event => setSigRepo(event?.target?.value ?? '') }),
+          h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReason'),
+            onChange: event => setSigReason(event?.target?.value ?? '') }),
+          h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
+            onChange: event => setSigFrom(event?.target?.value ?? '') }),
+          h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
+            onChange: event => setSigTo(event?.target?.value ?? '') }),
+          h(SegmentedControl, { options: [
+            { value: 'all', label: pt(t, 'decisionFilter.all') },
+            ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
+          value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
+        signalItems.length ? h(Fragment, null,
+          h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+            onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy,
+            focusId, onOpenTicket: id => leaveTo({ page: 'execution', id }) }),
+          h('div', { className: 'sa-pagination' },
+            h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
+              onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
+            h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
+              from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
+              total: Number(signals.data.total) || signalItems.length })),
+            h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
+              onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
           : h(Hint, null, pt(t, 'src.signalsEmpty')))
       : null)
 }
@@ -5294,6 +5613,17 @@ Object.assign(PAGE_TEXT, {
     'Set up a Source and send one message; Threads will appear here.'],
   'trg.emptyAction': ['去来源页', 'Open Source'],
   'trg.noneInFilter': ['这个筛选下没有线程。', 'No Thread matches this filter.'],
+  'trg.search': ['搜索线程', 'Search Threads'],
+  'trg.searchPlaceholder': ['标题、来源或会话 key…', 'Title, source or chat key…'],
+  'trg.repo': ['按仓库筛选', 'Filter by repository'],
+  'trg.repoPlaceholder': ['仓库 ID…', 'Repository ID…'],
+  'trg.reason': ['按原因筛选', 'Filter by reason'],
+  'trg.reasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
+  'trg.from': ['开始日期', 'From date'],
+  'trg.to': ['结束日期', 'To date'],
+  'trg.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'trg.prev': ['上一页', 'Previous'],
+  'trg.next': ['下一页', 'Next'],
   'trg.showAll': ['查看全部', 'Show all'],
   'trg.threadFallback.octo': ['Octo 会话', 'Octo conversation'],
   'trg.threadFallback.other': ['未命名线程', 'Untitled Thread'],
@@ -5465,11 +5795,107 @@ function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
       h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
+const TRG_PAGE_SIZE = 50
+const TRG_SCROLL_KEY = 'superagent-panel/trigger-scroll'
+
+/** The panel scrolls inside `.sa-scroll`; remember the list position so opening a Ticket/Thread can return to it. */
+function triggerScrollTop() {
+  try {
+    const scroller = document.querySelector('.sa-scroll')
+    const y = scroller ? scroller.scrollTop : window.scrollY
+    return Number.isFinite(y) && y > 0 ? y : 0
+  } catch { return 0 }
+}
+function rememberTriggerScroll() {
+  const y = triggerScrollTop()
+  if (y > 0) try { sessionStorage.setItem(TRG_SCROLL_KEY, String(y)) } catch { /* private mode */ }
+}
+function restoreTriggerScroll() {
+  try {
+    const y = Number(sessionStorage.getItem(TRG_SCROLL_KEY) ?? 0)
+    if (!(y > 0)) return
+    const scroller = document.querySelector('.sa-scroll')
+    if (scroller) scroller.scrollTop = y
+    else window.scrollTo(0, y)
+  } catch { /* private mode */ }
+}
+const TRG_URL_KEYS = { q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom', to: 'trgTo',
+  offset: 'trgOffset' }
+function trgUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
+    return { q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
+      reason: params.get(TRG_URL_KEYS.reason) || '', from: params.get(TRG_URL_KEYS.from) || '',
+      to: params.get(TRG_URL_KEYS.to) || '', offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function trgDayBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
+  const initial = useRef(trgUrlState())
   const [filter, setFilter] = useState('subscribed')
-  const { data, error, reload } = useLiveResource('engine/threads', { filter })
+  const [query, setQuery] = useState(initial.current.q)
+  const [q, setQ] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [offset, setOffset] = useState(initial.current.offset)
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepo(repo); setReason(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  useEffect(() => { setOffset(0) }, [filter, q, repo, reason, from, to])
+  // Keep the free-text filter in our own URL params; the host route (including the selected Thread) is untouched.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      if (q) url.searchParams.set(TRG_URL_KEYS.q, q); else url.searchParams.delete(TRG_URL_KEYS.q)
+      for (const [key, value] of [['repo', repo], ['reason', reason], ['from', from], ['to', to]]) {
+        if (value) url.searchParams.set(TRG_URL_KEYS[key], value); else url.searchParams.delete(TRG_URL_KEYS[key])
+      }
+      if (offset > 0) url.searchParams.set(TRG_URL_KEYS.offset, String(offset))
+      else url.searchParams.delete(TRG_URL_KEYS.offset)
+      window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    } catch { /* private mode */ }
+  }, [q, repo, reason, from, to, offset])
+  useEffect(() => {
+    const restore = () => {
+      const next = trgUrlState()
+      setQuery(next.q); setQ(next.q); setRepo(next.repo); setReason(next.reason)
+      setFrom(next.from); setTo(next.to); setOffset(next.offset)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, reload } = useLiveResource('engine/threads',
+    { filter, q, repo, reason, from: trgDayBound(from), to: trgDayBound(to, true), offset, limit: TRG_PAGE_SIZE })
+  // AC-07: opening a Thread in the single-pane layout (or a Ticket from its detail) hides/replaces the list; the
+  // position is remembered before that and restored when the list is shown again.
+  const previousRouteId = useRef(route?.id)
+  useEffect(() => {
+    const had = previousRouteId.current
+    const has = route?.id
+    previousRouteId.current = has
+    if (had && !has) window.requestAnimationFrame(restoreTriggerScroll)
+    else if (!had && has) rememberTriggerScroll()
+  }, [route?.id])
+  useEffect(() => () => { rememberTriggerScroll() }, [])
+  const restoredTriggerScroll = useRef(false)
+  useEffect(() => {
+    if (restoredTriggerScroll.current || !data) return
+    restoredTriggerScroll.current = true
+    window.requestAnimationFrame(restoreTriggerScroll)
+  }, [data])
   // The watched-chat titles live on the shared status model; they turn a raw octo key into a readable list title.
   const { data: status } = usePanelData()
   const octoConfig = status?.config?.octo
@@ -5499,12 +5925,25 @@ function LiveTriggerPage({ route }) {
 
   const options = THREAD_FILTERS.map(value => ({ value, label: pt(t, `trg.filter.${value}`),
     title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
+  const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
   const list = h('div', { className: 'sa-pane sa-pane-aside' },
-    h(Section, { title: pt(t, 'trg.title'), count: items.length,
+    h(Section, { title: pt(t, 'trg.title'), count: total,
       action: h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'trg.refresh'),
         onClick: () => { void reload() } }) },
       h(SegmentedControl, { options, value: filter, onChange: chooseFilter, label: pt(t, 'trg.filter'),
         className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'trg.searchPlaceholder'), label: pt(t, 'trg.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       items.length
         ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
@@ -5512,7 +5951,15 @@ function LiveTriggerPage({ route }) {
           // with no visible detail would otherwise promise a state the screen is not showing.
           selected: compact ? row.key === routeId : row.key === selected,
           onOpen: () => openThread(row.key), octoConfig })))
-        : h(Hint, null, pt(t, 'trg.noneInFilter'))))
+        : h(Hint, null, pt(t, 'trg.noneInFilter')),
+      items.length
+        ? h('div', { className: 'sa-pagination' },
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset <= 0,
+            onClick: () => setOffset(Math.max(0, offset - TRG_PAGE_SIZE)) }, pt(t, 'trg.prev')),
+          h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'trg.pageInfo', { from: pageFrom, to: pageTo, total })),
+          h(Button, { variant: 'ghost', size: 'sm', disabled: offset + items.length >= total,
+            onClick: () => setOffset(offset + TRG_PAGE_SIZE) }, pt(t, 'trg.next')))
+        : null))
   const detail = h('div', { className: 'sa-pane' },
     selected
       ? h(ThreadDetailView, { threadKey: selected, showBack: compact })
@@ -5830,6 +6277,10 @@ Object.assign(PAGE_TEXT, {
   'ev.windowAll': ['全部时间', 'All time'],
   'ev.window24h': ['24 小时', 'Last 24h'],
   'ev.refresh': ['刷新记录', 'Refresh'],
+  'ev.search': ['搜索记录', 'Search evaluations'],
+  'ev.searchPlaceholder': ['消息、原因或工单标题…', 'Message, reason or Ticket title…'],
+  'ev.repo': ['仓库', 'Repository'],
+  'ev.repoPlaceholder': ['全部仓库', 'All repositories'],
   'ev.emptyTitle': ['还没有评估记录。', 'No evaluation yet.'],
   'ev.emptyHint': ['触发一条消息后，这里会记录引擎为什么做/不做。', 'Send a message to a watched group; this page records why the engine did or did not take the work.'],
   'ev.emptyAction': ['去看触发页', 'Open Triggers'],
@@ -5865,6 +6316,20 @@ Object.assign(PAGE_TEXT, {
   'ev.humanIgnore': ['忽略', 'ignore'],
   'ev.modelHint': ['hybrid 模式：模型判定参与接单（repo_task 自动、risky 拦截、其余转人工）。',
     'Hybrid mode: the model takes part in intake (repo_task opens, risky blocks, the rest goes to review).'],
+  'ev.reason': ['原因筛选', 'Reason'],
+  'ev.reasonPlaceholder': ['原因关键字，如 rate-limit', 'Reason keyword, e.g. rate-limit'],
+  'ev.from': ['开始日期', 'From date'],
+  'ev.to': ['结束日期', 'To date'],
+  'ev.viewLabel': ['评估视图', 'View'],
+  'ev.viewAll': ['全部', 'All'],
+  'ev.viewDivergence': ['模型分歧', 'Model divergence'],
+  'ev.viewOverride': ['人工改判', 'Human override'],
+  'ev.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
+  'ev.prev': ['上一页', 'Previous'],
+  'ev.next': ['下一页', 'Next'],
+  'ev.signal': ['原始信号', 'Signal'],
+  'ev.thread': ['线程', 'Thread'],
+  'ev.run': ['运行', 'Run'],
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
@@ -5918,8 +6383,15 @@ function evalGroupKey(decision) {
   // A request can be judged more than once (re-evaluation, duplicate accept) and produce different Tickets. The group
   // identity is the request + judgement, not the Ticket id, so those rows collapse and every Ticket stays visible in
   // the row's ticket list instead of being hidden behind a separate ×N (C32).
+  // A different signal, model opinion or human decision is different evidence, even when kind/reason/strength match.
+  // Folding those rows hid the evidence behind the first record (review P2 AC-06).
+  const model = decision.shadow ?? decision.model
+  const human = decision.humanReview
   return JSON.stringify([decision.kind, decision.preview, decision.threadKey,
-    decision.strength, hit, rules.length - hit, decision.reason ?? null])
+    decision.strength, hit, rules.length - hit, decision.reason ?? null,
+    decision.signalId ?? null,
+    model ? [model.status ?? null, model.verdict ?? null, model.model ?? null, model.riskP ?? null] : null,
+    human ? [human.code ?? null, human.outcome ?? null, human.answer ?? null] : null])
 }
 
 /** Newest-first groups of decisions that differ only by time; order follows the first (newest) occurrence. */
@@ -5938,7 +6410,7 @@ function groupEvalDecisions(items) {
 
 /** One decision row: the message it judged as the title, the shape-coded outcome as a leading tag, then reason,
     strength, rule hit count and the Ticket link on one meta line, followed by the folded rule-by-rule result. */
-function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
+function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLinks = []) {
   const view = decisionKindView(decision)
   const label = pt(t, view.labelKey)
   const kindLabel = label === view.labelKey ? String(view.kind) : label
@@ -5965,7 +6437,13 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
             preview || pt(t, 'ev.noPreview'))),
         h('div', { className: 'sa-row-meta' },
           decision.threadKey
-            ? h('span', { className: 'sa-mono sa-hint', title: decision.threadKey }, liveShortId(decision.threadKey, 10)) : null,
+            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.thread')} · ${decision.threadKey}`,
+              onClick: event => { event.preventDefault(); navigate({ page: 'trigger', id: decision.threadKey }) } },
+            liveShortId(decision.threadKey, 10)) : null,
+          decision.signalId
+            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.signal')} · ${decision.signalId}`,
+              onClick: event => { event.preventDefault(); navigate({ page: 'source', id: decision.signalId }) } },
+            liveShortId(decision.signalId, 10)) : null,
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
           rules.length ? h('span', null, pt(t, 'thread.rulesHit', { hit, miss })) : null,
@@ -5984,6 +6462,14 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
               h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) },
                 pt(t, 'ev.openTicket')))
             : null,
+          runLinks.length
+            ? h('span', { className: 'sa-row-meta' },
+              runLinks.map(link => h('a', { key: link.runId ?? link.ticketId, href: '#', className: 'sa-mono sa-inline-link',
+                title: link.runId ? `${pt(t, 'ev.run')} · ${link.runId}` : link.ticketId,
+                onClick: event => { event.preventDefault()
+                  navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) } },
+              link.runId ? `${pt(t, 'ev.run')} ${liveShortId(link.runId, 8)}` : liveShortId(link.ticketId, 8))))
+            : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
         unavailable ? h('p', { className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
         h(Folded, { summary: rules.length ? pt(t, 'thread.rulesDetail') : pt(t, 'ev.detail') },
@@ -5995,7 +6481,7 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []) {
 }
 
 /** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
+function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
   const noRecords = (counts.all ?? 0) === 0
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
@@ -6009,18 +6495,129 @@ function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange) {
     action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
 }
 
+const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
+  reason: 'evalReason', from: 'evalFrom', to: 'evalTo', view: 'evalView', offset: 'evalOffset' }
+const EVAL_PAGE_SIZE = 25
+const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
+const EVAL_VIEWS = ['all', 'divergence', 'override']
+
+/** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
+function evalUrlState() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
+    return { kind: params.get(EVAL_URL_KEYS.kind) || 'all', range: params.get(EVAL_URL_KEYS.range) || 'all',
+      q: params.get(EVAL_URL_KEYS.q) || '', repo: params.get(EVAL_URL_KEYS.repo) || '',
+      reason: params.get(EVAL_URL_KEYS.reason) || '', from: params.get(EVAL_URL_KEYS.from) || '',
+      to: params.get(EVAL_URL_KEYS.to) || '',
+      view: EVAL_VIEWS.includes(params.get(EVAL_URL_KEYS.view)) ? params.get(EVAL_URL_KEYS.view) : 'all',
+      offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  } catch { return { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 } }
+}
+
+function rememberEvalFilters(next) {
+  try {
+    const url = new URL(window.location.href)
+    for (const [key, param] of Object.entries(EVAL_URL_KEYS)) {
+      const value = next[key]
+      if (!value || value === 'all' || value === 0) url.searchParams.delete(param)
+      else url.searchParams.set(param, String(value))
+    }
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+  } catch { /* a host without history still keeps the in-memory filters */ }
+}
+
+/** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
+function dateBound(value, end = false) {
+  if (!value) return ''
+  const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+}
+
 function LiveEvalPage() {
   const { t, navigate } = usePanel()
-  const [kind, setKind] = useState('all')
-  const [range, setRange] = useState('all')
-  const { data, error, loading, reload } = useLiveResource('engine/decisions', { kind, window: range })
+  const initial = useRef(evalUrlState())
+  const [kind, setKind] = useState(initial.current.kind)
+  const [range, setRange] = useState(initial.current.range)
+  const [query, setQuery] = useState(initial.current.q)
+  const [repo, setRepo] = useState(initial.current.repo)
+  const [reason, setReason] = useState(initial.current.reason)
+  const [from, setFrom] = useState(initial.current.from)
+  const [to, setTo] = useState(initial.current.to)
+  const [view, setView] = useState(initial.current.view)
+  const [offset, setOffset] = useState(initial.current.offset)
+  const [q, setQ] = useState(initial.current.q)
+  const [repoFilter, setRepoFilter] = useState(initial.current.repo)
+  const [reasonFilter, setReasonFilter] = useState(initial.current.reason)
+  // Debounce only the free-text fields: one request per pause, while selects apply immediately.
+  useEffect(() => {
+    const timer = setTimeout(() => { setQ(query); setRepoFilter(repo); setReasonFilter(reason) }, 300)
+    return () => clearTimeout(timer)
+  }, [query, repo, reason])
+  // Any filter change starts at the first page; otherwise a stale offset can land past the new total. The first mount
+  // must keep the page restored from the URL, and a popstate restore must not be reset to page 1 (review P1 AC-07).
+  const firstFilterRun = useRef(true)
+  const restoringFilters = useRef(false)
+  useEffect(() => {
+    if (firstFilterRun.current) { firstFilterRun.current = false; return }
+    if (restoringFilters.current) { restoringFilters.current = false; return }
+    setOffset(0)
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view])
+  useEffect(() => {
+    rememberEvalFilters({ kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view, offset })
+  }, [kind, range, q, repoFilter, reasonFilter, from, to, view, offset])
+  // Back/forward restores the filters from the URL; the host route keeps working because only our own params move.
+  useEffect(() => {
+    const restore = () => {
+      const next = evalUrlState()
+      restoringFilters.current = true
+      setKind(next.kind); setRange(next.range); setQuery(next.q); setQ(next.q)
+      setRepo(next.repo); setRepoFilter(next.repo); setReason(next.reason); setReasonFilter(next.reason)
+      setFrom(next.from); setTo(next.to); setView(next.view); setOffset(next.offset)
+      // If the restored URL equals the current state no filter effect runs; clear the guard so the next real change
+      // still resets the page.
+      setTimeout(() => { restoringFilters.current = false }, 0)
+    }
+    window.addEventListener('popstate', restore)
+    return () => window.removeEventListener('popstate', restore)
+  }, [])
+  const { data, error, loading, reload } = useLiveResource('engine/decisions',
+    { kind, window: range, q, repo: repoFilter, reason: reasonFilter,
+      from: dateBound(from), to: dateBound(to, true), view, offset, limit: EVAL_PAGE_SIZE })
   const refresh = useCallback(() => { void reload() }, [reload])
+  // Opening a Ticket/thread/signal leaves the page; remember where the list was so going back lands on the same row.
+  const openFromEval = useCallback(route => {
+    try {
+      // The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07).
+      const scroller = document.querySelector('.sa-scroll')
+      const y = scroller ? scroller.scrollTop : window.scrollY
+      sessionStorage.setItem(EVAL_SCROLL_KEY, String(y))
+    } catch { /* private mode */ }
+    navigate(route)
+  }, [navigate])
+  const restoredScroll = useRef(false)
+  useEffect(() => {
+    if (restoredScroll.current || !data) return
+    restoredScroll.current = true
+    try {
+      const y = Number(sessionStorage.getItem(EVAL_SCROLL_KEY) ?? 0)
+      if (Number.isFinite(y) && y > 0) window.requestAnimationFrame(() => {
+        const scroller = document.querySelector('.sa-scroll')
+        if (scroller) scroller.scrollTop = y
+        else window.scrollTo(0, y)
+      })
+    } catch { /* private mode */ }
+  }, [data])
   if (loading && !data) return h(Skeleton, { rows: 5 })
   if (!data) return h(ErrorState, { error, onRetry: reload })
 
   const items = Array.isArray(data.items) ? data.items : []
   const counts = data.counts ?? {}
   const total = Number.isFinite(data.total) ? data.total : items.length
+  const pageFrom = items.length ? offset + 1 : 0
+  const pageTo = Math.min(offset + items.length, total)
+  const hasPrev = offset > 0
+  const hasNext = offset + items.length < total
   // A kind earns a pill only when it can produce a list: `all`, every non-zero kind, and the active kind (so switching
   // the window never traps a selection on a hidden kind). Counts stay in the section header, not in the pills (C11).
   const kindOptions = EVAL_KINDS
@@ -6035,16 +6632,38 @@ function LiveEvalPage() {
       h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
       h(SegmentedControl, { options: [{ value: 'all', label: pt(t, 'ev.windowAll') }, { value: '24h', label: pt(t, 'ev.window24h') }],
         value: range, onChange: setRange, label: pt(t, 'ev.windowLabel'), className: 'sa-segmented-chips' }),
+      h(SegmentedControl, { options: EVAL_VIEWS.map(value => ({ value, label: pt(t, `ev.view${value === 'all' ? 'All' : value === 'divergence' ? 'Divergence' : 'Override'}`) })),
+        value: view, onChange: setView, label: pt(t, 'ev.viewLabel'), className: 'sa-segmented-chips' }),
+      h(Input, { value: query, placeholder: pt(t, 'ev.searchPlaceholder'), label: pt(t, 'ev.search'),
+        onChange: event => setQuery(event?.target?.value ?? '') }),
+      h(Input, { value: repo, placeholder: pt(t, 'ev.repoPlaceholder'), label: pt(t, 'ev.repo'),
+        onChange: event => setRepo(event?.target?.value ?? '') }),
+      h(Input, { value: reason, placeholder: pt(t, 'ev.reasonPlaceholder'), label: pt(t, 'ev.reason'),
+        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: from, label: pt(t, 'ev.from'),
+        onChange: event => setFrom(event?.target?.value ?? '') }),
+      h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
+        onChange: event => setTo(event?.target?.value ?? '') }),
       h('div', { className: 'sa-actions' },
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
-    h(Section, { title: pt(t, 'ev.title'), count: items.length },
+    h(Section, { title: pt(t, 'ev.title'), count: total },
       items.length
         ? h(Fragment, null,
-          total > items.length ? h(Hint, null, pt(t, 'ev.more', { total, shown: items.length })) : null,
           h('ul', { className: 'sa-list' }, groupEvalDecisions(items).map(group =>
-            evalDecisionRow(t, navigate, group.decision, group.count, group.ticketIds))))
-        : evalEmptyState(t, navigate, counts, kind, range, setKind, setRange)))
+            evalDecisionRow(t, openFromEval, group.decision, group.count, group.ticketIds,
+              group.decision.runs ?? []))),
+          h('div', { className: 'sa-pagination' },
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasPrev,
+              onClick: () => setOffset(Math.max(0, offset - EVAL_PAGE_SIZE)) }, pt(t, 'ev.prev')),
+            h('span', { className: 'sa-hint', role: 'status' },
+              pt(t, 'ev.pageInfo', { from: pageFrom, to: pageTo, total })),
+            h(Button, { variant: 'ghost', size: 'sm', disabled: !hasNext,
+              onClick: () => setOffset(offset + EVAL_PAGE_SIZE) }, pt(t, 'ev.next'))))
+        : evalEmptyState(t, openFromEval, counts, kind, range, setKind, setRange, () => {
+          setQuery(''); setRepo(''); setReason(''); setFrom(''); setTo(''); setView('all')
+          setQ(''); setRepoFilter(''); setReasonFilter(''); setOffset(0)
+        })))
 }
 
 
@@ -6407,7 +7026,7 @@ function ExecutionQueuePage({ route }) {
 /** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
     arrives from the Overview's watch items, which deep-link the dismissed slice). */
 function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution' }) : h(ExecutionQueuePage, { route })
+  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution', focusRun: route.run }) : h(ExecutionQueuePage, { route })
 }
 
 
@@ -6535,6 +7154,41 @@ Object.assign(PAGE_TEXT, {
   'detail.acceptLinePending': ['待你验收', 'Waiting for your sign-off'],
   'detail.acceptLineAccepted': ['已验收 · {time}', 'Accepted · {time}'],
   'detail.acceptLineRejected': ['已打回 · {time}', 'Rejected · {time}'],
+  'detail.evidenceTitle': ['交付证据', 'Delivery evidence'],
+  'detail.evidenceEmpty': ['这段交付还没有持久化的证据（旧工单或尚未跑完）。缺少历史时不推断“已修复”。',
+    'No persisted evidence for this delivery yet (an older Ticket or a run that has not delivered). Missing history never means "fixed".'],
+  'detail.evidenceRound': ['第 {round} 轮', 'Round {round}'],
+  'detail.evidenceFiles': ['{count} 个文件', '{count} files'],
+  'detail.evidenceGates': ['闸门 {passed}/{total}', 'Gates {passed}/{total}'],
+  'detail.evidenceCompare': ['与上一轮对比：新增 {added}，删除 {removed}，修改 {changed}；闸门变化 {gates} 项。',
+    'Compared with the previous round: +{added} added, -{removed} removed, {changed} changed; {gates} gate change(s).'],
+  'detail.evidencePlatform': ['推送 {pushed} · PR {pr} · 合并 {merged} · 部署 {deployed} · 验收 {accepted}',
+    'pushed {pushed} · PR {pr} · merged {merged} · deployed {deployed} · accepted {accepted}'],
+  'detail.evidenceYes': ['是', 'yes'],
+  'detail.evidenceBranch': ['分支', 'Branch'],
+  'detail.evidenceFilesLabel': ['改动文件', 'Changed files'],
+  'detail.evidenceSummary': ['本轮 worker 总结', 'Worker summary for this round'],
+  'detail.evidenceNoHistory': ['只有这一轮证据，无法比较上一轮；不推断“已修复”。',
+    'Only this round is on file; there is no previous round to compare, so nothing is claimed as fixed.'],
+  'detail.evidenceNo': ['否', 'no'],
+  'detail.evidenceRequirements': ['验收要求变化：新增 {added}；移除 {removed}。',
+    'Acceptance requirements changed: added {added}; removed {removed}.'],
+  'detail.evidenceNotRerun': ['未重跑：{names}。这些结果不能算本轮已通过。',
+    'Not re-run: {names}. These results cannot count as passing in this round.'],
+  'detail.evidenceDeploy': ['部署 commit {sha}', 'Deployment commit {sha}'],
+  'detail.evidenceIncomplete': ['证据不完整：上一轮文件列表截断 {previousOmitted} 项、脱敏 {previousRedacted} 项；本轮截断 {currentOmitted} 项、脱敏 {currentRedacted} 项。缺失项不当作删除。',
+    'Incomplete evidence: the previous file list lost {previousOmitted} to truncation and {previousRedacted} to redaction; this round lost {currentOmitted} and {currentRedacted}. Missing entries are not counted as deletions.'],
+  'detail.evidenceUncertain': ['无法确认新增 {added}、删除 {removed}：对应轮次的文件列表不完整。',
+    'Additions ({added}) and deletions ({removed}) cannot be confirmed: the file list on that side is incomplete.'],
+  'detail.evidencePatchTruncated': ['本轮 patch 已截断（保留 {bytes} 字节），不是完整改动。',
+    'This round\'s patch was truncated ({bytes} bytes kept); it is not the full change.'],
+  'detail.evidenceBaseline': ['基线已变化（{from} → {to}），上一轮的闸门结果不能直接沿用。',
+    'The baseline changed ({from} → {to}); the previous round\'s gate results cannot be reused as-is.'],
+  'detail.evidenceUnfinished': ['本轮仍未通过：{names}。',
+    'Still not passing in this round: {names}.'],
+  'detail.evidenceStale': ['以下闸门沿用了旧代码的结果，需要重跑：{names}。',
+    'These gates reused results from older code and must be re-run: {names}.'],
+  'detail.evidenceNone': ['无', 'none'],
   'detail.acceptLineJump': ['去验收', 'Go to acceptance'],
   'detail.acceptLineView': ['查看验收', 'View acceptance'],
 
@@ -6615,6 +7269,8 @@ Object.assign(PAGE_TEXT, {
   'detail.resumeTitle': ['继续这个中断的运行？', 'Resume this interrupted run?'],
   'detail.resumeConfirm': ['会从中断的检查点继续；没有检查点时重跑整单：{title}',
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
+  'detail.stoppedHint': ['上一次运行已按人工请求停止，工作树与检查点保留，可以继续执行。',
+    'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
   'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
@@ -7099,7 +7755,7 @@ function TicketRunRows({ runs }) {
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
     const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
-    return h('li', { key: run.id, className: 'sa-row' },
+    return h('li', { key: run.id, id: `sa-run-${run.id}`, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
@@ -7389,10 +8045,89 @@ const DETAIL_JUMPS = [
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
 ]
 
-function TicketDetail({ id, page = 'execution' }) {
+/** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
+function DeliveryEvidenceCard({ data, id }) {
+  const { t } = usePanel()
+  const rounds = Array.isArray(data?.rounds) ? data.rounds : []
+  // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
+  // recompute it from the rounds and quietly disagree (review P2 AC-08/AC-09).
+  const compare = useLiveResource('engine/evidence/:id/compare', { id }, 30000,
+    { enabled: Boolean(id) && rounds.length > 1 })
+  if (!rounds.length) return h(Hint, null, pt(t, 'detail.evidenceEmpty'))
+  const latest = rounds.at(-1)
+  const diff = compare.data
+  const previous = rounds.length > 1 ? rounds.at(-2) : null
+  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed').length
+  const platform = latest.platform ?? {}
+  const incomplete = diff?.incomplete
+  const uncertain = diff?.filesUncertain
+  const incompleteLine = incomplete && (!incomplete.previous.fileList || !incomplete.current.fileList)
+    ? pt(t, 'detail.evidenceIncomplete', {
+      previousOmitted: incomplete.previous.filesOmitted, previousRedacted: incomplete.previous.filesRedacted,
+      currentOmitted: incomplete.current.filesOmitted, currentRedacted: incomplete.current.filesRedacted })
+    : ''
+  const uncertainAdded = (uncertain?.added ?? []).join('、')
+  const uncertainRemoved = (uncertain?.removed ?? []).join('、')
+  const requirementsAdded = diff?.acceptance?.added ?? []
+  const requirementsRemoved = diff?.acceptance?.removed ?? []
+  const unfinished = (diff?.gatesUnfinished ?? []).map(gate => gate.name)
+  return h('div', { className: 'sa-card' },
+    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'detail.evidenceTitle')),
+      h(Tag, { tone: 'neutral' }, pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length }))),
+    h(KeyValues, { rows: [
+      [pt(t, 'detail.evidenceBranch'), h('span', { className: 'sa-mono' }, latest.branch || '—')],
+      [pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, (latest.headSha ?? '—').slice(0, 8))],
+      [pt(t, 'detail.evidenceFilesLabel'), pt(t, 'detail.evidenceFiles', { count: (latest.files ?? []).length })],
+      [pt(t, 'ticket.gates'), pt(t, 'detail.evidenceGates', { passed, total: (latest.gates ?? []).length })],
+    ] }),
+    h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      pr: platform.pr ?? 'none', merged: platform.merged ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      deployed: platform.deployed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })),
+    diff
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
+        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length }))
+      : rounds.length < 2
+        ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNoHistory'))
+        : null,
+    incompleteLine ? h('p', { className: 'sa-hint' }, incompleteLine) : null,
+    uncertainAdded || uncertainRemoved
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUncertain', {
+        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') }))
+      : null,
+    latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePatchTruncated', {
+        bytes: latest.patch?.bytes ?? previous?.patch?.bytes ?? 0 }))
+      : null,
+    diff?.baseline?.changed
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceBaseline', {
+        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) }))
+      : null,
+    unfinished.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') }))
+      : null,
+    diff?.gatesStale?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') }))
+      : null,
+    diff?.gatesNotRun?.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') }))
+      : null,
+    requirementsAdded.length || requirementsRemoved.length
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceRequirements', {
+        added: requirementsAdded.join('；') || pt(t, 'detail.evidenceNone'),
+        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') }))
+      : null,
+    platform.deployCommit
+      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) }))
+      : null,
+    latest.workerSummary ? h(Folded, { summary: pt(t, 'detail.evidenceSummary') }, h('p', null, latest.workerSummary)) : null)
+}
+
+function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)
+  const evidence = useLiveResource('engine/evidence/:id', { id }, 30000)
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
@@ -7405,6 +8140,13 @@ function TicketDetail({ id, page = 'execution' }) {
   const [diffOpen, setDiffOpen] = useState(false)
   const [diff, setDiff] = useState({})
   useEffect(() => { setDiff({}); setDiffOpen(false) }, [id])
+  // AC-07: an Eval/source record's run link opens this page pinned to that run; scroll to it once the ledger loads.
+  const focusedRun = useRef(null)
+  useEffect(() => {
+    if (!focusRun || focusedRun.current === focusRun) return
+    const node = document.getElementById(`sa-run-${focusRun}`)
+    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: 'smooth' }) }
+  }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
   const [revisionText, setRevisionText] = useState('')
@@ -7484,6 +8226,7 @@ function TicketDetail({ id, page = 'execution' }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
   const [answerText, setAnswerText] = useState('')
   // P1-3: rejection intents are optional checkboxes next to the reject button.
@@ -7551,7 +8294,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const hasGateResults = gateView.gates.length > 0 || Boolean(parkedGate)
   // P1: the newest operation decides whether the run can be resumed; the parked question decides the answer banner.
   const latestRun = latestRunFor(ticket, runs)
-  const interrupted = latestRun?.status === 'interrupted'
+  // AC-04: a stopped run keeps its checkpoint too, so the same resume action serves interrupted and stopped runs.
+  const interrupted = latestRun?.status === 'interrupted' || latestRun?.status === 'stopped'
   // A run in flight has nothing to launch: the dry-run action belongs to the ⋯ menu, not the primary slot (T3).
   const running = latestRun?.status === 'running' || ticket.status === 'working'
   const awaitingAnswer = ticket.status === 'awaiting-answer'
@@ -7601,8 +8345,12 @@ function TicketDetail({ id, page = 'execution' }) {
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
   if (routePreview) {
+    // Deliverable, required capabilities and backend are separate facts: a read-only report is not "the same route"
+    // as a code change, and an operator override must be visible as such.
+    const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
+      `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, `detail.workType.${routePreview.workType}`)} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
@@ -7632,6 +8380,8 @@ function TicketDetail({ id, page = 'execution' }) {
   const busy = { dryRun: dryRun.busy, retry: retry.busy, publish: publish.busy, refreshCi: refreshCi.busy, verify: verify.busy }
   // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
   // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
+  const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
+    || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
   // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
   const workflowResumable = failed && ticket.workflowResumable === true
@@ -7691,24 +8441,31 @@ function TicketDetail({ id, page = 'execution' }) {
       title: canPush ? undefined : pt(t, 'ticket.publishUnavailable') }]),
     { key: 'retry', label: pt(t, 'ticket.retry'), icon: 'refresh', onSelect: () => setPending('retry'),
       disabled: busy.retry || !canRun, title: canRun ? undefined : pt(t, 'ticket.retryUnavailable') },
-    { key: 'stop', label: pt(t, 'menu.stop'), icon: 'stop', onSelect: () => {}, disabled: true, title: pt(t, 'ticket.stopUnavailable') },
+    { key: 'stop', label: pt(t, ticket.stopRequested ? 'ticket.stopping' : 'menu.stop'), icon: 'stop',
+      onSelect: () => setPending('stop'), disabled: stopRun.busy || !activeRun || Boolean(ticket.stopRequested),
+      title: !activeRun ? pt(t, 'ticket.stopUnavailable') : ticket.stopRequested ? pt(t, 'ticket.stopping') : undefined },
     ...failed ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
   ]
   const runPending = async action => { const done = await action.run(); if (done) setPending(null) }
   const confirmDialog = pending
     ? h(Modal, { open: true, onClose: () => setPending(null),
-      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle') : pt(t, 'ticket.publishTitle'),
+      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
+        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle'),
       closeLabel: t('close'),
       description: pending === 'retry'
         ? pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })
+        : pending === 'stop'
+          ? pt(t, 'ticket.stopConfirm')
         : pending === 'dismiss'
           ? pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
             branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })
           : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss : busy.publish,
-          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss : publish) } }, t('confirm'))) })
+        h(Button, { variant: 'primary', disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
+          : pending === 'stop' ? stopRun.busy : busy.publish,
+          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
+            : pending === 'stop' ? stopRun : publish) } }, t('confirm'))) })
     : null
 
   // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
@@ -7809,7 +8566,7 @@ function TicketDetail({ id, page = 'execution' }) {
       h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
         h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
           interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.interruptedHint'))))
+        h('p', { className: 'sa-hint' }, pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint'))))
     : null
   const jumps = DETAIL_JUMPS
   const jumpTo = id => {
@@ -7838,6 +8595,11 @@ function TicketDetail({ id, page = 'execution' }) {
   const headActions = h(Fragment, null,
     acceptanceNote,
     primaryAction,
+    // AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only.
+    activeRun && !ticket.stopRequested
+      ? h(Button, { size: 'sm', variant: 'ghost', icon: 'stop', disabled: stopRun.busy, onClick: () => setPending('stop') },
+        pt(t, 'menu.stop'))
+      : null,
     h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
       text: primaryAction ? undefined : pt(t, 'menu.label') }))
 
@@ -7947,6 +8709,8 @@ function TicketDetail({ id, page = 'execution' }) {
     // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
     //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
     h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
+      // AC-08/09: durable evidence lives next to (not inside) the acceptance record.
+      h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(DeliveryEvidenceCard, { data: evidence.data, id })),
       // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
       acceptanceRecord
         ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
@@ -8039,6 +8803,22 @@ Object.assign(PAGE_TEXT, {
   'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
     'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
   'wf.hint': ['自动模式先由验收后端只读评估；复杂任务按 规划 → 实现 → 闸门 → 独立验收 执行。返工预算在「运行」里调。', 'Auto mode uses a read-only assessment by the review backend; complex tasks run planning, implementation, gates and independent review. The repair budget lives under Run.'],
+  // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
+  'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
+  'st.routeDeliverable': ['交付目标', 'Deliverable'],
+  'st.routeBackend': ['执行后端', 'Backend'],
+  'st.routeAuto': ['自动', 'Auto'],
+  'st.routeChange': ['代码改动', 'Code change'],
+  'st.routeReport': ['只读报告', 'Read-only report'],
+  'st.routeCapabilities': ['所需能力', 'Capabilities'],
+  'st.routeCapEdit': ['改文件', 'Edit files'],
+  'st.routeCapExec': ['跑命令', 'Run commands'],
+  'st.routeCapWeb': ['联网', 'Web access'],
+  'st.routeCapReport': ['报告/提问', 'Report/questions'],
+  'st.routeManualHint': ['人工选择会随工单保存并用于后续运行；能力上限仍然生效，不能把测试交给不会执行命令的后端。',
+    'A manual choice is saved on the Ticket and used by later runs; capability limits still apply, so a backend that cannot run commands cannot take a verification Ticket.'],
+  'st.routeUnsupported': ['当前后端缺少能力：{caps}', 'The chosen backend lacks: {caps}'],
+  'st.routePreviewFailed': ['暂时无法预览路由，仍可直接创建。', 'Routing preview is unavailable; you can still create the Ticket.'],
 })
 /* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
    right column edits one group at a time. What runs the work is split out of the executor groups: `run` owns how work
@@ -8086,6 +8866,46 @@ Object.assign(PAGE_TEXT, {
   'st.capClaudeResume': ['-p 一次性会话', '-p one-shot session'],
   'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
   'repos.add': ['添加仓库', 'Add repository'],
+  'repos.disabledTag': ['已停用', 'Disabled'],
+  'repos.edit': ['编辑', 'Edit'],
+  'repos.editTitle': ['编辑仓库 {name}', 'Edit repository {name}'],
+  'repos.editHint': ['下面显示当前值：保存前先核对路径与闸门命令；停用后不再接收或派发新任务，历史记录保留。令牌不在此处回显。',
+    'Current values are shown below: check the path and gate commands before saving. A disabled repository takes no new work, while its history is kept. Tokens are never shown here.'],
+  'repos.editSaved': ['仓库配置已保存，历史版本已记录。', 'Repository saved; a history version was recorded.'],
+  'repos.editInvalid': ['闸门必须是有效的 JSON 数组。', 'Gates must be a valid JSON array.'],
+  'repos.editDiff': ['保存前差异', 'Changes to save'],
+  'repos.editNoChanges': ['尚未修改。', 'No changes yet.'],
+  'repos.editGateCount': ['{count} 个闸门', '{count} gates'],
+  'repos.gateName': ['闸门名称', 'Gate name'],
+  'repos.gateCommand': ['命令', 'Command'],
+  'repos.gateCwd': ['工作目录（相对仓库）', 'Working directory (repository-relative)'],
+  'repos.gateCwdPlaceholder': ['留空 = 仓库根目录', 'Empty = repository root'],
+  'repos.gateTimeout': ['超时（毫秒）', 'Timeout (ms)'],
+  'repos.gateOnFail': ['失败策略', 'Failure policy'],
+  'repos.gateOnFail.manual': ['人工处置', 'Manual'],
+  'repos.gateOnFail.auto_repair': ['自动返工', 'Auto repair'],
+  'repos.gateDryRun': ['干跑命令（可选）', 'Dry-run command (optional)'],
+  'repos.gateAdd': ['添加闸门', 'Add gate'],
+  'repos.gateRemove': ['删除这个闸门', 'Remove this gate'],
+  'repos.gateEmptyEditor': ['还没有闸门；保存后按默认闸门执行。', 'No gates yet; saving keeps the default gates.'],
+  'repos.gateDiff': ['闸门「{name}」', 'Gate “{name}”'],
+  'repos.gateFieldRequired': ['闸门名称和命令不能为空。', 'A gate needs a name and a command.'],
+  'repos.editGateInvalid': ['JSON 无效', 'invalid JSON'],
+  'repos.test': ['测试配置', 'Test configuration'],
+  'repos.testing': ['检查中…', 'Checking…'],
+  'repos.testOk': ['配置检查通过', 'Configuration check passed'],
+  'repos.testFail': ['配置检查未通过', 'Configuration check failed'],
+  'repos.check.config': ['配置文件', 'Config file'],
+  'repos.check.node': ['Node.js 运行时', 'Node.js runtime'],
+  'repos.check.repo': ['本地仓库', 'Local repository'],
+  'repos.check.token': ['平台令牌', 'Platform token'],
+  'repos.check.connection': ['平台连接', 'Platform connection'],
+  'repos.check.enabled': ['仓库启用', 'Repository enabled'],
+  'repos.testHint': ['只做固定的只读检查：配置文件、运行时、路径、令牌是否配置、平台连通性；不执行闸门、不建单、不启动 worker。',
+    'Runs only fixed read-only checks: config file, runtime, path, token presence and platform connectivity. It never runs gates, creates Tickets or starts workers.'],
+  'repos.gatesJson': ['闸门定义（JSON）', 'Gate definitions (JSON)'],
+  'repos.gatesJsonHint': ['每项包含 name/command，可选 cwd（相对仓库路径）、timeoutMs、onFail、dryRunCommand。目录越界或重复名称会被拒绝。',
+    'Each entry has name/command plus optional cwd (relative to the repository), timeoutMs, onFail and dryRunCommand. Escaping paths and duplicate names are rejected.'],
   'repos.addTitle': ['添加仓库', 'Add repository'],
   'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
     'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
@@ -8332,8 +9152,14 @@ Object.assign(PAGE_TEXT, {
   'st.allowReply': ['允许回群消息', 'Allow group replies'],
   'st.allowReplyHint': ['执行器把状态与结果回复到来源群。', 'The executor posts status and results back to the source group.'],
   'st.paused': ['暂停处理', 'Pause processing'],
-  'st.pausedHint': ['暂停后不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
-    'While paused: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedHint': ['总暂停：不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
+    'Total pause: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedIntake': ['暂停接单（保留游标）', 'Pause intake (keep cursor)'],
+  'st.pausedIntakeHint': ['不读取新消息，来源游标不前进：恢复后这些请求仍然会进来。已在跑的工单不受影响。',
+    'Reads no new messages and does not advance the source cursor, so they arrive after resuming. Running work is unaffected.'],
+  'st.pausedDispatch': ['暂停派发（保留队列）', 'Pause dispatch (keep queue)'],
+  'st.pausedDispatchHint': ['不自动开始新的工单；队列和在跑任务都保留，手工开始仍可用。',
+    'Starts no new Ticket automatically; the queue and running work are kept and manual starts still work.'],
   'st.mrMode': ['发布 MR 方式', 'MR creation mode'],
   'st.mrModeHint': ['api：用 GitLab API 建 MR；push：用 git push options 建 MR。',
     'api: create the MR through the GitLab API; push: create it with git push options.'],
@@ -8499,6 +9325,8 @@ function settingsPatchOf(group, draft) {
       if (key in draft) patch[key] = draft[key] === true
     }
     if ('paused' in draft) patch.paused = draft.paused === true
+    if ('pausedIntake' in draft) patch.pausedIntake = draft.pausedIntake === true
+    if ('pausedDispatch' in draft) patch.pausedDispatch = draft.pausedDispatch === true
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
     if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
@@ -8686,9 +9514,23 @@ function WorkerCapabilityCard({ currentBackend }) {
       }))))
 }
 
-function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
-  const { t } = usePanel()
+const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
+  token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
+
+function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
+  const { t, actions } = usePanel()
   const [token, setToken] = useState('')
+  const [test, setTest] = useState({ busy: false })
+  const runTest = async () => {
+    setTest({ busy: true })
+    try {
+      const result = await actions.testConfig(repo.id)
+      setTest({ busy: false, result })
+    } catch (error) {
+      setTest({ busy: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
     [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono' }, String(repo.project)) : t('empty')],
@@ -8704,11 +9546,29 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
       h('span', { className: 'sa-section-icon' }, h(Icon, { name: 'pull', size: 16 })),
       h('span', { className: 'sa-card-title' }, repo.name ?? repo.id),
       isDefault ? h(Tag, { tone: 'quiet' }, pt(t, 'repo.default')) : null,
+      repo.enabled === false ? h(Tag, { tone: 'warning' }, pt(t, 'repos.disabledTag')) : null,
       h(Tag, { tone: repo.tokenConfigured ? 'outline' : 'warning' },
         repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')),
       repo.name && repo.id && repo.name !== repo.id
         ? h('span', { className: 'sa-mono sa-hint' }, String(repo.id)) : null),
     h(KeyValues, { rows }),
+    h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'settings', size: 14 }),
+        onClick: () => onEdit?.(repo) }, pt(t, 'repos.edit')),
+      h(ConfirmButton, { label: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
+        title: pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle'),
+        message: pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id }),
+        onConfirm: async () => { await onToggle?.(repo) } }),
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
+        disabled: test.busy, onClick: () => { void runTest() } },
+      pt(t, test.busy ? 'repos.testing' : 'repos.test'))),
+    test.result || test.error
+      ? h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
+        h('span', { className: 'sa-field-head' }, pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')),
+        h(Hint, null, test.error ?? (test.result.checks ?? []).map(check =>
+          `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')),
+        h(Hint, null, pt(t, 'repos.testHint')))
+      : null,
     h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
       h('span', { className: 'sa-field-head' }, pt(t, 'repo.token')),
       h('div', { style: { display: 'flex', width: '100%', minWidth: 0 } },
@@ -8753,6 +9613,10 @@ function LiveSettingsPage({ route }) {
   const [octoGroupQuery, setOctoGroupQuery] = useState('')
   const [configSampleOpen, setConfigSampleOpen] = useState(false)
   const [repoModalOpen, setRepoModalOpen] = useState(false)
+  // AC-10: existing repositories stay editable without losing their id/history; the modal shows the current values.
+  const [repoEdit, setRepoEdit] = useState(undefined)
+  const [repoEditBusy, setRepoEditBusy] = useState(false)
+  const [repoEditError, setRepoEditError] = useState(undefined)
   const [repoForm, setRepoForm] = useState(emptyRepoForm)
   const [repoSaving, setRepoSaving] = useState(false)
   const [repoError, setRepoError] = useState(undefined)
@@ -8897,6 +9761,48 @@ function LiveSettingsPage({ route }) {
     } finally { setRepoSaving(false) }
   }
 
+  const openRepoEdit = (repo) => {
+    // AC-10: edit one gate field at a time instead of hand-writing the whole gates JSON. A deep clone keeps the form
+    // independent from the loaded config (cancel must not mutate it).
+    const gates = Array.isArray(repo.gates) ? JSON.parse(JSON.stringify(repo.gates)) : []
+    setRepoEdit({ id: repo.id, name: repo.name ?? repo.id, repo: repo.repo ?? '', gates })
+    setRepoEditError(undefined)
+  }
+  const editGate = (index, key, value) => {
+    setRepoEdit(previous => {
+      if (!previous) return previous
+      const gates = previous.gates.map((gate, position) => position === index ? { ...gate, [key]: value } : gate)
+      return { ...previous, gates }
+    })
+  }
+  const saveRepoEdit = async () => {
+    if (repoEditBusy || !repoEdit) return
+    const gates = repoEdit.gates.map(gate => {
+      const clean = { name: String(gate.name ?? '').trim(), command: String(gate.command ?? '').trim() }
+      if (gate.cwd) clean.cwd = String(gate.cwd).trim()
+      if (Number.isFinite(Number(gate.timeoutMs)) && Number(gate.timeoutMs) > 0) clean.timeoutMs = Number(gate.timeoutMs)
+      if (gate.onFail) clean.onFail = gate.onFail
+      if (gate.dryRunCommand) clean.dryRunCommand = String(gate.dryRunCommand).trim()
+      return clean
+    })
+    if (gates.some(gate => !gate.name || !gate.command)) { setRepoEditError(pt(t, 'repos.gateFieldRequired')); return }
+    setRepoEditBusy(true)
+    setRepoEditError(undefined)
+    try {
+      await actions.updateRepo(repoEdit.id, { name: repoEdit.name.trim() || repoEdit.id, repo: repoEdit.repo.trim(), gates })
+      await reload()
+      setRepoEdit(undefined)
+      notify(pt(t, 'repos.editSaved'))
+    } catch (failure) { setRepoEditError(errorText(failure)) } finally { setRepoEditBusy(false) }
+  }
+  const toggleRepo = async (repo) => {
+    try {
+      await actions.updateRepo(repo.id, { enabled: repo.enabled === false })
+      await reload()
+      notify(pt(t, repo.enabled === false ? 'repos.enableSaved' : 'repos.disableSaved', { name: repo.name ?? repo.id }))
+    } catch (failure) { notify(errorText(failure), 'error') }
+  }
+
   /** Load saved live.json versions; the list contains configuration only, never tokens. */
   const openHistory = async () => {
     setHistoryOpen(true)
@@ -8965,7 +9871,8 @@ function LiveSettingsPage({ route }) {
         ? h(Fragment, null,
           h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
           h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
-            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id }))))
+            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id,
+            onEdit: openRepoEdit, onToggle: toggleRepo }))))
         : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
           action: h('div', { className: 'sa-actions' },
             config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
@@ -9427,6 +10334,8 @@ function LiveSettingsPage({ route }) {
       switchRow('executor.enabled', 'st.execEnabled', 'st.execEnabledHint', executor.enabled === true),
       switchRow('executor.autoRun', 'st.autoRun', 'st.autoRunHint', executor.autoRun === true),
       switchRow('paused', 'st.paused', 'st.pausedHint', config.paused === true || data.paused === true),
+      switchRow('pausedIntake', 'st.pausedIntake', 'st.pausedIntakeHint', config.pausedIntake === true),
+      switchRow('pausedDispatch', 'st.pausedDispatch', 'st.pausedDispatchHint', config.pausedDispatch === true),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.mrMode')),
         h(Select, { label: pt(t, 'st.mrMode'), disabled: frozen,
@@ -9657,6 +10566,31 @@ function LiveSettingsPage({ route }) {
   const writableGroups = SETTINGS_GROUPS.filter(group => !group.reference)
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
 
+  // AC-10: show what saving will change before the request leaves the panel. Compare against the loaded repository,
+  // not the draft, so a no-op save is visibly a no-op and token-only fields never enter the preview.
+  const repoEditRows = (() => {
+    if (!repoEdit) return []
+    const current = repos.find(item => item.id === repoEdit.id) ?? {}
+    const rows = []
+    const nameNow = current.name ?? current.id
+    if (repoEdit.name !== nameNow) rows.push([pt(t, 'repos.field.name'), nameNow, repoEdit.name])
+    const repoNow = current.repo ?? ''
+    if (repoEdit.repo !== repoNow) rows.push([pt(t, 'repos.field.repo'), repoNow, repoEdit.repo])
+    // Field-level gate diff: changing a command, cwd, timeout or failure policy must be visible, not hidden behind an
+    // unchanged gate count (review P2 AC-10).
+    const gatesBefore = Array.isArray(current.gates) ? current.gates : []
+    const gatesAfter = repoEdit.gates
+    const count = Math.max(gatesBefore.length, gatesAfter.length)
+    for (let index = 0; index < count; index += 1) {
+      const before = gatesBefore[index]
+      const after = gatesAfter[index]
+      if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) continue
+      rows.push([pt(t, 'repos.gateDiff', { name: after?.name || before?.name || `#${index + 1}` }),
+        before ? JSON.stringify(before) : '—', after ? JSON.stringify(after) : '—'])
+    }
+    return rows
+  })()
+
   return h(Fragment, null,
     h('div', { className: 'sa-settings-intro' },
       h(Hint, null, pt(t, 'st.pageIntro')),
@@ -9691,6 +10625,69 @@ function LiveSettingsPage({ route }) {
           h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
             onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
         : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
+    repoEdit ? h(Modal, { open: true, onClose: () => { if (!repoEditBusy) setRepoEdit(undefined) },
+      title: pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id }), closeLabel: t('close'), className: 'sa-repo-modal',
+      footer: h(Fragment, null,
+        h(Button, { variant: 'ghost', disabled: repoEditBusy, onClick: () => setRepoEdit(undefined) }, t('cancel')),
+        h(Button, { variant: 'primary', disabled: repoEditBusy, onClick: () => { void saveRepoEdit() } },
+          repoEditBusy ? t('saving') : t('save'))) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.editHint')),
+      h('div', { className: 'sa-repo-diff' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'repos.editDiff')),
+        repoEditRows.length
+          ? repoEditRows.map(([label, before, after], index) => h('div', { key: index, className: 'sa-diff-row' },
+            h('span', { className: 'sa-diff-label' }, label),
+            h('code', { className: 'sa-mono sa-diff-old' }, before || '—'),
+            h('span', { className: 'sa-hint', 'aria-hidden': 'true' }, '→'),
+            h('code', { className: 'sa-mono sa-diff-new' }, after || '—')))
+          : h('p', { className: 'sa-hint' }, pt(t, 'repos.editNoChanges'))),
+      h('div', { className: 'sa-form-grid' },
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.name, 'aria-label': pt(t, 'repos.field.name'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, name: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.repo, 'aria-label': pt(t, 'repos.field.repo'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, repo: event.target.value })) })),
+        h('div', { className: 'sa-field', style: { gridColumn: '1 / -1' } },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.gates')),
+          repoEdit.gates.length
+            ? repoEdit.gates.map((gate, index) => h('div', { key: index, className: 'sa-card',
+              style: { marginBottom: 8, padding: 10 } },
+              h('div', { className: 'sa-form-grid' },
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateName')),
+                  h(Input, { className: 'sa-input-full', value: gate.name ?? '', 'aria-label': pt(t, 'repos.gateName'),
+                    onChange: event => editGate(index, 'name', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCommand')),
+                  h(Input, { className: 'sa-input-full', value: gate.command ?? '', 'aria-label': pt(t, 'repos.gateCommand'),
+                    onChange: event => editGate(index, 'command', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCwd')),
+                  h(Input, { className: 'sa-input-full', value: gate.cwd ?? '', placeholder: pt(t, 'repos.gateCwdPlaceholder'),
+                    'aria-label': pt(t, 'repos.gateCwd'), onChange: event => editGate(index, 'cwd', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateTimeout')),
+                  h(Input, { className: 'sa-input-full', type: 'number', min: 1, value: gate.timeoutMs ?? '',
+                    'aria-label': pt(t, 'repos.gateTimeout'),
+                    onChange: event => editGate(index, 'timeoutMs', event.target.value) })),
+                h(Select, { label: pt(t, 'repos.gateOnFail'), value: gate.onFail ?? 'manual',
+                  options: [{ value: 'manual', label: pt(t, 'repos.gateOnFail.manual') },
+                    { value: 'auto_repair', label: pt(t, 'repos.gateOnFail.auto_repair') }],
+                  onChange: value => editGate(index, 'onFail', value) }),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateDryRun')),
+                  h(Input, { className: 'sa-input-full', value: gate.dryRunCommand ?? '',
+                    'aria-label': pt(t, 'repos.gateDryRun'), onChange: event => editGate(index, 'dryRunCommand', event.target.value) }))),
+              h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+                gates: previous.gates.filter((item, position) => position !== index) })) }, pt(t, 'repos.gateRemove'))))
+            : h('p', { className: 'sa-hint' }, pt(t, 'repos.gateEmptyEditor')),
+          h(Button, { variant: 'outline', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+            gates: [...previous.gates, { name: '', command: '', onFail: 'manual' }] })) }, pt(t, 'repos.gateAdd')),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.gatesJsonHint')))),
+      repoEditError ? h('p', { className: 'sa-banner sa-danger' }, repoEditError) : null) : null,
     repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
       title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
       footer: h(Fragment, null,

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.33] — 2026-11-13
+
+落地产品评审六项改进（AC-01…AC-12）并按七轮独立验收返工收口：路由贯穿分阶段执行、停止真正取消 worker 与
+CLI 进程组、恢复时对远端推送对账、评测与来源深链可回溯、证据与部署判定可复核、仓库与闸门可直接在设置页编辑。
+
+### 内容
+- 路由：`lib/live/routing.js` 与 `executor.js` 的 staged 分支按 `routeBackend`/`routeProfile` 选择实现后端与只读/
+  可写 profile，人工选择不可用时原样报 `unsupported`；设置页展示路由预览（交付类型、后端、是否自动、改动范围）。
+- 停止：`requestStop` 对 queued 工单立即结束排队；executor 每步检查 `ticket.stop`，worker 通过 `AbortSignal` 取消
+  宿主 agent，CLI 以进程组 SIGTERM→3s SIGKILL 升级；停止的 run 可恢复。
+- 推送/部署：`publishTicket` 先持久化推送请求再执行，未知结果按远端分支与 MR 对账；部署判定按记录的 SHA 比较，
+  不用最新流水线代替目标 commit。
+- 证据与评测：gate 记录 `at` 时间戳，reused 判定生效；证据包补齐被截断标记与 `deployCommit`；评测搜索覆盖
+  `candidate.text`/`payload.text`；来源与评估记录深链到具体 id；URL 恢复保留视图、页码与滚动位置。
+- 设置页：仓库对象中的闸门（名称、命令、目录、超时、失败策略、干跑命令）按完整对象编辑与保存，保存后刷新
+  不回退；`POST engine/repo/:id` 与 `POST engine/config/test` 补 API 测试；live-json 的 `onFail` 补断言。
+- 文档：README、`docs/self-development.md`、`docs/feature-maturity.md` 与实际测试数、停止能力对齐。
+
+### 验证
+- `node --check index.js`；`node scripts/build-client.mjs --check`；`node scripts/check-keys.mjs`；`node --test lib/store.test.js lib/live/*.test.js`；`node scripts/render-check.mjs`（数字见下方合并后版本节）。
+
 ## [0.4.32] — 2026-11-13
 
 Claude 验收报 `Unexpected end of JSON input`：不是模型没答，是读不到答案。`runProcess` 的 stdout 上限 8 MB 在
