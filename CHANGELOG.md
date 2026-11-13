@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.4.28] — 2026-11-13
+
+分阶段执行失败后可以从失败的那一步继续，不再整条重跑。之前的「继续执行」只识别被插件重载中断的运行，
+而分阶段流程的失败（例如 Codex 验收时额度用尽）是普通 failed run，界面只给「重试执行」，等于把已完成的分析、
+实现和闸门全部重做。本单给失败的分阶段工单补上真正的断点续跑：沿用 `ticket.workflow` 里已完成的阶段，
+只用失败阶段 key 里记录的输入重放该阶段，通过后照常提交、推送并按仓库策略交付。
+
+### 内容
+- `lib/live/workflow.js`：新增 `failedStageOf` 与 `resumeWorkflow`，交付循环抽成 `deliver`，支持带
+  `pendingReview`（沿用已记录的 gates 证据与 digest）续跑 review；`makeStage` 复用同 key 的失败项原地重试，
+  不再追加重复阶段。`RESUMABLE_ROLES = ['implement', 'review']`——评估/规划失败仍走整条重跑，闸门有既有
+  的停单/重试路径。
+- `lib/live/workflow-worker.js`：`executeWorkflow({ ..., resume })` 续跑时校验
+  mode、requirementRevision、最后阶段为 failed 且 role 可续，然后采用 `ticket.workflow` 调用
+  `resumeWorkflow`；digest 与验收证据不一致时拒绝续跑（`candidate changed since the gated review`）。
+- `lib/live/executor.js`：`executeTicket({ ..., resumeWorkflow })` 传入续跑标记并记 `workflow:resume` 步骤；
+  新增 `resumableWorkflowOf`，`resumeInterruptedTicket` 在没有 interrupted run 时改走
+  `executeTicket({ trigger:'resume', resumeWorkflow:true })`，两者都没有仍返回 409。
+- `lib/live/repos.js`：`workflowResumable(ticket)` 派生「failed + workflow blocked + 最后阶段 failed 且可续」，
+  `decorateTicket` 以 `workflowResumable` 暴露给客户端（不持久化）。
+- `client/src/58-ticket-detail.js` + i18n：失败且可续时主按钮改为「继续执行」，确认框说明只重跑失败的一步、
+  已完成的分析/实现/闸门保留，「重试执行」仍在 ⋯ 菜单；新增 `detail.resumeWorkflowTitle/Confirm` 中英 key。
+- `package.json` 0.4.28；`client/index.js` 重建（22 fragments，9772 行）。
+
+### 验证
+- `node --check index.js`：通过
+- `node scripts/build-client.mjs --check`：通过（22 fragments，产物最新）
+- `node scripts/check-keys.mjs`：通过（767 literal / 513 shared / 1149 page-local）
+- `node --test lib/store.test.js lib/live/*.test.js`：430 通过，0 失败。新增 5 条：review 续跑只重跑 review 且
+  阶段台账原地复用；digest 变化拒绝续跑；implement 失败按记录的 plan/feedback 续跑；无失败阶段拒绝续跑；
+  `executeTicket({ resumeWorkflow:true })` 在 planned 模式下只多调一次 review、implement 只跑一次并交付 dry-run。
+- `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
+
 ## [0.4.27] — 2026-11-12
 
 新增可选分阶段 Worker：自动复杂度评估，或直接选择简单/方案驱动执行。复杂流程由 Codex 规划、Claude/DSH 实现、程序闸门、全新 Codex 会话验收组成，支持最多两轮返工与方案修订。默认关闭，保留现有路由行为。
