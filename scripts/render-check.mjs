@@ -632,8 +632,14 @@ clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
 const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
-check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude' }))
+check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' }))
 check('worker group exposes staged workflow and implementer controls', workerText.includes('自动评估难度') && workerText.includes('Codex 规划与独立验收') && Boolean(rootElement.querySelector('select[aria-label="实现后端"]')))
+// A control without a visible label is not discoverable (regression: the reviewer/preset fields shipped unlabelled).
+check('staged workflow controls carry visible labels',
+  ['分阶段执行', '实现后端', '独立验收后端', 'Worker 预设（DSH）'].every(label => workerText.includes(label))
+    && Boolean(rootElement.querySelector('select[aria-label="独立验收后端"]'))
+    && Boolean(rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')),
+  workerText.slice(0, 400))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
 check('worker group carries the routing mode control',
   Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),

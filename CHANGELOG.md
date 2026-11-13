@@ -21,7 +21,8 @@ DSH worker 无法按仓库指定 Agent 预设。
   实现仍走 `implementer`；启停检查同时看两个后端。
 - `lib/live/workflow-worker.js`：验收阶段把候选 diff（`git diff HEAD` 统计、未跟踪文件、diff 正文前 40k 字符）写进
   review 的 prompt。Claude 的只读 profile 只授予文件工具（历史安全决策，测试仍在），没有 diff 它只能读文件猜改动。
-- 设置 → Worker「分阶段执行」新增「独立验收后端」（Codex / Claude Code）与「Worker 预设（DSH）」输入；
+- 设置 → Worker「分阶段执行」新增「独立验收后端」（Codex / Claude Code）与「Worker 预设（DSH）」输入，
+  每个控件都带可见标题（`sa-field-head`）；render-check 增加一条「控件必须有可见标签」的回归断言。
   patch 白名单同步加入两项。
 - 测试：live-json 白名单/校验、config 解析、仓库 presets/reviewer、执行器按 `executor.reviewer` 选择 CLI 后端。
 - `package.json` 0.4.30；`client/index.js` 重建（22 fragments，9814 行）。
