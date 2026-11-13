@@ -14,6 +14,10 @@
   一套演示状态（2 个仓库、2 个监听群、四条演示工单、一条接单历史），干净 clone 上不再是 172 检查 + 18 跳过。
 - 新增 `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、issue 表单与 PR 模板；交付桥与发布流程拆到
   `docs/delivery.md`，`AGENTS.md` 只留指向与 Agent 硬线。
+- 首次在 Linux/UTC 上跑 CI 暴露的三处测试问题（生产代码未改）：`lib/live/api.test.js` 的搜索用例被写进了
+  status 用例体内（子测试抢跑导致偶发 cancelled），已移回顶层；`lib/live/gitlab.test.js` 的超时用例只剩
+  `AbortSignal.timeout` 的 unref 定时器撑着事件循环，补了一个 ref 定时器；`lib/live/schedule.test.js` 的
+  `nextDailyAt` 断言写死 `+08:00`，在 UTC runner 上必然失败，改为按时钟本地构造。
 - 文档卫生：README 去掉写死的 `0.4.31`，改为 CHANGELOG/Releases 入口并加 CI/License/Node 徽章；开发验证一节
   改为从 `npm ci` 开始、写明前七条可在干净 clone/CI 上跑、后两条需桌面 DSH + Chrome；`docs/self-development.md`
   去掉本机绝对路径与内部仓库名；`engines.node` 提到 `>= 20`；`package.json` 补 `repository`/`homepage`/`bugs`。
@@ -22,7 +26,8 @@
 - 干净状态目录（`DSH_SUPERAGENT_STATE_DIR` 指向空目录）：`node scripts/render-check.mjs` 194 checks / 0 fail /
   0 skipped；操作者真实状态目录同样 194 / 0 / 0。
 - `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`、
-  `node --test lib/store.test.js lib/live/*.test.js`（555 pass）全部通过。
+  `node --test lib/store.test.js lib/live/*.test.js`（555 pass）全部通过；本地与 `TZ=UTC` 两种时区各跑一遍。
+- GitHub Actions：PR #29 上 node 20/22 两条 job 全绿。
 
 ## [0.4.38] — 2026-11-13
 
