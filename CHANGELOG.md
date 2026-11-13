@@ -30,7 +30,8 @@
 - `node scripts/check-keys.mjs`：通过（767 literal / 513 shared / 1149 page-local）
 - `node --test lib/store.test.js lib/live/*.test.js`：430 通过，0 失败。新增 5 条：review 续跑只重跑 review 且
   阶段台账原地复用；digest 变化拒绝续跑；implement 失败按记录的 plan/feedback 续跑；无失败阶段拒绝续跑；
-  `executeTicket({ resumeWorkflow:true })` 在 planned 模式下只多调一次 review、implement 只跑一次并交付 dry-run。
+  `executeTicket({ resumeWorkflow:true })` 在 planned 模式下只多调一次 review、implement 只跑一次、交付 dry-run，
+  且新 run 继承闸门结果与实现摘要（续跑不会让运行记录变成空壳）。
 - `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
 
 ## [0.4.27] — 2026-11-12
