@@ -1,0 +1,39 @@
+name: ci
+
+# Every gate a contributor can run on a clean clone. The desktop-only checks (CDP screenshots, isolated DSH mount)
+# stay local: they need the DeepSeek Harness app, which CI does not have.
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Host syntax
+        run: node --check index.js
+      - name: Client artifact is rebuilt from source
+        run: node scripts/build-client.mjs --check
+      - name: Locale keys cover both languages
+        run: node scripts/check-keys.mjs
+      - name: Host tests
+        run: node --test lib/store.test.js lib/live/*.test.js
+      - name: Client render regression (jsdom, fixture state)
+        run: node scripts/render-check.mjs

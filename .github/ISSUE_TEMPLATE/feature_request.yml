@@ -1,0 +1,36 @@
+name: Feature request
+description: 想要的新能力或改动
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      description: 描述场景，而不是直接给方案——这决定了改动落在哪一页/哪一层
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望它怎么工作
+      description: 界面上的位置、交互、数据从哪来
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及区域
+      multiple: true
+      options:
+        - 工单 / 执行台账
+        - 来源与触发
+        - 评估与接单
+        - 验收与信号
+        - 配置（live.json / 仓库 / worker）
+        - 构建与发布（client/src、产物、i18n）
+        - 其他
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: 我知道
+      options:
+        - label: 客户端不能 import DSH 的客户端包，新增 UI 会以本仓库自己的组件实现
+        - label: 改动需要同时提供中英文文案

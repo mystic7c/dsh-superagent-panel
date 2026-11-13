@@ -1,0 +1,145 @@
+{
+  "enabled": false,
+  "paused": false,
+  "pausedIntake": false,
+  "pausedDispatch": false,
+  "repo": "",
+  "baseBranch": "dev",
+  "featurePrefix": "feature/",
+  "worktreeRoot": "@STATE@/worktrees",
+  "pollSeconds": 10,
+  "octo": {
+    "cliPath": "octo",
+    "tokenFile": "@STATE@/octo.token",
+    "intake": "sync",
+    "watchChatIds": [
+      "fixture-group-a",
+      "fixture-group-b"
+    ],
+    "chatTitles": {
+      "fixture-group-a": "演示群 A",
+      "fixture-group-b": "演示群 B"
+    },
+    "channelType": 2,
+    "allowSenderIds": [],
+    "allowAnyHuman": false,
+    "requireMention": false,
+    "botName": "DSH_BOT",
+    "botUid": "",
+    "syncLimit": 100,
+    "backfill": false,
+    "replyPrefix": "Superagent:",
+    "chatRepos": {
+      "fixture-group-a": "ebs",
+      "fixture-group-b": "web-app"
+    }
+  },
+  "gitlab": {
+    "baseUrl": "",
+    "project": "",
+    "tokenFile": "@STATE@/gitlab.token",
+    "targetBranch": "dev",
+    "createMr": "api",
+    "uatUrl": "",
+    "healthUrl": "",
+    "verifySeconds": 120
+  },
+  "eval": {
+    "mode": "rules",
+    "decision": {
+      "endpoint": "",
+      "model": "",
+      "tokenFile": "@STATE@/decision.token",
+      "timeoutMs": 6000,
+      "acceptAt": 0.5,
+      "rejectAt": 0.2,
+      "riskAt": 0.5,
+      "maxPerPoll": 10,
+      "concurrency": 2
+    }
+  },
+  "review": {
+    "enabled": false,
+    "scope": "all",
+    "allowSenderIds": [],
+    "expireHours": 24
+  },
+  "executor": {
+    "enabled": true,
+    "autoRun": false,
+    "allowPush": false,
+    "allowReply": false,
+    "allowMerge": false,
+    "gates": [
+      "standards",
+      "backend",
+      "frontend"
+    ],
+    "timeoutMs": 1500000,
+    "gateTimeoutMs": 600000,
+    "workerIdleTimeoutMs": 300000,
+    "model": null,
+    "workerBackend": "dsh",
+    "workerModel": "",
+    "workerCommand": "",
+    "workers": {
+      "dsh": {
+        "enabled": true
+      },
+      "codex": {
+        "enabled": true
+      },
+      "claude": {
+        "enabled": true
+      }
+    }
+  },
+  "repos": [
+    {
+      "id": "web-app",
+      "name": "web-app",
+      "kind": "web",
+      "repo": "@STATE@/repos/web-app",
+      "baseBranch": "dev",
+      "featurePrefix": "feature/",
+      "worktreeRoot": "@STATE@/worktrees",
+      "verifyMode": "web-uat",
+      "acceptance": "deployed",
+      "gitlab": {
+        "baseUrl": "https://gitlab.example.com",
+        "project": "demo/web-app",
+        "targetBranch": "dev",
+        "createMr": "api",
+        "tokenFile": "@STATE@/gitlab.token",
+        "uatUrl": "https://uat.example.com/web-app"
+      },
+      "gates": [
+        "standards",
+        "frontend"
+      ]
+    },
+    {
+      "id": "ebs",
+      "name": "ebs",
+      "kind": "oracle-ebs",
+      "repo": "@STATE@/repos/ebs",
+      "baseBranch": "develop",
+      "featurePrefix": "feature/",
+      "worktreeRoot": "@STATE@/worktrees",
+      "verifyMode": "manual",
+      "acceptance": "merged",
+      "gitlab": {
+        "baseUrl": "https://gitlab.example.com",
+        "project": "demo/ebs",
+        "targetBranch": "develop",
+        "createMr": "push",
+        "tokenFile": "@STATE@/gitlab.token",
+        "uatUrl": "https://uat.example.com/ebs"
+      },
+      "gates": [
+        "standards"
+      ]
+    }
+  ],
+  "defaultRepo": "ebs"
+}

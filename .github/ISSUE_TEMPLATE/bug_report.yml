@@ -1,0 +1,49 @@
+name: Bug report
+description: 面板行为与预期不符
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先确认这是插件的问题，而不是 DSH 本身：在 Plugin Manager 里禁用→启用插件后仍能复现再提交。
+        安全问题请不要走这里，见 [SECURITY.md](../SECURITY.md)。
+  - type: input
+    id: version
+    attributes:
+      label: 插件版本
+      description: package.json 的 version，或 Release 页面上的 tag
+      placeholder: 0.4.39
+    validations:
+      required: true
+  - type: input
+    id: dsh
+    attributes:
+      label: DSH 版本与系统
+      placeholder: DSH 1.x / macOS 15 / Chrome 141
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开面板开始，一步一步写
+      placeholder: |
+        1. 打开侧栏「超级智能体」
+        2. 切到「执行」页
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际
+      description: 预期看到什么，实际看到了什么（含报错文本、控制台堆栈）
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: 相关状态
+      description: |
+        `~/.dsh/superagent/live.json` 或台账的**脱敏**片段；如果是渲染问题，附上 `node scripts/render-check.mjs` 的输出。
+        **请删掉 token、真实仓库地址与内部群名。**
