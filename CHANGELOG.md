@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.6] — 2026-11-14
+
+### 变更
+- `client/src/58-ticket-detail.js`（1951 行，403 处 `h(...)`）从 `h(...)` 迁移到 JSX（P2 第五步，issue #34）：
+  `TicketStamp`、`TicketTimeline`、`TicketLazyFolded`、`RunTrace`、`RunHandoff`、`RunReport`、`TicketGateResults`、
+  `AcceptanceRecordCard`、`TicketActivities`、`TicketRunRows`、`DiffBody`、`DiffCard`、`AutomationCard`、
+  `DeliveryEvidenceCard` 以及 `TicketDetail` 整体（primaryAction 链、确认/差异对话框、四条 banner、四个 section、返回树）。
+- 只改写法：字典、`TICKET_STEP_KEYS`、纯函数（`ticketEvents`、`changesOf`、`gateOnFailOf`、`failureHint`、
+  `ticketVisibleJumps` 等）与交互逻辑不变；条件渲染仍用同一组判定。
+- 产物 486,055 → 486,236 字节（+181），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
 ## [0.5.5] — 2026-11-14
 
 ### 变更
