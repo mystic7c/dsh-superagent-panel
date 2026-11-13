@@ -783,15 +783,21 @@ function ticketEvidence(t, ticket, view) {
   const mr = links.mergeRequest ?? {}
   // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
   // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
-  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  // A merged/deployed Ticket is past that stage: saying "waiting for PR" beside a 已合并 tag contradicts the state.
+  const merged = ['merged', 'deployed'].includes(ticket?.status)
+    || links.verification?.merged === true || links.acceptance?.ok === true
+  const prWaiting = !merged && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
     const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
-      : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
-    return mr.webUrl
-      ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
-        title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
+      : merged ? pt(t, 'ticket.mergedYes')
+        : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
+    const href = safeHttpUrl(mr.webUrl)
+    return href
+      ? h('a', { className: 'sa-inline-link sa-mono', href, target: '_blank', rel: 'noopener noreferrer',
+        title: href, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
+  if (merged) return h('span', { className: 'sa-mono' }, pt(t, 'ticket.mergedYes'))
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
     const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
@@ -1259,8 +1265,9 @@ function MergeRequestCard({ ticket }) {
   // push mode records only the GitHub `/pull/new/` URL before any PR number exists; the URL alone is MR evidence.
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
+  const delivered = merged || ['merged', 'deployed'].includes(ticket?.status) || links.acceptance?.ok === true
   const rows = []
-  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  const prWaiting = !delivered && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])

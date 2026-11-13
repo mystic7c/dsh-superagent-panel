@@ -139,7 +139,15 @@ async function readModels(host) {
 }
 
 /** Parse `/superagent/api/<path>` into segments. */
-const segmentsOf = (url) => url.split('?')[0].replace(PREFIX, '').split('/').filter(Boolean).map(decodeURIComponent)
+const segmentsOf = (url) => {
+  const parts = url.split('?')[0].replace(PREFIX, '').split('/').filter(Boolean)
+  try {
+    return parts.map(decodeURIComponent)
+  } catch {
+    // A malformed `%` escape used to reach the generic 500 handler; it is a client error, not an internal one.
+    throw new ActionError(400, 'invalid URL encoding')
+  }
+}
 
 const routes = {
   'GET state': ({ host }) => stateView(host),
@@ -192,9 +200,15 @@ export function apply(ctx, config = {}) {
       await ready
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
       if (!url.pathname.startsWith(PREFIX)) { send(res, 404, { error: 'not found' }); return }
-      // Same-origin only: a page served by this Harness. The custom header makes blind cross-site posts fail too.
+      // Same-origin only: compare hosts, not schemes, so a Harness served over HTTPS or behind a TLS-terminating
+      // reverse proxy is not blocked (`origin` is `https://host` while `req.headers.host` has no scheme). The custom
+      // header makes blind cross-site posts fail too.
       const origin = req.headers.origin
-      if (origin && req.headers.host && origin !== `http://${req.headers.host}`) { send(res, 403, { error: 'same-origin request required' }); return }
+      if (origin && req.headers.host) {
+        let originHost = ''
+        try { originHost = new URL(origin).host } catch { originHost = '' }
+        if (originHost !== req.headers.host) { send(res, 403, { error: 'same-origin request required' }); return }
+      }
       if (req.headers['x-superagent-request'] !== '1') { send(res, 403, { error: 'x-superagent-request header required' }); return }
       const segments = segmentsOf(url.pathname)
       const method = req.method ?? 'GET'
