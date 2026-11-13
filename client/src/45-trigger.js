@@ -179,21 +179,40 @@ function ThreadDetailView({ threadKey, showBack }) {
   return ThreadDetail({ key: threadKey, threadKey, id: threadKey, showBack })
 }
 
-/** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. */
-function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false }) {
+/** ↑/↓/Home/End move focus between the row buttons; the row buttons themselves keep native Enter/Space activation.
+    Only one row is in the Tab order (roving tabindex), so a 50-row page is one Tab stop, not fifty (WIG A4/P2). */
+function threadRowKeyDown(event) {
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+  const edge = event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : ''
+  if (!step && !edge) return
+  const buttons = [...(event.currentTarget.closest('ul')?.querySelectorAll('button.sa-row-open') ?? [])]
+  if (!buttons.length) return
+  event.preventDefault()
+  const index = buttons.indexOf(event.currentTarget)
+  const target = edge === 'first' ? buttons[0]
+    : edge === 'last' ? buttons[buttons.length - 1]
+      : buttons[Math.max(0, Math.min(buttons.length - 1, index + step))]
+  target?.focus()
+}
+
+/** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. The open action
+    is one real `<button>` whose `::after` covers the whole row (the `.sa-open` pattern), so the row is a list item with
+    native semantics instead of a `<li role="button">` (P1/A4). */
+function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tabbable = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
   return h('li', {
-    className: 'sa-row',
-    role: 'button',
-    tabIndex: 0,
-    'aria-current': selected ? 'true' : undefined,
-    onClick: onOpen,
-    onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen() } },
-    style: selected ? { background: 'var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2))' } : undefined,
+    className: 'sa-row sa-row-openable',
+    // `.sa-list .sa-row[role='button']` used to give every thread row its 8px inset; the row is a plain list item now,
+    // so keep the same inset from the shared spacing token.
+    style: { paddingLeft: 'var(--sa-sp-8)', paddingRight: 'var(--sa-sp-8)',
+      ...(selected ? { background: 'var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2))' } : null) },
   },
   h('div', { className: 'sa-row-main' },
-    h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig))),
+    h('div', { className: 'sa-row-title' },
+      h('button', { type: 'button', className: 'sa-row-open sa-open', tabIndex: tabbable ? 0 : -1,
+        'aria-current': selected ? 'true' : undefined, onClick: onOpen, onKeyDown: threadRowKeyDown },
+      h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig)))),
     h('div', { className: 'sa-row-meta' },
       h('span', { className: 'sa-actions' },
         h(Icon, { name: THREAD_SOURCE_ICON[row.source] ?? 'message', size: 12 }),
@@ -228,16 +247,20 @@ function restoreTriggerScroll() {
     else window.scrollTo(0, y)
   } catch { /* private mode */ }
 }
-const TRG_URL_KEYS = { q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom', to: 'trgTo',
-  offset: 'trgOffset' }
+// The filter is part of the same deep-link state as the text filters (A5): a reload/back must restore the visible
+// slice, not silently drop back to the default one.
+const TRG_URL_KEYS = { filter: 'trgFilter', q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom',
+  to: 'trgTo', offset: 'trgOffset' }
 function trgUrlState() {
   try {
     const params = new URLSearchParams(window.location.search)
     const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
-    return { q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
+    const filter = params.get(TRG_URL_KEYS.filter)
+    return { filter: THREAD_FILTERS.includes(filter) ? filter : THREAD_FILTERS[0],
+      q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
       reason: params.get(TRG_URL_KEYS.reason) || '', from: params.get(TRG_URL_KEYS.from) || '',
       to: params.get(TRG_URL_KEYS.to) || '', offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
-  } catch { return { q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
+  } catch { return { filter: THREAD_FILTERS[0], q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
 }
 
 /** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
@@ -251,7 +274,7 @@ function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
   const initial = useRef(trgUrlState())
-  const [filter, setFilter] = useState('subscribed')
+  const [filter, setFilter] = useState(initial.current.filter)
   const [query, setQuery] = useState(initial.current.q)
   const [q, setQ] = useState(initial.current.q)
   const [repo, setRepo] = useState(initial.current.repo)
@@ -264,10 +287,13 @@ function LiveTriggerPage({ route }) {
     return () => clearTimeout(timer)
   }, [query, repo, reason])
   useEffect(() => { setOffset(0) }, [filter, q, repo, reason, from, to])
-  // Keep the free-text filter in our own URL params; the host route (including the selected Thread) is untouched.
+  // Keep the filter (chip selection) plus the free-text filter in our own URL params; the host route (including the
+  // selected Thread) is untouched.
   useEffect(() => {
     try {
       const url = new URL(window.location.href)
+      if (filter !== THREAD_FILTERS[0]) url.searchParams.set(TRG_URL_KEYS.filter, filter)
+      else url.searchParams.delete(TRG_URL_KEYS.filter)
       if (q) url.searchParams.set(TRG_URL_KEYS.q, q); else url.searchParams.delete(TRG_URL_KEYS.q)
       for (const [key, value] of [['repo', repo], ['reason', reason], ['from', from], ['to', to]]) {
         if (value) url.searchParams.set(TRG_URL_KEYS[key], value); else url.searchParams.delete(TRG_URL_KEYS[key])
@@ -276,10 +302,11 @@ function LiveTriggerPage({ route }) {
       else url.searchParams.delete(TRG_URL_KEYS.offset)
       window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     } catch { /* private mode */ }
-  }, [q, repo, reason, from, to, offset])
+  }, [filter, q, repo, reason, from, to, offset])
   useEffect(() => {
     const restore = () => {
       const next = trgUrlState()
+      setFilter(next.filter)
       setQuery(next.q); setQ(next.q); setRepo(next.repo); setReason(next.reason)
       setFrom(next.from); setTo(next.to); setOffset(next.offset)
     }
@@ -312,6 +339,12 @@ function LiveTriggerPage({ route }) {
   const items = Array.isArray(data?.items) ? data.items : []
   const counts = data?.counts ?? {}
   const selected = routeId ?? items[0]?.key
+  // One Tab stop for the whole list: the selected row (or the first one) is the tabbable row; ↑/↓/Home/End move
+  // focus between rows so 50 rows do not add 50 tab stops (P2).
+  const tabbableKey = items.some(row => row.key === selected) ? selected : items[0]?.key
+  // While the 300ms debounce catches up the list still shows the previous result; expose that to assistive tech
+  // instead of silently swapping rows under it (P3).
+  const filtering = query !== q
 
   const chooseFilter = (value) => {
     if (value === filter) return
@@ -354,13 +387,16 @@ function LiveTriggerPage({ route }) {
       h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
         onChange: event => setTo(event?.target?.value ?? '') }),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
-      items.length
-        ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
-          // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
-          // with no visible detail would otherwise promise a state the screen is not showing.
-          selected: compact ? row.key === routeId : row.key === selected,
-          onOpen: () => openThread(row.key), octoConfig })))
-        : h(Hint, null, pt(t, 'trg.noneInFilter')),
+      h('div', { 'aria-busy': filtering ? 'true' : undefined },
+        h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, filtering ? t('loading') : ''),
+        items.length
+          ? h('ul', { className: 'sa-list' }, items.map(row => h(ThreadListRow, { key: row.key, row, compact,
+            // In the single-pane layout the first row is not "selected" until the route carries its key; a grey row
+            // with no visible detail would otherwise promise a state the screen is not showing.
+            selected: compact ? row.key === routeId : row.key === selected,
+            tabbable: row.key === tabbableKey,
+            onOpen: () => openThread(row.key), octoConfig })))
+          : h(Hint, null, pt(t, 'trg.noneInFilter'))),
       items.length
         ? h('div', { className: 'sa-pagination' },
           h(Button, { variant: 'ghost', size: 'sm', disabled: offset <= 0,

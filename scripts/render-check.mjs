@@ -672,7 +672,8 @@ else skip('detail offers the UAT link', 'no uatUrl configured for the primary re
 const passButton = clickByText('验收通过')
 check('acceptance button exists', Boolean(passButton))
 await sleep(500)
-const confirm = [...rootElement.querySelectorAll('.sa-modal button')].find(node => (node.textContent ?? '').trim() === '确定')
+const confirm = [...rootElement.querySelectorAll('.sa-modal button')]
+  .find(node => /验收通过/.test((node.textContent ?? '').trim()))
 check('acceptance asks for confirmation', Boolean(confirm))
 confirm?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1600)
@@ -876,8 +877,8 @@ if (evalReady) {
   check('eval rows lead with the judged message', /依据这个SQL|SELECT Gcc|修复：|报表/.test(evalText), evalText.slice(0, 500))
   check('eval rows no longer leak a raw reason key', !/contextOnly/.test(evalText), evalText.slice(0, 500))
   check('eval keeps the rule-by-rule fold', evalText.includes('逐条规则'), evalText.slice(0, 300))
-  check('eval ticket short codes are links', rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length >= 1,
-    String(rootElement.querySelectorAll('.sa-main .sa-row-meta a.sa-mono').length))
+  check('eval ticket short codes open their ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length >= 1,
+    String(rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length))
   check('eval rows identify their thread or ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length >= 1,
     String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
   check('eval rows show the shadow model opinion', evalText.includes('模型 93%') && evalText.includes('倾向接单'),
@@ -909,7 +910,7 @@ if (evalReady) {
   await sleep(100)
 } else {
   for (const name of ['eval rows lead with the judged message', 'eval rows no longer leak a raw reason key',
-    'eval keeps the rule-by-rule fold', 'eval ticket short codes are links', 'eval rows identify their thread or ticket',
+    'eval keeps the rule-by-rule fold', 'eval ticket short codes open their ticket', 'eval rows identify their thread or ticket',
     'eval rows show the shadow model opinion', 'eval filters are one row of chips (kind + time window)']) {
     skip(name, 'no decisions in this state, so the Eval page has no rows to check')
   }
@@ -973,7 +974,7 @@ const readyRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openab
   .find(row => (row.textContent ?? '').includes('演示：干跑完成待发布'))
 check('the execution queue lists the finished dry run', Boolean(readyRow),
   [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
-readyRow?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+readyRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 const readyPrimary = [...rootElement.querySelectorAll('.sa-page-head-actions .sa-btn-primary')].map(node => (node.textContent ?? '').trim())
 check('a finished dry run makes 发布 MR the primary action', readyPrimary.includes('发布 MR'), JSON.stringify(readyPrimary))
@@ -1044,7 +1045,7 @@ const runningRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-open
   .find(row => (row.textContent ?? '').includes('演示：正在执行的工单'))
 check('the execution queue lists the running Ticket', Boolean(runningRow),
   [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
-runningRow?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+runningRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 const headerStop = [...rootElement.querySelectorAll('.sa-page-head-actions button')]
   .find(button => (button.textContent ?? '').trim() === '停止工单')
@@ -1056,7 +1057,8 @@ const stopDialog = rootElement.querySelector('.sa-modal')
 check('stop asks for confirmation and says the completed work is kept',
   /请求停止这个工单/.test(stopDialog?.textContent ?? '') && /已完成的动作会保留/.test(stopDialog?.textContent ?? ''),
   (stopDialog?.textContent ?? '').slice(0, 200))
-const stopConfirm = [...(stopDialog?.querySelectorAll('button') ?? [])].find(button => /^(确认|确定)$/.test((button.textContent ?? '').trim()))
+const stopConfirm = [...(stopDialog?.querySelectorAll('button') ?? [])]
+  .find(button => /终止工单|^(确认|确定)$/.test((button.textContent ?? '').trim()))
 stopConfirm?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 const stoppedText = text()

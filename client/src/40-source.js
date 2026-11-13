@@ -120,11 +120,11 @@ function sourceStatRows(source) {
 function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
-  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono' }, String(config.project))])
+  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
   if (config.baseUrl) rows.push([pt(t, 'repo.baseUrl'), h(ExternalLink, { href: String(config.baseUrl), icon: null }, String(config.baseUrl))])
-  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono' }, String(config.targetBranch))])
+  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
   rows.push([pt(t, 'repo.token'), config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')])
-  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono' }, String(repo.repo))])
+  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo))])
   if (repo?.baseBranch || config.targetBranch) {
     rows.push([pt(t, 'repo.branches'), `${repo?.baseBranch ?? '—'} → ${config.targetBranch ?? '—'}`])
   }
@@ -221,7 +221,7 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onO
           h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
         (item?.source || reason || at)
           ? h('div', { className: 'sa-row-meta' },
-            item?.source ? h('span', { className: 'sa-mono' }, String(item.source)) : null,
+            item?.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(item.source)) : null,
             reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
             at ? h(When, { at }) : null,
             labels.length
@@ -307,7 +307,7 @@ function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenTh
     h('div', { className: 'sa-row-title' },
       String(signal.textPreview ?? signal.candidate?.text ?? signal.payload?.text ?? '') || pt(t, 'src.signalPreviewEmpty')),
     h('div', { className: 'sa-row-meta' },
-      signal.source ? h('span', { className: 'sa-mono' }, String(signal.source)) : null,
+      signal.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(signal.source)) : null,
       reason ? h('span', null, pt(t, 'src.signalReason', { reason })) : null,
       at ? h(When, { at }) : null),
     offPage ? h(Hint, null, pt(t, 'src.focusOffPage')) : null,
@@ -459,7 +459,7 @@ function LiveSourcePage({ route }) {
 
   const enabled = sources.filter(source => source.enabled).length
   const lastAt = sources.map(source => source.lastAt).filter(Boolean).sort().at(-1)
-  const clock = lastAt ? (hhmmss(lastAt, t.lang) || '').slice(0, 5) : ''
+  const clock = lastAt ? hhmm(lastAt, t.lang) : ''
   const summary = clock
     ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
     : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
@@ -479,11 +479,14 @@ function LiveSourcePage({ route }) {
       return [
         // Unified action vocabulary (critique §3): 检查新消息 = dry-run poll, with the message icon and no
         // white primary fill, so it reads the same as the header action instead of a generic refresh button.
-        h(Button, { key: 'poll', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-          // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
-          disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
-          title: !source.enabled && data.config?.octo?.tokenConfigured !== true ? pt(t, 'src.checkNeedsToken') : undefined,
-          onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+        // Dry run is the one intake action that stays meaningful while the engine is off, as long as a token exists.
+        h(Fragment, { key: 'poll' },
+          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
+            disabled: poll.busy || (!source.enabled && data.config?.octo?.tokenConfigured !== true),
+            onClick: () => { void poll.run() } }, pt(t, 'actions.checkNow')),
+          // A disabled control still has to say why: the reason is a focusable tip, not a title tooltip (A3).
+          !source.enabled && data.config?.octo?.tokenConfigured !== true
+            ? h(InfoTip, { text: pt(t, 'src.checkNeedsToken'), warn: true }) : null),
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
           onClick: focusFiltered }, pt(t, 'src.action.filtered')),
       ]
@@ -568,43 +571,50 @@ function LiveSourcePage({ route }) {
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
       : null,
-    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it.
-    signals.data
-      ? h(Section, { title: pt(t, 'src.signals'), count: Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length,
-        badge: labelTotal > 0
-          ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
-            correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
-            missedWake: Number(labelCounts.missed_wake) || 0 }))
-          : null,
-        action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
-          pt(t, 'src.signalsRefresh')) },
-        h('div', { className: 'sa-filters' },
-          h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
-            onChange: event => setSigQuery(event?.target?.value ?? '') }),
-          h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
-            onChange: event => setSigRepo(event?.target?.value ?? '') }),
-          h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
-            onChange: event => setSigReason(event?.target?.value ?? '') }),
-          h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
-            onChange: event => setSigFrom(event?.target?.value ?? '') }),
-          h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
-            onChange: event => setSigTo(event?.target?.value ?? '') }),
-          h(SegmentedControl, { options: [
-            { value: 'all', label: pt(t, 'decisionFilter.all') },
-            ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
-          value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
-        signalItems.length ? h(Fragment, null,
-          h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
-            onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy,
-            focusId, onOpenTicket: id => leaveTo({ page: 'execution', id }) }),
-          h('div', { className: 'sa-pagination' },
-            h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
-              onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
-            h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
-              from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
-              total: Number(signals.data.total) || signalItems.length })),
-            h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
-              onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
-          : h(Hint, null, pt(t, 'src.signalsEmpty')))
-      : null)
+    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it. The section itself
+    // must not vanish while the first load is pending or a poll failed, so it keeps its heading and renders a skeleton
+    // or the retryable error instead (P2).
+    signalsOff
+      ? null
+      : h('div', { 'aria-busy': signals.loading ? 'true' : undefined },
+        h(Section, { title: pt(t, 'src.signals'),
+          count: signals.data ? (Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length) : undefined,
+          badge: signals.data && labelTotal > 0
+            ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
+              correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
+              missedWake: Number(labelCounts.missed_wake) || 0 }))
+            : null,
+          action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
+            pt(t, 'src.signalsRefresh')) },
+          h('div', { className: 'sa-filters' },
+            h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
+              onChange: event => setSigQuery(event?.target?.value ?? '') }),
+            h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
+              onChange: event => setSigRepo(event?.target?.value ?? '') }),
+            h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
+              onChange: event => setSigReason(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
+              onChange: event => setSigFrom(event?.target?.value ?? '') }),
+            h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
+              onChange: event => setSigTo(event?.target?.value ?? '') }),
+            h(SegmentedControl, { options: [
+              { value: 'all', label: pt(t, 'decisionFilter.all') },
+              ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
+            value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
+          signals.error ? h(ErrorState, { error: signals.error, onRetry: signals.reload }) : null,
+          !signals.data
+            ? signals.error ? null : h(Skeleton, { rows: 3 })
+            : signalItems.length ? h(Fragment, null,
+              h(RawSignalRows, { items: signalItems, onReplay: item => { void replay.run(item) },
+                onLabel: (item, labelId) => { void label.run(item, labelId) }, busy: replay.busy, labelBusy: label.busy,
+                focusId, onOpenTicket: id => leaveTo({ page: 'execution', id }) }),
+              h('div', { className: 'sa-pagination' },
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
+                  onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
+                h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
+                  from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
+                  total: Number(signals.data.total) || signalItems.length })),
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
+                  onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
+              : h(Hint, null, pt(t, 'src.signalsEmpty')))))
 }

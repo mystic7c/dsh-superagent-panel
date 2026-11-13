@@ -97,6 +97,11 @@ Object.assign(PAGE_TEXT, {
     'Triggers: {manual} manual · {auto} automatic · {timed} timed'],
   'ov.q.acceptance': ['验收：{rounds} 轮 · 通过 {rate}%', 'Acceptance: {rounds} rounds · {rate}% passed'],
   'ov.q.openExecution': ['去执行页', 'Open Execution'],
+
+  // ---- folded runtime details: a 30-group cursor row stays two lines until it is expanded ------------------------
+  'ov.cursorMore': ['其余 {count} 个', '{count} more'],
+  // The poll cadence can be absent on an older host: the summary cannot promise a number it does not have.
+  'ov.summaryAlt': ['轮询间隔未知 · 更新于 {time}', 'Poll interval unknown · updated {time}'],
 })
 
 const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
@@ -123,12 +128,13 @@ function useOverviewNow(intervalMs = 1000) {
   return now
 }
 
-const ovPad = value => String(value).padStart(2, '0')
-/** `MM-DD HH:mm` — enough for an absolute stamp without the seconds a 30s model cannot promise. */
+// The hand-built `MM-DD HH:mm` was the same string in both languages and bypassed the locale's digit/order rules.
+const ovStampFormatter = lang => new Intl.DateTimeFormat(lang === 'en' ? 'en' : 'zh-CN',
+  { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 function ovStamp(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
-  return `${ovPad(date.getMonth() + 1)}-${ovPad(date.getDate())} ${ovPad(date.getHours())}:${ovPad(date.getMinutes())}`
+  return ovStampFormatter(PANEL_LANG).format(date)
 }
 const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en' ? 'en' : 'zh-CN')
 const ovClip = (value, limit = 64) => {
@@ -294,7 +300,9 @@ function LiveOverviewPage({ route }) {
     notify(pt(t, 'automation.started'))
   }, { reload })
   const [runtimeOpen, setRuntimeOpen] = useState(false)
-  const now = useOverviewNow(1000)
+  // The page used to re-render every second just to keep a countdown fresh; only the pulse/countdown read this clock,
+  // so a 5 s beat keeps it honest without repainting the whole desk each second (WIG P2).
+  const now = useOverviewNow(5000)
   // The previous visit is read once (this render) and written after it: reading it in an effect would already see
   // the new value and every visit would claim "nothing new".
   const [lastSeen] = useState(ovReadLastSeen)
@@ -372,10 +380,10 @@ function LiveOverviewPage({ route }) {
   // The one panel-wide "data updated" clock is the header's; the folded summary repeats the same client read time
   // without seconds, and the engine's own poll time lives only in the expanded KeyValues (#2/#23).
   const clock = hhmm(updatedAt, t.lang) || '—'
-  const pollSeconds = config.pollSeconds ?? '—'
-  const cursorText = Object.entries(engine.channelCursors ?? {})
+  const pollSeconds = config.pollSeconds
+  const pollSecondsKnown = pollSeconds !== undefined && pollSeconds !== null && pollSeconds !== ''
+  const cursorPairs = Object.entries(engine.channelCursors ?? {})
     .map(([chat, seq]) => `${config.octo?.chatTitles?.[chat] ?? String(chat).slice(0, 8)}@${seq}`)
-    .join(' / ')
 
   // The engine error and the paused switch are also derivable through `problemsOf`, but this page renders both as
   // their own state block right above the desk; listing them twice would say the same thing in two places (§4.2).
@@ -456,22 +464,24 @@ function LiveOverviewPage({ route }) {
 
   // P2-9 run quality card: KPI line, at most three failure causes (each jumps to Execution) and one small metric line.
   const qualitySection = quality
-    ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title') },
+    ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title'),
+      // One section-level jump replaces the identical per-row button a failure list used to repeat (WIG P3).
+      action: quality.failures.length
+        ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
+          pt(t, 'ov.q.openExecution'))
+        : undefined },
       quality.total > 0
         ? h(Fragment, null,
           h('p', { style: { margin: '0 0 var(--sa-sp-8)', fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
             pt(t, 'ov.q.kpi', { runs: quality.total, rate: quality.rate, avg: quality.avgText, repaired: quality.repaired })),
           quality.failures.length
             ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } },
-              h('p', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
+              h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
               h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
                 h(StatusIcon, { state: 'error', size: 14, spin: false }),
                 h('div', { className: 'sa-row-main' },
                   h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, item.reason || '—')),
-                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count })))),
-                h('div', { className: 'sa-row-actions' },
-                  h(Button, { variant: 'ghost', size: 'sm',
-                    onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.q.openExecution')))))))
+                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count }))))))))
             : null,
           (quality.triggerText || quality.acceptanceText)
             ? h('p', { className: 'sa-hint' }, [quality.triggerText, quality.acceptanceText].filter(Boolean).join(' · '))
@@ -481,11 +491,19 @@ function LiveOverviewPage({ route }) {
           h('span', { className: 'sa-hint' }, pt(t, 'ov.q.empty'))))
     : null
 
+  const cursorMore = cursorPairs.slice(3)
   const runtimeRows = [
     [pt(t, 'ov.runState'), h(StatusText, { state: health.state }, pt(t, health.labelKey))],
-    [pt(t, 'ov.pollInterval'), pt(t, 'ov.seconds', { value: pollSeconds })],
+    // A missing cadence used to render as "— 秒": show the dash itself, not a sentence around a placeholder.
+    [pt(t, 'ov.pollInterval'), pollSecondsKnown ? pt(t, 'ov.seconds', { value: pollSeconds }) : '—'],
     [pt(t, 'ov.engineLastPoll'), engine.lastPollAt ? h(When, { at: engine.lastPollAt }) : '—'],
-    [pt(t, 'ov.cursor'), cursorText || String(engine.cursor ?? 0)],
+    [pt(t, 'ov.cursor'), cursorPairs.length
+      ? h(Fragment, null, cursorPairs.slice(0, 3).join(' / '),
+        cursorMore.length
+          ? h(Folded, { summary: pt(t, 'ov.cursorMore', { count: cursorMore.length }) },
+            h('span', { className: 'sa-mono' }, cursorMore.join(' / ')))
+          : null)
+      : String(engine.cursor ?? 0)],
     [pt(t, 'ov.autoVerify'), pt(t, 'ov.autoVerifyValue', { value: engine.autoVerifySeconds ?? '—' })],
     [pt(t, 'ov.counts'), pt(t, 'ov.countsValue', { tickets: counts.tickets ?? 0,
       runs: counts.runs ?? 0, triggers: counts.triggers ?? 0 })],
@@ -518,23 +536,31 @@ function LiveOverviewPage({ route }) {
   const legacyNeedsBody = legacyTickets.length
     ? h(Fragment, null,
       h('ul', { className: 'sa-list' }, legacyTickets.map(ticket =>
-        h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true }))),
+        h(TicketRow, { key: ticket.id, ticket, page: 'overview', actions, reload, compact: true, now }))),
       moreCount > 0 ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount })) : null)
     : legacyHumanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: legacyHumanCount }))
       : null
   // Inbox desk (P0): one row per blocking item — kind icon, title, summary and the one step that settles it (open the
   // Ticket or the Source). Count = rendered rows; a count without rows (list still loading) says so instead of lying.
+  // The whole row used to be a click-only div: not focusable, not operable from the keyboard and not announced as a
+  // control (WIG P1). The title is now a real button whose stretched overlay (`.sa-open::after`) covers the row, and
+  // the explicit action button keeps its own clickable layer above it.
   const inboxRows = blockingItems.length
     ? h('ul', { className: 'sa-list' }, blockingItems.map(item => h('li', { key: item.id },
-      h('div', { className: 'sa-row sa-row-openable', onClick: () => openInboxItem(item) },
+      h('div', { className: 'sa-row sa-row-openable' },
         h(Icon, { name: ovInboxIcon(item), size: 16 }),
         h('div', { className: 'sa-row-main' },
-          h('div', { className: 'sa-row-title' }, h('span', null, String(item.title ?? ''))),
+          h('div', { className: 'sa-row-title' },
+            h('button', { type: 'button', className: 'sa-row-open sa-open',
+              title: String(item.title ?? '') || undefined,
+              'aria-label': `${String(item.title ?? '') || item.id} — ${pt(t, ovInboxActionKey(item))}`,
+              onClick: () => openInboxItem(item) },
+            h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—'))),
           item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
         h('div', { className: 'sa-row-actions' },
           h(Button, { variant: 'outline', size: 'sm',
-            onClick: event => { event.stopPropagation(); openInboxItem(item) } }, pt(t, ovInboxActionKey(item))))))))
+            onClick: () => openInboxItem(item) }, pt(t, ovInboxActionKey(item))))))))
     : humanCount > 0
       ? h('p', { className: 'sa-hint' }, pt(t, 'ov.onlyCount', { count: humanCount }))
       : null
@@ -580,7 +606,7 @@ function LiveOverviewPage({ route }) {
     activeTickets.length ? h(Section, { title: pt(t, 'ov.running'), count: activeTickets.length,
       action: h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) },
         pt(t, 'actions.openExecution')) },
-      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload })) : null,
+      h(TicketList, { tickets: activeTickets, page: 'execution', actions, reload, now })) : null,
 
     // 3. System problems: each row keeps its own next step; an empty list hides the whole block.
     problems.length ? h(Section, { title: pt(t, 'ov.problems'), count: problems.length },
@@ -589,7 +615,8 @@ function LiveOverviewPage({ route }) {
           h(StatusIcon, { state: problem.severity === 'error' ? 'error' : 'warning', size: 16 }),
           h('div', { className: 'sa-row-main' },
             h('div', { className: 'sa-row-title' }, h('span', null, problem.title)),
-            problem.detail ? h('div', { className: 'sa-row-meta' }, problem.detail) : null),
+            problem.detail ? h('div', { className: 'sa-row-meta' },
+              h(ClampText, { text: String(problem.detail), limit: 300, lines: 2 })) : null),
           h('div', { className: 'sa-row-actions' },
             problem.action ? h(Button, { variant: 'outline', size: 'sm',
               onClick: () => runProblem(problem) }, pt(t, problem.action.labelKey)) : null)))))) : null,
@@ -604,7 +631,7 @@ function LiveOverviewPage({ route }) {
           // The policy ledger is a second reading of the same window and stays visible even when the 24h flow is
           // empty but decisions exist (an empty funnel is not proof that nothing was judged).
           h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)', marginTop: 'var(--sa-sp-8)' } },
-            h('p', { className: 'sa-ledger-title' }, pt(t, 'ov.rulesTitle')),
+            h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.rulesTitle')),
             ruleLedger.rows.length
               ? h('div', { className: 'sa-ledger' }, ruleLedger.rows.map(row =>
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
@@ -634,7 +661,8 @@ function LiveOverviewPage({ route }) {
     // 5. Secondary engine state, collapsed by default; the summary carries the poll cadence and the read time only.
     h(DisclosureRow, { title: pt(t, 'ov.runtime'), open: runtimeOpen,
       onToggle: () => setRuntimeOpen(open => !open),
-      collapsedContent: h('span', { className: 'sa-hint' }, pt(t, 'ov.summary', {
-        seconds: pollSeconds, time: clock })) },
+      collapsedContent: h('span', { className: 'sa-hint' },
+        pollSecondsKnown ? pt(t, 'ov.summary', { seconds: pollSeconds, time: clock })
+          : pt(t, 'ov.summaryAlt', { time: clock })) },
       h(KeyValues, { rows: runtimeRows })))
 }
