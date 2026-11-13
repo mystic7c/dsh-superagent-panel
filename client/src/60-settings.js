@@ -666,15 +666,18 @@ function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled
     if (hintId) node.setAttribute('aria-describedby', hintId)
     else node.removeAttribute('aria-describedby')
   }, [hintId])
-  return h('label', { className: 'sa-switch-row' },
-    h('span', { className: 'sa-switch-row-text' },
-      h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-        label,
-        badge ?? null,
-        tip ? h(InfoTip, { text: tip, warn: tipWarn === true }) : null),
-      // A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>.
-      hint ? h('span', { className: 'sa-hint', id: hintId, style: { display: 'block' } }, hint) : null),
-    h(Switch, { checked: Boolean(checked), label, disabled, inputRef, onChange }))
+  return <label className="sa-switch-row">
+    <span className="sa-switch-row-text">
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
+        {label}
+        {badge ?? null}
+        {tip ? <InfoTip text={tip} warn={tipWarn === true} /> : null}
+      </span>
+      {/* A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>. */}
+      {hint ? <span className="sa-hint" id={hintId} style={{ display: 'block' }}>{hint}</span> : null}
+    </span>
+    <Switch checked={Boolean(checked)} label={label} disabled={disabled} inputRef={inputRef} onChange={onChange} />
+  </label>
 }
 
 /** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
@@ -682,17 +685,13 @@ function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled
 function SettingsStatusLine({ view, note, busy }) {
   const { t } = usePanel()
   if (!view) return null
-  return h('div', {
-    className: 'sa-actions',
-    role: 'status',
-    'aria-live': 'polite',
-    'aria-atomic': 'true',
-    'aria-busy': busy ? 'true' : undefined,
-    style: { flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' },
-  },
-    h(StatusText, { state: view.state }, view.text),
-    note ? h('span', { className: 'sa-hint' }, note) : null,
-    view.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, view.raw)) : null)
+  return <div className="sa-actions" role="status" aria-live="polite" aria-atomic="true"
+    aria-busy={busy ? 'true' : undefined}
+    style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' }}>
+    <StatusText state={view.state}>{view.text}</StatusText>
+    {note ? <span className="sa-hint">{note}</span> : null}
+    {view.raw ? <Folded summary={t('rawError')}><pre className="sa-pre" translate="no">{view.raw}</pre></Folded> : null}
+  </div>
 }
 
 /** Gate codes render through the shared gate labels when they are known, and stay raw when they are not. */
@@ -776,28 +775,35 @@ const WORKER_CAPABILITIES = [
 function WorkerCapabilityCard({ currentBackend }) {
   const { t } = usePanel()
   const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
-  return h('div', { className: 'sa-field' },
-    h('span', { className: 'sa-field-head' }, pt(t, 'st.capTitle')),
-    h(Hint, null, pt(t, 'st.capHint')),
-    h('table', { className: 'sa-glossary sa-capabilities' },
-      h('thead', null, h('tr', null,
-        h('th', null, pt(t, 'st.capBackend')),
-        WORKER_CAP_COLUMNS.map(column => h('th', { key: column.key }, pt(t, column.labelKey))))),
-      h('tbody', null, WORKER_CAPABILITIES.map(entry => {
+  return <div className="sa-field">
+    <span className="sa-field-head">{pt(t, 'st.capTitle')}</span>
+    <Hint>{pt(t, 'st.capHint')}</Hint>
+    <table className="sa-glossary sa-capabilities">
+      <thead><tr>
+        <th>{pt(t, 'st.capBackend')}</th>
+        {WORKER_CAP_COLUMNS.map(column => <th key={column.key}>{pt(t, column.labelKey)}</th>)}
+      </tr></thead>
+      <tbody>{WORKER_CAPABILITIES.map(entry => {
         const active = entry.backend === current
-        return h('tr', { key: entry.backend, 'data-current': active ? 'true' : undefined,
-          style: active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined },
-          h('th', { scope: 'row' },
-            h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-4)' } },
-              h('span', null, pt(t, entry.nameKey)),
-              active ? h(Tag, { tone: 'info' }, pt(t, 'st.capCurrent')) : null)),
-          WORKER_CAP_COLUMNS.map(column => {
+        return <tr key={entry.backend} data-current={active ? 'true' : undefined}
+          style={active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined}>
+          <th scope="row">
+            <span className="sa-actions" style={{ gap: 'var(--sa-sp-4)' }}>
+              <span>{pt(t, entry.nameKey)}</span>
+              {active ? <Tag tone="info">{pt(t, 'st.capCurrent')}</Tag> : null}
+            </span>
+          </th>
+          {WORKER_CAP_COLUMNS.map(column => {
             const cell = entry.capabilities[column.key] ?? { yes: false }
-            return h('td', { key: column.key },
-              h(Tag, { tone: cell.yes ? 'success' : 'neutral' }, pt(t, cell.yes ? 'st.capYes' : 'st.capNo')),
-              cell.noteKey ? h('div', { className: 'sa-hint' }, pt(t, cell.noteKey)) : null)
-          }))
-      }))))
+            return <td key={column.key}>
+              <Tag tone={cell.yes ? 'success' : 'neutral'}>{pt(t, cell.yes ? 'st.capYes' : 'st.capNo')}</Tag>
+              {cell.noteKey ? <div className="sa-hint">{pt(t, cell.noteKey)}</div> : null}
+            </td>
+          })}
+        </tr>
+      })}</tbody>
+    </table>
+  </div>
 }
 
 const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
@@ -819,67 +825,77 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
   const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
-    [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.project)) : t('empty')],
-    [pt(t, 'repo.baseUrl'), repo.baseUrl ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.baseUrl)) : t('empty')],
-    [pt(t, 'repo.localPath'), repo.repo ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo)) : t('empty')],
+    [pt(t, 'repo.project'), repo.project ? <span className="sa-mono" translate="no">{String(repo.project)}</span> : t('empty')],
+    [pt(t, 'repo.baseUrl'), repo.baseUrl ? <span className="sa-mono" translate="no">{String(repo.baseUrl)}</span> : t('empty')],
+    [pt(t, 'repo.localPath'), repo.repo ? <span className="sa-mono" translate="no">{String(repo.repo)}</span> : t('empty')],
     [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
     [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
     [pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repo.verifyMode)],
     [pt(t, 'repo.acceptance'), repoAcceptanceText(t, repo.acceptance)],
   ]
-  return h('div', { className: 'sa-card' },
-    h('div', { className: 'sa-card-head' },
-      h('span', { className: 'sa-section-icon' }, h(Icon, { name: 'pull', size: 16 })),
-      h('span', { className: 'sa-card-title' }, repo.name ?? repo.id),
-      isDefault ? h(Tag, { tone: 'quiet' }, pt(t, 'repo.default')) : null,
-      repo.enabled === false ? h(Tag, { tone: 'warning' }, pt(t, 'repos.disabledTag')) : null,
-      h(Tag, { tone: repo.tokenConfigured ? 'outline' : 'warning' },
-        repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')),
-      repo.name && repo.id && repo.name !== repo.id
-        ? h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(repo.id)) : null),
-    h(KeyValues, { rows }),
-    h('div', { className: 'sa-actions' },
-      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'settings', size: 14 }),
-        onClick: () => onEdit?.(repo) }, pt(t, 'repos.edit')),
-      h(ConfirmButton, { label: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
-        title: pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle'),
-        message: pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id }),
+  return <div className="sa-card">
+    <div className="sa-card-head">
+      <span className="sa-section-icon"><Icon name="pull" size={16} /></span>
+      <span className="sa-card-title">{repo.name ?? repo.id}</span>
+      {isDefault ? <Tag tone="quiet">{pt(t, 'repo.default')}</Tag> : null}
+      {repo.enabled === false ? <Tag tone="warning">{pt(t, 'repos.disabledTag')}</Tag> : null}
+      <Tag tone={repo.tokenConfigured ? 'outline' : 'warning'}>
+        {repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')}
+      </Tag>
+      {repo.name && repo.id && repo.name !== repo.id
+        ? <span className="sa-mono sa-hint" translate="no">{String(repo.id)}</span> : null}
+    </div>
+    <KeyValues rows={rows} />
+    <div className="sa-actions">
+      <Button variant="outline" size="sm" icon={<Icon name="settings" size={14} />}
+        onClick={() => onEdit?.(repo)}>{pt(t, 'repos.edit')}</Button>
+      <ConfirmButton label={pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable')}
+        title={pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle')}
+        message={pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id })}
         // A generic "确定" would make the reader re-read the dialog body: the confirm button states the action.
-        confirmLabel: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
-        onConfirm: async () => { await onToggle?.(repo) } }),
-      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
-        disabled: test.busy, 'aria-busy': test.busy ? 'true' : undefined, onClick: () => { void runTest() } },
-      pt(t, test.busy ? 'repos.testing' : 'repos.test'))),
-    test.result || test.error
-      ? h('div', { className: 'sa-field', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true',
-        style: { marginTop: 'var(--sa-sp-8)' } },
-        h('span', { className: 'sa-field-head' }, pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')),
-        h(Hint, null, test.error ?? (test.result.checks ?? []).map(check =>
-          `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')),
-        h(Hint, null, pt(t, 'repos.testHint')))
-      : null,
-    h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
-      h('span', { className: 'sa-field-head' }, pt(t, 'repo.token')),
-      h('div', { style: { display: 'flex', width: '100%', minWidth: 0 } },
-        h(Input, { type: 'password', autoComplete: 'off', value: token, disabled: tokenBusy, className: 'sa-input-full',
-          placeholder: pt(t, 'repos.tokenPlaceholder'), 'aria-label': pt(t, 'repos.tokenPlaceholder'),
-          onChange: event => setToken(event.target.value) })),
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
-          disabled: tokenBusy || !token.trim(),
-          onClick: () => { void Promise.resolve(onSaveToken?.(repo, token.trim())).then(saved => { if (saved) setToken('') }) } },
-        pt(t, 'repos.tokenSave')),
-        repo.tokenConfigured
+        confirmLabel={pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable')}
+        onConfirm={async () => { await onToggle?.(repo) }} />
+      <Button variant="outline" size="sm" icon={<Icon name="shield" size={14} />}
+        disabled={test.busy} aria-busy={test.busy ? 'true' : undefined} onClick={() => { void runTest() }}>
+        {pt(t, test.busy ? 'repos.testing' : 'repos.test')}
+      </Button>
+    </div>
+    {test.result || test.error
+      ? <div className="sa-field" role="status" aria-live="polite" aria-atomic="true"
+        style={{ marginTop: 'var(--sa-sp-8)' }}>
+        <span className="sa-field-head">{pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')}</span>
+        <Hint>{test.error ?? (test.result.checks ?? []).map(check =>
+          `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')}</Hint>
+        <Hint>{pt(t, 'repos.testHint')}</Hint>
+      </div>
+      : null}
+    <div className="sa-field" style={{ marginTop: 'var(--sa-sp-8)' }}>
+      <span className="sa-field-head">{pt(t, 'repo.token')}</span>
+      <div style={{ display: 'flex', width: '100%', minWidth: 0 }}>
+        <Input type="password" autoComplete="off" value={token} disabled={tokenBusy} className="sa-input-full"
+          placeholder={pt(t, 'repos.tokenPlaceholder')} aria-label={pt(t, 'repos.tokenPlaceholder')}
+          onChange={event => setToken(event.target.value)} />
+      </div>
+      <div className="sa-actions">
+        <Button variant="outline" size="sm" icon={<Icon name="shield" size={14} />}
+          disabled={tokenBusy || !token.trim()}
+          onClick={() => { void Promise.resolve(onSaveToken?.(repo, token.trim())).then(saved => { if (saved) setToken('') }) }}>
+          {pt(t, 'repos.tokenSave')}
+        </Button>
+        {repo.tokenConfigured
           // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
-          ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'repos.tokenClearTitle'),
-            message: pt(t, 'repos.tokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
-            onConfirm: async () => {
+          ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle')}
+            message={pt(t, 'repos.tokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
+            onConfirm={async () => {
               if (tokenBusy) return
               const cleared = await onSaveToken?.(repo, '')
               if (cleared !== false) setToken('')
-            } })
-          : null),
-      h(Hint, null, pt(t, 'repos.tokenHint'))))
+            }} />
+          : null}
+      </div>
+      <Hint>{pt(t, 'repos.tokenHint')}</Hint>
+    </div>
+  </div>
 }
 
 function LiveSettingsPage({ route }) {
@@ -957,7 +973,7 @@ function LiveSettingsPage({ route }) {
     return () => clearTimeout(timer)
   }, [route?.focus, active])
   if (!data) {
-    return error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : h(Skeleton, { rows: 6 })
+    return error ? <ErrorState error={error} onRetry={() => { void reload() }} /> : <Skeleton rows={6} />
   }
   const config = data.config ?? {}
   const octo = config.octo ?? {}
@@ -1192,57 +1208,62 @@ function LiveSettingsPage({ route }) {
   // Each content group opens with a real H2 mirroring its left-nav label; `.sa-settings-title` owns the typography
   // (05-style.js), so the element here carries no inline styles.
   const activeGroup = SETTINGS_GROUPS.find(group => group.id === active) ?? SETTINGS_GROUPS[0]
-  const settingsHeading = () => h('h2', { className: 'sa-settings-title' }, pt(t, activeGroup.labelKey))
+  const settingsHeading = () => <h2 className="sa-settings-title">{pt(t, activeGroup.labelKey)}</h2>
 
   // ---- repositories group: repository cards + tokens, then the read-only deployment section -------------------
   // Deployment used to be its own group; it describes the same GitLab target and worktree as these repositories, so it
   // lives here as a read-only sub-section instead of owning a seventh navigation entry.
   const renderRepos = () => {
     const deployRows = [
-      [pt(t, 'st.configFile'), h('span', { className: 'sa-mono', translate: 'no' }, config.file ?? t('empty'))],
+      [pt(t, 'st.configFile'), <span className="sa-mono" translate="no">{config.file ?? t('empty')}</span>],
       [pt(t, 'st.configExists'), config.exists ? pt(t, 'st.fileExists') : pt(t, 'st.fileMissing')],
-      [pt(t, 'st.gitlabProject'), gitlab.project ? h('span', { className: 'sa-mono', translate: 'no' }, gitlab.project) : t('empty')],
-      [pt(t, 'st.gitlabBase'), gitlab.baseUrl ? h(ExternalLink, { href: gitlab.baseUrl, icon: null }, gitlab.baseUrl) : t('empty')],
+      [pt(t, 'st.gitlabProject'), gitlab.project ? <span className="sa-mono" translate="no">{gitlab.project}</span> : t('empty')],
+      [pt(t, 'st.gitlabBase'), gitlab.baseUrl ? <ExternalLink href={gitlab.baseUrl} icon={null}>{gitlab.baseUrl}</ExternalLink> : t('empty')],
       [pt(t, 'st.branches'), `${config.baseBranch ?? t('empty')} → ${gitlab.targetBranch ?? t('empty')}`],
-      [pt(t, 'st.uatUrl'), gitlab.uatUrl ? h(ExternalLink, { href: gitlab.uatUrl, icon: null }, gitlab.uatUrl) : t('empty')],
-      [pt(t, 'st.healthUrl'), gitlab.healthUrl ? h(ExternalLink, { href: gitlab.healthUrl, icon: null }, gitlab.healthUrl) : t('empty')],
+      [pt(t, 'st.uatUrl'), gitlab.uatUrl ? <ExternalLink href={gitlab.uatUrl} icon={null}>{gitlab.uatUrl}</ExternalLink> : t('empty')],
+      [pt(t, 'st.healthUrl'), gitlab.healthUrl ? <ExternalLink href={gitlab.healthUrl} icon={null}>{gitlab.healthUrl}</ExternalLink> : t('empty')],
       [pt(t, 'st.gitlabToken'), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? <span className="sa-mono" translate="no">{config.worktreeRoot}</span> : t('empty')],
     ]
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'repos.intro')),
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'primary', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
-          onClick: () => { setRepoForm(emptyRepoForm()); setRepoError(undefined); setRepoModalOpen(true) } },
-        pt(t, 'repos.add')),
-        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(true) },
-          pt(t, 'repos.emptyAction'))),
-      repos.length
-        ? h(Fragment, null,
-          h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
-          h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
-            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id,
-            onEdit: openRepoEdit, onToggle: toggleRepo }))))
-        : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
-          action: h('div', { className: 'sa-actions' },
-            config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
-            h(Button, { variant: 'outline', size: 'sm',
-              onClick: () => setConfigSampleOpen(true) }, pt(t, 'repos.emptyAction'))) }),
-      h('p', { className: 'sa-hint' }, pt(t, 'repos.manageHint')),
-      h('h3', { className: 'sa-ledger-title' }, pt(t, 'st.deployTitle')),
-      h(Hint, null, pt(t, 'st.deployHint')),
-      config.error ? h('p', { className: 'sa-banner sa-danger' }, `${pt(t, 'st.configError')}${config.error}`) : null,
-      h(KeyValues, { rows: deployRows }),
-      h(Hint, null, pt(t, 'st.reloadHint')),
-      h('div', { className: 'sa-actions' },
-        reloadButton(),
-        h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'external', size: 14 }), disabled: uatState.busy,
-          'aria-busy': uatState.busy ? 'true' : undefined,
-          onClick: () => { void runUat() } }, uatState.busy ? pt(t, 'st.probing') : pt(t, 'st.checkUat'))),
-      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
-      h(SettingsStatusLine, { view: uatState.view, busy: uatState.busy }))
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'repos.intro')}</Hint>
+      <div className="sa-actions">
+        <Button variant="primary" size="sm" icon={<Icon name="plus" size={14} />}
+          onClick={() => { setRepoForm(emptyRepoForm()); setRepoError(undefined); setRepoModalOpen(true) }}>
+          {pt(t, 'repos.add')}
+        </Button>
+        {config.file ? <CopyButton value={config.file} label={pt(t, 'st.copyConfigPath')} /> : null}
+        <Button variant="outline" size="sm" onClick={() => setConfigSampleOpen(true)}>{pt(t, 'repos.emptyAction')}</Button>
+      </div>
+      {repos.length
+        ? <>
+          <p className="sa-hint" role="status">{pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })}</p>
+          <div className="sa-cards-2">{repos.map(repo => <ReposCard key={repo.id} repo={repo}
+            isDefault={repo.id === defaultRepoId} onSaveToken={saveRepoTokenFor} tokenBusy={tokenSaving === repo.id}
+            onEdit={openRepoEdit} onToggle={toggleRepo} />)}</div>
+        </>
+        : <EmptyState icon="pull" title={pt(t, 'repos.empty')}
+          action={<div className="sa-actions">
+            {config.file ? <CopyButton value={config.file} label={pt(t, 'st.copyConfigPath')} /> : null}
+            <Button variant="outline" size="sm" onClick={() => setConfigSampleOpen(true)}>{pt(t, 'repos.emptyAction')}</Button>
+          </div>} />}
+      <p className="sa-hint">{pt(t, 'repos.manageHint')}</p>
+      <h3 className="sa-ledger-title">{pt(t, 'st.deployTitle')}</h3>
+      <Hint>{pt(t, 'st.deployHint')}</Hint>
+      {config.error ? <p className="sa-banner sa-danger">{`${pt(t, 'st.configError')}${config.error}`}</p> : null}
+      <KeyValues rows={deployRows} />
+      <Hint>{pt(t, 'st.reloadHint')}</Hint>
+      <div className="sa-actions">
+        {reloadButton()}
+        <Button variant="outline" size="sm" icon={<Icon name="external" size={14} />} disabled={uatState.busy}
+          aria-busy={uatState.busy ? 'true' : undefined} onClick={() => { void runUat() }}>
+          {uatState.busy ? pt(t, 'st.probing') : pt(t, 'st.checkUat')}
+        </Button>
+      </div>
+      <SettingsStatusLine view={reloadView} busy={reloadState.busy} />
+      <SettingsStatusLine view={uatState.view} busy={uatState.busy} />
+    </div>
   }
 
   /** Rewrite the whole group→repository map (host validates consistency) and refresh the model. */
@@ -1321,7 +1342,7 @@ function LiveSettingsPage({ route }) {
   const fieldErrorMessage = (group, field) => {
     const error = fieldErrors[group]
     return error && error.field === field
-      ? h('p', { className: 'sa-error', id: `sa-field-${field}-error`, role: 'alert' }, pt(t, error.messageKey))
+      ? <p className="sa-error" id={`sa-field-${field}-error`} role="alert">{pt(t, error.messageKey)}</p>
       : null
   }
 
@@ -1437,54 +1458,65 @@ function LiveSettingsPage({ route }) {
     // SaveBar has no disabled state; while any group is saving its save/retry actions would be silent no-ops
     // (saveGroup returns early), so other groups only keep the local-only discard action.
     const canSave = !savingGroup
-    return h(Fragment, null,
-      h(SaveBar, { state, savedAt, error: stored?.error, dirty: dirtyOf(group),
-        onSave: canSave ? () => { void saveGroup(group) } : undefined,
-        onRetry: canSave ? () => { void saveGroup(group) } : undefined,
-        onDiscard: () => discardGroup(group) }),
-      stored ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
-        h('div', { className: 'sa-actions' },
-          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-            disabled: Boolean(savingGroup), onClick: () => { void recoverGroup(group) } }, pt(t, 'st.reloadConfig'))),
-        stored.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, stored.raw)) : null) : null)
+    return <>
+      <SaveBar state={state} savedAt={savedAt} error={stored?.error} dirty={dirtyOf(group)}
+        onSave={canSave ? () => { void saveGroup(group) } : undefined}
+        onRetry={canSave ? () => { void saveGroup(group) } : undefined}
+        onDiscard={() => discardGroup(group)} />
+      {stored ? <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
+        <div className="sa-actions">
+          <Button variant="outline" size="sm" icon={<Icon name="refresh" size={14} />}
+            disabled={Boolean(savingGroup)} onClick={() => { void recoverGroup(group) }}>{pt(t, 'st.reloadConfig')}</Button>
+        </div>
+        {stored.raw ? <Folded summary={t('rawError')}><pre className="sa-pre" translate="no">{stored.raw}</pre></Folded> : null}
+      </div> : null}
+    </>
   }
 
-  const reloadButton = () => h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-    disabled: reloadState.busy, 'aria-busy': reloadState.busy ? 'true' : undefined,
-    onClick: () => { void reloadEngineConfig() } },
-  reloadState.busy ? pt(t, 'st.reloading') : pt(t, 'st.reloadConfig'))
+  const reloadButton = () => <Button variant="ghost" size="sm" icon={<Icon name="refresh" size={14} />}
+    disabled={reloadState.busy} aria-busy={reloadState.busy ? 'true' : undefined}
+    onClick={() => { void reloadEngineConfig() }}>
+    {reloadState.busy ? pt(t, 'st.reloading') : pt(t, 'st.reloadConfig')}
+  </Button>
 
   /** Write-only Octo token editor. An env-provided token is shown as read-only, because the file cannot override it. */
   const renderOctoToken = () => {
     const configured = octo.tokenConfigured === true
     const tokenSource = octo.tokenSource
-    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token', tabIndex: -1,
-      style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
-      h('label', { className: 'sa-field-head', htmlFor: 'sa-field-octo-token' }, pt(t, 'st.octoToken'),
-        configured
-          ? h(Tag, { tone: tokenSource === 'env' ? 'info' : 'success' },
-            tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk'))
-          : h(Tag, { tone: 'outline' }, pt(t, 'st.tokenMissing'))),
-      tokenSource === 'env'
-        ? h(Hint, null, pt(t, 'st.octoTokenEnvHint'))
-        : h(Fragment, null,
-          h('div', { style: { display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-            h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-              h(Input, { id: 'sa-field-octo-token', className: 'sa-input-full', type: 'password', value: octoTokenDraft,
-                autoComplete: 'off', 'aria-describedby': 'sa-field-octo-token-hint',
-                placeholder: pt(t, 'st.octoTokenPlaceholder'),
-                disabled: octoTokenBusy,
-                onChange: event => setOctoTokenDraft(event.target.value) })),
-            h(Button, { variant: 'outline', size: 'sm', disabled: octoTokenBusy || !octoTokenDraft.trim(),
-              'aria-busy': octoTokenBusy ? 'true' : undefined,
-              onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
-            octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
-            configured
-              ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'st.octoTokenClearTitle'),
-                message: pt(t, 'st.octoTokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
-                onConfirm: async () => { if (!octoTokenBusy) await saveOctoTokenFor('') } })
-              : null),
-          h('p', { className: 'sa-hint', id: 'sa-field-octo-token-hint' }, pt(t, 'st.octoTokenHint'))))
+    return <div className="sa-field" id="sa-settings-octo-token" tabIndex={-1}
+      style={{ scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' }}>
+      <label className="sa-field-head" htmlFor="sa-field-octo-token">{pt(t, 'st.octoToken')}
+        {configured
+          ? <Tag tone={tokenSource === 'env' ? 'info' : 'success'}>
+            {tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk')}
+          </Tag>
+          : <Tag tone="outline">{pt(t, 'st.tokenMissing')}</Tag>}
+      </label>
+      {tokenSource === 'env'
+        ? <Hint>{pt(t, 'st.octoTokenEnvHint')}</Hint>
+        : <>
+          <div style={{ display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex' }}>
+              <Input id="sa-field-octo-token" className="sa-input-full" type="password" value={octoTokenDraft}
+                autoComplete="off" aria-describedby="sa-field-octo-token-hint"
+                placeholder={pt(t, 'st.octoTokenPlaceholder')}
+                disabled={octoTokenBusy}
+                onChange={event => setOctoTokenDraft(event.target.value)} />
+            </div>
+            <Button variant="outline" size="sm" disabled={octoTokenBusy || !octoTokenDraft.trim()}
+              aria-busy={octoTokenBusy ? 'true' : undefined}
+              onClick={() => { void saveOctoTokenFor(octoTokenDraft) }}>
+              {octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')}
+            </Button>
+            {configured
+              ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'st.octoTokenClearTitle')}
+                message={pt(t, 'st.octoTokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
+                onConfirm={async () => { if (!octoTokenBusy) await saveOctoTokenFor('') }} />
+              : null}
+          </div>
+          <p className="sa-hint" id="sa-field-octo-token-hint">{pt(t, 'st.octoTokenHint')}</p>
+        </>}
+    </div>
   }
 
   /** Searchable group picker: fills the binding form, never writes a binding by itself. */
@@ -1493,26 +1525,31 @@ function LiveSettingsPage({ route }) {
     const query = octoGroupQuery.trim().toLowerCase()
     const items = (octoGroups.items ?? []).filter(group => !query
       || String(group.name ?? '').toLowerCase().includes(query) || String(group.id ?? '').toLowerCase().includes(query))
-    return h('div', { className: 'sa-group-picker' },
-      h('div', { className: 'sa-group-picker-head' },
-        h(Input, { value: octoGroupQuery, placeholder: pt(t, 'st.groupsSearch'), 'aria-label': pt(t, 'st.groupsSearch'),
-          onChange: event => setOctoGroupQuery(event.target.value) }),
-        h('span', { className: 'sa-hint' }, pt(t, 'st.groupsCount', { count: items.length }))),
-      octoGroups.busy
-        ? h(Hint, null, pt(t, 'st.groupsLoading'))
+    return <div className="sa-group-picker">
+      <div className="sa-group-picker-head">
+        <Input value={octoGroupQuery} placeholder={pt(t, 'st.groupsSearch')} aria-label={pt(t, 'st.groupsSearch')}
+          onChange={event => setOctoGroupQuery(event.target.value)} />
+        <span className="sa-hint">{pt(t, 'st.groupsCount', { count: items.length })}</span>
+      </div>
+      {octoGroups.busy
+        ? <Hint>{pt(t, 'st.groupsLoading')}</Hint>
         : octoGroups.error
-          ? h('p', { className: 'sa-error', role: 'alert' }, octoGroups.error)
+          ? <p className="sa-error" role="alert">{octoGroups.error}</p>
           : items.length
-            ? h('ul', { className: 'sa-list' }, items.map(group => h('li', { key: String(group.id) },
-              h('button', { type: 'button', className: 'sa-group-option', disabled: watched.has(String(group.id)),
-                onClick: () => chooseGroup(group) },
-              h('span', { className: 'sa-group-option-main' },
-                h('span', { className: 'sa-group-option-name' }, group.name || String(group.id)),
-                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(group.id))),
-              watched.has(String(group.id))
-                ? h(Tag, { tone: 'success' }, pt(t, 'st.groupsWatched'))
-                : h(Icon, { name: 'plus', size: 14 })))))
-            : h(Hint, null, pt(t, 'st.groupsEmpty')))
+            ? <ul className="sa-list">{items.map(group => <li key={String(group.id)}>
+              <button type="button" className="sa-group-option" disabled={watched.has(String(group.id))}
+                onClick={() => chooseGroup(group)}>
+                <span className="sa-group-option-main">
+                  <span className="sa-group-option-name">{group.name || String(group.id)}</span>
+                  <span className="sa-mono sa-hint" translate="no">{String(group.id)}</span>
+                </span>
+                {watched.has(String(group.id))
+                  ? <Tag tone="success">{pt(t, 'st.groupsWatched')}</Tag>
+                  : <Icon name="plus" size={14} />}
+              </button>
+            </li>)}</ul>
+            : <Hint>{pt(t, 'st.groupsEmpty')}</Hint>}
+    </div>
   }
 
   /** Sender allowlist: editable when "accept any human" is off; ignored (and explained) while it is on. */
@@ -1521,26 +1558,30 @@ function LiveSettingsPage({ route }) {
     const allowAnyHuman = 'octo.allowAnyHuman' in draft ? draft['octo.allowAnyHuman'] : octo.allowAnyHuman === true
     const senders = senderValuesOf(draft)
     const list = senders.length
-      ? h('div', { className: 'sa-sender-list' }, senders.map(sender => h('span', { key: sender, className: 'sa-sender-chip' },
-        h('span', { className: 'sa-mono', translate: 'no' }, sender),
-        h('button', { type: 'button', className: 'sa-sender-remove', 'aria-label': pt(t, 'st.removeSender', { sender }),
-          onClick: () => removeSender(sender) }, '×'))))
-      : h(Hint, null, pt(t, 'st.sendersEmpty'))
-    const add = h('div', { className: 'sa-actions' },
-      h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-        h(Input, { id: 'sa-field-senders', className: 'sa-input-full', value: senderDraft,
-          placeholder: pt(t, 'st.senderPlaceholderExample'), 'aria-describedby': 'sa-field-senders-hint',
-          disabled: savingGroup === 'source',
-          onChange: event => setSenderDraft(event.target.value),
-          onKeyDown: event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } } })),
-      h(Button, { variant: 'outline', size: 'sm', disabled: savingGroup === 'source' || !senderDraft.trim(),
-        onClick: addSender }, pt(t, 'st.addSender')))
-    return h('div', { className: 'sa-field' },
-      allowAnyHuman
-        ? h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'), h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')))
-        : h('label', { className: 'sa-field-head', htmlFor: 'sa-field-senders' }, pt(t, 'st.senders')),
-      allowAnyHuman ? h(Hint, null, pt(t, 'st.anyHumanSendersHint')) : h(Fragment, null, list, add),
-      allowAnyHuman ? null : h('p', { className: 'sa-hint', id: 'sa-field-senders-hint' }, pt(t, 'st.sendersHint')))
+      ? <div className="sa-sender-list">{senders.map(sender => <span key={sender} className="sa-sender-chip">
+        <span className="sa-mono" translate="no">{sender}</span>
+        <button type="button" className="sa-sender-remove" aria-label={pt(t, 'st.removeSender', { sender })}
+          onClick={() => removeSender(sender)}>×</button>
+      </span>)}</div>
+      : <Hint>{pt(t, 'st.sendersEmpty')}</Hint>
+    const add = <div className="sa-actions">
+      <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex' }}>
+        <Input id="sa-field-senders" className="sa-input-full" value={senderDraft}
+          placeholder={pt(t, 'st.senderPlaceholderExample')} aria-describedby="sa-field-senders-hint"
+          disabled={savingGroup === 'source'}
+          onChange={event => setSenderDraft(event.target.value)}
+          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } }} />
+      </div>
+      <Button variant="outline" size="sm" disabled={savingGroup === 'source' || !senderDraft.trim()}
+        onClick={addSender}>{pt(t, 'st.addSender')}</Button>
+    </div>
+    return <div className="sa-field">
+      {allowAnyHuman
+        ? <span className="sa-field-head">{pt(t, 'st.senders')}<Tag tone="info">{pt(t, 'st.allHumans')}</Tag></span>
+        : <label className="sa-field-head" htmlFor="sa-field-senders">{pt(t, 'st.senders')}</label>}
+      {allowAnyHuman ? <Hint>{pt(t, 'st.anyHumanSendersHint')}</Hint> : <>{list}{add}</>}
+      {allowAnyHuman ? null : <p className="sa-hint" id="sa-field-senders-hint">{pt(t, 'st.sendersHint')}</p>}
+    </div>
   }
 
   // ---- source group -----------------------------------------------------------------------------------------
@@ -1557,94 +1598,111 @@ function LiveSettingsPage({ route }) {
     const rows = [
       [pt(t, 'st.watchChats'), chatNames.length ? chatNames.join(t('listSeparator')) : t('empty')],
       [pt(t, 'st.cursors'), cursorRows.length ? cursorRows.join(t('listSeparator')) : t('empty')],
-      [pt(t, 'st.lastPoll'), engine.lastPollAt ? h(When, { at: engine.lastPollAt }) : t('empty')],
+      [pt(t, 'st.lastPoll'), engine.lastPollAt ? <When at={engine.lastPollAt} /> : t('empty')],
     ]
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.sourceHint')),
-      renderOctoToken(),
-      h(SettingsSwitchRow, { label: pt(t, 'st.enabled'), hint: pt(t, 'st.enabledHint'), checked: enabled,
-        disabled: savingGroup === 'source',
-        onChange: next => editField('source', 'enabled', next, config.enabled === true) }),
-      h(SettingsSwitchRow, { label: pt(t, 'st.allowAnyHuman'), hint: pt(t, 'st.allowAnyHumanHint'), checked: allowAnyHuman,
-        disabled: savingGroup === 'source',
-        onChange: next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true) }),
-      renderSenders(),
-      h('div', { className: 'sa-field' },
-        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-poll' }, pt(t, 'st.pollSeconds')),
-        // The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18).
-        h('div', { style: { display: 'flex', maxWidth: '420px', minWidth: 0 } },
-          h(Input, { id: 'sa-field-poll', type: 'number', min: 2, step: 1, value: pollSeconds, style: { maxWidth: '420px' },
-            disabled: savingGroup === 'source', 'aria-label': pt(t, 'st.pollSeconds'),
-            ...fieldAria('source', 'poll', 'sa-field-poll-hint'),
-            onChange: event => editField('source', 'pollSeconds', event.target.value, String(config.pollSeconds ?? '')) })),
-        h('p', { className: 'sa-hint', id: 'sa-field-poll-hint' }, pt(t, 'st.pollSecondsHint')),
-        fieldErrorMessage('source', 'poll')),
-      h(KeyValues, { rows }),
-      !allowAnyHuman && !senders.length ? h('p', { className: 'sa-banner' }, pt(t, 'st.noSenders')) : null,
-      chatNames.length ? null : h(Hint, null, pt(t, 'st.noChats')),
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }), disabled: probe.busy,
-          'aria-busy': probe.busy ? 'true' : undefined,
-          onClick: () => { void runProbe() } }, probe.busy ? pt(t, 'st.probing') : pt(t, 'actions.checkNow')),
-        reloadButton()),
-      h(Hint, null, pt(t, 'st.probeHint')),
-      h(SettingsStatusLine, { view: probe.view, busy: probe.busy,
-        note: probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined }),
-      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
-      h('div', { className: 'sa-field', id: 'sa-settings-bindings', tabIndex: -1,
-        style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.bindings')),
-        h(Hint, null, pt(t, 'st.bindingsHint')),
-        h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
-          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-            disabled: octoGroups.busy || bindingBusy, onClick: () => { void loadOctoGroups() } },
-          octoGroups.busy ? pt(t, 'st.groupsLoading') : pt(t, 'st.groupsPick')),
-          octoGroups.open
-            ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => setOctoGroups(previous => ({ ...previous, open: false, error: undefined })) },
-              pt(t, 'st.groupsClose'))
-            : null),
-        octoGroups.open ? renderGroupPicker() : null,
-        chatIds.length
-          ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
-            chatIds.map(chatId => h('div', { key: chatId, className: 'sa-switch-row' },
-              h('div', { className: 'sa-switch-row-text' },
-                h('span', null, octo.chatTitles?.[chatId] ?? chatId),
-                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(chatId))),
-              // The control row never wraps: the repository select and its 移除 button stay on one line (critique §27).
-              h('div', { className: 'sa-actions', style: { flexWrap: 'nowrap', minWidth: 0 } },
-                h('div', { style: { flex: '0 1 240px', minWidth: 0 } },
-                  h(Select, { label: pt(t, 'st.bindingRepo'), value: octo.chatRepos?.[chatId] ?? defaultRepoId,
-                    options: repoOptions, disabled: bindingBusy,
-                    onChange: next => { void applyBindings(chatIds, octo.chatTitles ?? {}, { ...(octo.chatRepos ?? {}), [chatId]: next }) } })),
-                h('span', { style: { flex: '0 0 auto' } },
-                  h(ConfirmButton, { label: pt(t, 'st.bindingRemove'), title: pt(t, 'st.bindingRemoveTitle'),
-                    message: pt(t, 'st.bindingRemoveMessage'), confirmLabel: pt(t, 'st.bindingRemoveConfirm'),
-                    onConfirm: async () => {
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.sourceHint')}</Hint>
+      {renderOctoToken()}
+      <SettingsSwitchRow label={pt(t, 'st.enabled')} hint={pt(t, 'st.enabledHint')} checked={enabled}
+        disabled={savingGroup === 'source'}
+        onChange={next => editField('source', 'enabled', next, config.enabled === true)} />
+      <SettingsSwitchRow label={pt(t, 'st.allowAnyHuman')} hint={pt(t, 'st.allowAnyHumanHint')} checked={allowAnyHuman}
+        disabled={savingGroup === 'source'}
+        onChange={next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true)} />
+      {renderSenders()}
+      <div className="sa-field">
+        <label className="sa-field-head" htmlFor="sa-field-poll">{pt(t, 'st.pollSeconds')}</label>
+        {/* The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18). */}
+        <div style={{ display: 'flex', maxWidth: '420px', minWidth: 0 }}>
+          <Input id="sa-field-poll" type="number" min={2} step={1} value={pollSeconds} style={{ maxWidth: '420px' }}
+            disabled={savingGroup === 'source'} aria-label={pt(t, 'st.pollSeconds')}
+            {...fieldAria('source', 'poll', 'sa-field-poll-hint')}
+            onChange={event => editField('source', 'pollSeconds', event.target.value, String(config.pollSeconds ?? ''))} />
+        </div>
+        <p className="sa-hint" id="sa-field-poll-hint">{pt(t, 'st.pollSecondsHint')}</p>
+        {fieldErrorMessage('source', 'poll')}
+      </div>
+      <KeyValues rows={rows} />
+      {!allowAnyHuman && !senders.length ? <p className="sa-banner">{pt(t, 'st.noSenders')}</p> : null}
+      {chatNames.length ? null : <Hint>{pt(t, 'st.noChats')}</Hint>}
+      <div className="sa-actions">
+        <Button variant="outline" size="sm" icon={<Icon name="message" size={14} />} disabled={probe.busy}
+          aria-busy={probe.busy ? 'true' : undefined} onClick={() => { void runProbe() }}>
+          {probe.busy ? pt(t, 'st.probing') : pt(t, 'actions.checkNow')}
+        </Button>
+        {reloadButton()}
+      </div>
+      <Hint>{pt(t, 'st.probeHint')}</Hint>
+      <SettingsStatusLine view={probe.view} busy={probe.busy}
+        note={probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined} />
+      <SettingsStatusLine view={reloadView} busy={reloadState.busy} />
+      <div className="sa-field" id="sa-settings-bindings" tabIndex={-1}
+        style={{ scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' }}>
+        <span className="sa-field-head">{pt(t, 'st.bindings')}</span>
+        <Hint>{pt(t, 'st.bindingsHint')}</Hint>
+        <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-4)' }}>
+          <Button variant="outline" size="sm" icon={<Icon name="message" size={14} />}
+            disabled={octoGroups.busy || bindingBusy} onClick={() => { void loadOctoGroups() }}>
+            {octoGroups.busy ? pt(t, 'st.groupsLoading') : pt(t, 'st.groupsPick')}
+          </Button>
+          {octoGroups.open
+            ? <Button variant="ghost" size="sm"
+              onClick={() => setOctoGroups(previous => ({ ...previous, open: false, error: undefined }))}>
+              {pt(t, 'st.groupsClose')}
+            </Button>
+            : null}
+        </div>
+        {octoGroups.open ? renderGroupPicker() : null}
+        {chatIds.length
+          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
+            {chatIds.map(chatId => <div key={chatId} className="sa-switch-row">
+              <div className="sa-switch-row-text">
+                <span>{octo.chatTitles?.[chatId] ?? chatId}</span>
+                <span className="sa-mono sa-hint" translate="no">{String(chatId)}</span>
+              </div>
+              {/* The control row never wraps: the repository select and its 移除 button stay on one line (critique §27). */}
+              <div className="sa-actions" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
+                <div style={{ flex: '0 1 240px', minWidth: 0 }}>
+                  <Select label={pt(t, 'st.bindingRepo')} value={octo.chatRepos?.[chatId] ?? defaultRepoId}
+                    options={repoOptions} disabled={bindingBusy}
+                    onChange={next => { void applyBindings(chatIds, octo.chatTitles ?? {}, { ...(octo.chatRepos ?? {}), [chatId]: next }) }} />
+                </div>
+                <span style={{ flex: '0 0 auto' }}>
+                  <ConfirmButton label={pt(t, 'st.bindingRemove')} title={pt(t, 'st.bindingRemoveTitle')}
+                    message={pt(t, 'st.bindingRemoveMessage')} confirmLabel={pt(t, 'st.bindingRemoveConfirm')}
+                    onConfirm={async () => {
                       // Removing a binding changes what the engine watches: confirm first, never delete on a stray click.
                       if (bindingBusy) return
                       const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
                       const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
                       await applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
-                    } }))))))
-          : h(Hint, null, pt(t, 'st.bindingEmpty')),
-        h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
-          h(Input, { id: 'sa-field-binding-chat', value: bindingForm.chatId, placeholder: pt(t, 'st.chatIdPlaceholder'),
-            'aria-invalid': bindingError ? 'true' : undefined,
-            'aria-describedby': bindingError ? 'sa-field-binding-chat-error' : undefined,
-            disabled: bindingBusy,
-            onChange: event => { setBindingError(undefined); setBindingForm(previous => ({ ...previous, chatId: event.target.value })) } }),
-          h(Input, { value: bindingForm.title, placeholder: pt(t, 'st.bindingTitle'), 'aria-label': pt(t, 'st.bindingTitle'),
-            disabled: bindingBusy, onChange: event => setBindingForm(previous => ({ ...previous, title: event.target.value })) }),
-          h(Select, { label: pt(t, 'st.bindingRepo'), value: bindingForm.repoId || defaultRepoId, options: repoOptions,
-            disabled: bindingBusy, onChange: next => setBindingForm(previous => ({ ...previous, repoId: next })) }),
-          h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
-            'aria-busy': bindingBusy ? 'true' : undefined,
-            disabled: bindingBusy || !bindingForm.chatId.trim(), onClick: () => { void onAddBinding() } }, pt(t, 'st.bindingAdd'))),
-        bindingError
-          ? h('p', { className: 'sa-error', id: 'sa-field-binding-chat-error', role: 'alert' }, bindingError)
-          : null),
-      saveBarFor('source'))
+                    }} />
+                </span>
+              </div>
+            </div>)}
+          </div>
+          : <Hint>{pt(t, 'st.bindingEmpty')}</Hint>}
+        <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-4)' }}>
+          <Input id="sa-field-binding-chat" value={bindingForm.chatId} placeholder={pt(t, 'st.chatIdPlaceholder')}
+            aria-invalid={bindingError ? 'true' : undefined}
+            aria-describedby={bindingError ? 'sa-field-binding-chat-error' : undefined}
+            disabled={bindingBusy}
+            onChange={event => { setBindingError(undefined); setBindingForm(previous => ({ ...previous, chatId: event.target.value })) }} />
+          <Input value={bindingForm.title} placeholder={pt(t, 'st.bindingTitle')} aria-label={pt(t, 'st.bindingTitle')}
+            disabled={bindingBusy} onChange={event => setBindingForm(previous => ({ ...previous, title: event.target.value }))} />
+          <Select label={pt(t, 'st.bindingRepo')} value={bindingForm.repoId || defaultRepoId} options={repoOptions}
+            disabled={bindingBusy} onChange={next => setBindingForm(previous => ({ ...previous, repoId: next }))} />
+          <Button variant="outline" size="sm" icon={<Icon name="plus" size={14} />}
+            aria-busy={bindingBusy ? 'true' : undefined}
+            disabled={bindingBusy || !bindingForm.chatId.trim()} onClick={() => { void onAddBinding() }}>{pt(t, 'st.bindingAdd')}</Button>
+        </div>
+        {bindingError
+          ? <p className="sa-error" id="sa-field-binding-chat-error" role="alert">{bindingError}</p>
+          : null}
+      </div>
+      {saveBarFor('source')}
+    </div>
   }
 
   // ---- eval group (read-only) -------------------------------------------------------------------------------
@@ -1667,16 +1725,18 @@ function LiveSettingsPage({ route }) {
       [pt(t, 'st.decisionsTotal'), String(data.counts?.decisions ?? 0)],
       [pt(t, 'st.decisions24h'), String(data.flow24h?.judged ?? 0)],
     ]
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.evalHint')),
-      h(KeyValues, { rows }),
-      h(Hint, null, pt(t, 'st.judgeHint')),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.rules')),
-        rules.length
-          ? h(KeyValues, { rows: rules.map(rule => [`${rule.id} · ${rule.name}`, rule.description]) })
-          : h(Hint, null, pt(t, 'st.noRules'))))
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.evalHint')}</Hint>
+      <KeyValues rows={rows} />
+      <Hint>{pt(t, 'st.judgeHint')}</Hint>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.rules')}</span>
+        {rules.length
+          ? <KeyValues rows={rules.map(rule => [`${rule.id} · ${rule.name}`, rule.description])} />
+          : <Hint>{pt(t, 'st.noRules')}</Hint>}
+      </div>
+    </div>
   }
 
   // ---- review group: the group-confirmation loop (who may answer, scope, expiry) --------------------------------
@@ -1690,39 +1750,45 @@ function LiveSettingsPage({ route }) {
     const senders = field('review.allowSenderIds', initialSenders)
     const expireHours = field('review.expireHours', String(review.expireHours ?? 24))
     const scope = field('review.scope', review.scope === 'uncertain' ? 'uncertain' : 'all')
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.reviewIntro')),
-      h(SettingsSwitchRow, { label: pt(t, 'st.reviewEnabled'), hint: pt(t, 'st.reviewEnabledHint'),
-        checked: Boolean(field('review.enabled', review.enabled === true)), disabled: frozen,
-        onChange: next => editField('review', 'review.enabled', next, review.enabled === true) }),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewScope')),
-        h(Select, { label: pt(t, 'st.reviewScope'), disabled: frozen, value: scope,
-          options: [{ value: 'all', label: pt(t, 'st.reviewScopeAll') },
-            { value: 'uncertain', label: pt(t, 'st.reviewScopeUncertain') }],
-          onChange: next => editField('review', 'review.scope', next, review.scope === 'uncertain' ? 'uncertain' : 'all') })),
-      h('div', { className: 'sa-field' },
-        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-review-senders' }, pt(t, 'st.reviewSenders')),
-        h('div', { style: { display: 'flex', maxWidth: '520px', minWidth: 0 } },
-          h(Input, { id: 'sa-field-review-senders', value: String(senders ?? ''), disabled: frozen,
-            'aria-label': pt(t, 'st.reviewSenders'), 'aria-describedby': 'sa-field-review-senders-hint',
-            onChange: event => editField('review', 'review.allowSenderIds', event.target.value, initialSenders) })),
-        h('p', { className: 'sa-hint', id: 'sa-field-review-senders-hint' }, pt(t, 'st.reviewSendersHint'))),
-      h('div', { className: 'sa-field' },
-        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-expire' }, pt(t, 'st.reviewExpire')),
-        h('div', { style: { display: 'flex', maxWidth: '220px', minWidth: 0 } },
-          h(Input, { id: 'sa-field-expire', type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
-            'aria-label': pt(t, 'st.reviewExpire'),
-            ...fieldAria('review', 'expire', 'sa-field-expire-hint'),
-            onChange: event => editField('review', 'review.expireHours', event.target.value, String(review.expireHours ?? 24)) })),
-        h('p', { className: 'sa-hint', id: 'sa-field-expire-hint' }, pt(t, 'st.reviewExpireHint')),
-        fieldErrorMessage('review', 'expire')),
-      h(KeyValues, { rows: [
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.reviewIntro')}</Hint>
+      <SettingsSwitchRow label={pt(t, 'st.reviewEnabled')} hint={pt(t, 'st.reviewEnabledHint')}
+        checked={Boolean(field('review.enabled', review.enabled === true))} disabled={frozen}
+        onChange={next => editField('review', 'review.enabled', next, review.enabled === true)} />
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.reviewScope')}</span>
+        <Select label={pt(t, 'st.reviewScope')} disabled={frozen} value={scope}
+          options={[{ value: 'all', label: pt(t, 'st.reviewScopeAll') },
+            { value: 'uncertain', label: pt(t, 'st.reviewScopeUncertain') }]}
+          onChange={next => editField('review', 'review.scope', next, review.scope === 'uncertain' ? 'uncertain' : 'all')} />
+      </div>
+      <div className="sa-field">
+        <label className="sa-field-head" htmlFor="sa-field-review-senders">{pt(t, 'st.reviewSenders')}</label>
+        <div style={{ display: 'flex', maxWidth: '520px', minWidth: 0 }}>
+          <Input id="sa-field-review-senders" value={String(senders ?? '')} disabled={frozen}
+            aria-label={pt(t, 'st.reviewSenders')} aria-describedby="sa-field-review-senders-hint"
+            onChange={event => editField('review', 'review.allowSenderIds', event.target.value, initialSenders)} />
+        </div>
+        <p className="sa-hint" id="sa-field-review-senders-hint">{pt(t, 'st.reviewSendersHint')}</p>
+      </div>
+      <div className="sa-field">
+        <label className="sa-field-head" htmlFor="sa-field-expire">{pt(t, 'st.reviewExpire')}</label>
+        <div style={{ display: 'flex', maxWidth: '220px', minWidth: 0 }}>
+          <Input id="sa-field-expire" type="number" min={1} max={168} step={1} value={String(expireHours)} disabled={frozen}
+            aria-label={pt(t, 'st.reviewExpire')}
+            {...fieldAria('review', 'expire', 'sa-field-expire-hint')}
+            onChange={event => editField('review', 'review.expireHours', event.target.value, String(review.expireHours ?? 24))} />
+        </div>
+        <p className="sa-hint" id="sa-field-expire-hint">{pt(t, 'st.reviewExpireHint')}</p>
+        {fieldErrorMessage('review', 'expire')}
+      </div>
+      <KeyValues rows={[
         [pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 }), ''],
-      ] }),
-      h(Hint, null, pt(t, 'st.reviewExample')),
-      saveBarFor('review'))
+      ]} />
+      <Hint>{pt(t, 'st.reviewExample')}</Hint>
+      {saveBarFor('review')}
+    </div>
   }
 
   // ---- run group: the executor master switch, how it runs and the manual ticket form -------------------------
@@ -1738,63 +1804,69 @@ function LiveSettingsPage({ route }) {
     const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
-      [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono', translate: 'no' }, config.repo) : t('empty')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.repo'), config.repo ? <span className="sa-mono" translate="no">{config.repo}</span> : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? <span className="sa-mono" translate="no">{config.worktreeRoot}</span> : t('empty')],
     ]
-    const switchRow = (key, labelKey, hintKey, initial) => h(SettingsSwitchRow, {
-      label: pt(t, labelKey), hint: pt(t, hintKey), checked: Boolean(field(key, initial)),
-      disabled: frozen,
-      onChange: next => editField('run', key, next, initial) })
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.runHint')),
-      switchRow('executor.enabled', 'st.execEnabled', 'st.execEnabledHint', executor.enabled === true),
-      switchRow('executor.autoRun', 'st.autoRun', 'st.autoRunHint', executor.autoRun === true),
-      switchRow('paused', 'st.paused', 'st.pausedHint', config.paused === true || data.paused === true),
-      switchRow('pausedIntake', 'st.pausedIntake', 'st.pausedIntakeHint', config.pausedIntake === true),
-      switchRow('pausedDispatch', 'st.pausedDispatch', 'st.pausedDispatchHint', config.pausedDispatch === true),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.mrMode')),
-        h(Select, { label: pt(t, 'st.mrMode'), disabled: frozen,
-          value: field('gitlab.createMr', gitlab.createMr === 'push' ? 'push' : 'api'),
-          options: [{ value: 'api', label: pt(t, 'st.mrModeApi') }, { value: 'push', label: pt(t, 'st.mrModePush') }],
-          onChange: next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api') }),
-        h(Hint, null, pt(t, 'st.mrModeHint'))),
-      h('div', { className: 'sa-field' },
-        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-timeout' }, pt(t, 'st.timeout')),
-        h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
-          h(Input, { id: 'sa-field-timeout', type: 'number', min: 1, max: 1440, step: 1,
-            value: Number.isFinite(Number(field('executor.timeoutMs', timeout))) && field('executor.timeoutMs', timeout) !== ''
-              ? Math.round(Number(field('executor.timeoutMs', timeout)) / 60000) : '',
-            disabled: frozen, 'aria-label': pt(t, 'st.timeout'),
-            ...fieldAria('run', 'timeout', 'sa-field-timeout-hint'),
-            placeholder: String(timeoutMinutes),
-            onChange: event => {
+    const switchRow = (key, labelKey, hintKey, initial) => <SettingsSwitchRow
+      label={pt(t, labelKey)} hint={pt(t, hintKey)} checked={Boolean(field(key, initial))}
+      disabled={frozen}
+      onChange={next => editField('run', key, next, initial)} />
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.runHint')}</Hint>
+      {switchRow('executor.enabled', 'st.execEnabled', 'st.execEnabledHint', executor.enabled === true)}
+      {switchRow('executor.autoRun', 'st.autoRun', 'st.autoRunHint', executor.autoRun === true)}
+      {switchRow('paused', 'st.paused', 'st.pausedHint', config.paused === true || data.paused === true)}
+      {switchRow('pausedIntake', 'st.pausedIntake', 'st.pausedIntakeHint', config.pausedIntake === true)}
+      {switchRow('pausedDispatch', 'st.pausedDispatch', 'st.pausedDispatchHint', config.pausedDispatch === true)}
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.mrMode')}</span>
+        <Select label={pt(t, 'st.mrMode')} disabled={frozen}
+          value={field('gitlab.createMr', gitlab.createMr === 'push' ? 'push' : 'api')}
+          options={[{ value: 'api', label: pt(t, 'st.mrModeApi') }, { value: 'push', label: pt(t, 'st.mrModePush') }]}
+          onChange={next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api')} />
+        <Hint>{pt(t, 'st.mrModeHint')}</Hint>
+      </div>
+      <div className="sa-field">
+        <label className="sa-field-head" htmlFor="sa-field-timeout">{pt(t, 'st.timeout')}</label>
+        <div style={{ display: 'flex', maxWidth: '200px', minWidth: 0 }}>
+          <Input id="sa-field-timeout" type="number" min={1} max={1440} step={1}
+            value={Number.isFinite(Number(field('executor.timeoutMs', timeout))) && field('executor.timeoutMs', timeout) !== ''
+              ? Math.round(Number(field('executor.timeoutMs', timeout)) / 60000) : ''}
+            disabled={frozen} aria-label={pt(t, 'st.timeout')}
+            {...fieldAria('run', 'timeout', 'sa-field-timeout-hint')}
+            placeholder={String(timeoutMinutes)}
+            onChange={event => {
               const raw = event.target.value
               editField('run', 'executor.timeoutMs', raw === '' ? '' : Number(raw) * 60000, timeout)
-            } })),
-        h('p', { className: 'sa-hint', id: 'sa-field-timeout-hint' }, pt(t, 'st.timeoutHint')),
-        fieldErrorMessage('run', 'timeout')),
-      h('div', { className: 'sa-field' },
-        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-repair' }, pt(t, 'st.repairBudget')),
-        h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
-          h(Input, { id: 'sa-field-repair', type: 'number', min: 0, max: 6, step: 1,
-            value: field('executor.maxRepairRounds', repairBudget) === '' ? ''
-              : String(field('executor.maxRepairRounds', repairBudget)),
-            disabled: frozen, 'aria-label': pt(t, 'st.repairBudget'),
-            ...fieldAria('run', 'repair', 'sa-field-repair-hint'),
-            placeholder: String(repairBudget),
-            onChange: event => {
+            }} />
+        </div>
+        <p className="sa-hint" id="sa-field-timeout-hint">{pt(t, 'st.timeoutHint')}</p>
+        {fieldErrorMessage('run', 'timeout')}
+      </div>
+      <div className="sa-field">
+        <label className="sa-field-head" htmlFor="sa-field-repair">{pt(t, 'st.repairBudget')}</label>
+        <div style={{ display: 'flex', maxWidth: '200px', minWidth: 0 }}>
+          <Input id="sa-field-repair" type="number" min={0} max={6} step={1}
+            value={field('executor.maxRepairRounds', repairBudget) === '' ? ''
+              : String(field('executor.maxRepairRounds', repairBudget))}
+            disabled={frozen} aria-label={pt(t, 'st.repairBudget')}
+            {...fieldAria('run', 'repair', 'sa-field-repair-hint')}
+            placeholder={String(repairBudget)}
+            onChange={event => {
               const raw = event.target.value
               editField('run', 'executor.maxRepairRounds', raw === '' ? '' : Number(raw), repairBudget)
-            } })),
-        h('p', { className: 'sa-hint', id: 'sa-field-repair-hint' }, pt(t, 'st.repairBudgetHint')),
-        fieldErrorMessage('run', 'repair')),
-      h(KeyValues, { rows }),
-      // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
-      // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
-      h(ManualTicketForm, { onDone: () => { void reload() } }),
-      saveBarFor('run'))
+            }} />
+        </div>
+        <p className="sa-hint" id="sa-field-repair-hint">{pt(t, 'st.repairBudgetHint')}</p>
+        {fieldErrorMessage('run', 'repair')}
+      </div>
+      <KeyValues rows={rows} />
+      {/* The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
+          of fields, one write path, one success/error treatment. The inline form resets itself after each creation. */}
+      <ManualTicketForm onDone={() => { void reload() }} />
+      {saveBarFor('run')}
+    </div>
   }
 
   // ---- worker group: routing mode, enabled backends, work-type preferences and the capability matrix ----------
@@ -1836,85 +1908,102 @@ function LiveSettingsPage({ route }) {
     const backendCard = backend => {
       const entry = workers[backend.value] ?? {}
       const on = backend.value in workers && entry.enabled !== false
-      return h('div', { key: backend.value, className: 'sa-field' },
-        h(SettingsSwitchRow, { label: pt(t, backend.labelKey), hint: pt(t, backend.hintKey), disabled: frozen,
-          checked: on, onChange: next => toggleBackend(backend.value, next) }),
-        backend.value === 'dsh' ? null : h(Fragment, null,
-          h('div', { style: { display: 'flex', gap: 'var(--sa-sp-8)', flexWrap: 'wrap', maxWidth: '560px', minWidth: 0 } },
-            h('div', { style: { flex: '1 1 180px', minWidth: 0, display: 'flex' } },
-              h(Input, { className: 'sa-input-full', value: entry.model ?? '', disabled: frozen,
-                placeholder: pt(t, 'st.workerModel'), 'aria-label': pt(t, 'st.workerModel'),
-                onChange: event => setBackendField(backend.value, 'model', event.target.value) })),
-            h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-              h(Input, { className: 'sa-input-full', value: entry.command ?? '', disabled: frozen,
-                placeholder: pt(t, 'st.workerCommand'), 'aria-label': pt(t, 'st.workerCommand'),
-                onChange: event => setBackendField(backend.value, 'command', event.target.value) }))),
-          h(Hint, null, pt(t, 'st.workerModelHint'))))
+      return <div key={backend.value} className="sa-field">
+        <SettingsSwitchRow label={pt(t, backend.labelKey)} hint={pt(t, backend.hintKey)} disabled={frozen}
+          checked={on} onChange={next => toggleBackend(backend.value, next)} />
+        {backend.value === 'dsh' ? null : <>
+          <div style={{ display: 'flex', gap: 'var(--sa-sp-8)', flexWrap: 'wrap', maxWidth: '560px', minWidth: 0 }}>
+            <div style={{ flex: '1 1 180px', minWidth: 0, display: 'flex' }}>
+              <Input className="sa-input-full" value={entry.model ?? ''} disabled={frozen}
+                placeholder={pt(t, 'st.workerModel')} aria-label={pt(t, 'st.workerModel')}
+                onChange={event => setBackendField(backend.value, 'model', event.target.value)} />
+            </div>
+            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex' }}>
+              <Input className="sa-input-full" value={entry.command ?? ''} disabled={frozen}
+                placeholder={pt(t, 'st.workerCommand')} aria-label={pt(t, 'st.workerCommand')}
+                onChange={event => setBackendField(backend.value, 'command', event.target.value)} />
+            </div>
+          </div>
+          <Hint>{pt(t, 'st.workerModelHint')}</Hint>
+        </>}
+      </div>
     }
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.workerHint')),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'wf.title')),
-        h(Select, { label: pt(t, 'wf.title'), disabled: frozen,
-          value: draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off',
-          options: ['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) })),
-          onChange: value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off') }),
-        h(Hint, null, pt(t, 'wf.hint')),
-        h('span', { className: 'sa-field-head' }, pt(t, 'wf.implementer')),
-        h(Select, { label: pt(t, 'wf.implementer'), disabled: frozen,
-          value: draft['executor.implementer'] ?? executor.implementer ?? 'dsh',
-          options: stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh'),
-          onChange: value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh') }),
-        h('span', { className: 'sa-field-head' }, pt(t, 'wf.reviewer')),
-        h(Select, { label: pt(t, 'wf.reviewer'), disabled: frozen,
-          value: draft['executor.reviewer'] ?? executor.reviewer ?? 'codex',
-          options: stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'),
-          onChange: value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex') }),
-        h(Hint, null, pt(t, 'wf.reviewerHint')),
-        h('span', { className: 'sa-field-head' }, pt(t, 'wf.workerPreset')),
-        h(Input, { value: draft['executor.workerPreset'] ?? executor.workerPreset ?? '', disabled: frozen,
-          placeholder: pt(t, 'wf.workerPresetPlaceholder'), 'aria-label': pt(t, 'wf.workerPreset'),
-          onChange: event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '') }),
-        h(Hint, null, pt(t, 'wf.workerPresetHint'))),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.routingTitle')),
-        h(Select, { label: pt(t, 'st.routingTitle'), disabled: frozen, value: visible,
-          options: [{ value: 'single', label: pt(t, 'st.routingModeSingle') },
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.workerHint')}</Hint>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'wf.title')}</span>
+        <Select label={pt(t, 'wf.title')} disabled={frozen}
+          value={draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off'}
+          options={['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) }))}
+          onChange={value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off')} />
+        <Hint>{pt(t, 'wf.hint')}</Hint>
+        <span className="sa-field-head">{pt(t, 'wf.implementer')}</span>
+        <Select label={pt(t, 'wf.implementer')} disabled={frozen}
+          value={draft['executor.implementer'] ?? executor.implementer ?? 'dsh'}
+          options={stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh')}
+          onChange={value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh')} />
+        <span className="sa-field-head">{pt(t, 'wf.reviewer')}</span>
+        <Select label={pt(t, 'wf.reviewer')} disabled={frozen}
+          value={draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'}
+          options={stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex')}
+          onChange={value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex')} />
+        <Hint>{pt(t, 'wf.reviewerHint')}</Hint>
+        <span className="sa-field-head">{pt(t, 'wf.workerPreset')}</span>
+        <Input value={draft['executor.workerPreset'] ?? executor.workerPreset ?? ''} disabled={frozen}
+          placeholder={pt(t, 'wf.workerPresetPlaceholder')} aria-label={pt(t, 'wf.workerPreset')}
+          onChange={event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '')} />
+        <Hint>{pt(t, 'wf.workerPresetHint')}</Hint>
+      </div>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.routingTitle')}</span>
+        <Select label={pt(t, 'st.routingTitle')} disabled={frozen} value={visible}
+          options={[{ value: 'single', label: pt(t, 'st.routingModeSingle') },
             { value: 'suggest', label: pt(t, 'st.routingModeSuggest') },
-            { value: 'auto', label: pt(t, 'st.routingModeAuto') }],
-          onChange: next => setRouting({ mode: next }) }),
-        h(Hint, null, pt(t, 'st.routingModeHint'))),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.enabledBackends')),
-        h(Hint, null, pt(t, 'st.enabledBackendsHint')),
-        ROUTE_BACKENDS.map(backendCard)),
-      h('div', { style: { display: 'flex', gap: 'var(--sa-sp-16)', flexWrap: 'wrap' } },
-        h('div', { className: 'sa-field', style: { flex: '1 1 220px', minWidth: 0 } },
-          h('span', { className: 'sa-field-head' }, pt(t, 'st.defaultBackend')),
-          h(Select, { label: pt(t, 'st.defaultBackend'), disabled: frozen, value: defaultBackend,
-            options: backendOptions, onChange: next => setRouting({ defaultBackend: next }) }),
-          h(Hint, null, pt(t, 'st.defaultBackendHint'))),
-        h('div', { className: 'sa-field', style: { flex: '1 1 220px', minWidth: 0 } },
-          h('span', { className: 'sa-field-head' }, pt(t, 'st.fallbackBackend')),
-          h(Select, { label: pt(t, 'st.fallbackBackend'), disabled: frozen, value: fallback,
-            options: [{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions],
-            onChange: next => setRouting({ fallback: next ? [next] : [] }) }))),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreferences')),
-        h(Hint, null, pt(t, 'st.routePreferencesHint')),
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
-          ROUTE_WORK_TYPES.map(type => h('div', { key: type.key, className: 'sa-switch-row' },
-            h('div', { className: 'sa-switch-row-text' },
-              h('span', null, pt(t, type.labelKey)),
-              h('span', { className: 'sa-hint' }, type.hintKey ? pt(t, type.hintKey) : '')),
-            h('div', { style: { flex: '0 0 200px', minWidth: 0 } },
-              h(Select, { label: pt(t, type.labelKey), disabled: frozen, value: preferenceOf(type.key),
-                options: [{ value: '', label: pt(t, 'st.routeFollowDefault') }, ...backendOptions],
-                onChange: next => setPreference(type.key, next) })))))),
-      // P2-5: static capability matrix, read-only; highlights the default backend.
-      h(WorkerCapabilityCard, { currentBackend: defaultBackend }),
-      saveBarFor('worker'))
+            { value: 'auto', label: pt(t, 'st.routingModeAuto') }]}
+          onChange={next => setRouting({ mode: next })} />
+        <Hint>{pt(t, 'st.routingModeHint')}</Hint>
+      </div>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.enabledBackends')}</span>
+        <Hint>{pt(t, 'st.enabledBackendsHint')}</Hint>
+        {ROUTE_BACKENDS.map(backendCard)}
+      </div>
+      <div style={{ display: 'flex', gap: 'var(--sa-sp-16)', flexWrap: 'wrap' }}>
+        <div className="sa-field" style={{ flex: '1 1 220px', minWidth: 0 }}>
+          <span className="sa-field-head">{pt(t, 'st.defaultBackend')}</span>
+          <Select label={pt(t, 'st.defaultBackend')} disabled={frozen} value={defaultBackend}
+            options={backendOptions} onChange={next => setRouting({ defaultBackend: next })} />
+          <Hint>{pt(t, 'st.defaultBackendHint')}</Hint>
+        </div>
+        <div className="sa-field" style={{ flex: '1 1 220px', minWidth: 0 }}>
+          <span className="sa-field-head">{pt(t, 'st.fallbackBackend')}</span>
+          <Select label={pt(t, 'st.fallbackBackend')} disabled={frozen} value={fallback}
+            options={[{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions]}
+            onChange={next => setRouting({ fallback: next ? [next] : [] })} />
+        </div>
+      </div>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.routePreferences')}</span>
+        <Hint>{pt(t, 'st.routePreferencesHint')}</Hint>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
+          {ROUTE_WORK_TYPES.map(type => <div key={type.key} className="sa-switch-row">
+            <div className="sa-switch-row-text">
+              <span>{pt(t, type.labelKey)}</span>
+              <span className="sa-hint">{type.hintKey ? pt(t, type.hintKey) : ''}</span>
+            </div>
+            <div style={{ flex: '0 0 200px', minWidth: 0 }}>
+              <Select label={pt(t, type.labelKey)} disabled={frozen} value={preferenceOf(type.key)}
+                options={[{ value: '', label: pt(t, 'st.routeFollowDefault') }, ...backendOptions]}
+                onChange={next => setPreference(type.key, next)} />
+            </div>
+          </div>)}
+        </div>
+      </div>
+      {/* P2-5: static capability matrix, read-only; highlights the default backend. */}
+      <WorkerCapabilityCard currentBackend={defaultBackend} />
+      {saveBarFor('worker')}
+    </div>
   }
 
   // ---- write-permission group: the three things the executor may write, with the high-risk merge called out ------
@@ -1924,38 +2013,40 @@ function LiveSettingsPage({ route }) {
     const frozen = savingGroup === 'write'
     const token = gitlab.tokenConfigured === true
     const allowMerge = Boolean(field('executor.allowMerge', executor.allowMerge === true))
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      h(Hint, null, pt(t, 'st.writeHint')),
-      h(SettingsSwitchRow, { label: pt(t, 'st.allowPush'), hint: pt(t, 'st.allowPushHint'), disabled: frozen,
-        checked: Boolean(field('executor.allowPush', executor.allowPush === true)),
-        onChange: next => editField('write', 'executor.allowPush', next, executor.allowPush === true) }),
-      h(SettingsSwitchRow, { label: pt(t, 'st.allowReply'), hint: pt(t, 'st.allowReplyHint'), disabled: frozen,
-        checked: Boolean(field('executor.allowReply', executor.allowReply === true)),
-        onChange: next => editField('write', 'executor.allowReply', next, executor.allowReply === true) }),
-      // The one irreversible permission: a warning tag, a warn-styled info tip and — while it is on — a standing
-      // warning line. Saving still goes through the ordinary save bar; this is emphasis, not a second confirmation.
-      h(SettingsSwitchRow, { label: pt(t, 'st.allowMerge'),
-        hint: pt(t, token ? 'st.allowMergeHint' : 'st.allowMergeNoToken'),
-        badge: h(Tag, { tone: 'warning' }, pt(t, 'st.highRisk')),
-        tip: pt(t, 'st.allowMergeRisk'), tipWarn: true,
-        checked: allowMerge, disabled: frozen || !token,
-        onChange: next => editField('write', 'executor.allowMerge', next, executor.allowMerge === true) }),
-      allowMerge ? h('p', { className: 'sa-banner' }, pt(t, 'st.allowMergeOn')) : null,
-      saveBarFor('write'))
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.writeHint')}</Hint>
+      <SettingsSwitchRow label={pt(t, 'st.allowPush')} hint={pt(t, 'st.allowPushHint')} disabled={frozen}
+        checked={Boolean(field('executor.allowPush', executor.allowPush === true))}
+        onChange={next => editField('write', 'executor.allowPush', next, executor.allowPush === true)} />
+      <SettingsSwitchRow label={pt(t, 'st.allowReply')} hint={pt(t, 'st.allowReplyHint')} disabled={frozen}
+        checked={Boolean(field('executor.allowReply', executor.allowReply === true))}
+        onChange={next => editField('write', 'executor.allowReply', next, executor.allowReply === true)} />
+      {/* The one irreversible permission: a warning tag, a warn-styled info tip and — while it is on — a standing
+          warning line. Saving still goes through the ordinary save bar; this is emphasis, not a second confirmation. */}
+      <SettingsSwitchRow label={pt(t, 'st.allowMerge')}
+        hint={pt(t, token ? 'st.allowMergeHint' : 'st.allowMergeNoToken')}
+        badge={<Tag tone="warning">{pt(t, 'st.highRisk')}</Tag>}
+        tip={pt(t, 'st.allowMergeRisk')} tipWarn={true}
+        checked={allowMerge} disabled={frozen || !token}
+        onChange={next => editField('write', 'executor.allowMerge', next, executor.allowMerge === true)} />
+      {allowMerge ? <p className="sa-banner">{pt(t, 'st.allowMergeOn')}</p> : null}
+      {saveBarFor('write')}
+    </div>
   }
 
   // ---- prompt group (read-only) -----------------------------------------------------------------------------
   const renderPrompt = () => {
     const brief = String(data.prompts?.workerBrief ?? '')
-    return h('div', { className: 'sa-settings-group' },
-      settingsHeading(),
-      // One sentence per fact: briefNote explains the raw value below, briefBuiltIn says built-in prompts ship with code.
-      h(Hint, null, pt(t, 'st.briefNote')),
-      brief
-        ? h(RawValue, { label: pt(t, 'st.briefLabel'), text: brief })
-        : h(EmptyState, { icon: 'inbox', title: pt(t, 'st.briefEmpty'), hint: pt(t, 'st.briefEmptyHint') }),
-      h(Hint, null, pt(t, 'st.briefBuiltIn')))
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      {/* One sentence per fact: briefNote explains the raw value below, briefBuiltIn says built-in prompts ship with code. */}
+      <Hint>{pt(t, 'st.briefNote')}</Hint>
+      {brief
+        ? <RawValue label={pt(t, 'st.briefLabel')} text={brief} />
+        : <EmptyState icon="inbox" title={pt(t, 'st.briefEmpty')} hint={pt(t, 'st.briefEmptyHint')} />}
+      <Hint>{pt(t, 'st.briefBuiltIn')}</Hint>
+    </div>
   }
 
   const renderGroup = () => {
@@ -1983,21 +2074,23 @@ function LiveSettingsPage({ route }) {
       if (body && typeof body.scrollIntoView === 'function') body.scrollIntoView({ block: 'start' })
     }, 0)
   }
-  const settingsNavButton = group => h('button', { key: group.id, type: 'button',
-    className: 'sa-settings-group', 'aria-current': active === group.id ? 'true' : undefined,
-    'data-reference': group.reference ? 'true' : undefined,
+  const settingsNavButton = group => <button key={group.id} type="button"
+    className="sa-settings-group" aria-current={active === group.id ? 'true' : undefined}
+    data-reference={group.reference ? 'true' : undefined}
     // The title is always present (what the button opens) and only gains the dirty suffix while the draft is unsaved.
-    title: dirtyGroups.has(group.id) ? `${pt(t, group.labelKey)} · ${pt(t, 'st.unsaved')}` : pt(t, group.labelKey),
-    onClick: () => selectGroup(group.id) },
-    h(Icon, { name: group.icon, size: 14 }),
-    h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-      pt(t, group.labelKey)),
-    // The dot is decorative; the unsaved state is also in the accessible name, not only in the title tooltip.
-    dirtyGroups.has(group.id)
-      ? h('span', { className: 'sa-count', style: { marginLeft: 'auto', color: 'var(--dsw-alias-state-warn-primary)' },
-        'aria-hidden': 'true', 'data-empty': 'true' }, '●')
-      : null,
-    dirtyGroups.has(group.id) ? h('span', { className: 'sa-sr-only' }, `· ${pt(t, 'st.unsaved')}`) : null)
+    title={dirtyGroups.has(group.id) ? `${pt(t, group.labelKey)} · ${pt(t, 'st.unsaved')}` : pt(t, group.labelKey)}
+    onClick={() => selectGroup(group.id)}>
+    <Icon name={group.icon} size={14} />
+    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {pt(t, group.labelKey)}
+    </span>
+    {/* The dot is decorative; the unsaved state is also in the accessible name, not only in the title tooltip. */}
+    {dirtyGroups.has(group.id)
+      ? <span className="sa-count" style={{ marginLeft: 'auto', color: 'var(--dsw-alias-state-warn-primary)' }}
+        aria-hidden="true" data-empty="true">●</span>
+      : null}
+    {dirtyGroups.has(group.id) ? <span className="sa-sr-only">{`· ${pt(t, 'st.unsaved')}`}</span> : null}
+  </button>
   const writableGroups = SETTINGS_GROUPS.filter(group => !group.reference)
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
 
@@ -2012,7 +2105,7 @@ function LiveSettingsPage({ route }) {
     'aria-describedby': repoFieldErrors[key] ? `sa-repo-field-${key}-error` : undefined,
   })
   const repoFieldError = key => repoFieldErrors[key]
-    ? h('small', { className: 'sa-error', id: `sa-repo-field-${key}-error`, role: 'alert' }, pt(t, repoFieldErrors[key]))
+    ? <small className="sa-error" id={`sa-repo-field-${key}-error`} role="alert">{pt(t, repoFieldErrors[key])}</small>
     : null
   const repoFieldEdit = (key, value) => {
     setRepoFieldErrors(previous => settingsOmit(previous, key))
@@ -2044,205 +2137,203 @@ function LiveSettingsPage({ route }) {
     return rows
   })()
 
-  return h(Fragment, null,
-    h('div', { className: 'sa-settings-intro' },
-      h(Hint, null, pt(t, 'st.pageIntro')),
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'history', size: 14 }),
-          onClick: () => { void openHistory() } }, pt(t, 'st.history')),
-        config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null)),
-    h('div', { className: 'sa-settings' },
-      h('nav', { className: 'sa-settings-nav', 'aria-label': pt(t, 'st.navLabel') },
-        writableGroups.map(settingsNavButton),
-        referenceGroups.length
-          ? h(Fragment, null,
-            h('div', { className: 'sa-settings-nav-sep', 'aria-hidden': 'true' }),
-            h('span', { className: 'sa-settings-nav-label' }, pt(t, 'st.reference')),
-            referenceGroups.map(settingsNavButton))
-          : null),
-      h('div', { className: 'sa-settings-body', ref: bodyRef },
-        error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
-        renderGroup())),
-    historyOpen ? h(Modal, { open: true, onClose: () => { if (!historyBusy) setHistoryOpen(false) },
-      title: pt(t, 'st.historyTitle'), closeLabel: t('close'), className: 'sa-history-modal',
-      footer: h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
-        onClick: () => setHistoryOpen(false) }, t('close')) },
-      h('p', { className: 'sa-hint' }, pt(t, 'st.historyHint')),
-      historyError ? h('p', { className: 'sa-error', role: 'alert' }, historyError) : null,
-      historyBusy && !historyEntries.length ? h(Hint, null, pt(t, 'st.historyLoading')) : null,
-      historyEntries.length
-        ? h('div', { className: 'sa-history-list' }, historyEntries.map(entry => h('div', { key: entry.id, className: 'sa-history-row' },
-          h('div', { className: 'sa-history-main' },
-            h('span', { className: 'sa-history-label' }, historyLabel(entry)),
-            h('span', { className: 'sa-hint' }, h(When, { at: entry.at }))),
-          h(ConfirmButton, { label: pt(t, 'st.historyRestore'), title: pt(t, 'st.historyRestoreTitle'),
-            message: pt(t, 'st.historyRestoreMessage'), confirmLabel: pt(t, 'st.historyRestoreConfirm'),
-            onConfirm: async () => { await restoreHistory(entry.id) } }))))
-        : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
-    repoEdit ? h(Modal, { open: true, onClose: () => { if (!repoEditBusy) setRepoEdit(undefined) },
-      title: pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id }), closeLabel: t('close'), className: 'sa-repo-modal',
-      footer: h(Fragment, null,
-        h(Button, { variant: 'ghost', disabled: repoEditBusy, onClick: () => setRepoEdit(undefined) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: repoEditBusy, onClick: () => { void saveRepoEdit() } },
-          repoEditBusy ? t('saving') : t('save'))) },
-      h('p', { className: 'sa-hint' }, pt(t, 'repos.editHint')),
-      h('div', { className: 'sa-repo-diff' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'repos.editDiff')),
-        repoEditRows.length
-          ? repoEditRows.map(([label, before, after], index) => h('div', { key: index, className: 'sa-diff-row' },
-            h('span', { className: 'sa-diff-label' }, label),
-            h('code', { className: 'sa-mono sa-diff-old', translate: 'no' }, before || '—'),
-            h('span', { className: 'sa-hint', 'aria-hidden': 'true' }, '→'),
-            h('code', { className: 'sa-mono sa-diff-new', translate: 'no' }, after || '—')))
-          : h('p', { className: 'sa-hint' }, pt(t, 'repos.editNoChanges'))),
-      h('div', { className: 'sa-form-grid' },
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
-          h(Input, { className: 'sa-input-full', value: repoEdit.name, 'aria-label': pt(t, 'repos.field.name'),
-            onChange: event => setRepoEdit(previous => ({ ...previous, name: event.target.value })) })),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
-          h(Input, { className: 'sa-input-full', value: repoEdit.repo, 'aria-label': pt(t, 'repos.field.repo'),
-            onChange: event => setRepoEdit(previous => ({ ...previous, repo: event.target.value })) })),
-        h('div', { className: 'sa-field', style: { gridColumn: '1 / -1' } },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.gates')),
-          repoEdit.gates.length
-            ? repoEdit.gates.map((gate, index) => h('div', { key: index, className: 'sa-card',
-              style: { marginBottom: 8, padding: 10 } },
-              h('div', { className: 'sa-form-grid' },
-                h('label', { className: 'sa-field' },
-                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateName')),
-                  h(Input, { className: 'sa-input-full', value: gate.name ?? '', 'aria-label': pt(t, 'repos.gateName'),
-                    onChange: event => editGate(index, 'name', event.target.value) })),
-                h('label', { className: 'sa-field' },
-                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCommand')),
-                  h(Input, { className: 'sa-input-full', value: gate.command ?? '', 'aria-label': pt(t, 'repos.gateCommand'),
-                    onChange: event => editGate(index, 'command', event.target.value) })),
-                h('label', { className: 'sa-field' },
-                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCwd')),
-                  h(Input, { className: 'sa-input-full', value: gate.cwd ?? '', placeholder: pt(t, 'repos.gateCwdPlaceholder'),
-                    'aria-label': pt(t, 'repos.gateCwd'), onChange: event => editGate(index, 'cwd', event.target.value) })),
-                h('label', { className: 'sa-field' },
-                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateTimeout')),
-                  h(Input, { className: 'sa-input-full', type: 'number', min: 1, value: gate.timeoutMs ?? '',
-                    'aria-label': pt(t, 'repos.gateTimeout'),
-                    onChange: event => editGate(index, 'timeoutMs', event.target.value) })),
-                h(Select, { label: pt(t, 'repos.gateOnFail'), value: gate.onFail ?? 'manual',
-                  options: [{ value: 'manual', label: pt(t, 'repos.gateOnFail.manual') },
-                    { value: 'auto_repair', label: pt(t, 'repos.gateOnFail.auto_repair') }],
-                  onChange: value => editGate(index, 'onFail', value) }),
-                h('label', { className: 'sa-field' },
-                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateDryRun')),
-                  h(Input, { className: 'sa-input-full', value: gate.dryRunCommand ?? '',
-                    'aria-label': pt(t, 'repos.gateDryRun'), onChange: event => editGate(index, 'dryRunCommand', event.target.value) }))),
-              h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
-                gates: previous.gates.filter((item, position) => position !== index) })) }, pt(t, 'repos.gateRemove'))))
-            : h('p', { className: 'sa-hint' }, pt(t, 'repos.gateEmptyEditor')),
-          h(Button, { variant: 'outline', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
-            gates: [...previous.gates, { name: '', command: '', onFail: 'manual' }] })) }, pt(t, 'repos.gateAdd')),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.gatesJsonHint')))),
-      repoEditError ? h('p', { className: 'sa-banner sa-danger' }, repoEditError) : null) : null,
-    repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
-      title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
-      footer: h(Fragment, null,
-        h(Button, { variant: 'ghost', disabled: repoSaving, onClick: () => setRepoModalOpen(false) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: repoSaving, onClick: () => { void submitRepo() } },
-          repoSaving ? t('saving') : pt(t, 'repos.add'))) },
-      h('p', { className: 'sa-hint' }, pt(t, 'repos.addHint')),
-      h('div', { className: 'sa-form-grid' },
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.id')),
-          h(Input, { className: 'sa-input-full', value: repoForm.id, 'aria-label': pt(t, 'repos.field.id'),
-            ...repoFieldProps('id', true),
-            onChange: event => repoFieldEdit('id', event.target.value) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint')),
-          repoFieldError('id')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
-          h(Input, { className: 'sa-input-full', value: repoForm.name, 'aria-label': pt(t, 'repos.field.name'),
-            ...repoFieldProps('name', false),
-            onChange: event => repoFieldEdit('name', event.target.value) }),
-          repoFieldError('name')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.kind')),
-          h(Select, { label: pt(t, 'repos.field.kind'), value: repoForm.kind,
-            options: [{ value: 'web', label: pt(t, 'repos.kindWeb') }, { value: 'oracle-ebs', label: pt(t, 'repos.kindEbs') }],
-            onChange: next => setRepoForm(previous => ({ ...previous, kind: next,
+  /** One add-repository input row: the label, the control, an optional hint and the field's own error line. */
+  const repoInputField = (key, labelKey, { required = false, placeholder = undefined, hintKey = undefined } = {}) => (
+    <label className="sa-field">
+      <span className="sa-field-head">{pt(t, labelKey)}</span>
+      <Input className="sa-input-full" value={repoForm[key]} aria-label={pt(t, labelKey)}
+        placeholder={placeholder}
+        {...repoFieldProps(key, required)}
+        onChange={event => repoFieldEdit(key, event.target.value)} />
+      {hintKey ? <small className="sa-hint">{pt(t, hintKey)}</small> : null}
+      {repoFieldError(key)}
+    </label>
+  )
+
+  return <>
+    <div className="sa-settings-intro">
+      <Hint>{pt(t, 'st.pageIntro')}</Hint>
+      <div className="sa-actions">
+        <Button variant="ghost" size="sm" icon={<Icon name="history" size={14} />}
+          onClick={() => { void openHistory() }}>{pt(t, 'st.history')}</Button>
+        {config.file ? <CopyButton value={config.file} label={pt(t, 'st.copyConfigPath')} /> : null}
+      </div>
+    </div>
+    <div className="sa-settings">
+      <nav className="sa-settings-nav" aria-label={pt(t, 'st.navLabel')}>
+        {writableGroups.map(settingsNavButton)}
+        {referenceGroups.length
+          ? <>
+            <div className="sa-settings-nav-sep" aria-hidden="true" />
+            <span className="sa-settings-nav-label">{pt(t, 'st.reference')}</span>
+            {referenceGroups.map(settingsNavButton)}
+          </>
+          : null}
+      </nav>
+      <div className="sa-settings-body" ref={bodyRef}>
+        {error ? <ErrorState error={error} onRetry={() => { void reload() }} /> : null}
+        {renderGroup()}
+      </div>
+    </div>
+    {historyOpen ? <Modal open={true} onClose={() => { if (!historyBusy) setHistoryOpen(false) }}
+      title={pt(t, 'st.historyTitle')} closeLabel={t('close')} className="sa-history-modal"
+      footer={<Button variant="outline" size="sm" disabled={historyBusy}
+        onClick={() => setHistoryOpen(false)}>{t('close')}</Button>}>
+      <p className="sa-hint">{pt(t, 'st.historyHint')}</p>
+      {historyError ? <p className="sa-error" role="alert">{historyError}</p> : null}
+      {historyBusy && !historyEntries.length ? <Hint>{pt(t, 'st.historyLoading')}</Hint> : null}
+      {historyEntries.length
+        ? <div className="sa-history-list">{historyEntries.map(entry => <div key={entry.id} className="sa-history-row">
+          <div className="sa-history-main">
+            <span className="sa-history-label">{historyLabel(entry)}</span>
+            <span className="sa-hint"><When at={entry.at} /></span>
+          </div>
+          <ConfirmButton label={pt(t, 'st.historyRestore')} title={pt(t, 'st.historyRestoreTitle')}
+            message={pt(t, 'st.historyRestoreMessage')} confirmLabel={pt(t, 'st.historyRestoreConfirm')}
+            onConfirm={async () => { await restoreHistory(entry.id) }} />
+        </div>)}</div>
+        : (!historyBusy && !historyError ? <Hint>{pt(t, 'st.historyEmpty')}</Hint> : null)}
+    </Modal> : null}
+    {repoEdit ? <Modal open={true} onClose={() => { if (!repoEditBusy) setRepoEdit(undefined) }}
+      title={pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id })} closeLabel={t('close')}
+      className="sa-repo-modal"
+      footer={<>
+        <Button variant="ghost" disabled={repoEditBusy} onClick={() => setRepoEdit(undefined)}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={repoEditBusy} onClick={() => { void saveRepoEdit() }}>
+          {repoEditBusy ? t('saving') : t('save')}
+        </Button>
+      </>}>
+      <p className="sa-hint">{pt(t, 'repos.editHint')}</p>
+      <div className="sa-repo-diff">
+        <span className="sa-field-head">{pt(t, 'repos.editDiff')}</span>
+        {repoEditRows.length
+          ? repoEditRows.map(([label, before, after], index) => <div key={index} className="sa-diff-row">
+            <span className="sa-diff-label">{label}</span>
+            <code className="sa-mono sa-diff-old" translate="no">{before || '—'}</code>
+            <span className="sa-hint" aria-hidden="true">→</span>
+            <code className="sa-mono sa-diff-new" translate="no">{after || '—'}</code>
+          </div>)
+          : <p className="sa-hint">{pt(t, 'repos.editNoChanges')}</p>}
+      </div>
+      <div className="sa-form-grid">
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.name')}</span>
+          <Input className="sa-input-full" value={repoEdit.name} aria-label={pt(t, 'repos.field.name')}
+            onChange={event => setRepoEdit(previous => ({ ...previous, name: event.target.value }))} />
+        </label>
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.repo')}</span>
+          <Input className="sa-input-full" value={repoEdit.repo} aria-label={pt(t, 'repos.field.repo')}
+            onChange={event => setRepoEdit(previous => ({ ...previous, repo: event.target.value }))} />
+        </label>
+        <div className="sa-field" style={{ gridColumn: '1 / -1' }}>
+          <span className="sa-field-head">{pt(t, 'repos.gates')}</span>
+          {repoEdit.gates.length
+            ? repoEdit.gates.map((gate, index) => <div key={index} className="sa-card" style={{ marginBottom: 8, padding: 10 }}>
+              <div className="sa-form-grid">
+                <label className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'repos.gateName')}</span>
+                  <Input className="sa-input-full" value={gate.name ?? ''} aria-label={pt(t, 'repos.gateName')}
+                    onChange={event => editGate(index, 'name', event.target.value)} />
+                </label>
+                <label className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'repos.gateCommand')}</span>
+                  <Input className="sa-input-full" value={gate.command ?? ''} aria-label={pt(t, 'repos.gateCommand')}
+                    onChange={event => editGate(index, 'command', event.target.value)} />
+                </label>
+                <label className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'repos.gateCwd')}</span>
+                  <Input className="sa-input-full" value={gate.cwd ?? ''} placeholder={pt(t, 'repos.gateCwdPlaceholder')}
+                    aria-label={pt(t, 'repos.gateCwd')} onChange={event => editGate(index, 'cwd', event.target.value)} />
+                </label>
+                <label className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'repos.gateTimeout')}</span>
+                  <Input className="sa-input-full" type="number" min={1} value={gate.timeoutMs ?? ''}
+                    aria-label={pt(t, 'repos.gateTimeout')}
+                    onChange={event => editGate(index, 'timeoutMs', event.target.value)} />
+                </label>
+                <Select label={pt(t, 'repos.gateOnFail')} value={gate.onFail ?? 'manual'}
+                  options={[{ value: 'manual', label: pt(t, 'repos.gateOnFail.manual') },
+                    { value: 'auto_repair', label: pt(t, 'repos.gateOnFail.auto_repair') }]}
+                  onChange={value => editGate(index, 'onFail', value)} />
+                <label className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'repos.gateDryRun')}</span>
+                  <Input className="sa-input-full" value={gate.dryRunCommand ?? ''}
+                    aria-label={pt(t, 'repos.gateDryRun')} onChange={event => editGate(index, 'dryRunCommand', event.target.value)} />
+                </label>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setRepoEdit(previous => ({ ...previous,
+                gates: previous.gates.filter((item, position) => position !== index) }))}>{pt(t, 'repos.gateRemove')}</Button>
+            </div>)
+            : <p className="sa-hint">{pt(t, 'repos.gateEmptyEditor')}</p>}
+          <Button variant="outline" size="sm" onClick={() => setRepoEdit(previous => ({ ...previous,
+            gates: [...previous.gates, { name: '', command: '', onFail: 'manual' }] }))}>{pt(t, 'repos.gateAdd')}</Button>
+          <small className="sa-hint">{pt(t, 'repos.gatesJsonHint')}</small>
+        </div>
+      </div>
+      {repoEditError ? <p className="sa-banner sa-danger">{repoEditError}</p> : null}
+    </Modal> : null}
+    {repoModalOpen ? <Modal open={true} onClose={() => { if (!repoSaving) setRepoModalOpen(false) }}
+      title={pt(t, 'repos.addTitle')} closeLabel={t('close')} className="sa-repo-modal"
+      footer={<>
+        <Button variant="ghost" disabled={repoSaving} onClick={() => setRepoModalOpen(false)}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={repoSaving} onClick={() => { void submitRepo() }}>
+          {repoSaving ? t('saving') : pt(t, 'repos.add')}
+        </Button>
+      </>}>
+      <p className="sa-hint">{pt(t, 'repos.addHint')}</p>
+      <div className="sa-form-grid">
+        {repoInputField('id', 'repos.field.id', { required: true, hintKey: 'repos.field.idHint' })}
+        {repoInputField('name', 'repos.field.name')}
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.kind')}</span>
+          <Select label={pt(t, 'repos.field.kind')} value={repoForm.kind}
+            options={[{ value: 'web', label: pt(t, 'repos.kindWeb') }, { value: 'oracle-ebs', label: pt(t, 'repos.kindEbs') }]}
+            onChange={next => setRepoForm(previous => ({ ...previous, kind: next,
               verifyMode: next === 'oracle-ebs' ? 'manual' : 'web-uat',
-              acceptance: next === 'oracle-ebs' ? 'merged' : 'deployed' })) })),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
-          h(Input, { className: 'sa-input-full', value: repoForm.path, 'aria-label': pt(t, 'repos.field.repo'),
-            placeholder: '/Users/you/work/my-repo',
-            ...repoFieldProps('path', true),
-            onChange: event => repoFieldEdit('path', event.target.value) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint')),
-          repoFieldError('path')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseBranch')),
-          h(Input, { className: 'sa-input-full', value: repoForm.baseBranch, 'aria-label': pt(t, 'repos.field.baseBranch'),
-            ...repoFieldProps('baseBranch', true),
-            onChange: event => repoFieldEdit('baseBranch', event.target.value) }),
-          repoFieldError('baseBranch')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.targetBranch')),
-          h(Input, { className: 'sa-input-full', value: repoForm.targetBranch, 'aria-label': pt(t, 'repos.field.targetBranch'),
-            ...repoFieldProps('targetBranch', true),
-            onChange: event => repoFieldEdit('targetBranch', event.target.value) }),
-          repoFieldError('targetBranch')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseUrl')),
-          h(Input, { className: 'sa-input-full', value: repoForm.baseUrl, 'aria-label': pt(t, 'repos.field.baseUrl'),
-            placeholder: 'https://gitlab.example.com',
-            ...repoFieldProps('baseUrl', true),
-            onChange: event => repoFieldEdit('baseUrl', event.target.value) }),
-          repoFieldError('baseUrl')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.project')),
-          h(Input, { className: 'sa-input-full', value: repoForm.project, 'aria-label': pt(t, 'repos.field.project'),
-            placeholder: 'group/project',
-            ...repoFieldProps('project', true),
-            onChange: event => repoFieldEdit('project', event.target.value) }),
-          repoFieldError('project')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.verifyMode')),
-          h(Select, { label: pt(t, 'repos.field.verifyMode'), value: repoForm.verifyMode,
-            options: [{ value: 'web-uat', label: pt(t, 'repos.verifyWebUat') }, { value: 'manual', label: pt(t, 'repos.verifyManual') }],
-            onChange: next => setRepoForm(previous => ({ ...previous, verifyMode: next })) })),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.acceptance')),
-          h(Select, { label: pt(t, 'repos.field.acceptance'), value: repoForm.acceptance,
-            options: [{ value: 'deployed', label: pt(t, 'repos.acceptDeployed') }, { value: 'merged', label: pt(t, 'repos.acceptMerged') }],
-            onChange: next => setRepoForm(previous => ({ ...previous, acceptance: next })) })),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.uatUrl')),
-          h(Input, { className: 'sa-input-full', value: repoForm.uatUrl, 'aria-label': pt(t, 'repos.field.uatUrl'),
-            placeholder: 'https://uat.example.com',
-            ...repoFieldProps('uatUrl', false),
-            onChange: event => repoFieldEdit('uatUrl', event.target.value) }),
-          repoFieldError('uatUrl')),
-        h('label', { className: 'sa-field' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.healthUrl')),
-          h(Input, { className: 'sa-input-full', value: repoForm.healthUrl, 'aria-label': pt(t, 'repos.field.healthUrl'),
-            placeholder: 'https://uat.example.com/health',
-            ...repoFieldProps('healthUrl', false),
-            onChange: event => repoFieldEdit('healthUrl', event.target.value) }),
-          repoFieldError('healthUrl'))),
-      h(SettingsSwitchRow, { label: pt(t, 'repos.field.makeDefault'), hint: pt(t, 'repos.field.makeDefaultHint'),
-        checked: repoForm.makeDefault, disabled: repoSaving,
-        onChange: next => setRepoForm(previous => ({ ...previous, makeDefault: next })) }),
-      repoError
-        ? h(Fragment, null,
-          h('p', { className: 'sa-error', role: 'alert', id: 'sa-repo-error', tabIndex: -1 }, repoError),
-          h('p', { className: 'sa-hint' }, pt(t, 'repos.fixHint')))
-        : null) : null,
-    configSampleOpen ? h(Modal, { open: true, onClose: () => setConfigSampleOpen(false),
-      title: pt(t, 'repos.sampleTitle'), closeLabel: t('close'), className: 'sa-glossary-modal',
-      footer: h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(false) }, t('close')) },
-      h('p', { className: 'sa-hint' }, pt(t, 'repos.sampleHint')),
-      h('div', { className: 'sa-md-code' },
-        h('div', { className: 'sa-md-code-head' },
-          h('span', { className: 'sa-md-code-lang' }, 'live.json'),
-          h(CopyButton, { value: REPO_CONFIG_SAMPLE, label: pt(t, 'repos.sampleCopy') })),
-        h('pre', { className: 'sa-md-pre', translate: 'no' }, REPO_CONFIG_SAMPLE))) : null)
+              acceptance: next === 'oracle-ebs' ? 'merged' : 'deployed' }))} />
+        </label>
+        {repoInputField('path', 'repos.field.repo', { required: true, placeholder: '/Users/you/work/my-repo', hintKey: 'repos.field.repoHint' })}
+        {repoInputField('baseBranch', 'repos.field.baseBranch', { required: true })}
+        {repoInputField('targetBranch', 'repos.field.targetBranch', { required: true })}
+        {repoInputField('baseUrl', 'repos.field.baseUrl', { required: true, placeholder: 'https://gitlab.example.com' })}
+        {repoInputField('project', 'repos.field.project', { required: true, placeholder: 'group/project' })}
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.verifyMode')}</span>
+          <Select label={pt(t, 'repos.field.verifyMode')} value={repoForm.verifyMode}
+            options={[{ value: 'web-uat', label: pt(t, 'repos.verifyWebUat') }, { value: 'manual', label: pt(t, 'repos.verifyManual') }]}
+            onChange={next => setRepoForm(previous => ({ ...previous, verifyMode: next }))} />
+        </label>
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.acceptance')}</span>
+          <Select label={pt(t, 'repos.field.acceptance')} value={repoForm.acceptance}
+            options={[{ value: 'deployed', label: pt(t, 'repos.acceptDeployed') }, { value: 'merged', label: pt(t, 'repos.acceptMerged') }]}
+            onChange={next => setRepoForm(previous => ({ ...previous, acceptance: next }))} />
+        </label>
+        {repoInputField('uatUrl', 'repos.field.uatUrl', { placeholder: 'https://uat.example.com' })}
+        {repoInputField('healthUrl', 'repos.field.healthUrl', { placeholder: 'https://uat.example.com/health' })}
+      </div>
+      <SettingsSwitchRow label={pt(t, 'repos.field.makeDefault')} hint={pt(t, 'repos.field.makeDefaultHint')}
+        checked={repoForm.makeDefault} disabled={repoSaving}
+        onChange={next => setRepoForm(previous => ({ ...previous, makeDefault: next }))} />
+      {repoError
+        ? <>
+          <p className="sa-error" role="alert" id="sa-repo-error" tabIndex={-1}>{repoError}</p>
+          <p className="sa-hint">{pt(t, 'repos.fixHint')}</p>
+        </>
+        : null}
+    </Modal> : null}
+    {configSampleOpen ? <Modal open={true} onClose={() => setConfigSampleOpen(false)}
+      title={pt(t, 'repos.sampleTitle')} closeLabel={t('close')} className="sa-glossary-modal"
+      footer={<Button variant="outline" size="sm" onClick={() => setConfigSampleOpen(false)}>{t('close')}</Button>}>
+      <p className="sa-hint">{pt(t, 'repos.sampleHint')}</p>
+      <div className="sa-md-code">
+        <div className="sa-md-code-head">
+          <span className="sa-md-code-lang">live.json</span>
+          <CopyButton value={REPO_CONFIG_SAMPLE} label={pt(t, 'repos.sampleCopy')} />
+        </div>
+        <pre className="sa-md-pre" translate="no">{REPO_CONFIG_SAMPLE}</pre>
+      </div>
+    </Modal> : null}
+  </>
 }
