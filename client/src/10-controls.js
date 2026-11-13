@@ -1,13 +1,15 @@
 /* Local UI controls. Markup, class names, focus behavior and token usage follow the Harness panel controls the
    plugin renders beside; the plugin must not import host component packages, so the behavior is reproduced here.
-   Signatures are frozen by spec/impl-contract-2026-11.md §3.1; pages only use these props. */
+   Signatures are frozen by spec/impl-contract-2026-11.md §3.1; pages only use these props.
+
+   Written in JSX (compiled to the same `h` binding the build prelude defines), so files can migrate one at a time. */
 
 /** Six shape-coded states (contract §3.4). Color never carries the state alone: every state also has a shape. */
 const STATUS_STATES = ['done', 'ongoing', 'warning', 'error', 'idle', 'queued']
 
 function controlIcon(icon, size = 16) {
   if (icon === undefined || icon === null) return null
-  return typeof icon === 'string' ? h(Icon, { name: icon, size }) : icon
+  return typeof icon === 'string' ? <Icon name={icon} size={size} /> : icon
 }
 
 /** Shape-coded state icon. `ongoing` spins by default; `spin` forces/forbids the rotation. */
@@ -15,40 +17,43 @@ function StatusIcon({ state = 'idle', size = 16, spin, className }) {
   const key = STATUS_STATES.includes(state) ? state : 'idle'
   const spinning = spin === undefined ? key === 'ongoing' : spin
   const shape = key === 'done'
-    ? [h('circle', { key: 'c', cx: 12, cy: 12, r: 9 }), h('path', { key: 'p', d: 'M7.8 12.4l2.9 2.9 5.5-6.1' })]
+    ? [<circle key="c" cx={12} cy={12} r={9} />, <path key="p" d="M7.8 12.4l2.9 2.9 5.5-6.1" />]
     : key === 'ongoing'
-      ? [h('circle', { key: 't', cx: 12, cy: 12, r: 9, opacity: 0.2 }), h('path', { key: 'a', d: 'M12 3a9 9 0 0 1 9 9' })]
+      ? [<circle key="t" cx={12} cy={12} r={9} opacity={0.2} />, <path key="a" d="M12 3a9 9 0 0 1 9 9" />]
       : key === 'warning'
-        ? [h('path', { key: 't', d: 'M12 3.8l9.2 16.4H2.8z' }), h('path', { key: 'i', d: 'M12 9.6v4.6' }), h('path', { key: 'd', d: 'M12 17.2h.01' })]
+        ? [<path key="t" d="M12 3.8l9.2 16.4H2.8z" />, <path key="i" d="M12 9.6v4.6" />, <path key="d" d="M12 17.2h.01" />]
         : key === 'error'
-          ? [h('circle', { key: 'c', cx: 12, cy: 12, r: 9 }), h('path', { key: 'x', d: 'M8.8 8.8l6.4 6.4M15.2 8.8l-6.4 6.4' })]
+          ? [<circle key="c" cx={12} cy={12} r={9} />, <path key="x" d="M8.8 8.8l6.4 6.4M15.2 8.8l-6.4 6.4" />]
           : key === 'queued'
-            ? [h('circle', { key: 'c', cx: 12, cy: 12, r: 9 }), h('path', { key: 'h', d: 'M12 7.2V12l3.2 2.1' })]
-            : [h('circle', { key: 'c', cx: 12, cy: 12, r: 9 })]
-  return h('svg', { className: cx('sa-status-icon', spinning && 'sa-spin', className), 'data-state': key, width: size, height: size,
-    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
-    'aria-hidden': 'true', focusable: 'false' }, shape)
+            ? [<circle key="c" cx={12} cy={12} r={9} />, <path key="h" d="M12 7.2V12l3.2 2.1" />]
+            : [<circle key="c" cx={12} cy={12} r={9} />]
+  return <svg className={cx('sa-status-icon', spinning && 'sa-spin', className)} data-state={key} width={size} height={size}
+    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"
+    aria-hidden="true" focusable="false">{shape}</svg>
 }
 
 /** Shape + text; the only allowed way to show a state, so WCAG 1.4.1 holds. */
 function StatusText({ state = 'idle', children }) {
-  return h('span', { className: 'sa-status-text', 'data-state': STATUS_STATES.includes(state) ? state : 'idle' },
-    h(StatusIcon, { state, size: 14 }), h('span', { className: 'sa-status-label' }, children))
+  return <span className="sa-status-text" data-state={STATUS_STATES.includes(state) ? state : 'idle'}>
+    <StatusIcon state={state} size={14} />
+    <span className="sa-status-label">{children}</span>
+  </span>
 }
 
 function Button({ variant = 'ghost', size = 'md', icon, className, children, type = 'button', ...rest }) {
-  return h('button', { type, className: cx('sa-btn', `sa-btn-${variant}`, `sa-btn-${size}`, className), ...rest },
-    icon !== undefined && icon !== null ? h('span', { className: 'sa-btn-icon' }, controlIcon(icon, size === 'sm' ? 14 : 16)) : null,
-    children !== undefined && children !== null ? children : null)
+  return <button type={type} className={cx('sa-btn', `sa-btn-${variant}`, `sa-btn-${size}`, className)} {...rest}>
+    {icon !== undefined && icon !== null ? <span className="sa-btn-icon">{controlIcon(icon, size === 'sm' ? 14 : 16)}</span> : null}
+    {children !== undefined && children !== null ? children : null}
+  </button>
 }
 
 function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
-  return h('button', { type: 'button', className: 'sa-icon-btn', 'data-variant': variant,
-    'aria-label': label ?? title, title: title ?? label, disabled, onClick, ...rest }, controlIcon(icon, 16))
+  return <button type="button" className="sa-icon-btn" data-variant={variant}
+    aria-label={label ?? title} title={title ?? label} disabled={disabled} onClick={onClick} {...rest}>{controlIcon(icon, 16)}</button>
 }
 
 function Tag({ tone = 'outline', title, children }) {
-  return h('span', { className: 'sa-tag', 'data-tone': tone, title }, children)
+  return <span className="sa-tag" data-tone={tone} title={title}>{children}</span>
 }
 
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
@@ -66,12 +71,13 @@ function SegmentedTabs({ items, value, onChange, label, className }) {
     // (which is now tabindex=-1 and unselected).
     list.current?.querySelector(`button[data-value="${target.value}"]`)?.focus()
   }
-  return h('div', { ref: list, role: 'tablist', 'aria-label': label, className: cx('sa-tabs', className),
-    onKeyDown: walk }, items.map(item => h('button', { key: item.value, type: 'button', role: 'tab', id: item.id,
-      'aria-controls': item.panelId, 'aria-selected': item.value === value, 'data-value': String(item.value),
-      tabIndex: item.value === value ? 0 : -1,
-      title: item.title, 'aria-keyshortcuts': item.shortcut,
-      className: 'sa-tab', onClick: () => onChange(item.value) }, item.label)))
+  return <div ref={list} role="tablist" aria-label={label} className={cx('sa-tabs', className)} onKeyDown={walk}>
+    {items.map(item => <button key={item.value} type="button" role="tab" id={item.id}
+      aria-controls={item.panelId} aria-selected={item.value === value} data-value={String(item.value)}
+      tabIndex={item.value === value ? 0 : -1}
+      title={item.title} aria-keyshortcuts={item.shortcut}
+      className="sa-tab" onClick={() => onChange(item.value)}>{item.label}</button>)}
+  </div>
 }
 
 /** Secondary filter pills (contract §5.2): one radio group, arrow keys move and select, roving tabindex. */
@@ -92,36 +98,42 @@ function SegmentedControl({ options = [], value, onChange, label, disabled, clas
     else if (event.key === 'Home') { event.preventDefault(); focusAt(0) }
     else if (event.key === 'End') { event.preventDefault(); focusAt(selectable.length - 1) }
   }
-  return h('div', { ref: list, role: 'radiogroup', 'aria-label': label, className: cx('sa-segmented', className), onKeyDown },
-    options.map(option => h('button', { key: option.value, type: 'button', role: 'radio', 'aria-checked': option.value === value,
-      'data-value': String(option.value), title: option.title, disabled: disabled || option.disabled,
-      tabIndex: option.value === value || (value === undefined && option === selectable[0]) ? 0 : -1, className: 'sa-segment',
-      onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label,
-      option.description ? h('span', { className: 'sa-sr-only' }, option.description) : null)))
+  return <div ref={list} role="radiogroup" aria-label={label} className={cx('sa-segmented', className)} onKeyDown={onKeyDown}>
+    {options.map(option => <button key={option.value} type="button" role="radio" aria-checked={option.value === value}
+      data-value={String(option.value)} title={option.title} disabled={disabled || option.disabled}
+      tabIndex={option.value === value || (value === undefined && option === selectable[0]) ? 0 : -1} className="sa-segment"
+      onClick={() => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) }}>{option.label}
+      {option.description ? <span className="sa-sr-only">{option.description}</span> : null}
+    </button>)}
+  </div>
 }
 
 /** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
     identifier fields (repo, branch, ref, path) default to spellCheck=false so the browser stops underlining them. */
 function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
-  return h('span', { className: cx('sa-input', className) }, icon !== undefined ? h('span', { className: 'sa-input-icon' }, controlIcon(icon, 14)) : null,
-    h('input', { ref: inputRef, spellCheck: spellCheck ?? false, ...rest, 'aria-label': rest['aria-label'] ?? label }))
+  return <span className={cx('sa-input', className)}>
+    {icon !== undefined ? <span className="sa-input-icon">{controlIcon(icon, 14)}</span> : null}
+    <input ref={inputRef} spellCheck={spellCheck ?? false} {...rest} aria-label={rest['aria-label'] ?? label} />
+  </span>
 }
 
 function Select({ options = [], value, onChange, label, className, disabled }) {
-  return h('select', { className: cx('sa-select', className), value: value ?? '', 'aria-label': label, disabled,
-    onChange: event => onChange(event.target.value) },
-    options.map(option => h('option', { key: option.value, value: option.value, disabled: option.disabled }, option.label)))
+  return <select className={cx('sa-select', className)} value={value ?? ''} aria-label={label} disabled={disabled}
+    onChange={event => onChange(event.target.value)}>
+    {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
+  </select>
 }
 
 /** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
     hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
     visible text lives outside the label (it may be omitted when the text is inside). */
 function Switch({ checked, onChange, label, className, disabled, inputRef }) {
-  return h('span', { className: cx('sa-switch', className) },
-    h('input', { ref: inputRef, type: 'checkbox', role: 'switch', className: 'sa-switch-input',
-      checked: Boolean(checked), disabled, 'aria-label': typeof label === 'string' ? label : undefined,
-      onChange: event => onChange(event.target.checked) }),
-    h('span', { className: 'sa-switch-track', 'aria-hidden': 'true' }, h('span', { className: 'sa-switch-thumb' })))
+  return <span className={cx('sa-switch', className)}>
+    <input ref={inputRef} type="checkbox" role="switch" className="sa-switch-input"
+      checked={Boolean(checked)} disabled={disabled} aria-label={typeof label === 'string' ? label : undefined}
+      onChange={event => onChange(event.target.checked)} />
+    <span className="sa-switch-track" aria-hidden="true"><span className="sa-switch-thumb" /></span>
+  </span>
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
@@ -160,14 +172,18 @@ function Modal({ open, onClose, title, closeLabel, description, footer, classNam
     }
   }, [open])
   if (!open) return null
-  return h('div', { className: 'sa-modal-root', role: 'presentation' },
-    h('div', { className: 'sa-modal-mask', 'aria-hidden': 'true', onClick: onClose }),
-    h('div', { ref: dialog, className: cx('sa-modal', className), role: 'dialog', 'aria-modal': 'true', 'aria-label': title, tabIndex: -1 },
-      h('div', { className: 'sa-modal-header' }, h('h2', null, title),
-        h('button', { type: 'button', className: 'sa-modal-close', 'aria-label': closeLabel, onClick: onClose }, h(Icon, { name: 'close', size: 14 }))),
-      description ? h('p', { className: 'sa-modal-description' }, description) : null,
-      children !== undefined ? h('div', { className: 'sa-modal-body' }, children) : null,
-      footer !== undefined ? h('div', { className: 'sa-modal-footer' }, footer) : null))
+  return <div className="sa-modal-root" role="presentation">
+    <div className="sa-modal-mask" aria-hidden="true" onClick={onClose} />
+    <div ref={dialog} className={cx('sa-modal', className)} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+      <div className="sa-modal-header">
+        <h2>{title}</h2>
+        <button type="button" className="sa-modal-close" aria-label={closeLabel} onClick={onClose}><Icon name="close" size={14} /></button>
+      </div>
+      {description ? <p className="sa-modal-description">{description}</p> : null}
+      {children !== undefined ? <div className="sa-modal-body">{children}</div> : null}
+      {footer !== undefined ? <div className="sa-modal-footer">{footer}</div> : null}
+    </div>
+  </div>
 }
 
 /** Tooltip trigger for hover, keyboard focus and touch; positioned with fixed coordinates so it escapes scroll clips. */
@@ -191,12 +207,13 @@ function InfoTip({ text, icon = 'question', warn }) {
     window.addEventListener('resize', close)
     return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close) }
   }, [open])
-  return h(Fragment, null,
-    h('button', { ref: anchor, type: 'button', className: warn ? 'sa-info sa-info-warn' : 'sa-info', 'aria-label': text,
-      onMouseEnter: () => setOpen(true), onMouseLeave: () => setOpen(false), onBlur: () => setOpen(false),
-      onFocus: event => { if (event.currentTarget.matches(':focus-visible')) setOpen(true) },
-      onKeyDown: event => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation() } } }, h(Icon, { name: icon, size: 14 })),
-    open ? h('span', { ref: bubble, role: 'tooltip', className: 'sa-tooltip' }, text) : null)
+  return <>
+    <button ref={anchor} type="button" className={warn ? 'sa-info sa-info-warn' : 'sa-info'} aria-label={text}
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)} onBlur={() => setOpen(false)}
+      onFocus={event => { if (event.currentTarget.matches(':focus-visible')) setOpen(true) }}
+      onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); event.stopPropagation() } }}><Icon name={icon} size={14} /></button>
+    {open ? <span ref={bubble} role="tooltip" className="sa-tooltip">{text}</span> : null}
+  </>
 }
 
 /**
@@ -205,17 +222,20 @@ function InfoTip({ text, icon = 'question', warn }) {
  * longer passes a gear. `sa-disclosure-*` class hooks stay in place so the stylesheet owns the look.
  */
 function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
-  return h('div', { className: 'sa-disclosure', 'data-open': open || undefined },
-    h('button', { type: 'button', className: 'sa-disclosure-row', 'aria-expanded': open, onClick: onToggle },
-      icon ? h('span', { className: 'sa-disclosure-icon' }, controlIcon(icon, 14)) : null,
-      h('span', { className: 'sa-disclosure-title' }, title),
-      !open && collapsedContent
-        ? h('span', { className: 'sa-disclosure-summary', style: { flex: '1 1 auto', minWidth: 0, overflow: 'hidden',
-          textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, collapsedContent)
-        : null,
-      h('span', { className: 'sa-disclosure-chevron', style: { marginLeft: 'auto' } },
-        h(Icon, { name: open ? 'chevron-up' : 'chevron-down' }))),
-    open ? children : null)
+  return <div className="sa-disclosure" data-open={open || undefined}>
+    <button type="button" className="sa-disclosure-row" aria-expanded={open} onClick={onToggle}>
+      {icon ? <span className="sa-disclosure-icon">{controlIcon(icon, 14)}</span> : null}
+      <span className="sa-disclosure-title">{title}</span>
+      {!open && collapsedContent
+        ? <span className="sa-disclosure-summary" style={{ flex: '1 1 auto', minWidth: 0, overflow: 'hidden',
+          textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{collapsedContent}</span>
+        : null}
+      <span className="sa-disclosure-chevron" style={{ marginLeft: 'auto' }}>
+        <Icon name={open ? 'chevron-up' : 'chevron-down'} />
+      </span>
+    </button>
+    {open ? children : null}
+  </div>
 }
 
 /** Nearest ancestor whose horizontal overflow clips its children (the panel's `.sa-scroll`); the document otherwise. */
@@ -307,26 +327,32 @@ function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
     else if (event.key === 'End') edge(event, true)
     else if (event.key === 'Tab') setOpen(false)
   }
-  return h('div', { ref: root, className: 'sa-menu' },
-    text !== undefined
-      ? h('button', { ref: trigger, type: 'button', className: cx('sa-btn', 'sa-btn-outline', 'sa-btn-sm', 'sa-menu-picker'),
-        'aria-label': label ?? t('moreActions'), 'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
-        onClick: () => setOpen(value => !value) }, h('span', { className: 'sa-menu-picker-text' }, text),
-        h(Icon, { name: 'chevron-down', size: 14 }))
-      : h('button', { ref: trigger, type: 'button', className: 'sa-icon-btn sa-menu-trigger', 'aria-label': label ?? t('moreActions'),
-        'aria-haspopup': 'menu', 'aria-expanded': open, title: label ?? t('moreActions'),
-        onClick: () => setOpen(value => !value) }, h(Icon, { name: iconName, size: 16 })),
-    open ? h('div', { ref: pop, role: 'menu', 'aria-label': label, className: 'sa-menu-pop', 'data-align': side,
-      onKeyDown: onPopKeyDown },
-      items.map(item => h('button', { key: item.key, type: 'button', role: item.checked === undefined ? 'menuitem' : 'menuitemradio',
-        'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
-        title: item.title, className: 'sa-menu-item', onClick: () => choose(item) },
-        item.icon !== undefined ? h('span', { className: 'sa-menu-item-icon' }, controlIcon(item.icon, 14)) : null,
-        h('span', { className: 'sa-menu-item-label' },
-          h('span', null, item.label),
-          // A disabled entry explains itself in the menu itself instead of only in a hover title (A3).
-          item.note !== undefined ? h('span', { className: 'sa-menu-item-note' }, item.note) : null),
-        item.checked ? h('span', { className: 'sa-menu-item-check' }, h(Icon, { name: 'check', size: 14 })) : null))) : null)
+  const triggerNode = text !== undefined
+    ? <button ref={trigger} type="button" className="sa-btn sa-btn-outline sa-btn-sm sa-menu-picker"
+      aria-label={label ?? t('moreActions')} aria-haspopup="menu" aria-expanded={open} title={label ?? t('moreActions')}
+      onClick={() => setOpen(value => !value)}>
+      <span className="sa-menu-picker-text">{text}</span>
+      <Icon name="chevron-down" size={14} />
+    </button>
+    : <button ref={trigger} type="button" className="sa-icon-btn sa-menu-trigger" aria-label={label ?? t('moreActions')}
+      aria-haspopup="menu" aria-expanded={open} title={label ?? t('moreActions')}
+      onClick={() => setOpen(value => !value)}><Icon name={iconName} size={16} /></button>
+  return <div ref={root} className="sa-menu">
+    {triggerNode}
+    {open ? <div ref={pop} role="menu" aria-label={label} className="sa-menu-pop" data-align={side} onKeyDown={onPopKeyDown}>
+      {items.map(item => <button key={item.key} type="button" role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+        aria-checked={item.checked === undefined ? undefined : Boolean(item.checked)} disabled={item.disabled}
+        title={item.title} className="sa-menu-item" onClick={() => choose(item)}>
+        {item.icon !== undefined ? <span className="sa-menu-item-icon">{controlIcon(item.icon, 14)}</span> : null}
+        <span className="sa-menu-item-label">
+          <span>{item.label}</span>
+          {/* A disabled entry explains itself in the menu itself instead of only in a hover title (A3). */}
+          {item.note !== undefined ? <span className="sa-menu-item-note">{item.note}</span> : null}
+        </span>
+        {item.checked ? <span className="sa-menu-item-check"><Icon name="check" size={14} /></span> : null}
+      </button>)}
+    </div> : null}
+  </div>
 }
 
 /** Copy a value, then confirm with a short live "copied" state (no modal, no toast). */
@@ -358,9 +384,11 @@ function CopyButton({ value, label }) {
   const text = label ?? t('copy')
   // The button keeps the action as its accessible name; the copy result is announced through a live region so a
   // screen-reader user hears "copied" without the button (or the row) being renamed under them.
-  return h(Fragment, null,
-    h(Button, { variant: 'ghost', size: 'sm', className: 'sa-copy-btn', 'aria-label': text, title: text,
-      icon: h(Icon, { name: copied ? 'check' : 'copy', size: 14 }), onClick: () => { void copy() } },
-      copied ? t('copied') : text),
-    h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, copied ? t('copied') : ''))
+  return <>
+    <Button variant="ghost" size="sm" className="sa-copy-btn" aria-label={text} title={text}
+      icon={<Icon name={copied ? 'check' : 'copy'} size={14} />} onClick={() => { void copy() }}>
+      {copied ? t('copied') : text}
+    </Button>
+    <span className="sa-sr-only" role="status" aria-live="polite">{copied ? t('copied') : ''}</span>
+  </>
 }

@@ -18,13 +18,14 @@ import { homedir, tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const requireRepo = createRequire(join(root, 'package.json'))
-let JSDOM, React, ReactDOM
+let JSDOM, React, ReactDOM, esbuild
 try {
   ;({ JSDOM } = requireRepo('jsdom'))
   React = requireRepo('react')
   ReactDOM = requireRepo('react-dom/client')
+  esbuild = requireRepo('esbuild')
 } catch (error) {
-  console.error('render-check needs jsdom + react + react-dom: run `npm ci` in the repo root first.')
+  console.error('render-check needs jsdom + react + react-dom + esbuild: run `npm ci` in the repo root first.')
   console.error(String(error?.message ?? error))
   process.exit(2)
 }
@@ -411,7 +412,11 @@ const h = React.createElement
 `
 const files = readdirSync(join(root, 'client', 'src')).filter(name => name.endsWith('.js') && name !== '90-apply.js').sort()
 const source = files.map(name => readFileSync(join(root, 'client', 'src', name), 'utf8')).join('\n')
-const factory = new Function('require', prelude + source + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf }')
+// Fragments may contain JSX; compile them the way the bundle does (JSX -> the same `h` binding).
+const compiled = esbuild.transformSync(prelude + source, {
+  loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'React.Fragment', target: 'es2022',
+}).code
+const factory = new Function('require', compiled + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf }')
 const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = factory(id => {
   if (id === 'react') return React
   throw new Error(`unexpected require(${id})`)
