@@ -5,7 +5,7 @@
 
 ## 环境
 
-- Node.js ≥ 20（CI 跑 20 与 22）。
+- Node.js ≥ 22（CI 跑 22 与 24）。
 - 无需全局工具；依赖只有 devDependencies（jsdom + React，供渲染回归使用）：`npm ci`。
 
 ## 两条半区

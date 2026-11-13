@@ -33,7 +33,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 
 ## 安装
 
-前置：DSH（含 Web UI）、Node.js ≥ 20。
+前置：DSH（含 Web UI）、Node.js ≥ 22。
 
 ```bash
 # 在 DSH 会话中让 agent 执行，或通过 Plugin Manager 安装该目录
@@ -106,7 +106,7 @@ CHANGELOG.md        版本与能力变更记录
 
 ## 开发与验证
 
-前置：Node.js ≥ 20。干净 clone 只需一次依赖安装（jsdom + React，仅用于渲染回归）：
+前置：Node.js ≥ 22。干净 clone 只需一次依赖安装（jsdom + React，仅用于渲染回归）：
 
 ```bash
 npm ci                                 # 安装 devDependencies（无运行时依赖）
