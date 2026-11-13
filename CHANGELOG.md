@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.5.1] — 2026-11-14
+
+### 修复
+- 测试里不再出现真实的自建 GitLab 主机名（`lib/live/executor.test.js:298` 的 push-option 断言改用
+  `gitlab.example.com`），发布前把内部域名从公开仓库里清掉；断言的行为不变。
+
+### 验证
+- `node --test lib/live/executor.test.js` 通过；全量 555 pass / 0 fail。
+
+## [0.5.0] — 2026-11-14
+
+开源首发版本：把 0.4.39（开源准备 P0）与 0.4.40（客户端构建层 P1）合进一个可以对外发布的版本。
+功能行为与 0.4.38 一致，变化都在工程与文档层。
+
+### 内容
+- 仓库可被外部贡献：MIT LICENSE、GitHub Actions CI（Node 22/24，五道门）、`CONTRIBUTING.md`、行为准则、
+  安全策略与威胁模型、issue 表单与 PR 模板、`docs/delivery.md` 交付流程。
+- 干净 clone 可自查：`jsdom`/`react`/`react-dom` 进 `devDependencies`（精确版本 + lockfile），渲染回归
+  内置 fixture，194 项检查在无任何本地状态时也能跑通。
+- 客户端构建层换成 esbuild：仍按文件名拼接进同一个工厂作用域，产物压缩到 486 KB 并附 sourcemap，
+  `--check` 逐字节校验产物与 map。
+- 基线 Node.js 22；`testConfig` 的 Node 检查、`engines`、CI 矩阵与文档统一。
+
+### 验证
+- `node scripts/build-client.mjs --check`、`node --check index.js`、`node scripts/check-keys.mjs`、
+  Host 测试 555 pass / 0 fail、`node scripts/render-check.mjs` 194 checks / 0 fail / 0 skipped。
+- 以上在干净 clone（`npm ci`）与 GitHub Actions（node 22、node 24）上各跑过一遍。
+
 ## [0.4.40] — 2026-11-14
 
 开源准备（P1）：客户端构建层从"手写拼接"换成 esbuild 压缩，产物契约与运行时行为都不变。
