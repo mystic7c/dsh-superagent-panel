@@ -18,6 +18,7 @@ import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
 import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
   resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
+import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 export const inject = ['webServer']
 const PREFIX = '/superagent/api'
@@ -158,6 +159,11 @@ export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
   const store = new Store(stateDir)
   const host = createHost({ ctx, store, stateDir })
+  // DeepSeek JSON Output for review turns (lib/live/review-json.js); a host without the extension registry still runs,
+  // the reviewer just answers free-form JSON and the workflow parses that.
+  if (!registerReviewJsonMode(ctx, line => ctx.logger?.warn?.(`superagent review json mode: ${line}`))) {
+    ctx.logger?.debug?.('superagent review json mode: deepseekLlmApiExtensions is unavailable')
+  }
 
   // The live engine is optional: it only starts when live.json exists and enabled=true. Its document is separate
   // from the demo state, so a trial run never destroys what the panel shows in demo mode.

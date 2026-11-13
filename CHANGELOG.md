@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.31] — 2026-11-13
+
+独立验收现在可以选 DSH（独立只读会话），Claude 验收拿到 JSON schema，DSH 验收在 DeepSeek 路由上真正开
+JSON Output。上一版把「DSH 没有验收入口」当成「DSH 不支持结构化输出」，这是错的：DSH 只是没有把
+DeepSeek 的 `response_format` 接进评审请求，而 Claude Code CLI 2.1 早已支持 `--json-schema`（此前只给
+codex 传了 `--output-schema`）。
+
+### 内容
+- `lib/live/worker-cli.js`：Claude 评审把 schema 文件内容以 `--json-schema <json>` 传给 CLI（不是路径），
+  与 codex 的 `--output-schema` 对齐；repro：`claude --help` 的 "JSON Schema for structured output"。
+- `lib/live/workflow-worker.js`：评审提示词追加固定标记 `Return only a json object with keys: verdict,
+  findings, evidence.`（同时满足 DeepSeek JSON 模式「prompt 必须含 json」的要求）；DSH 评审调用带
+  `readOnly: true`（实现轮仍可写）；新增 `parseStageResult()`，容忍 ```json 围栏与前后缀文字，解析失败才抛错。
+- 新增 `lib/live/review-json.js`：`deepseekLlmApiExtensions.register('response_format', provider)`，仅当请求体
+  含评审标记、且（无工具或已见过 tool 结果）时注入 `{type:'json_object'}`——首轮探索保持自由输出，避免
+  JSON 模式打断读代码；宿主没有该扩展注册表时静默跳过，评审退回自由 JSON。
+- `lib/live/config.js` / `lib/live/live-json.js`：`executor.reviewer` 白名单加入 `dsh`（错误文案改为
+  `must be "codex", "claude" or "dsh"`）；设置 → Worker 的「独立验收后端」出现 DSH，选项仍跟随启用后端过滤。
+- `index.js`：插件挂载时注册 JSON mode，失败只记 debug 日志。
+- 测试：`review-json.test.js`（标记门控、工具结果门控、注册/降级）、`worker-cli` 的 `--json-schema` 断言、
+  live-json/config 的 dsh 白名单、执行器 `a DSH reviewer runs read-only and its fenced JSON verdict parses`。
+- `package.json` 0.4.31；`client/index.js` 重建（22 fragments，9828 行）。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（最新）；
+`node scripts/check-keys.mjs`（775 literal / 513 shared / 1157 page-local）；
+`node --test lib/store.test.js lib/live/*.test.js`（446 通过 0 失败）；`node scripts/render-check.mjs`（exit 0）。
+
 ## [0.4.30] — 2026-11-13
 
 修掉三件事：设置页保存返工预算报 `unsupported setting: executor.maxRepairRounds`；独立验收后端不能切到 Claude；

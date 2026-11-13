@@ -642,7 +642,7 @@ check('staged workflow controls carry visible labels',
   workerText.slice(0, 400))
 check('staged backend options follow the enabled backends',
   [...rootElement.querySelectorAll('.sa-main select[aria-label="实现后端"] option')].map(option => option.value).join(',') === 'dsh,claude'
-    && [...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value).join(',') === 'codex,claude',
+    && [...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value).join(',') === 'codex,claude,dsh',
   JSON.stringify([...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value)))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
 check('worker group carries the routing mode control',
