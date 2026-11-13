@@ -74,6 +74,15 @@ const evalKindLabel = (t, kind) => kind === 'all' ? pt(t, 'decisionFilter.all') 
 /** Strength vocabulary is closed; an unknown value falls back to the raw string instead of a missing key. */
 const EVAL_STRENGTHS = ['explicit', 'inferred']
 
+/** Locale-correct percent formatting for the model probability (P2): `Intl` instead of hand-built `${round(p*100)}%`. */
+const EVAL_PERCENT_FORMAT = {
+  en: new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 0 }),
+  zh: new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 0 }),
+}
+function evalPercent(t, value) {
+  return (EVAL_PERCENT_FORMAT[t.lang] ?? EVAL_PERCENT_FORMAT.en).format(value)
+}
+
 /** Human label for the decision model's shadow verdict; unknown values stay visible as the raw string. */
 function evalShadowVerdict(t, verdict) {
   if (verdict === 'accept') return pt(t, 'ev.shadowAccept')
@@ -90,9 +99,9 @@ function evalModelTag(t, decision) {
   const title = [pt(t, shadow ? 'ev.shadowHint' : 'ev.modelHint'), model.model, model.category, model.questions]
     .filter(Boolean).join(' · ')
   const risk = typeof model.riskP === 'number'
-    ? ` · ${pt(t, 'ev.shadowRisk', { p: `${Math.round(model.riskP * 100)}%` })}` : ''
+    ? ` · ${pt(t, 'ev.shadowRisk', { p: evalPercent(t, model.riskP) })}` : ''
   if (model.status !== 'ok') return h(Tag, { tone: 'quiet', title }, pt(t, 'ev.shadowError'))
-  const probability = typeof model.p === 'number' ? `${Math.round(model.p * 100)}%` : '?'
+  const probability = typeof model.p === 'number' ? evalPercent(t, model.p) : '?'
   const tone = model.verdict === 'accept' ? 'info' : model.verdict === 'reject' ? 'warning' : 'quiet'
   return h(Tag, { tone, title: `${title}${risk}` },
     pt(t, 'ev.shadow', { p: probability, verdict: evalShadowVerdict(t, model.verdict) }))
@@ -160,6 +169,8 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLi
   const contextOnly = reasons.some(item => item && typeof item === 'object' && item.code === 'contextOnly')
   const preview = evalMessagePreview(decision)
   const unavailable = view.kind === 'unavailable'
+  // The visible hint is the accessible description for the (disabled) dismiss action, so the reason is not title-only (A3).
+  const dismissHintId = `sa-eval-dismiss-${decision.id ?? 'row'}`
   return h('li', { key: decision.id },
     h('div', { className: 'sa-row' },
       h(StatusIcon, { state: view.state, size: 16 }),
@@ -171,13 +182,16 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLi
           h('span', { style: { flex: '1 1 0%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
             preview || pt(t, 'ev.noPreview'))),
         h('div', { className: 'sa-row-meta' },
+          // In-app navigation has no URL to point at, so these are real buttons, not `<a href="#">` fake links (A4).
           decision.threadKey
-            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.thread')} · ${decision.threadKey}`,
-              onClick: event => { event.preventDefault(); navigate({ page: 'trigger', id: decision.threadKey }) } },
+            ? h('button', { type: 'button', className: 'sa-mono sa-textlink',
+              title: `${pt(t, 'ev.thread')} · ${decision.threadKey}`,
+              onClick: () => navigate({ page: 'trigger', id: decision.threadKey }) },
             liveShortId(decision.threadKey, 10)) : null,
           decision.signalId
-            ? h('a', { href: '#', className: 'sa-mono sa-inline-link', title: `${pt(t, 'ev.signal')} · ${decision.signalId}`,
-              onClick: event => { event.preventDefault(); navigate({ page: 'source', id: decision.signalId }) } },
+            ? h('button', { type: 'button', className: 'sa-mono sa-textlink',
+              title: `${pt(t, 'ev.signal')} · ${decision.signalId}`,
+              onClick: () => navigate({ page: 'source', id: decision.signalId }) },
             liveShortId(decision.signalId, 10)) : null,
           h('span', null, reason || pt(t, 'ev.noReason')),
           strength ? h(Tag, { tone: 'quiet' }, strength) : null,
@@ -192,26 +206,26 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLi
           decision.at ? h(When, { at: decision.at }) : null,
           ticketIds.length
             ? h(Fragment, null,
-              ticketIds.map(id => h('a', { key: id, href: '#', className: 'sa-mono sa-inline-link', title: id,
-                onClick: event => { event.preventDefault(); navigate({ page: 'execution', id }) } }, liveShortId(id, 8))),
+              ticketIds.map(id => h('button', { key: id, type: 'button', className: 'sa-mono sa-textlink', title: id,
+                onClick: () => navigate({ page: 'execution', id }) }, liveShortId(id, 8))),
               h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) },
                 pt(t, 'ev.openTicket')))
             : null,
           runLinks.length
             ? h('span', { className: 'sa-row-meta' },
-              runLinks.map(link => h('a', { key: link.runId ?? link.ticketId, href: '#', className: 'sa-mono sa-inline-link',
+              runLinks.map(link => h('button', { key: link.runId ?? link.ticketId, type: 'button',
+                className: 'sa-mono sa-textlink',
                 title: link.runId ? `${pt(t, 'ev.run')} · ${link.runId}` : link.ticketId,
-                onClick: event => { event.preventDefault()
-                  navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) } },
+                onClick: () => navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) },
               link.runId ? `${pt(t, 'ev.run')} ${liveShortId(link.runId, 8)}` : liveShortId(link.ticketId, 8))))
             : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
-        unavailable ? h('p', { className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
+        unavailable ? h('p', { id: dismissHintId, className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
         h(Folded, { summary: rules.length ? pt(t, 'thread.rulesDetail') : pt(t, 'ev.detail') },
           rules.length ? h(ThreadRuleRows, { rules }) : h(Hint, null, pt(t, 'ev.noRules')),
           h(RawValue, { label: pt(t, 'ev.raw'), json: decision }))),
       unavailable ? h('div', { className: 'sa-row-actions' },
-        h(Button, { variant: 'ghost', size: 'sm', disabled: true, title: pt(t, 'ev.dismissHint') }, pt(t, 'ev.dismiss')),
+        h(Button, { variant: 'ghost', size: 'sm', disabled: true, 'aria-describedby': dismissHintId }, pt(t, 'ev.dismiss')),
         h(InfoTip, { text: pt(t, 'ev.dismissHint'), warn: true })) : null))
 }
 

@@ -99,9 +99,11 @@ function SegmentedControl({ options = [], value, onChange, label, disabled, clas
       onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label)))
 }
 
-function Input({ icon, className, inputRef, ...rest }) {
+/** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
+    identifier fields (repo, branch, ref, path) default to spellCheck=false so the browser stops underlining them. */
+function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
   return h('span', { className: cx('sa-input', className) }, icon !== undefined ? h('span', { className: 'sa-input-icon' }, controlIcon(icon, 14)) : null,
-    h('input', { ref: inputRef, ...rest }))
+    h('input', { ref: inputRef, spellCheck: spellCheck ?? false, ...rest, 'aria-label': rest['aria-label'] ?? label }))
 }
 
 function Select({ options = [], value, onChange, label, className, disabled }) {
@@ -110,9 +112,15 @@ function Select({ options = [], value, onChange, label, className, disabled }) {
     options.map(option => h('option', { key: option.value, value: option.value, disabled: option.disabled }, option.label)))
 }
 
-function Switch({ checked, onChange, label, className, disabled }) {
-  return h('button', { type: 'button', role: 'switch', 'aria-checked': checked, 'aria-label': label,
-    className: cx('sa-switch', className), disabled, onClick: () => onChange(!checked) }, h('span', { className: 'sa-switch-thumb' }))
+/** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
+    hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
+    visible text lives outside the label (it may be omitted when the text is inside). */
+function Switch({ checked, onChange, label, className, disabled, inputRef }) {
+  return h('span', { className: cx('sa-switch', className) },
+    h('input', { ref: inputRef, type: 'checkbox', role: 'switch', className: 'sa-switch-input',
+      checked: Boolean(checked), disabled, 'aria-label': typeof label === 'string' ? label : undefined,
+      onChange: event => onChange(event.target.checked) }),
+    h('span', { className: 'sa-switch-track', 'aria-hidden': 'true' }, h('span', { className: 'sa-switch-thumb' })))
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
@@ -197,8 +205,7 @@ function InfoTip({ text, icon = 'question', warn }) {
  */
 function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
   return h('div', { className: 'sa-disclosure', 'data-open': open || undefined },
-    h('div', { className: 'sa-disclosure-row', role: 'button', tabIndex: 0, 'aria-expanded': open, onClick: onToggle,
-      onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onToggle() } } },
+    h('button', { type: 'button', className: 'sa-disclosure-row', 'aria-expanded': open, onClick: onToggle },
       icon ? h('span', { className: 'sa-disclosure-icon' }, controlIcon(icon, 14)) : null,
       h('span', { className: 'sa-disclosure-title' }, title),
       !open && collapsedContent
@@ -314,7 +321,10 @@ function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
         'aria-checked': item.checked === undefined ? undefined : Boolean(item.checked), disabled: item.disabled,
         title: item.title, className: 'sa-menu-item', onClick: () => choose(item) },
         item.icon !== undefined ? h('span', { className: 'sa-menu-item-icon' }, controlIcon(item.icon, 14)) : null,
-        h('span', { className: 'sa-menu-item-label' }, item.label),
+        h('span', { className: 'sa-menu-item-label' },
+          h('span', null, item.label),
+          // A disabled entry explains itself in the menu itself instead of only in a hover title (A3).
+          item.note !== undefined ? h('span', { className: 'sa-menu-item-note' }, item.note) : null),
         item.checked ? h('span', { className: 'sa-menu-item-check' }, h(Icon, { name: 'check', size: 14 })) : null))) : null)
 }
 
@@ -345,7 +355,11 @@ function CopyButton({ value, label }) {
     } catch { /* clipboard may be blocked by permissions; the value stays selectable */ }
   }
   const text = label ?? t('copy')
-  return h(Button, { variant: 'ghost', size: 'sm', className: 'sa-copy-btn', 'aria-label': text, title: text,
-    icon: h(Icon, { name: copied ? 'check' : 'copy', size: 14 }), onClick: () => { void copy() } },
-    copied ? t('copied') : text)
+  // The button keeps the action as its accessible name; the copy result is announced through a live region so a
+  // screen-reader user hears "copied" without the button (or the row) being renamed under them.
+  return h(Fragment, null,
+    h(Button, { variant: 'ghost', size: 'sm', className: 'sa-copy-btn', 'aria-label': text, title: text,
+      icon: h(Icon, { name: copied ? 'check' : 'copy', size: 14 }), onClick: () => { void copy() } },
+      copied ? t('copied') : text),
+    h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, copied ? t('copied') : ''))
 }

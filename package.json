@@ -1,6 +1,6 @@
 {
   "name": "@mystic7c/dsh-superagent-panel",
-  "version": "0.4.35",
+  "version": "0.4.36",
   "private": true,
   "type": "module",
   "description": "Superagent \u7ba1\u7406\u9762\u677f\uff1a\u5f85\u529e/\u5de5\u5355/\u8fd0\u884c\u89c2\u6d4b/\u81ea\u52a8\u5316/\u9a8c\u6536/\u6765\u6e90\u4e0e\u90e8\u7f72\u8bbe\u7f6e\uff08DSH \u63d2\u4ef6\uff09\u3002",

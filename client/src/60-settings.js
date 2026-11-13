@@ -143,6 +143,10 @@ Object.assign(PAGE_TEXT, {
   'repos.field.healthUrl': ['健康检查地址（可选）', 'Health URL (optional)'],
   'repos.field.makeDefault': ['设为默认仓库', 'Make default repository'],
   'repos.field.makeDefaultHint': ['手工建单和未绑定群会使用默认仓库。', 'Manual Tickets and unbound groups use the default repository.'],
+  'repos.required': ['请填写此项。', 'This field is required.'],
+  'repos.idInvalid': ['只能用小写字母、数字、点、下划线或短横线。', 'Use lowercase letters, digits, dots, underscores or dashes only.'],
+  'repos.urlInvalid': ['需要完整的 http(s) 地址。', 'Enter a full http(s) URL.'],
+  'repos.fixHint': ['修正标红字段后重试；服务器报错时会给出具体原因。', 'Fix the highlighted fields and try again; a server failure states its reason.'],
   'repos.kindWeb': ['Web / 常规', 'Web'],
   'repos.kindEbs': ['Oracle EBS', 'Oracle EBS'],
   'repos.verifyWebUat': ['Web UAT', 'Web UAT'],
@@ -181,7 +185,6 @@ Object.assign(PAGE_TEXT, {
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
   'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写 chatId，保存后按引擎开关状态开始监听。',
     'Bind one repository to each watched group. Add a group from the list or paste a chat id; the engine watches it once enabled and saved.'],
-  'st.bindingChat': ['群 chatId', 'Group chat id'],
   'st.bindingTitle': ['群名称（可选）', 'Group name (optional)'],
   'st.bindingRepo': ['接单仓库', 'Repository'],
   'st.bindingAdd': ['添加绑定', 'Add binding'],
@@ -277,7 +280,6 @@ Object.assign(PAGE_TEXT, {
   'st.sendersHint': ['填写发送者的 Octo UID；关闭「允许任意人类」时只接受名单中的发送者。',
     'Enter the sender Octo UID; when “accept any human” is off, only listed senders are accepted.'],
   'st.sendersEmpty': ['还没有允许的发送者。', 'No allowed sender yet.'],
-  'st.senderPlaceholder': ['发送者 UID', 'Sender UID'],
   'st.addSender': ['添加', 'Add'],
   'st.removeSender': ['移除发送者 {sender}', 'Remove sender {sender}'],
   'st.anyHumanSendersHint': ['「允许任意人类」已开启，名单暂不参与判断；关闭后可继续编辑名单。',
@@ -291,11 +293,11 @@ Object.assign(PAGE_TEXT, {
   'st.cursors': ['群游标', 'Group cursors'],
   'st.lastPoll': ['最近轮询', 'Last poll'],
   'st.noSenders': ['没有允许发送者，也没有“允许任意人类”：轮询会被引擎拒绝。',
-    'No allowed senders and "accept any human" is off, so the engine rejects polling.'],
+    'No allowed senders and “accept any human” is off, so the engine rejects polling.'],
   'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写 chatId。',
     'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
   'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
-    '"Check for new messages" is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
+    '“Check for new messages” is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
   'st.probeAt': ['检查于 {time}', 'Checked {time}'],
   'st.probeSummary': ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）',
     'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
@@ -305,8 +307,20 @@ Object.assign(PAGE_TEXT, {
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
   'st.errDisabled': ['引擎未启用，请先在设置→来源打开「启用引擎」。', 'The engine is disabled; turn on “Engine enabled” under Settings → Source first.'],
   'st.errNoToken': ['Octo token 未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
-  'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and "accept any human" is off.'],
+  'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and “accept any human” is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
+  'st.reloading': ['重载中…', 'Reloading…'],
+  'st.probing': ['检查中…', 'Checking…'],
+  'st.senderPlaceholderExample': ['发送者 UID，如 oc_xxxx…', 'Sender UID, e.g. oc_xxxx…'],
+  'st.chatIdPlaceholder': ['群 chatId，如 oc_xxxx…', 'Group chat id, e.g. oc_xxxx…'],
+  'st.historyRestoreTitle': ['恢复这个历史版本？', 'Restore this version?'],
+  'st.historyRestoreMessage': ['恢复前会先把当前 live.json 备份为「恢复前的备份」，再用所选版本覆盖；正在运行的任务不受影响。',
+    'The current live.json is backed up as “before restore” first, then replaced by the chosen version; running work is unaffected.'],
+  'st.historyRestoreConfirm': ['恢复并先备份', 'Restore and back up first'],
+  'st.bindingRemoveTitle': ['移除这个监听群？', 'Remove this watched group?'],
+  'st.bindingRemoveMessage': ['移除后引擎不再读取该群；群游标会保留，重新绑定后从原位置继续。',
+    'The engine stops reading this group. Its cursor is kept, so re-binding resumes from the same position.'],
+  'st.bindingRemoveConfirm': ['移除绑定', 'Remove binding'],
   'st.reloadFailed': ['重载配置失败。', 'Reloading the config failed.'],
   'st.reloadedAt': ['已重载配置 {time}', 'Config reloaded {time}'],
 
@@ -498,10 +512,43 @@ const SETTINGS_GROUPS = [
     separate drafts and separate save bars even though all three patch `executor.*`. */
 const SETTINGS_SAVEABLE = ['source', 'review', 'run', 'worker', 'write']
 
+/** Draft mirror for the current tab: a reload or an accidental page switch must not silently drop unsaved edits. */
+const SETTINGS_DRAFT_CACHE = 'superagent-panel/settings-drafts'
+
+function draftHasKeys(draft) {
+  return Boolean(draft && typeof draft === 'object' && Object.keys(draft).length)
+}
+
+function readDraftCache() {
+  try {
+    const raw = window.sessionStorage.getItem(SETTINGS_DRAFT_CACHE)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    const restored = {}
+    for (const group of SETTINGS_SAVEABLE) {
+      if (draftHasKeys(parsed[group])) restored[group] = parsed[group]
+    }
+    return restored
+  } catch { return {} }
+}
+
+function writeDraftCache(drafts) {
+  try {
+    if (draftHasKeys(drafts)) window.sessionStorage.setItem(SETTINGS_DRAFT_CACHE, JSON.stringify(drafts))
+    else window.sessionStorage.removeItem(SETTINGS_DRAFT_CACHE)
+  } catch { /* storage can be unavailable (private mode); drafts then stay in memory only */ }
+}
+
 const settingsOmit = (object, key) => {
   const next = { ...(object ?? {}) }
   delete next[key]
   return next
+}
+
+/** Scroll a node into view where the DOM supports it; test DOMs may not implement scrollIntoView. */
+const revealNode = node => {
+  if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
 }
 
 /** Draft comparison: booleans by value, numbers/strings by their text form (the number input holds a string). */
@@ -605,26 +652,47 @@ function settingsUatView(t, uat) {
 }
 
 /** One switch row of a group form: label (+ optional badge and info tip) and explanatory hint on the left, the switch
-    on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. */
+    on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. The hint is tied to
+    the switch with aria-describedby, so it is announced with the switch instead of only sitting next to it. */
+let settingsSwitchHintSeq = 0
 function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled, onChange }) {
-  return h('div', { className: 'sa-switch-row' },
-    h('div', { className: 'sa-switch-row-text' },
+  const inputRef = useRef(null)
+  const seqRef = useRef(null)
+  if (seqRef.current === null) { settingsSwitchHintSeq += 1; seqRef.current = settingsSwitchHintSeq }
+  const hintId = hint ? `sa-switch-hint-${seqRef.current}` : undefined
+  useEffect(() => {
+    const node = inputRef.current
+    if (!node) return
+    if (hintId) node.setAttribute('aria-describedby', hintId)
+    else node.removeAttribute('aria-describedby')
+  }, [hintId])
+  return h('label', { className: 'sa-switch-row' },
+    h('span', { className: 'sa-switch-row-text' },
       h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
         label,
         badge ?? null,
         tip ? h(InfoTip, { text: tip, warn: tipWarn === true }) : null),
-      hint ? h(Hint, null, hint) : null),
-    h(Switch, { checked: Boolean(checked), label, disabled, onChange }))
+      // A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>.
+      hint ? h('span', { className: 'sa-hint', id: hintId, style: { display: 'block' } }, hint) : null),
+    h(Switch, { checked: Boolean(checked), label, disabled, inputRef, onChange }))
 }
 
-/** Result line for a one-shot action; the raw error is folded, never a bare stack. */
-function SettingsStatusLine({ view, note }) {
+/** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
+    check/reload/test result is announced when it appears, and aria-busy marks the trigger while work runs. */
+function SettingsStatusLine({ view, note, busy }) {
   const { t } = usePanel()
   if (!view) return null
-  return h('div', { className: 'sa-actions', style: { flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' } },
+  return h('div', {
+    className: 'sa-actions',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+    'aria-busy': busy ? 'true' : undefined,
+    style: { flexDirection: 'column', alignItems: 'flex-start', gap: 'var(--sa-sp-4)' },
+  },
     h(StatusText, { state: view.state }, view.text),
     note ? h('span', { className: 'sa-hint' }, note) : null,
-    view.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, view.raw)) : null)
+    view.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, view.raw)) : null)
 }
 
 /** Gate codes render through the shared gate labels when they are known, and stay raw when they are not. */
@@ -751,9 +819,9 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
   const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
-    [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono' }, String(repo.project)) : t('empty')],
-    [pt(t, 'repo.baseUrl'), repo.baseUrl ? h('span', { className: 'sa-mono' }, String(repo.baseUrl)) : t('empty')],
-    [pt(t, 'repo.localPath'), repo.repo ? h('span', { className: 'sa-mono' }, String(repo.repo)) : t('empty')],
+    [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.project)) : t('empty')],
+    [pt(t, 'repo.baseUrl'), repo.baseUrl ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.baseUrl)) : t('empty')],
+    [pt(t, 'repo.localPath'), repo.repo ? h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo)) : t('empty')],
     [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
     [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
     [pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repo.verifyMode)],
@@ -768,7 +836,7 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
       h(Tag, { tone: repo.tokenConfigured ? 'outline' : 'warning' },
         repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')),
       repo.name && repo.id && repo.name !== repo.id
-        ? h('span', { className: 'sa-mono sa-hint' }, String(repo.id)) : null),
+        ? h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(repo.id)) : null),
     h(KeyValues, { rows }),
     h('div', { className: 'sa-actions' },
       h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'settings', size: 14 }),
@@ -776,12 +844,15 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
       h(ConfirmButton, { label: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
         title: pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle'),
         message: pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id }),
+        // A generic "确定" would make the reader re-read the dialog body: the confirm button states the action.
+        confirmLabel: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
         onConfirm: async () => { await onToggle?.(repo) } }),
       h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
-        disabled: test.busy, onClick: () => { void runTest() } },
+        disabled: test.busy, 'aria-busy': test.busy ? 'true' : undefined, onClick: () => { void runTest() } },
       pt(t, test.busy ? 'repos.testing' : 'repos.test'))),
     test.result || test.error
-      ? h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
+      ? h('div', { className: 'sa-field', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true',
+        style: { marginTop: 'var(--sa-sp-8)' } },
         h('span', { className: 'sa-field-head' }, pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')),
         h(Hint, null, test.error ?? (test.result.checks ?? []).map(check =>
           `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')),
@@ -790,7 +861,7 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
     h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
       h('span', { className: 'sa-field-head' }, pt(t, 'repo.token')),
       h('div', { style: { display: 'flex', width: '100%', minWidth: 0 } },
-        h(Input, { type: 'password', autoComplete: 'new-password', value: token, disabled: tokenBusy, className: 'sa-input-full',
+        h(Input, { type: 'password', autoComplete: 'off', value: token, disabled: tokenBusy, className: 'sa-input-full',
           placeholder: pt(t, 'repos.tokenPlaceholder'), 'aria-label': pt(t, 'repos.tokenPlaceholder'),
           onChange: event => setToken(event.target.value) })),
       h('div', { className: 'sa-actions' },
@@ -801,7 +872,7 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
         repo.tokenConfigured
           // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
           ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'repos.tokenClearTitle'),
-            message: pt(t, 'repos.tokenClearMessage'),
+            message: pt(t, 'repos.tokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
             onConfirm: async () => {
               if (tokenBusy) return
               const cleared = await onSaveToken?.(repo, '')
@@ -812,15 +883,19 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
 }
 
 function LiveSettingsPage({ route }) {
-  const { t, notify } = usePanel()
+  const { t, notify, navigate } = usePanel()
   const { data, error, reload, actions } = usePanelData()
   const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
   const [active, setActive] = useState(requestedGroup)
-  const [drafts, setDrafts] = useState({})
+  // Editable groups keep a group-local draft. A draft that exists only in memory is lost on reload / tab close, so it
+  // is mirrored into sessionStorage and the tab warns before unloading while any group still has unsaved edits.
+  const [drafts, setDrafts] = useState(readDraftCache)
   const [savingGroup, setSavingGroup] = useState(null)
   const [saveErrors, setSaveErrors] = useState({})
+  const [fieldErrors, setFieldErrors] = useState({})
   const [savedTimes, setSavedTimes] = useState({})
   const savedTimers = useRef({})
+  const bodyRef = useRef(null)
   const [reloadState, setReloadState] = useState({ busy: false })
   const [probe, setProbe] = useState({ busy: false })
   const [uatState, setUatState] = useState({ busy: false })
@@ -838,26 +913,46 @@ function LiveSettingsPage({ route }) {
   const [repoForm, setRepoForm] = useState(emptyRepoForm)
   const [repoSaving, setRepoSaving] = useState(false)
   const [repoError, setRepoError] = useState(undefined)
+  const [repoFieldErrors, setRepoFieldErrors] = useState({})
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyEntries, setHistoryEntries] = useState([])
   const [historyBusy, setHistoryBusy] = useState(false)
   const [historyError, setHistoryError] = useState(undefined)
   const [senderDraft, setSenderDraft] = useState('')
   const [bindingForm, setBindingForm] = useState({ chatId: '', title: '', repoId: '' })
+  const [bindingError, setBindingError] = useState(undefined)
   const [bindingBusy, setBindingBusy] = useState(false)
   useEffect(() => () => {
     for (const timer of Object.values(savedTimers.current)) clearTimeout(timer)
   }, [])
+  // Keep the draft mirror in sync; clearing the last draft removes the key so a stale copy never comes back.
+  useEffect(() => { writeDraftCache(drafts) }, [drafts])
+  // Unsaved edits are the only client state that cannot be recovered after a reload: ask before leaving the tab.
+  useEffect(() => {
+    const dirty = SETTINGS_SAVEABLE.some(group => draftHasKeys(drafts[group]))
+    if (!dirty) return undefined
+    const onBeforeUnload = event => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [drafts])
   // Deep links from the setup checklist and system problems select the matching group. The effect only depends on
   // the requested group, so clicking the left rail afterwards is never overridden by an old route.
   useEffect(() => {
     if (route?.group && SETTINGS_GROUPS.some(group => group.id === route.group)) setActive(route.group)
   }, [route?.group])
-  // A setup step can point at one field inside a group; scroll it into view after the pane switched.
+  // A setup step can point at one field inside a group; scroll it into view and move focus there after the pane
+  // switched, so keyboard and screen-reader users land on the field instead of the top of the page.
   useEffect(() => {
     if (!route?.focus) return undefined
     const timer = setTimeout(() => {
-      document.getElementById(`sa-settings-${route.focus}`)?.scrollIntoView({ block: 'center' })
+      const target = document.getElementById(`sa-settings-${route.focus}`)
+      if (!target) return
+      revealNode(target)
+      const focusable = target.matches('input, select, textarea, button, a[href]')
+        ? target
+        : target.querySelector('input, select, textarea, button, a[href], [tabindex]')
+      const node = focusable ?? target
+      if (node && typeof node.focus === 'function') node.focus({ preventScroll: true })
     }, 120)
     return () => clearTimeout(timer)
   }, [route?.focus, active])
@@ -945,10 +1040,42 @@ function LiveSettingsPage({ route }) {
       Array.isArray(octo.allowSenderIds) ? octo.allowSenderIds : [])
   }
 
+  /** Field-level validation for the add-repository form: one message per field, so the modal can mark and focus it. */
+  const validateRepoForm = form => {
+    const errors = {}
+    const id = form.id.trim()
+    if (!id) errors.id = 'repos.required'
+    else if (!/^[a-z0-9._-]+$/.test(id)) errors.id = 'repos.idInvalid'
+    if (!form.path.trim()) errors.path = 'repos.required'
+    if (!form.baseBranch.trim()) errors.baseBranch = 'repos.required'
+    if (!form.targetBranch.trim()) errors.targetBranch = 'repos.required'
+    const urlOk = value => /^https?:\/\/\S+$/i.test(value.trim())
+    if (!form.baseUrl.trim()) errors.baseUrl = 'repos.required'
+    else if (!urlOk(form.baseUrl)) errors.baseUrl = 'repos.urlInvalid'
+    if (!form.project.trim()) errors.project = 'repos.required'
+    if (form.uatUrl.trim() && !urlOk(form.uatUrl)) errors.uatUrl = 'repos.urlInvalid'
+    if (form.healthUrl.trim() && !urlOk(form.healthUrl)) errors.healthUrl = 'repos.urlInvalid'
+    return errors
+  }
+
   /** Add one repository definition; the token is a separate write on the new card. */
   const submitRepo = async () => {
     if (repoSaving) return
     const form = repoForm
+    const clientErrors = validateRepoForm(form)
+    if (Object.keys(clientErrors).length) {
+      setRepoFieldErrors(clientErrors)
+      setRepoError(undefined)
+      const first = Object.keys(clientErrors)[0]
+      setTimeout(() => {
+        const node = document.getElementById(`sa-repo-field-${first}`)
+        if (!node) return
+        if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+        revealNode(node)
+      }, 0)
+      return
+    }
+    setRepoFieldErrors({})
     const repo = {
       id: form.id.trim(),
       name: form.name.trim() || form.id.trim(),
@@ -976,6 +1103,13 @@ function LiveSettingsPage({ route }) {
       notify(pt(t, 'repos.saved'))
     } catch (failure) {
       setRepoError(errorText(failure))
+      // A server failure is not tied to one field: bring the banner into view and put focus on it, with advice.
+      setTimeout(() => {
+        const node = document.getElementById('sa-repo-error')
+        if (!node) return
+        revealNode(node)
+        if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+      }, 0)
     } finally { setRepoSaving(false) }
   }
 
@@ -1065,15 +1199,15 @@ function LiveSettingsPage({ route }) {
   // lives here as a read-only sub-section instead of owning a seventh navigation entry.
   const renderRepos = () => {
     const deployRows = [
-      [pt(t, 'st.configFile'), h('span', { className: 'sa-mono' }, config.file ?? t('empty'))],
+      [pt(t, 'st.configFile'), h('span', { className: 'sa-mono', translate: 'no' }, config.file ?? t('empty'))],
       [pt(t, 'st.configExists'), config.exists ? pt(t, 'st.fileExists') : pt(t, 'st.fileMissing')],
-      [pt(t, 'st.gitlabProject'), gitlab.project ? h('span', { className: 'sa-mono' }, gitlab.project) : t('empty')],
+      [pt(t, 'st.gitlabProject'), gitlab.project ? h('span', { className: 'sa-mono', translate: 'no' }, gitlab.project) : t('empty')],
       [pt(t, 'st.gitlabBase'), gitlab.baseUrl ? h(ExternalLink, { href: gitlab.baseUrl, icon: null }, gitlab.baseUrl) : t('empty')],
       [pt(t, 'st.branches'), `${config.baseBranch ?? t('empty')} → ${gitlab.targetBranch ?? t('empty')}`],
       [pt(t, 'st.uatUrl'), gitlab.uatUrl ? h(ExternalLink, { href: gitlab.uatUrl, icon: null }, gitlab.uatUrl) : t('empty')],
       [pt(t, 'st.healthUrl'), gitlab.healthUrl ? h(ExternalLink, { href: gitlab.healthUrl, icon: null }, gitlab.healthUrl) : t('empty')],
       [pt(t, 'st.gitlabToken'), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
     ]
     return h('div', { className: 'sa-settings-group' },
       settingsHeading(),
@@ -1105,9 +1239,10 @@ function LiveSettingsPage({ route }) {
       h('div', { className: 'sa-actions' },
         reloadButton(),
         h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'external', size: 14 }), disabled: uatState.busy,
-          onClick: () => { void runUat() } }, pt(t, 'st.checkUat'))),
-      h(SettingsStatusLine, { view: reloadView }),
-      h(SettingsStatusLine, { view: uatState.view }))
+          'aria-busy': uatState.busy ? 'true' : undefined,
+          onClick: () => { void runUat() } }, uatState.busy ? pt(t, 'st.probing') : pt(t, 'st.checkUat'))),
+      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
+      h(SettingsStatusLine, { view: uatState.view, busy: uatState.busy }))
   }
 
   /** Rewrite the whole group→repository map (host validates consistency) and refresh the model. */
@@ -1123,10 +1258,16 @@ function LiveSettingsPage({ route }) {
       return false
     } finally { setBindingBusy(false) }
   }
-  const closeBindingForm = () => setBindingForm({ chatId: '', title: '', repoId: '' })
+  const closeBindingForm = () => { setBindingForm({ chatId: '', title: '', repoId: '' }); setBindingError(undefined) }
   const onAddBinding = async () => {
     const chatId = bindingForm.chatId.trim()
-    if (!chatId) { notify(pt(t, 'st.bindingChatRequired')); return }
+    if (!chatId) {
+      // The missing chat id is marked on the field (and announced there), not only in a transient toast.
+      setBindingError(pt(t, 'st.bindingChatRequired'))
+      setTimeout(() => document.getElementById('sa-field-binding-chat')?.focus(), 0)
+      return
+    }
+    setBindingError(undefined)
     const repoId = bindingForm.repoId || defaultRepoId
     const watched = [...new Set([...(octo.watchChatIds ?? []), chatId])]
     const titles = { ...(octo.chatTitles ?? {}), ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
@@ -1139,6 +1280,7 @@ function LiveSettingsPage({ route }) {
   /** Move one field into (or back out of) the group draft; editing clears a shown save failure for that group. */
   const editField = (group, key, value, initial) => {
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     setDrafts(previous => {
       const next = { ...(previous[group] ?? {}) }
       if (settingsSame(value, initial)) delete next[key]
@@ -1152,7 +1294,35 @@ function LiveSettingsPage({ route }) {
     delete savedTimers.current[group]
     setDrafts(previous => settingsOmit(previous, group))
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     setSavedTimes(previous => settingsOmit(previous, group))
+  }
+
+  /** A validation failure belongs on the field, not only in the bottom save bar: mark the input, point it at the
+      message and move focus there so the user can fix it without hunting. */
+  const failField = (group, field, messageKey) => {
+    setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => ({ ...previous, [group]: { field, messageKey } }))
+    setTimeout(() => {
+      const node = document.getElementById(`sa-field-${field}`)
+      if (!node) return
+      if (typeof node.focus === 'function') node.focus({ preventScroll: true })
+      revealNode(node)
+    }, 0)
+  }
+
+  /** aria-invalid / aria-describedby for a numeric field that may currently fail validation. */
+  const fieldAria = (group, field, hintId) => {
+    const invalid = fieldErrors[group]?.field === field
+    const describedBy = [hintId, invalid ? `sa-field-${field}-error` : null].filter(Boolean).join(' ')
+    return { 'aria-invalid': invalid ? 'true' : undefined, 'aria-describedby': describedBy || undefined }
+  }
+
+  const fieldErrorMessage = (group, field) => {
+    const error = fieldErrors[group]
+    return error && error.field === field
+      ? h('p', { className: 'sa-error', id: `sa-field-${field}-error`, role: 'alert' }, pt(t, error.messageKey))
+      : null
   }
 
   /** Save one group: patch → model reload → 3s "saved" state; failures keep the draft for a retry. */
@@ -1161,27 +1331,28 @@ function LiveSettingsPage({ route }) {
     if (!draft || !Object.keys(draft).length || savingGroup) return
     const patch = settingsPatchOf(group, draft)
     if ('pollSeconds' in patch && (!Number.isFinite(patch.pollSeconds) || patch.pollSeconds < 2)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.pollInvalid')) } }))
+      failField(group, 'poll', 'st.pollInvalid')
       return
     }
     if ('executor.timeoutMs' in patch
       && (!Number.isFinite(patch['executor.timeoutMs']) || patch['executor.timeoutMs'] < 60_000
         || patch['executor.timeoutMs'] > 86_400_000)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.timeoutInvalid')) } }))
+      failField(group, 'timeout', 'st.timeoutInvalid')
       return
     }
     if ('executor.maxRepairRounds' in patch && (!Number.isInteger(patch['executor.maxRepairRounds'])
       || patch['executor.maxRepairRounds'] < 0 || patch['executor.maxRepairRounds'] > 6)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.repairBudgetInvalid')) } }))
+      failField(group, 'repair', 'st.repairBudgetInvalid')
       return
     }
     if ('review.expireHours' in patch && (!Number.isInteger(patch['review.expireHours'])
       || patch['review.expireHours'] < 1 || patch['review.expireHours'] > 168)) {
-      setSaveErrors(previous => ({ ...previous, [group]: { error: new Error(pt(t, 'st.reviewExpireInvalid')) } }))
+      failField(group, 'expire', 'st.reviewExpireInvalid')
       return
     }
     setSavingGroup(group)
     setSaveErrors(previous => settingsOmit(previous, group))
+    setFieldErrors(previous => settingsOmit(previous, group))
     clearTimeout(savedTimers.current[group])
     delete savedTimers.current[group]
     setSavedTimes(previous => settingsOmit(previous, group))
@@ -1263,27 +1434,33 @@ function LiveSettingsPage({ route }) {
     const savedAt = savedTimes[group]
     const state = savingGroup === group ? 'saving' : stored ? 'error' : dirtyOf(group) ? 'dirty' : savedAt ? 'saved' : 'idle'
     if (state === 'idle') return null
+    // SaveBar has no disabled state; while any group is saving its save/retry actions would be silent no-ops
+    // (saveGroup returns early), so other groups only keep the local-only discard action.
+    const canSave = !savingGroup
     return h(Fragment, null,
       h(SaveBar, { state, savedAt, error: stored?.error, dirty: dirtyOf(group),
-        onSave: () => { void saveGroup(group) },
-        onRetry: () => { void saveGroup(group) },
+        onSave: canSave ? () => { void saveGroup(group) } : undefined,
+        onRetry: canSave ? () => { void saveGroup(group) } : undefined,
         onDiscard: () => discardGroup(group) }),
       stored ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
         h('div', { className: 'sa-actions' },
           h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-            disabled: savingGroup === group, onClick: () => { void recoverGroup(group) } }, pt(t, 'st.reloadConfig'))),
-        stored.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre' }, stored.raw)) : null) : null)
+            disabled: Boolean(savingGroup), onClick: () => { void recoverGroup(group) } }, pt(t, 'st.reloadConfig'))),
+        stored.raw ? h(Folded, { summary: t('rawError') }, h('pre', { className: 'sa-pre', translate: 'no' }, stored.raw)) : null) : null)
   }
 
   const reloadButton = () => h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-    disabled: reloadState.busy, onClick: () => { void reloadEngineConfig() } }, pt(t, 'st.reloadConfig'))
+    disabled: reloadState.busy, 'aria-busy': reloadState.busy ? 'true' : undefined,
+    onClick: () => { void reloadEngineConfig() } },
+  reloadState.busy ? pt(t, 'st.reloading') : pt(t, 'st.reloadConfig'))
 
   /** Write-only Octo token editor. An env-provided token is shown as read-only, because the file cannot override it. */
   const renderOctoToken = () => {
     const configured = octo.tokenConfigured === true
     const tokenSource = octo.tokenSource
-    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token' },
-      h('span', { className: 'sa-field-head' }, pt(t, 'st.octoToken'),
+    return h('div', { className: 'sa-field', id: 'sa-settings-octo-token', tabIndex: -1,
+      style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
+      h('label', { className: 'sa-field-head', htmlFor: 'sa-field-octo-token' }, pt(t, 'st.octoToken'),
         configured
           ? h(Tag, { tone: tokenSource === 'env' ? 'info' : 'success' },
             tokenSource === 'env' ? pt(t, 'st.octoTokenEnv') : pt(t, 'st.tokenOk'))
@@ -1293,19 +1470,21 @@ function LiveSettingsPage({ route }) {
         : h(Fragment, null,
           h('div', { style: { display: 'flex', maxWidth: '560px', minWidth: 0, gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
             h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-              h(Input, { className: 'sa-input-full', type: 'password', value: octoTokenDraft, autoComplete: 'off',
-                placeholder: pt(t, 'st.octoTokenPlaceholder'), 'aria-label': pt(t, 'st.octoTokenPlaceholder'),
+              h(Input, { id: 'sa-field-octo-token', className: 'sa-input-full', type: 'password', value: octoTokenDraft,
+                autoComplete: 'off', 'aria-describedby': 'sa-field-octo-token-hint',
+                placeholder: pt(t, 'st.octoTokenPlaceholder'),
                 disabled: octoTokenBusy,
                 onChange: event => setOctoTokenDraft(event.target.value) })),
             h(Button, { variant: 'outline', size: 'sm', disabled: octoTokenBusy || !octoTokenDraft.trim(),
+              'aria-busy': octoTokenBusy ? 'true' : undefined,
               onClick: () => { void saveOctoTokenFor(octoTokenDraft) } },
             octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')),
             configured
               ? h(ConfirmButton, { label: pt(t, 'repos.tokenClear'), title: pt(t, 'st.octoTokenClearTitle'),
-                message: pt(t, 'st.octoTokenClearMessage'),
+                message: pt(t, 'st.octoTokenClearMessage'), confirmLabel: pt(t, 'repos.tokenClear'),
                 onConfirm: async () => { if (!octoTokenBusy) await saveOctoTokenFor('') } })
               : null),
-          h(Hint, null, pt(t, 'st.octoTokenHint'))))
+          h('p', { className: 'sa-hint', id: 'sa-field-octo-token-hint' }, pt(t, 'st.octoTokenHint'))))
   }
 
   /** Searchable group picker: fills the binding form, never writes a binding by itself. */
@@ -1329,7 +1508,7 @@ function LiveSettingsPage({ route }) {
                 onClick: () => chooseGroup(group) },
               h('span', { className: 'sa-group-option-main' },
                 h('span', { className: 'sa-group-option-name' }, group.name || String(group.id)),
-                h('span', { className: 'sa-mono sa-hint' }, String(group.id))),
+                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(group.id))),
               watched.has(String(group.id))
                 ? h(Tag, { tone: 'success' }, pt(t, 'st.groupsWatched'))
                 : h(Icon, { name: 'plus', size: 14 })))))
@@ -1343,23 +1522,25 @@ function LiveSettingsPage({ route }) {
     const senders = senderValuesOf(draft)
     const list = senders.length
       ? h('div', { className: 'sa-sender-list' }, senders.map(sender => h('span', { key: sender, className: 'sa-sender-chip' },
-        h('span', { className: 'sa-mono' }, sender),
+        h('span', { className: 'sa-mono', translate: 'no' }, sender),
         h('button', { type: 'button', className: 'sa-sender-remove', 'aria-label': pt(t, 'st.removeSender', { sender }),
           onClick: () => removeSender(sender) }, '×'))))
       : h(Hint, null, pt(t, 'st.sendersEmpty'))
     const add = h('div', { className: 'sa-actions' },
       h('div', { style: { flex: '1 1 240px', minWidth: 0, display: 'flex' } },
-        h(Input, { className: 'sa-input-full', value: senderDraft, placeholder: pt(t, 'st.senderPlaceholder'),
-          'aria-label': pt(t, 'st.senderPlaceholder'), disabled: savingGroup === 'source',
+        h(Input, { id: 'sa-field-senders', className: 'sa-input-full', value: senderDraft,
+          placeholder: pt(t, 'st.senderPlaceholderExample'), 'aria-describedby': 'sa-field-senders-hint',
+          disabled: savingGroup === 'source',
           onChange: event => setSenderDraft(event.target.value),
           onKeyDown: event => { if (event.key === 'Enter') { event.preventDefault(); addSender() } } })),
       h(Button, { variant: 'outline', size: 'sm', disabled: savingGroup === 'source' || !senderDraft.trim(),
         onClick: addSender }, pt(t, 'st.addSender')))
     return h('div', { className: 'sa-field' },
-      h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'),
-        allowAnyHuman ? h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')) : null),
+      allowAnyHuman
+        ? h('span', { className: 'sa-field-head' }, pt(t, 'st.senders'), h(Tag, { tone: 'info' }, pt(t, 'st.allHumans')))
+        : h('label', { className: 'sa-field-head', htmlFor: 'sa-field-senders' }, pt(t, 'st.senders')),
       allowAnyHuman ? h(Hint, null, pt(t, 'st.anyHumanSendersHint')) : h(Fragment, null, list, add),
-      allowAnyHuman ? null : h(Hint, null, pt(t, 'st.sendersHint')))
+      allowAnyHuman ? null : h('p', { className: 'sa-hint', id: 'sa-field-senders-hint' }, pt(t, 'st.sendersHint')))
   }
 
   // ---- source group -----------------------------------------------------------------------------------------
@@ -1390,25 +1571,29 @@ function LiveSettingsPage({ route }) {
         onChange: next => editField('source', 'octo.allowAnyHuman', next, octo.allowAnyHuman === true) }),
       renderSenders(),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.pollSeconds')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-poll' }, pt(t, 'st.pollSeconds')),
         // The Input `style` reaches the inner <input>; the wrapper makes the bordered box itself 420px (critique §18).
         h('div', { style: { display: 'flex', maxWidth: '420px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 2, step: 1, value: pollSeconds, style: { maxWidth: '420px' },
+          h(Input, { id: 'sa-field-poll', type: 'number', min: 2, step: 1, value: pollSeconds, style: { maxWidth: '420px' },
             disabled: savingGroup === 'source', 'aria-label': pt(t, 'st.pollSeconds'),
+            ...fieldAria('source', 'poll', 'sa-field-poll-hint'),
             onChange: event => editField('source', 'pollSeconds', event.target.value, String(config.pollSeconds ?? '')) })),
-        h(Hint, null, pt(t, 'st.pollSecondsHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-poll-hint' }, pt(t, 'st.pollSecondsHint')),
+        fieldErrorMessage('source', 'poll')),
       h(KeyValues, { rows }),
       !allowAnyHuman && !senders.length ? h('p', { className: 'sa-banner' }, pt(t, 'st.noSenders')) : null,
       chatNames.length ? null : h(Hint, null, pt(t, 'st.noChats')),
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }), disabled: probe.busy,
-          onClick: () => { void runProbe() } }, pt(t, 'actions.checkNow')),
+          'aria-busy': probe.busy ? 'true' : undefined,
+          onClick: () => { void runProbe() } }, probe.busy ? pt(t, 'st.probing') : pt(t, 'actions.checkNow')),
         reloadButton()),
       h(Hint, null, pt(t, 'st.probeHint')),
-      h(SettingsStatusLine, { view: probe.view,
+      h(SettingsStatusLine, { view: probe.view, busy: probe.busy,
         note: probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined }),
-      h(SettingsStatusLine, { view: reloadView }),
-      h('div', { className: 'sa-field', id: 'sa-settings-bindings' },
+      h(SettingsStatusLine, { view: reloadView, busy: reloadState.busy }),
+      h('div', { className: 'sa-field', id: 'sa-settings-bindings', tabIndex: -1,
+        style: { scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' } },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.bindings')),
         h(Hint, null, pt(t, 'st.bindingsHint')),
         h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
@@ -1425,29 +1610,40 @@ function LiveSettingsPage({ route }) {
             chatIds.map(chatId => h('div', { key: chatId, className: 'sa-switch-row' },
               h('div', { className: 'sa-switch-row-text' },
                 h('span', null, octo.chatTitles?.[chatId] ?? chatId),
-                h('span', { className: 'sa-mono sa-hint' }, String(chatId))),
+                h('span', { className: 'sa-mono sa-hint', translate: 'no' }, String(chatId))),
               // The control row never wraps: the repository select and its 移除 button stay on one line (critique §27).
               h('div', { className: 'sa-actions', style: { flexWrap: 'nowrap', minWidth: 0 } },
                 h('div', { style: { flex: '0 1 240px', minWidth: 0 } },
                   h(Select, { label: pt(t, 'st.bindingRepo'), value: octo.chatRepos?.[chatId] ?? defaultRepoId,
                     options: repoOptions, disabled: bindingBusy,
                     onChange: next => { void applyBindings(chatIds, octo.chatTitles ?? {}, { ...(octo.chatRepos ?? {}), [chatId]: next }) } })),
-                h(Button, { variant: 'ghost', size: 'sm', style: { flex: '0 0 auto' }, disabled: bindingBusy,
-                  onClick: () => {
-                    const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
-                    const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
-                    void applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
-                  } }, pt(t, 'st.bindingRemove'))))))
+                h('span', { style: { flex: '0 0 auto' } },
+                  h(ConfirmButton, { label: pt(t, 'st.bindingRemove'), title: pt(t, 'st.bindingRemoveTitle'),
+                    message: pt(t, 'st.bindingRemoveMessage'), confirmLabel: pt(t, 'st.bindingRemoveConfirm'),
+                    onConfirm: async () => {
+                      // Removing a binding changes what the engine watches: confirm first, never delete on a stray click.
+                      if (bindingBusy) return
+                      const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
+                      const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
+                      await applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
+                    } }))))))
           : h(Hint, null, pt(t, 'st.bindingEmpty')),
         h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-4)' } },
-          h(Input, { value: bindingForm.chatId, placeholder: pt(t, 'st.bindingChat'), 'aria-label': pt(t, 'st.bindingChat'),
-            disabled: bindingBusy, onChange: event => setBindingForm(previous => ({ ...previous, chatId: event.target.value })) }),
+          h(Input, { id: 'sa-field-binding-chat', value: bindingForm.chatId, placeholder: pt(t, 'st.chatIdPlaceholder'),
+            'aria-invalid': bindingError ? 'true' : undefined,
+            'aria-describedby': bindingError ? 'sa-field-binding-chat-error' : undefined,
+            disabled: bindingBusy,
+            onChange: event => { setBindingError(undefined); setBindingForm(previous => ({ ...previous, chatId: event.target.value })) } }),
           h(Input, { value: bindingForm.title, placeholder: pt(t, 'st.bindingTitle'), 'aria-label': pt(t, 'st.bindingTitle'),
             disabled: bindingBusy, onChange: event => setBindingForm(previous => ({ ...previous, title: event.target.value })) }),
           h(Select, { label: pt(t, 'st.bindingRepo'), value: bindingForm.repoId || defaultRepoId, options: repoOptions,
             disabled: bindingBusy, onChange: next => setBindingForm(previous => ({ ...previous, repoId: next })) }),
           h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'plus', size: 14 }),
-            disabled: bindingBusy || !bindingForm.chatId.trim(), onClick: () => { void onAddBinding() } }, pt(t, 'st.bindingAdd')))),
+            'aria-busy': bindingBusy ? 'true' : undefined,
+            disabled: bindingBusy || !bindingForm.chatId.trim(), onClick: () => { void onAddBinding() } }, pt(t, 'st.bindingAdd'))),
+        bindingError
+          ? h('p', { className: 'sa-error', id: 'sa-field-binding-chat-error', role: 'alert' }, bindingError)
+          : null),
       saveBarFor('source'))
   }
 
@@ -1507,18 +1703,21 @@ function LiveSettingsPage({ route }) {
             { value: 'uncertain', label: pt(t, 'st.reviewScopeUncertain') }],
           onChange: next => editField('review', 'review.scope', next, review.scope === 'uncertain' ? 'uncertain' : 'all') })),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewSenders')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-review-senders' }, pt(t, 'st.reviewSenders')),
         h('div', { style: { display: 'flex', maxWidth: '520px', minWidth: 0 } },
-          h(Input, { value: String(senders ?? ''), disabled: frozen, 'aria-label': pt(t, 'st.reviewSenders'),
+          h(Input, { id: 'sa-field-review-senders', value: String(senders ?? ''), disabled: frozen,
+            'aria-label': pt(t, 'st.reviewSenders'), 'aria-describedby': 'sa-field-review-senders-hint',
             onChange: event => editField('review', 'review.allowSenderIds', event.target.value, initialSenders) })),
-        h(Hint, null, pt(t, 'st.reviewSendersHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-review-senders-hint' }, pt(t, 'st.reviewSendersHint'))),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.reviewExpire')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-expire' }, pt(t, 'st.reviewExpire')),
         h('div', { style: { display: 'flex', maxWidth: '220px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
+          h(Input, { id: 'sa-field-expire', type: 'number', min: 1, max: 168, step: 1, value: String(expireHours), disabled: frozen,
             'aria-label': pt(t, 'st.reviewExpire'),
+            ...fieldAria('review', 'expire', 'sa-field-expire-hint'),
             onChange: event => editField('review', 'review.expireHours', event.target.value, String(review.expireHours ?? 24)) })),
-        h(Hint, null, pt(t, 'st.reviewExpireHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-expire-hint' }, pt(t, 'st.reviewExpireHint')),
+        fieldErrorMessage('review', 'expire')),
       h(KeyValues, { rows: [
         [pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 }), ''],
       ] }),
@@ -1539,8 +1738,8 @@ function LiveSettingsPage({ route }) {
     const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
-      [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono' }, config.repo) : t('empty')],
-      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono' }, config.worktreeRoot) : t('empty')],
+      [pt(t, 'st.repo'), config.repo ? h('span', { className: 'sa-mono', translate: 'no' }, config.repo) : t('empty')],
+      [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? h('span', { className: 'sa-mono', translate: 'no' }, config.worktreeRoot) : t('empty')],
     ]
     const switchRow = (key, labelKey, hintKey, initial) => h(SettingsSwitchRow, {
       label: pt(t, labelKey), hint: pt(t, hintKey), checked: Boolean(field(key, initial)),
@@ -1562,31 +1761,35 @@ function LiveSettingsPage({ route }) {
           onChange: next => editField('run', 'gitlab.createMr', next, gitlab.createMr === 'push' ? 'push' : 'api') }),
         h(Hint, null, pt(t, 'st.mrModeHint'))),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.timeout')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-timeout' }, pt(t, 'st.timeout')),
         h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 1, max: 1440, step: 1,
+          h(Input, { id: 'sa-field-timeout', type: 'number', min: 1, max: 1440, step: 1,
             value: Number.isFinite(Number(field('executor.timeoutMs', timeout))) && field('executor.timeoutMs', timeout) !== ''
               ? Math.round(Number(field('executor.timeoutMs', timeout)) / 60000) : '',
             disabled: frozen, 'aria-label': pt(t, 'st.timeout'),
+            ...fieldAria('run', 'timeout', 'sa-field-timeout-hint'),
             placeholder: String(timeoutMinutes),
             onChange: event => {
               const raw = event.target.value
               editField('run', 'executor.timeoutMs', raw === '' ? '' : Number(raw) * 60000, timeout)
             } })),
-        h(Hint, null, pt(t, 'st.timeoutHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-timeout-hint' }, pt(t, 'st.timeoutHint')),
+        fieldErrorMessage('run', 'timeout')),
       h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.repairBudget')),
+        h('label', { className: 'sa-field-head', htmlFor: 'sa-field-repair' }, pt(t, 'st.repairBudget')),
         h('div', { style: { display: 'flex', maxWidth: '200px', minWidth: 0 } },
-          h(Input, { type: 'number', min: 0, max: 6, step: 1,
+          h(Input, { id: 'sa-field-repair', type: 'number', min: 0, max: 6, step: 1,
             value: field('executor.maxRepairRounds', repairBudget) === '' ? ''
               : String(field('executor.maxRepairRounds', repairBudget)),
             disabled: frozen, 'aria-label': pt(t, 'st.repairBudget'),
+            ...fieldAria('run', 'repair', 'sa-field-repair-hint'),
             placeholder: String(repairBudget),
             onChange: event => {
               const raw = event.target.value
               editField('run', 'executor.maxRepairRounds', raw === '' ? '' : Number(raw), repairBudget)
             } })),
-        h(Hint, null, pt(t, 'st.repairBudgetHint'))),
+        h('p', { className: 'sa-hint', id: 'sa-field-repair-hint' }, pt(t, 'st.repairBudgetHint')),
+        fieldErrorMessage('run', 'repair')),
       h(KeyValues, { rows }),
       // The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
       // of fields, one write path, one success/error treatment. The inline form resets itself after each creation.
@@ -1768,21 +1971,53 @@ function LiveSettingsPage({ route }) {
 
   // The rail promises what can be changed first: writable groups, then a divider + "参考" label + the read-only groups.
   // `data-reference` is the hook 05-style.js de-emphasises them with; the button keeps its usual label and dirty dot.
+  /** Selecting a group writes it into the panel route (so reload / deep links keep it) and starts the new group at its
+      top; tall and short groups otherwise inherit the previous scroll position mid-page. */
+  const selectGroup = id => {
+    if (id === active) return
+    setActive(id)
+    navigate({ page: 'settings', group: id }, true)
+    // Defer past the render, and stay defensive: scrollIntoView is not implemented in every test DOM.
+    setTimeout(() => {
+      const body = bodyRef.current
+      if (body && typeof body.scrollIntoView === 'function') body.scrollIntoView({ block: 'start' })
+    }, 0)
+  }
   const settingsNavButton = group => h('button', { key: group.id, type: 'button',
     className: 'sa-settings-group', 'aria-current': active === group.id ? 'true' : undefined,
     'data-reference': group.reference ? 'true' : undefined,
     // The title is always present (what the button opens) and only gains the dirty suffix while the draft is unsaved.
     title: dirtyGroups.has(group.id) ? `${pt(t, group.labelKey)} · ${pt(t, 'st.unsaved')}` : pt(t, group.labelKey),
-    onClick: () => setActive(group.id) },
+    onClick: () => selectGroup(group.id) },
     h(Icon, { name: group.icon, size: 14 }),
     h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
       pt(t, group.labelKey)),
+    // The dot is decorative; the unsaved state is also in the accessible name, not only in the title tooltip.
     dirtyGroups.has(group.id)
       ? h('span', { className: 'sa-count', style: { marginLeft: 'auto', color: 'var(--dsw-alias-state-warn-primary)' },
-        'aria-hidden': 'true' }, '●')
-      : null)
+        'aria-hidden': 'true', 'data-empty': 'true' }, '●')
+      : null,
+    dirtyGroups.has(group.id) ? h('span', { className: 'sa-sr-only' }, `· ${pt(t, 'st.unsaved')}`) : null)
   const writableGroups = SETTINGS_GROUPS.filter(group => !group.reference)
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
+
+  // Add-repository form: identifier fields get a stable id/name and no autofill or spellcheck; a failed validation
+  // marks the field it belongs to (aria-invalid + described-by) instead of only showing one banner at the bottom.
+  const repoFieldProps = (key, required) => ({
+    id: `sa-repo-field-${key}`,
+    name: key === 'path' ? 'repo' : key,
+    autoComplete: 'off',
+    'aria-required': required ? 'true' : undefined,
+    'aria-invalid': repoFieldErrors[key] ? 'true' : undefined,
+    'aria-describedby': repoFieldErrors[key] ? `sa-repo-field-${key}-error` : undefined,
+  })
+  const repoFieldError = key => repoFieldErrors[key]
+    ? h('small', { className: 'sa-error', id: `sa-repo-field-${key}-error`, role: 'alert' }, pt(t, repoFieldErrors[key]))
+    : null
+  const repoFieldEdit = (key, value) => {
+    setRepoFieldErrors(previous => settingsOmit(previous, key))
+    setRepoForm(previous => ({ ...previous, [key]: value }))
+  }
 
   // AC-10: show what saving will change before the request leaves the panel. Compare against the loaded repository,
   // not the draft, so a no-op save is visibly a no-op and token-only fields never enter the preview.
@@ -1825,7 +2060,7 @@ function LiveSettingsPage({ route }) {
             h('span', { className: 'sa-settings-nav-label' }, pt(t, 'st.reference')),
             referenceGroups.map(settingsNavButton))
           : null),
-      h('div', { className: 'sa-settings-body' },
+      h('div', { className: 'sa-settings-body', ref: bodyRef },
         error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : null,
         renderGroup())),
     historyOpen ? h(Modal, { open: true, onClose: () => { if (!historyBusy) setHistoryOpen(false) },
@@ -1840,8 +2075,9 @@ function LiveSettingsPage({ route }) {
           h('div', { className: 'sa-history-main' },
             h('span', { className: 'sa-history-label' }, historyLabel(entry)),
             h('span', { className: 'sa-hint' }, h(When, { at: entry.at }))),
-          h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
-            onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
+          h(ConfirmButton, { label: pt(t, 'st.historyRestore'), title: pt(t, 'st.historyRestoreTitle'),
+            message: pt(t, 'st.historyRestoreMessage'), confirmLabel: pt(t, 'st.historyRestoreConfirm'),
+            onConfirm: async () => { await restoreHistory(entry.id) } }))))
         : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
     repoEdit ? h(Modal, { open: true, onClose: () => { if (!repoEditBusy) setRepoEdit(undefined) },
       title: pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id }), closeLabel: t('close'), className: 'sa-repo-modal',
@@ -1855,9 +2091,9 @@ function LiveSettingsPage({ route }) {
         repoEditRows.length
           ? repoEditRows.map(([label, before, after], index) => h('div', { key: index, className: 'sa-diff-row' },
             h('span', { className: 'sa-diff-label' }, label),
-            h('code', { className: 'sa-mono sa-diff-old' }, before || '—'),
+            h('code', { className: 'sa-mono sa-diff-old', translate: 'no' }, before || '—'),
             h('span', { className: 'sa-hint', 'aria-hidden': 'true' }, '→'),
-            h('code', { className: 'sa-mono sa-diff-new' }, after || '—')))
+            h('code', { className: 'sa-mono sa-diff-new', translate: 'no' }, after || '—')))
           : h('p', { className: 'sa-hint' }, pt(t, 'repos.editNoChanges'))),
       h('div', { className: 'sa-form-grid' },
         h('label', { className: 'sa-field' },
@@ -1917,12 +2153,16 @@ function LiveSettingsPage({ route }) {
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.id')),
           h(Input, { className: 'sa-input-full', value: repoForm.id, 'aria-label': pt(t, 'repos.field.id'),
-            onChange: event => setRepoForm(previous => ({ ...previous, id: event.target.value })) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint'))),
+            ...repoFieldProps('id', true),
+            onChange: event => repoFieldEdit('id', event.target.value) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.idHint')),
+          repoFieldError('id')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
           h(Input, { className: 'sa-input-full', value: repoForm.name, 'aria-label': pt(t, 'repos.field.name'),
-            onChange: event => setRepoForm(previous => ({ ...previous, name: event.target.value })) })),
+            ...repoFieldProps('name', false),
+            onChange: event => repoFieldEdit('name', event.target.value) }),
+          repoFieldError('name')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.kind')),
           h(Select, { label: pt(t, 'repos.field.kind'), value: repoForm.kind,
@@ -1934,26 +2174,36 @@ function LiveSettingsPage({ route }) {
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
           h(Input, { className: 'sa-input-full', value: repoForm.path, 'aria-label': pt(t, 'repos.field.repo'),
             placeholder: '/Users/you/work/my-repo',
-            onChange: event => setRepoForm(previous => ({ ...previous, path: event.target.value })) }),
-          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint'))),
+            ...repoFieldProps('path', true),
+            onChange: event => repoFieldEdit('path', event.target.value) }),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.field.repoHint')),
+          repoFieldError('path')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseBranch')),
           h(Input, { className: 'sa-input-full', value: repoForm.baseBranch, 'aria-label': pt(t, 'repos.field.baseBranch'),
-            onChange: event => setRepoForm(previous => ({ ...previous, baseBranch: event.target.value })) })),
+            ...repoFieldProps('baseBranch', true),
+            onChange: event => repoFieldEdit('baseBranch', event.target.value) }),
+          repoFieldError('baseBranch')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.targetBranch')),
           h(Input, { className: 'sa-input-full', value: repoForm.targetBranch, 'aria-label': pt(t, 'repos.field.targetBranch'),
-            onChange: event => setRepoForm(previous => ({ ...previous, targetBranch: event.target.value })) })),
+            ...repoFieldProps('targetBranch', true),
+            onChange: event => repoFieldEdit('targetBranch', event.target.value) }),
+          repoFieldError('targetBranch')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.baseUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.baseUrl, 'aria-label': pt(t, 'repos.field.baseUrl'),
             placeholder: 'https://gitlab.example.com',
-            onChange: event => setRepoForm(previous => ({ ...previous, baseUrl: event.target.value })) })),
+            ...repoFieldProps('baseUrl', true),
+            onChange: event => repoFieldEdit('baseUrl', event.target.value) }),
+          repoFieldError('baseUrl')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.project')),
           h(Input, { className: 'sa-input-full', value: repoForm.project, 'aria-label': pt(t, 'repos.field.project'),
             placeholder: 'group/project',
-            onChange: event => setRepoForm(previous => ({ ...previous, project: event.target.value })) })),
+            ...repoFieldProps('project', true),
+            onChange: event => repoFieldEdit('project', event.target.value) }),
+          repoFieldError('project')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.verifyMode')),
           h(Select, { label: pt(t, 'repos.field.verifyMode'), value: repoForm.verifyMode,
@@ -1968,16 +2218,24 @@ function LiveSettingsPage({ route }) {
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.uatUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.uatUrl, 'aria-label': pt(t, 'repos.field.uatUrl'),
             placeholder: 'https://uat.example.com',
-            onChange: event => setRepoForm(previous => ({ ...previous, uatUrl: event.target.value })) })),
+            ...repoFieldProps('uatUrl', false),
+            onChange: event => repoFieldEdit('uatUrl', event.target.value) }),
+          repoFieldError('uatUrl')),
         h('label', { className: 'sa-field' },
           h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.healthUrl')),
           h(Input, { className: 'sa-input-full', value: repoForm.healthUrl, 'aria-label': pt(t, 'repos.field.healthUrl'),
             placeholder: 'https://uat.example.com/health',
-            onChange: event => setRepoForm(previous => ({ ...previous, healthUrl: event.target.value })) }))),
+            ...repoFieldProps('healthUrl', false),
+            onChange: event => repoFieldEdit('healthUrl', event.target.value) }),
+          repoFieldError('healthUrl'))),
       h(SettingsSwitchRow, { label: pt(t, 'repos.field.makeDefault'), hint: pt(t, 'repos.field.makeDefaultHint'),
         checked: repoForm.makeDefault, disabled: repoSaving,
         onChange: next => setRepoForm(previous => ({ ...previous, makeDefault: next })) }),
-      repoError ? h('p', { className: 'sa-error', role: 'alert' }, repoError) : null) : null,
+      repoError
+        ? h(Fragment, null,
+          h('p', { className: 'sa-error', role: 'alert', id: 'sa-repo-error', tabIndex: -1 }, repoError),
+          h('p', { className: 'sa-hint' }, pt(t, 'repos.fixHint')))
+        : null) : null,
     configSampleOpen ? h(Modal, { open: true, onClose: () => setConfigSampleOpen(false),
       title: pt(t, 'repos.sampleTitle'), closeLabel: t('close'), className: 'sa-glossary-modal',
       footer: h(Button, { variant: 'outline', size: 'sm', onClick: () => setConfigSampleOpen(false) }, t('close')) },
@@ -1986,5 +2244,5 @@ function LiveSettingsPage({ route }) {
         h('div', { className: 'sa-md-code-head' },
           h('span', { className: 'sa-md-code-lang' }, 'live.json'),
           h(CopyButton, { value: REPO_CONFIG_SAMPLE, label: pt(t, 'repos.sampleCopy') })),
-        h('pre', { className: 'sa-md-pre' }, REPO_CONFIG_SAMPLE))) : null)
+        h('pre', { className: 'sa-md-pre', translate: 'no' }, REPO_CONFIG_SAMPLE))) : null)
 }

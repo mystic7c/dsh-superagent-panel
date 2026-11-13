@@ -121,6 +121,13 @@ function ExecutionQueuePage({ route }) {
   useEffect(() => {
     if (route?.stage && EXEC_STAGES.includes(route.stage)) setStage(route.stage)
   }, [route?.stage])
+  // The stage filter is in-view state, so mirror it into the route object the shell already keeps: back/forward then
+  // restores the visible slice instead of resetting it (A5). Replacing the entry keeps filtering out of the history
+  // stack. (A reload still narrows the route to page/id in 25-router.js, so it falls back to the whole queue.)
+  const chooseStage = value => {
+    setStage(value)
+    navigate({ page: 'execution', ...(value === 'all' ? {} : { stage: value }) }, true)
+  }
   const [manualOpen, setManualOpen] = useState(false)
   const [doneExpanded, setDoneExpanded] = useState(false)
   const [execView, setExecView] = useState(execReadView)
@@ -208,7 +215,7 @@ function ExecutionQueuePage({ route }) {
     h(EmptyState, { icon: 'inbox', title: pt(t, 'ex.emptyTitle'), hint: pt(t, 'ex.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
         pt(t, 'ex.createTicket')) }))
-  const clearFilters = () => { setStage('all'); updateView({ showDone: true }) }
+  const clearFilters = () => { chooseStage('all'); updateView({ showDone: true }) }
   const stageEmptyState = h(Section, { title: pt(t, 'ex.tickets'), count: 0 },
     h(EmptyState, { icon: 'filter', title: pt(t, 'ex.filterEmptyTitle'),
       action: h(Button, { variant: 'outline', size: 'sm', onClick: clearFilters }, pt(t, 'ex.clearFilters')) }))
@@ -237,7 +244,7 @@ function ExecutionQueuePage({ route }) {
   const listBar = tickets.length
     ? h('div', { className: 'sa-list-bar' },
       h('div', { className: 'sa-list-stage' },
-        h(SegmentedControl, { options: stageOptions, value: stage, onChange: setStage, label: pt(t, 'ex.filterLabel'),
+        h(SegmentedControl, { options: stageOptions, value: stage, onChange: chooseStage, label: pt(t, 'ex.filterLabel'),
           className: 'sa-segmented-chips' })),
       h('div', { className: 'sa-viewbar', role: 'group', 'aria-label': pt(t, 'ex.toolbarLabel') },
         h(Menu, { label: pt(t, 'ex.groupByLabel'),
@@ -261,10 +268,10 @@ function ExecutionQueuePage({ route }) {
               onSelect: () => updateView({ sort: 'created' }) },
           ] }),
         h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
-        h('span', { className: 'sa-switch-field' },
+        h('label', { className: 'sa-switch-field' },
           h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),
           h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
-            label: pt(t, 'ex.showDone'), className: 'sa-switch-compact' }))))
+            className: 'sa-switch-compact' }))))
     : null
   const queueBody = stage === 'dismissed'
     ? h('div', { className: 'sa-exec-queue' },
@@ -281,7 +288,8 @@ function ExecutionQueuePage({ route }) {
       h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
         className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
       doneOverflow ? h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', onClick: () => setDoneExpanded(value => !value) },
+        h(Button, { variant: 'outline', size: 'sm', 'aria-expanded': doneExpanded,
+          onClick: () => setDoneExpanded(value => !value) },
           pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null)
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
@@ -312,22 +320,27 @@ function ExecutionQueuePage({ route }) {
         h('div', { className: 'sa-executor-recent' },
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
-            h(When, { at: recentRun.startedAt }),
+            h(When, { at: recentRun.startedAt ?? recentRun.at }),
             h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
             // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
             runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
             recentRun.error
-              ? h('span', { className: 'sa-hint', title: String(recentRun.error) },
-                pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) }))
+              ? h(Fragment, null,
+                // The failure cause stays visible; the raw error is supplementary detail behind a real focusable InfoTip
+                // rather than a hover-only title (A3).
+                h('span', { className: 'sa-hint' },
+                  pt(t, 'row.evidenceCause', { cause: failureLabel(t, String(recentRun.error)) })),
+                h(InfoTip, { text: String(recentRun.error), warn: true }))
               : null,
+            // In-app navigation has no URL to point at, so these are real buttons, not `<a href="#">` fake links (A4).
             recentRun.ticketId
-              ? h('a', { href: '#', className: 'sa-inline-link',
-                onClick: event => { event.preventDefault(); navigate({ page: 'execution', id: recentRun.ticketId }) } },
-                pt(t, 'ex.recentTicket'))
+              ? h('button', { type: 'button', className: 'sa-textlink',
+                onClick: () => navigate({ page: 'execution', id: recentRun.ticketId }) },
+              pt(t, 'ex.recentTicket'))
               : null) : null,
-          h('a', { href: '#', className: 'sa-inline-link',
-            onClick: event => { event.preventDefault(); navigate({ page: 'overview' }) } },
-            pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
+          h('button', { type: 'button', className: 'sa-textlink',
+            onClick: () => navigate({ page: 'overview' }) },
+          pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
       status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
