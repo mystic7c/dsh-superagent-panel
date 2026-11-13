@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.2] — 2026-11-14
+
+### 变更
+- 客户端构建层接受 JSX：esbuild 以 `loader: 'jsx'` + `jsxFactory: 'h'` 编译拼接后的片段。产物契约不变——
+  同一 esbuild 版本下，仅切换 loader 时 `client/index.js` 逐字节相同（485,801 字节）。
+- `client/src/10-controls.js` 从 `h(...)` 迁移到 JSX（P2 第一步，issue #34）：markup、class 名、ARIA 属性、
+  焦点行为与无障碍名全部保持原样，只改写法。
+- `scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 用同一套 esbuild 参数编译片段后再求值，否则 JSX
+  片段在 `new Function` 里会直接语法错误。
+- 文档：`CONTRIBUTING.md` 与 `README.md` 说明片段可写 JSX 或 `h(...)`，可以按文件逐个迁移。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段，485,818 字节）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+
 ## [0.5.1] — 2026-11-14
 
 ### 修复
