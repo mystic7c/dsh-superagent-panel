@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.32] — 2026-11-13
+
+Claude 验收报 `Unexpected end of JSON input`：不是模型没答，是读不到答案。`runProcess` 的 stdout 上限 8 MB 在
+达上限后丢弃**新到的** chunk，而 Claude stream-json 每个 thinking token 就产出一条 `thinking_tokens` 事件
+（实测约 320 B/token，一次 1 万 token 的思考就有 3.5 MB），真实验收一越过 8 MB，最后那条含 verdict 的 `result`
+就被丢掉，解析器只能拿到空字符串，`JSON.parse('')` 便报这个错。stage 里还留着 sessionId，正是「CLI 跑了、
+只是尾巴没了」的证据。
+
+### 内容
+- `lib/live/worker-cli.js`：`runProcess` 达上限后**保留尾部**（`stdout = stdout.slice(-maxStdout)`），并支持
+  注入 `maxStdout` 便于测试；`parseClaudeStream` 在 `result` 文本缺失时回落到 `structured_output`
+  （`--json-schema` 的正式载荷）；CLI 退出 0 但没有任何结果文本时，错误改为
+  `claude CLI returned no result text (stdout N bytes): …` 并带 stderr/stdout 尾部，不再让 JSON.parse 报误导性错误。
+- 测试：`runProcess keeps the stream tail when the stdout cap is reached`、`a CLI that exits 0 without result
+  text is reported instead of failing JSON parse`、`Claude structured output is used when the result event carries
+  no text`。
+- `package.json` 0.4.32。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`；`node scripts/check-keys.mjs`；
+`node --test lib/store.test.js lib/live/*.test.js`（449 通过 0 失败）。
+
 ## [0.4.31] — 2026-11-13
 
 独立验收现在可以选 DSH（独立只读会话），Claude 验收拿到 JSON schema，DSH 验收在 DeepSeek 路由上真正开
