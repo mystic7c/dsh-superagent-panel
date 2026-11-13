@@ -6617,6 +6617,9 @@ Object.assign(PAGE_TEXT, {
     'Continues from the interrupted checkpoint (re-runs the Ticket when there is none): {title}'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
+  'detail.resumeWorkflowTitle': ['从失败的一步继续？', 'Continue from the failed stage?'],
+  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只重跑失败的那一步，通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
+    'Finished assessment, implementation and gates are kept: only the failed stage runs again, then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -7630,6 +7633,8 @@ function TicketDetail({ id, page = 'execution' }) {
   // One state-following primary action (retry a failed run, review a pending acceptance, publish a finished dry run,
   // open the merged MR once accepted, dry run otherwise) plus a ⋯ menu for every other action (critique #4, O15).
   const failed = view.state === 'error'
+  // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
+  const workflowResumable = failed && ticket.workflowResumable === true
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
   const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
@@ -7640,9 +7645,14 @@ function TicketDetail({ id, page = 'execution' }) {
       document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, pt(t, 'primary.answer'))
     : failed
     ? canRun
-      ? h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
-        message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
-        onConfirm: async () => { await retry.run() } })
+      // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
+      ? workflowResumable
+        ? h(ConfirmButton, { label: pt(t, 'detail.resume'), title: pt(t, 'detail.resumeWorkflowTitle'),
+          message: pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'play',
+          onConfirm: async () => { await resume.run() } })
+        : h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
+          message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
+          onConfirm: async () => { await retry.run() } })
       : h(Button, { variant: 'primary', size: 'sm', disabled: true, title: pt(t, 'ticket.retryUnavailable') }, pt(t, 'ticket.retry'))
     : accepted
       // An accepted Ticket has nothing left to run: open the merged MR when there is one, otherwise only the ⋯ menu stays.
