@@ -21,7 +21,8 @@
 
 ## 流水线
 
-1. **取上下文**：`impeccable context`。没有 `DESIGN.md` 时以 `spec/panel-ui.md` 的 token 契约为准，不新建刻度。
+1. **取上下文**：`impeccable context`。`DESIGN.md`（根目录）是视觉契约的唯一起点，`spec/panel-ui.md` 是它的来源与细则；
+   两者冲突时以代码里实际生效的 token 为准，并回头改文档。
 2. **先规划再动手**：`/impeccable shape <这一屏>`，只出方案（结构、层级、状态、空/错/加载），不写代码。
 3. **编辑**：`/impeccable polish|layout|typeset|adapt <目标>`。编辑前读 `reference/craft-floor.md`；
    涉及每个可点元素的反馈、焦点、密度的判断以它为准。
@@ -81,7 +82,7 @@ node scripts/render-check.mjs             # jsdom 全页回归（依赖 /tmp/sa-
 /impeccable 给 dsh-superagent-panel 的「执行」页做一次 polish。
 - 模式：Operate（app UI，scanability 优先，克制）
 - 目标：client/src/55-execution.js + client/src/05-style.js；不要动 06-i18n.js / client/index.js
-- 上下文：先跑 impeccable context；没有 DESIGN.md 就按 spec/panel-ui.md 的 token 契约走，不新建刻度
+- 上下文：先跑 impeccable context，以 DESIGN.md 的 token 与 Named Rules 为准；不新建刻度
 - 编辑前先读 reference/craft-floor.md；这是裸 DOM（h = React.createElement），不要引入 JSX/Tailwind
 - 硬约束：只用手上已有的 --sa-* 与 --dsw-alias-* token；不许新增颜色，不许改信息架构
 - 验收：node scripts/build-client.mjs && node scripts/check-keys.mjs && node --test lib/store.test.js lib/live/*.test.js
