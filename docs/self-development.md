@@ -47,7 +47,7 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 ## 分支策略（GitFlow）
 
 - `main`：发布分支，只接收 `release/**` 与 `hotfix/**` 的合并；每次发布打 tag（`v0.4.13` 起）。本机安装跟随
-  `main` 的打包产物（见「本机安装（main 打包产物）」），不再从 stable clone link。
+  `main` 的打包产物（见「本机安装（main 打包产物）」）。
 - `develop`：集成分支，工单的 `feature/<ticketId>` 都合到这里；`live.json` 的 `baseBranch`/`targetBranch` 指向它。
 - `feature/**`：执行器为每张工单推送的交付分支，auto-pr 以 `develop` 为 base 开 PR。
 - `release/<version>`（从 `develop` 切出）与 `hotfix/<version>`（从 `main` 切出）：auto-pr 以 `main` 为 base 开 PR；
@@ -105,7 +105,7 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 ## 本机安装（main 打包产物）
 
-本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树，也不是 stable clone：
+本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树：
 
 - profile 依赖是 `file:<tarball 绝对路径>`（例如
   `file:/Users/mlamp/Documents/workspace/private/dsh-plugins/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`）。
@@ -113,8 +113,6 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
   不是指向开发仓库的 `link:`。
 - 升级必须**显式安装新 tarball**，再在面板的插件管理里重载插件并刷新页面；合并进 `develop`、在工作树里跑闸门
   都不会改动安装目录或运行态。
-- 旧的 stable clone（`../dsh-superagent-panel-stable`）不再是安装源，只保留作**回滚参考**；不要再用
-  `dsh plugin add` / `link:` 把它接回 profile。
 
 ### 本地打包与安装
 
