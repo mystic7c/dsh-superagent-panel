@@ -366,7 +366,8 @@ function LiveTriggerPage({ route }) {
   if (data === undefined) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 
   const options = THREAD_FILTERS.map(value => ({ value, label: pt(t, `trg.filter.${value}`),
-    title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
+    title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }),
+    description: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
   const total = Number.isFinite(data.total) ? data.total : items.length
   const pageFrom = items.length ? offset + 1 : 0
   const pageTo = Math.min(offset + items.length, total)

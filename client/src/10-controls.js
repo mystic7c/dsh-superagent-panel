@@ -96,7 +96,8 @@ function SegmentedControl({ options = [], value, onChange, label, disabled, clas
     options.map(option => h('button', { key: option.value, type: 'button', role: 'radio', 'aria-checked': option.value === value,
       'data-value': String(option.value), title: option.title, disabled: disabled || option.disabled,
       tabIndex: option.value === value || (value === undefined && option === selectable[0]) ? 0 : -1, className: 'sa-segment',
-      onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label)))
+      onClick: () => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) } }, option.label,
+      option.description ? h('span', { className: 'sa-sr-only' }, option.description) : null)))
 }
 
 /** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
