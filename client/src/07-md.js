@@ -86,7 +86,9 @@ function markdownBlocks(text) {
     const bullet = /^\s*[-*+]\s+(.*)$/.exec(line)
     // Ordered markers: `1.` and `1)` need a space (so "2.5 倍" stays prose), the Chinese `1、` may follow directly.
     const ordered = /^\s*(\d+)(?:[.)]\s+|、\s*)(.+)$/.exec(line)
-    if (heading) { flush(); flushList(); blocks.push({ kind: 'heading', text: heading[2] }) }
+    // The level travels with the block so the renderer can keep the document outline instead of flattening every
+    // heading into one styled paragraph.
+    if (heading) { flush(); flushList(); blocks.push({ kind: 'heading', level: heading[1].length, text: heading[2] }) }
     else if (bullet) { flush(); if (!list || list.ordered) { flushList(); list = { kind: 'list', ordered: false, items: [] } } list.items.push(bullet[1]) }
     else if (ordered) { flush(); if (!list || !list.ordered) { flushList(); list = { kind: 'list', ordered: true, items: [] } } list.items.push(ordered[2]) }
     else if (!line.trim()) { flush(); flushList() }
