@@ -98,7 +98,7 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 ## 入口
 
-执行页 →「手工建单」→ 仓库下拉选择 **DSH Superagent Panel**（`live.json` 的默认仓库是 `demo-legacy-repo`，别沿用默认），
+执行页 →「手工建单」→ 仓库下拉选择 **DSH Superagent Panel**（`live.json` 的默认仓库多半不是本仓库，别沿用默认），
 填写标题与需求后创建；工单随后按上面的流程推进。自开发的典型操作路径是：手工建单 → 工单详情「干跑执行」
 （worker 改工作树、跑闸门、不推送）→ 确认改动后「发布 MR」（重跑闸门再提交、推送）。合入 `develop` 只更新
 集成分支，不会更新本机安装；把新版本装进日常界面要显式安装 `main` 的 tarball（见「本机安装（main 打包产物）」）。
@@ -107,8 +107,8 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树：
 
-- profile 依赖是 `file:<tarball 绝对路径>`（例如
-  `file:/Users/you/Documents/workspace/private/dsh-plugins/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`）。
+- profile 依赖是 `file:<tarball 绝对路径>`（例如 `file:/abs/path/to/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`，
+  换成你自己机器上的路径）。
 - `~/.dsh/profiles/desktop/node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的**实体目录**，
   不是指向开发仓库的 `link:`。
 - 升级必须**显式安装新 tarball**，再在面板的插件管理里重载插件并刷新页面；合并进 `develop`、在工作树里跑闸门

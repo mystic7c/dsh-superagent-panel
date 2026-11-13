@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.4.39] — 2026-11-14
+
+开源准备（P0）：让一个干净 clone 能自查、能被外部贡献者读懂，并把仓库里的"内部习惯"与"外部契约"分开。
+功能行为不变，所有改动都在构建、测试与文档层。
+
+### 内容
+- 新增 `LICENSE`（MIT）与 `.github/workflows/ci.yml`：Node 20/22 矩阵，`npm ci` 后跑 Host 语法、产物一致性、
+  双语 key、Host 测试与渲染回归五道门。
+- 渲染回归不再依赖 `/tmp/sa-harness`：`jsdom`/`react`/`react-dom` 改为 `devDependencies`（精确版本）并提交
+  `package-lock.json`；`scripts/render-check.mjs` 缺依赖时提示 `npm ci` 并以 2 退出。
+- 新增 `test/fixtures/live.json` 与渲染回归的内置 fixture：状态目录里没有 `live.json` 时自动在临时目录搭建
+  一套演示状态（2 个仓库、2 个监听群、四条演示工单、一条接单历史），干净 clone 上不再是 172 检查 + 18 跳过。
+- 新增 `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、issue 表单与 PR 模板；交付桥与发布流程拆到
+  `docs/delivery.md`，`AGENTS.md` 只留指向与 Agent 硬线。
+- 文档卫生：README 去掉写死的 `0.4.31`，改为 CHANGELOG/Releases 入口并加 CI/License/Node 徽章；开发验证一节
+  改为从 `npm ci` 开始、写明前七条可在干净 clone/CI 上跑、后两条需桌面 DSH + Chrome；`docs/self-development.md`
+  去掉本机绝对路径与内部仓库名；`engines.node` 提到 `>= 20`；`package.json` 补 `repository`/`homepage`/`bugs`。
+
+### 验证
+- 干净状态目录（`DSH_SUPERAGENT_STATE_DIR` 指向空目录）：`node scripts/render-check.mjs` 194 checks / 0 fail /
+  0 skipped；操作者真实状态目录同样 194 / 0 / 0。
+- `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`、
+  `node --test lib/store.test.js lib/live/*.test.js`（555 pass）全部通过。
+
 ## [0.4.38] — 2026-11-13
 
 按 `/impeccable audit`（对着 DESIGN.md 契约跑的 16/20 审计）逐条修复。核心一条是 token 语义错用：`--dsw-alias-bg-overlay`
@@ -705,7 +729,7 @@ README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.j
 ## [0.4.12] — 2026-11-11
 
 README 补上「用面板开发本仓库（自开发）」一节：自开发链路已经跑通（工单 → 闸门 → 推送 → auto-pr → merge commit →
-验收），但操作口径只散落在 `AGENTS.md` 与 CHANGELOG 里，照 GitLab/`demo-legacy-repo` 的旧习惯操作容易踩坑（例如用 squash
+验收），但操作口径只散落在 `AGENTS.md` 与 CHANGELOG 里，照 GitLab/旧仓库的旧习惯操作容易踩坑（例如用 squash
 合并，面板的 ancestry 判定认不到已合入，工单停在 `mr-open`）。
 
 ### 内容
@@ -718,7 +742,7 @@ README 补上「用面板开发本仓库（自开发）」一节：自开发链�
   - 合并必须用 merge commit（fast-forward 可以；squash/rebase 会重写 commit，`git merge-base --is-ancestor`
     判定不到，工单一直停在 `mr-open`）
   - 状态流转 `queued → working → mr-open → merged → 人工验收`；失败时先看「闸门结果」与运行记录里的证据
-  - 入口：执行页「手工建单」时选本仓库（`live.json` 的默认仓库是 `demo-legacy-repo`，不能沿用默认）
+  - 入口：执行页「手工建单」时选本仓库（`live.json` 的默认仓库不是本仓库，不能沿用默认）
 - 改动范围：README、CHANGELOG 与 `package.json` 版本号；不涉及 Host/客户端代码，`client/index.js` 不重建
 
 ### 验证
