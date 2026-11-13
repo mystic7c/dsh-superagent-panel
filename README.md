@@ -65,7 +65,7 @@ plugin_manager install_bundle target=<本仓库目录>
 - 本插件没有演示种子：首次启动创建空状态；`POST /superagent/api/demo/reset` 只会清空回空状态。
 - 设置页可写：来源（token、群绑定、轮询、允许任意人类/发送者名单）、评估确认（启用/范围/允许回复的操作人/
   有效期）、运行（执行器开关/自动执行/暂停/MR 方式/执行超时/返工预算）、
-  Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
+  Worker（多后端启用、路由模式/默认/降级/任务类型偏好、模型/CLI 路径、独立验收后端、DSH worker 预设）、写权限（推送/回群/合并）、仓库（GitLab token、新增仓库定义）、变更历史（查看/恢复快照）。
   编辑/删除已有仓库、闸门命令、worktree、UAT/健康检查地址、gate `onFail/repairHint`、
   闸门自动修复的 `onFail/repairHint` 等更细字段仍通过 `live.json` 配置；工单自动化在工单详情页配置。
 - 手动 `live.json` 修改后，使用设置页「重载配置」让引擎重新读取。

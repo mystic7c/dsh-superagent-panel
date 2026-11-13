@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.4.30] — 2026-11-13
+
+修掉三件事：设置页保存返工预算报 `unsupported setting: executor.maxRepairRounds`；独立验收后端不能切到 Claude；
+DSH worker 无法按仓库指定 Agent 预设。
+
+根因：`lib/live/live-json.js` 的 FIELDS 白名单漏了 `executor.maxRepairRounds`（设置页能显示、保存被拒）；
+`workflow-worker.js` 把验收后端硬编码为 `config.executor.reviewer ?? 'codex'`，且该配置项既不在白名单也不在 UI；
+`worker.js` 一律 `presets.resolve()` 跟随宿主默认预设，没有按仓库覆盖的入口。
+
+### 内容
+- `lib/live/live-json.js`：FIELDS 增加 `executor.maxRepairRounds`（整数 0..6）、`executor.reviewer`（codex|claude）、
+  `executor.workerPreset`（单行）；对应校验错误文案。保存设置不再报 unsupported setting。
+- `lib/live/config.js`：executor 归一化 reviewer（仅 codex/claude，dsh 不能当 reviewer）与 workerPreset（trim、拒换行）。
+- `lib/live/repos.js`：仓库项支持可选 `reviewer` 与 `workerPreset`（缺省回落到 executor 级配置）。
+- `lib/live/worker.js`：`runWorker({ preset })` 显式解析预设，解析不到时记录一次并回落到宿主默认，不中断运行。
+- `lib/live/executor.js`：`workerPreset = repo.workerPreset ?? config.executor.workerPreset` 传给进程内 DSH worker
+  （分阶段与经典路径都传）；`executeWorkflow` 新增 `reviewer = repo.reviewer ?? config.executor.reviewer`。
+- `lib/live/workflow-worker.js`：验收/规划后端取 `reviewerOverride ?? config.executor.reviewer ?? 'codex'`，
+  实现仍走 `implementer`；启停检查同时看两个后端。
+- 设置 → Worker「分阶段执行」新增「独立验收后端」（Codex / Claude Code）与「Worker 预设（DSH）」输入；
+  patch 白名单同步加入两项。
+- 测试：live-json 白名单/校验、config 解析、仓库 presets/reviewer、执行器按 `executor.reviewer` 选择 CLI 后端。
+- `package.json` 0.4.30；`client/index.js` 重建（22 fragments，9814 行）。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments，最新）；
+`node scripts/check-keys.mjs`（773 literal / 513 shared / 1157 page-local）；
+`node --test lib/store.test.js lib/live/*.test.js`（442 通过 0 失败）；`node scripts/render-check.mjs`（exit 0，ok:true）。
+
 ## [0.4.29] — 2026-11-13
 
 分阶段流程停下来时不再只报「workflow blocked: blocked」，返工预算真正生效并且可以在设置里调大后接着返工。

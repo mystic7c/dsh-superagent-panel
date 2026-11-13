@@ -8032,6 +8032,12 @@ Object.assign(PAGE_TEXT, {
   'wf.simple': ['直接实现', 'Direct implementation'],
   'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
   'wf.implementer': ['实现后端', 'Implementation backend'],
+  'wf.reviewer': ['独立验收后端', 'Independent review backend'],
+  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行；Codex 或 Claude Code 的 CLI 会话。', 'Runs assessment, planning and the final review read-only through the Codex or Claude Code CLI.'],
+  'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
+  'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
+  'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
+    'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
   'wf.hint': ['自动模式由 Codex 只读评估；复杂任务先规划，再实现、运行闸门及独立验收。最多返工两轮。', 'Auto mode uses read-only Codex assessment; complex tasks run planning, implementation, gates and independent review. At most two repair rounds.'],
 })
 /* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
@@ -8503,7 +8509,8 @@ function settingsPatchOf(group, draft) {
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer',
+        'executor.reviewer', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -9518,6 +9525,13 @@ function LiveSettingsPage({ route }) {
           value: draft['executor.implementer'] ?? executor.implementer ?? 'dsh',
           options: [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }],
           onChange: value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh') }),
+        h(Select, { label: pt(t, 'wf.reviewer'), disabled: frozen,
+          value: draft['executor.reviewer'] ?? executor.reviewer ?? 'codex',
+          options: [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }],
+          onChange: value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex') }),
+        h(Input, { value: draft['executor.workerPreset'] ?? executor.workerPreset ?? '', disabled: frozen,
+          placeholder: pt(t, 'wf.workerPresetPlaceholder'), 'aria-label': pt(t, 'wf.workerPreset'),
+          onChange: event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '') }),
         h(Hint, null, pt(t, 'wf.hint'))),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.routingTitle')),
