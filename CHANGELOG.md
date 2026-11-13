@@ -1,5 +1,153 @@
 # Changelog
 
+## [0.4.31] — 2026-11-13
+
+第四轮评审返工，逐项修正 18 条验收缺口：旧 `/pull/new/` 记录仍显示「PR 已创建」、排队工单停止只写标记不落地、
+重启后停止请求悬挂、停止后检查点写成 `done` 无法恢复、证据文件合法 JSON 缺 `rounds` 抛 TypeError、报告型交付
+不留证据、停用仓库仍被定时触发派发、人工选择的不可用后端被静默换掉、部署 `matchesHead` 用错 SHA 比较。补齐
+config/live-json/API/engine/executor/routing/evidence 与渲染回归，并修正文档口径。
+
+### 内容
+- `lib/live/engine.js`：`deliverySummary` 对任何带 `webUrl` 且无 `iid` 的 MR 投影为 `waiting`（含无 `mode` 的旧记录）；
+  `deployment.matchesHead` 优先已记录布尔值，否则比较 `deployment.sha`↔`deployment.commit`，最后才回退到分支 HEAD，
+  不再拿功能分支 HEAD 与 MR merge commit 直接比较。
+- `lib/live/engine.js`：`requestStop` 对 `queued` 立即结束排队（写 `ticket.stop.confirmedAt`、回到 `ready`、删
+  `stopRequested`、记「已停止排队中的工单」），不再留下永远不会执行的「正在停止」；`reconcile` 将重启前遗留的
+  `stopRequested` 一并确认（`recovered: 'host restart'`），再次停止返回 `alreadyStopped:true`（幂等）而不是卡住面板。
+- `lib/live/engine.js`：`automationSkipReason` 在仓库查找后检查 `repo.enabled`，停用仓库返回 `repo-disabled`，
+  定时触发不再先计一次执行、写「定时触发」活动再被 executor 拒绝。
+- `lib/live/routing.js` + `index.js`：人工选择的后端即使能力不足也不再被静默替换，`unsupported` 原样返回；建单接口
+  在写入前以 400 `所选路由不可用` 拒绝，人工覆盖仍受能力上限约束。
+- `lib/live/executor.js`：`resumableRunOf` 接受 `interrupted|stopped`；停止步骤保留 `checkpoint.phase`，停止后可从
+  闸门/提交/推送/MR 检查点恢复；报告型交付在返回前也写证据包；run 记录仓库配置快照（`run.repo`）。
+- `lib/live/evidence.js`：`normalizeEvidenceDocument` 对合法 JSON 缺失/损坏的 `rounds` 归一为数组并标 `recovered`，
+  `get`/`list` 不再抛异常。
+- 客户端：旧 push 记录、`MergeRequestCard` 与阶段轨道统一显示「已推送，等待创建 PR」；`stopRequested` 时状态 chip
+  显示「正在停止」；详情页头部直接提供停止入口；停止后的工单可继续恢复；评估记录直接链接到本次运行；URL 恢复
+  覆盖刷新、页码、视图与滚动位置。
+- 回归与文档：补 engine/executor/evidence/routing/config/live-json/api 测试及 render-check 的旧 PR 记录、排队停止、
+  重启悬挂、创建提交、停止 UI、来源/评估深链与滚动恢复断言；README 测试数与渲染数对齐，补充本轮实现细节。
+
+### 验证
+- `node --check index.js` 通过；`node scripts/build-client.mjs --check` 通过（22 fragments）。
+- `node scripts/check-keys.mjs` 通过（871 literal / 513 shared / 1285 page-local）。
+- `node --test lib/store.test.js lib/live/*.test.js`：514 通过 / 0 失败 / 0 跳过。
+- `node scripts/render-check.mjs` exit 0，190/190 checks，`skipped: []`。
+- 已知未验证边界：真实 CLI 取消、真实 GitHub/GitLab 推送与 PR 查询仍需人工环境验证。
+
+## [0.4.30] — 2026-11-13
+
+第三轮评审返工，修正五个 P1 以及一处真实采集缺陷：恢复闸门的停止判断读的是 `persist()` 之前的旧 ticket 对象，
+API 停止请求无法取消当前运行；推送后确认停止只清旧对象，手动发布遇到停止又把残留标记留在权威状态；手动发布先创建
+MR 再补查，远端成功但响应丢失时会重复创建；证据脱敏只删 `files` 行不删 patch 段，`certs/service.key` 仍以正文入包；
+发布闸门只做字符串路径前缀判断，工作树里的目录符号链接可让闸门在仓库外执行。补真实采集链路测试时还发现
+`recordDeliveryEvidence` 从未导入 `worktreeDiff`，执行路径保存的 patch 一直为空。
+
+### 内容
+- `executor.js`：恢复/闸门重试的停止判断统一走 `engine.isStopRequested`；新增 `confirmStopOnAuthoritative`，首轮、
+  推送后、手动发布停止共用，写 `ticket.stop.confirmedAt` 后调用 `engine.clearStopRequest` 并删除权威条目上的
+  `stopRequested`，不再残留“正在停止”。
+- `executor.js`：交付与手动发布共用 `openOrAdoptMergeRequest`：先 `listMergeRequests` 再决定是否创建，登记已合并/
+  已开启的 MR；查询失败记 `mr_lookup_failed`（run 未确认、链接标 unverified），绝不盲建；重复错误只在查询后接管。
+  手动发布的闸门目录改用与 `runGatePhase` 相同的 `insideRealRoot` realpath 校验。
+- `repo.js`/`diff.js`/`evidence.js`：新增共享 `sensitivePath`（补 `.key`/`.pem`/`p12`/`pfx`/`id_rsa` 等），
+  `worktreeDiff` 同时过滤已跟踪与未跟踪的敏感路径；`filterSensitiveSections` 按整段删除敏感 patch，`sanitizeRound`
+  前置一次数量提示并保留 `patch.redacted`，`updateLatest` 再脱敏保持幂等。
+- `executor.js` 补 `worktreeDiff` 导入，并以 `run.worktree ?? ticket.links.worktree` 取采集目录，普通执行路径终于能
+  保存真实 patch；证据仍在工作树清理前写入。
+- 回归：恢复闸门停止改用 `engine.requestStop` 并经权威状态断言；推送后、手动发布及 MR 创建期间到达的停止断言权威条目已清理；丢失创建响应
+  后接管既有 MR、查询失败不创建、发布闸门符号链接越界；临时 git 工作树验证真实采集证据不含私钥；证据存储与 reload
+  的整段脱敏幂等；`worktreeDiff` 已跟踪/未跟踪密钥过滤。README 版本对齐 `0.4.30`。
+
+### 验证
+- `node --check index.js` 通过；`node scripts/build-client.mjs --check` 通过（22 fragments）。
+- `node scripts/check-keys.mjs` 通过（871 literal / 513 shared / 1281 page-local）。
+- `node --test lib/store.test.js lib/live/*.test.js`：501 通过 / 0 失败 / 0 跳过。
+- `node scripts/render-check.mjs` exit 0，`skipped: []`；`node scripts/isolated-verify.mjs` PASS，控制台错误 0
+  （本机 Chrome 需 `--no-sandbox`，用临时 `CHROME_PATH` wrapper 运行，未改仓库脚本）。
+- 已知未验证边界：真实 CLI 取消、真实 GitHub/GitLab 推送与 PR 查询仍需人工环境验证。
+
+## [0.4.29] — 2026-11-13
+
+第二轮评审返工，修正三个验收缺陷：检查点恢复期间停止只走 `failRun`（run 变 failed、`stopRequested` 残留、界面一直
+显示“正在停止”）；评估的仓库筛选只解析关联工单，导致未接单的拒绝记录全部算到默认仓库；证据更新时重新归一化会丢掉
+`filesOmitted`/`filesRedacted`，把不完整的文件清单变成“完整”，跨轮比较可能误判新增/删除。
+
+### 内容
+- `executor.js` 抽出 `finalizeStoppedRun`，首轮执行、闸门恢复、检查点恢复三条停止路径共用：从权威 state 记录读取
+  `stopRequested`（含 by/note）写入 `ticket.stop.confirmedAt` 并在 state 副本上清除请求，run 记 `stopped`/`stoppedAt`，
+  工单回 `ready` 保留工作树，写 `stop` 步骤与活动记录，再冻结交付证据；不再把人工停止记成失败。
+- `engine.js` 新增 `repoIdOfDecision`：优先用 decision 自身的 `repoId`（拒绝记录没有 ticketId），旧记录才回退到工单；
+  `decisionsView` 的仓库筛选在分页前按此求交集，不再把所有拒绝记录归到默认仓库。
+- `evidence.js` 归一化时把既有 `filesOmitted`/`filesRedacted` 与新丢弃计数相加（幂等），`updateLatest` 追加人工/平台
+  决定后仍保持“清单不完整”标记，`compareRounds` 继续把差异列进 `filesUncertain`。
+- 回归：检查点恢复中停止（含停止证据）、多仓库拒绝记录筛选、证据更新/重载/跨轮比较；`api.test.js` 的拒绝记录 fixture
+  补 `repoId` 以反映现有评估写入。
+- 未改客户端源码，`client/index.js` 保持已构建版本。
+
+### 验证
+- `node --check index.js` 通过；`node scripts/build-client.mjs --check` 通过（22 fragments）。
+- `node scripts/check-keys.mjs` 通过（871 literal / 513 shared / 1281 page-local）。
+- `node --test lib/store.test.js lib/live/*.test.js`：493 通过 / 0 失败 / 0 跳过。
+- `node scripts/render-check.mjs` 通过（skipped=[]）；`node scripts/isolated-verify.mjs` PASS，控制台错误 0（本机沙箱
+  Chrome 需 `--no-sandbox`，用临时 `CHROME_PATH` wrapper 运行，未改仓库脚本）。
+- 已知未验证边界：真实 CLI 取消、真实 GitHub/GitLab 远端推送与 PR 查询仍需人工环境验证。
+
+## [0.4.28] — 2026-11-13
+
+按 `docs/product-review-2026-11.md` 落地六项改进：意图分类不再把明确开发任务降级为报告；暂停拆成接单与派发两个开关并
+支持真正取消当前 worker/子进程的运行停止；交付证据把推送、等待 PR、确认 PR、合并、部署、验收分开，并补 GitHub 只读
+PR 查询；来源/触发/评估各自提供服务端文本筛选与分页，评估另支持原因/时间范围/分歧与改判视图并写入 URL；每次交付保存
+有界脱敏证据包并修正 patch、PR 身份、字节截断与原子写；仓库与闸门可编辑/停用且不丢 ID 与历史，新增只读「测试配置」。
+根因是此前分类按关键词先命中 read-only、暂停只有总开关、停止只设标记不移交取消信号、`/pull/new/` 被当成 PR 已创建、
+评估只按 kind/time 过滤、证据 patch 读取了错误字段、仓库配置只能新增。
+
+### 内容
+- `routing.js` 交付物/能力/后端三维分类与 `POST engine/route` 预览；人工覆盖持久化为 `routeSelection`，执行时快照
+  `run.route`。分阶段 Worker 现在接收已解析的 backend/profile 并按只读报告模式降权，不再按配置越过人工选择。
+- `pausedIntake`/`pausedDispatch` 与旧 `paused` 兼容；`pollOnce` 同时拒绝 `pausedIntake`，不再推进游标。新增运行停止：
+  `AbortController` 贯穿 DSH agent、CLI 子进程与闸门/导出命令，动作边界（导出/闸门/提交/推送/PR）重复检查；
+  停止确认后写 `ticket.stop.confirmedAt`、清除 `stopRequested`，保留工作树，已推送则跳过 PR。
+- `delivery` 投影区分已推送/等待 PR/已确认 PR/合并/部署/验收，`links.push` 记录推送证据，PR 关闭不再被当作开启；
+  新增 `lib/live/github.js` 只读 REST 客户端，验证与对账可按分支认领 GitHub PR；部署证据带 commit 与 `matchesHead`。
+- 评估页支持文本/仓库/原因/时间范围/视图筛选与分页；来源信号、触发线程同样支持文本、仓库、原因与时间范围筛选及
+  服务端分页；筛选写入 URL 并支持
+  `popstate` 恢复，评估记录关联回原始信号/线程。
+- `lib/live/evidence.js`：有界、脱敏、原子写入的证据轮次，修正 `diff.diff` patch 来源、闸门 state、文件摘要 digest、
+  PR iid/url 二次归一化丢失、JSON 凭据脱敏与 UTF-8 字节截断；工作树删除后仍可读，支持相邻轮次比较。
+- 仓库编辑/停用：`POST engine/repo/:id`，闸门校验（唯一名称、单行命令、仓库内 cwd、符号链接越界），设置页编辑弹窗
+  展示保存前差异；`POST engine/config/test` 只做固定只读检查，不跑闸门、不建单、不启动 worker。
+- `docs/panel-improvements-2026-11.md` 更新六项契约与未覆盖边界；README 同步功能摘要与验证数字。
+- 评审返工：显式只读在 `single`/`suggest` 下也保持 `read-only`；定时工单在派发前复核 `pausedDispatch` 并回滚已推进的
+  调度计数；分阶段 Worker 收到取消信号，闸门命令按进程组终止并等待退出；推送先落请求再核对远端，MR 查询失败保留
+  未知状态且不重复创建；部署流水线按 MR merge commit SHA 匹配；证据保留 deploy commit 与闸门代码指纹，失败/干跑路径
+  也写证据；闸门 cwd 用 realpath 校验；仓库编辑改为逐字段闸门表单与逐闸门差异。
+
+### 评审二轮返工
+- AC-04：交付与发布共用 `deliverPush`，推送前把 `pushRequest`（分支/SHA/模式）持久化；恢复或重启后先按远端分支
+  SHA 对账（已送达/未出现/本地已前进/远端不可读），远端不可读时保留 `unknown` 并拒绝盲目重推，`publishTicket`
+  同样复用已送达的 HEAD。补中断恢复、重复恢复与发布对账三个回归。
+- AC-03：CLI worker 以独立进程组启动，取消与超时先 `SIGTERM` 整个进程组、3 秒后 `SIGKILL`，不再只结束 CLI 主进程；
+  用真实子进程补 abort 与 timeout 两个断言（孙进程必须一起退出）。
+- AC-05：`deliverySummary` 仅在部署流水线 `success` 且 `matchesHead !== false` 时报告 `deployed`，部署投影带
+  `status`；补「运行中/失败/成功/旧 commit」四个断言，避免等待或失败的流水线被显示为已部署。
+- AC-06：原始信号搜索覆盖 `candidate.text`/`payload.text`/线程标题/`skipReason`/`error`，修复正文关键词返回 0 条。
+- AC-07：来源页读取 `route.id`，经 `engine/signal/:id` 显示定位卡片（正文、工单/线程跳转、原始行高亮）；信号已清理
+  时明确提示原文不可用；离开/返回恢复列表滚动位置，触发页同样恢复滚动；渲染断言覆盖深链、缺失关联与回退位置。
+- AC-08/09：证据轮次记录 `filesOmitted`/`filesRedacted`；比较只在对应侧文件列表完整时推断新增/删除，另报告基线变化、
+  未重跑与沿用旧代码的闸门、仍未通过的闸门及 patch 截断；详情卡只读 Host 比较，不再自行计算。
+
+### 验证
+- Host：`node --test lib/store.test.js lib/live/*.test.js` 490/490 通过，SKIP 0（新增路由/停止取消/GitHub PR/评估视图/
+  证据字节与原子写/仓库符号链接/只读测试配置/来源与触发筛选/推送对账/进程组终止/证据完整性比较等断言）。
+- 渲染：`node scripts/render-check.mjs` 175/175 通过，SKIP 0（新增评估视图/URL、分页、原因日期控件、逐字段闸门编辑与
+  差异、来源筛选、信号深链与清理提示、触发页滚动恢复、证据不完整/基线/旧闸门/未通过/patch 截断）。
+- `node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments）、`node scripts/check-keys.mjs`
+  （871 literal / 513 shared / 1281 page-local）通过；隔离 DSH 实机 CDP 验证 PASS（六页签、0 console error）。
+- 边界：未做真实 CLI 取消与远程 GitHub/GitLab 平台实测；来源/触发页的仓库/原因/时间范围筛选与评估页一致，但真实
+  平台连通性未实测；GitLab 部署流水线按 MR merge commit SHA 精确匹配，匹配不到时保留 `waiting-for-pipeline`/`unknown`
+  且不提升为已部署。
+
 ## [0.4.27] — 2026-11-12
 
 新增可选分阶段 Worker：自动复杂度评估，或直接选择简单/方案驱动执行。复杂流程由 Codex 规划、Claude/DSH 实现、程序闸门、全新 Codex 会话验收组成，支持最多两轮返工与方案修订。默认关闭，保留现有路由行为。
