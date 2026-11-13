@@ -1,5 +1,7 @@
 /* Panel shell: page header with the global health summary, the six page tabs, route dispatch and one panel-level
-   error boundary. App owns the single `usePanelModel()` poll; PanelState hands it to every page. */
+   error boundary. App owns the single `usePanelModel()` poll; PanelState hands it to every page.
+
+   Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
 Object.assign(PAGE_TEXT, {
   'search.title': ['搜索', 'Search'],
@@ -38,11 +40,12 @@ function GlobalStatus() {
   const { t, navigate } = usePanel()
   const { data, error, reload, updatedAt } = usePanelData()
   if (!data) {
-    return h('div', { className: 'sa-global-status', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)',
-      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
-      h(StatusIcon, { state: 'idle', size: 14, spin: false }),
-      h('span', null, error ? pt(t, 'shell.unknown') : pt(t, 'shell.loading')),
-      error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
+    return <div className="sa-global-status" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)',
+      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 }}>
+      <StatusIcon state="idle" size={14} spin={false} />
+      <span>{error ? pt(t, 'shell.unknown') : pt(t, 'shell.loading')}</span>
+      {error ? <Button variant="ghost" size="sm" onClick={() => { void reload() }}>{pt(t, 'actions.refreshStatus')}</Button> : null}
+    </div>
   }
   const health = globalHealth(data)
   // P0: the header count follows the derived inbox when the host exposes it; older hosts keep the status-derived count.
@@ -56,31 +59,36 @@ function GlobalStatus() {
   const clock = hhmm(updatedAt, t.lang) || '—'
   // Outside the live region below: the poll rewrites this every 30s, and announcing the timestamp would interrupt the
   // reader on a fixed cadence without telling it anything new. The full time stays available on hover (`title`).
-  const updated = h('span', { 'aria-hidden': 'true', title: fullTime(updatedAt, t.lang) || undefined },
-    pt(t, 'dataUpdatedAt', { time: clock }))
+  const updated = <span aria-hidden="true" title={fullTime(updatedAt, t.lang) || undefined}>
+    {pt(t, 'dataUpdatedAt', { time: clock })}
+  </span>
   // Only the sentence whose text actually changes ("运行中 · 需要你处理 2 件") is a live region, so updates are announced
   // when the state or the counts move and not on every poll. inline-flex reproduces the flex gap inside the status line.
-  const sentence = h('span', { role: 'status', 'aria-live': 'polite',
-    style: { display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sa-sp-8)' } },
-    h('span', null, pt(t, health.labelKey)),
-    h('span', { 'aria-hidden': 'true' }, '·'),
-    h('span', { className: pending > 0 ? 'sa-status-pending' : undefined }, pt(t, 'shell.pending', { count: pending })),
-    active > 0 ? h('span', { 'aria-hidden': 'true' }, '·') : null,
-    active > 0 ? h('span', null, pt(t, 'shell.active', { count: active })) : null)
-  return h('div', { className: 'sa-global-status', title: error ? errorText(error) : undefined,
-    style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
-      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 } },
-    h(StatusIcon, { state: health.state, size: 14, spin: health.state === 'ongoing' }),
-    sentence,
-    h('span', { 'aria-hidden': 'true' }, '·'),
-    updated,
-    setup.done < setup.total && !onlyEnginePending
-      ? h(Fragment, null,
-        h('span', { 'aria-hidden': 'true' }, '·'),
-        h('button', { type: 'button', className: 'sa-setup-chip', onClick: () => navigate({ page: 'overview' }) },
-          pt(t, 'shell.setupChip', { done: setup.done, total: setup.total })))
-      : null,
-    error ? h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void reload() } }, pt(t, 'actions.refreshStatus')) : null)
+  const sentence = <span role="status" aria-live="polite"
+    style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sa-sp-8)' }}>
+    <span>{pt(t, health.labelKey)}</span>
+    <span aria-hidden="true">·</span>
+    <span className={pending > 0 ? 'sa-status-pending' : undefined}>{pt(t, 'shell.pending', { count: pending })}</span>
+    {active > 0 ? <span aria-hidden="true">·</span> : null}
+    {active > 0 ? <span>{pt(t, 'shell.active', { count: active })}</span> : null}
+  </span>
+  return <div className="sa-global-status" title={error ? errorText(error) : undefined}
+    style={{ display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap',
+      fontSize: 'var(--sa-fs-meta)', color: 'var(--sa-label-tertiary)', minWidth: 0 }}>
+    <StatusIcon state={health.state} size={14} spin={health.state === 'ongoing'} />
+    {sentence}
+    <span aria-hidden="true">·</span>
+    {updated}
+    {setup.done < setup.total && !onlyEnginePending
+      ? <>
+        <span aria-hidden="true">·</span>
+        <button type="button" className="sa-setup-chip" onClick={() => navigate({ page: 'overview' })}>
+          {pt(t, 'shell.setupChip', { done: setup.done, total: setup.total })}
+        </button>
+      </>
+      : null}
+    {error ? <Button variant="ghost" size="sm" onClick={() => { void reload() }}>{pt(t, 'actions.refreshStatus')}</Button> : null}
+  </div>
 }
 
 /** Cross-record search palette: tickets, threads and message text in one query, opened with Ctrl/Cmd+K or `/`. */
@@ -130,30 +138,37 @@ function GlobalSearch({ open, onClose }) {
     requestAnimationFrame(() => document.querySelector('.sa-scroll')?.focus())
   }
   const groups = result ? [
-    { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => h('button', {
-      key: ticket.id, type: 'button', className: 'sa-row sa-row-openable',
-      onClick: () => go({ page: 'execution', id: ticket.id }) },
-    h(StatusIcon, { state: ticketStatus(ticket).state, size: 14 }),
-    h('div', { className: 'sa-row-main' },
-      h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, ticket.title || ticket.id)),
-      h('div', { className: 'sa-row-meta' },
-        h(Tag, { tone: ticketStatus(ticket).tone }, pt(t, ticketStatus(ticket).labelKey)),
-        ticket.updatedAt ? h(When, { at: ticket.updatedAt }) : null))) },
-    { key: 'threads', titleKey: 'search.threads', items: result.threads ?? [], render: thread => h('button', {
-      key: thread.key, type: 'button', className: 'sa-row sa-row-openable',
-      onClick: () => go({ page: 'trigger', id: thread.key }) },
-    h(Icon, { name: 'message', size: 14 }),
-    h('div', { className: 'sa-row-main' },
-      h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, thread.title || thread.key)),
-      h('div', { className: 'sa-row-meta' }, thread.source ? h(Tag, { tone: 'outline' }, String(thread.source)) : null,
-        thread.lastAt ? h(When, { at: thread.lastAt }) : null))) },
-    { key: 'triggers', titleKey: 'search.triggers', items: result.triggers ?? [], render: trigger => h('button', {
-      key: trigger.id, type: 'button', className: 'sa-row sa-row-openable',
-      onClick: () => go(trigger.threadKey ? { page: 'trigger', id: trigger.threadKey } : { page: 'trigger' }) },
-    h(Icon, { name: 'message', size: 14 }),
-    h('div', { className: 'sa-row-main' },
-      h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, trigger.text || trigger.id)),
-      trigger.at ? h('div', { className: 'sa-row-meta' }, h(When, { at: trigger.at })) : null)) },
+    { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => <button
+      key={ticket.id} type="button" className="sa-row sa-row-openable"
+      onClick={() => go({ page: 'execution', id: ticket.id })}>
+      <StatusIcon state={ticketStatus(ticket).state} size={14} />
+      <div className="sa-row-main">
+        <div className="sa-row-title"><span className="sa-ellipsis">{ticket.title || ticket.id}</span></div>
+        <div className="sa-row-meta">
+          <Tag tone={ticketStatus(ticket).tone}>{pt(t, ticketStatus(ticket).labelKey)}</Tag>
+          {ticket.updatedAt ? <When at={ticket.updatedAt} /> : null}
+        </div>
+      </div>
+    </button> },
+    { key: 'threads', titleKey: 'search.threads', items: result.threads ?? [], render: thread => <button
+      key={thread.key} type="button" className="sa-row sa-row-openable"
+      onClick={() => go({ page: 'trigger', id: thread.key })}>
+      <Icon name="message" size={14} />
+      <div className="sa-row-main">
+        <div className="sa-row-title"><span className="sa-ellipsis">{thread.title || thread.key}</span></div>
+        <div className="sa-row-meta">{thread.source ? <Tag tone="outline">{String(thread.source)}</Tag> : null}
+          {thread.lastAt ? <When at={thread.lastAt} /> : null}</div>
+      </div>
+    </button> },
+    { key: 'triggers', titleKey: 'search.triggers', items: result.triggers ?? [], render: trigger => <button
+      key={trigger.id} type="button" className="sa-row sa-row-openable"
+      onClick={() => go(trigger.threadKey ? { page: 'trigger', id: trigger.threadKey } : { page: 'trigger' })}>
+      <Icon name="message" size={14} />
+      <div className="sa-row-main">
+        <div className="sa-row-title"><span className="sa-ellipsis">{trigger.text || trigger.id}</span></div>
+        {trigger.at ? <div className="sa-row-meta"><When at={trigger.at} /></div> : null}
+      </div>
+    </button> },
   ].filter(group => group.items.length) : []
   // A6: the palette's async result needs a live region. Announce only the settled outcome (N results / nothing matched)
   // — never the result list itself — and stay silent while a newer query is in flight or an error owns `role=alert`.
@@ -162,28 +177,34 @@ function GlobalSearch({ open, onClose }) {
     ? (found > 0 ? pt(t, 'search.resultCount', { count: found }) : pt(t, 'search.noResults'))
     : ''
   const body = !query.trim()
-    ? h(Hint, null, pt(t, 'search.hint'))
+    ? <Hint>{pt(t, 'search.hint')}</Hint>
     : failure
-      ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure))
+      ? <p className="sa-error" role="alert">{errorText(failure)}</p>
       : busy && !result
-        ? h(Hint, null, pt(t, 'search.searching'))
+        ? <Hint>{pt(t, 'search.searching')}</Hint>
         : result && result.total === 0
-          ? h(Hint, null, pt(t, 'search.noResults'))
-          : h('div', { className: 'sa-search-groups' }, groups.map(group => h('section', { key: group.key, className: 'sa-section' },
-            h('h3', { className: 'sa-ledger-title' }, pt(t, group.titleKey),
-              h('span', { className: 'sa-count', 'data-empty': group.items.length === 0 ? 'true' : undefined },
-                pt(t, 'search.showCount', { count: group.items.length }))),
-            h('div', { className: 'sa-list' }, group.items.map(group.render)))))
-  return h(Modal, { open, onClose, title: pt(t, 'search.title'), closeLabel: t('close'), className: 'sa-search-modal',
+          ? <Hint>{pt(t, 'search.noResults')}</Hint>
+          : <div className="sa-search-groups">{groups.map(group => <section key={group.key} className="sa-section">
+            <h3 className="sa-ledger-title">{pt(t, group.titleKey)}
+              <span className="sa-count" data-empty={group.items.length === 0 ? 'true' : undefined}>
+                {pt(t, 'search.showCount', { count: group.items.length })}
+              </span>
+            </h3>
+            <div className="sa-list">{group.items.map(group.render)}</div>
+          </section>)}</div>
+  return <Modal open={open} onClose={onClose} title={pt(t, 'search.title')} closeLabel={t('close')} className="sa-search-modal"
     // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
-    restoreTo: () => document.getElementById('sa-search-trigger') },
-    h('form', { role: 'search', 'aria-label': pt(t, 'search.title'), onSubmit: event => event.preventDefault() },
-      h(Input, { inputRef, icon: 'search', className: 'sa-input-full', type: 'search', name: 'q', autoComplete: 'off',
-        value: query, placeholder: pt(t, 'search.placeholder'), 'aria-label': pt(t, 'search.placeholder'),
-        'aria-busy': busy ? 'true' : undefined,
-        onChange: event => setQuery(event.target.value) })),
-    h('div', { className: 'sa-modal-body', 'aria-busy': busy ? 'true' : undefined }, body,
-      h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, announcement)))
+    restoreTo={() => document.getElementById('sa-search-trigger')}>
+    <form role="search" aria-label={pt(t, 'search.title')} onSubmit={event => event.preventDefault()}>
+      <Input inputRef={inputRef} icon="search" className="sa-input-full" type="search" name="q" autoComplete="off"
+        value={query} placeholder={pt(t, 'search.placeholder')} aria-label={pt(t, 'search.placeholder')}
+        aria-busy={busy ? 'true' : undefined}
+        onChange={event => setQuery(event.target.value)} />
+    </form>
+    <div className="sa-modal-body" aria-busy={busy ? 'true' : undefined}>{body}
+      <span className="sa-sr-only" role="status" aria-live="polite">{announcement}</span>
+    </div>
+  </Modal>
 }
 
 /** Page header: title, the one global status line, the two fixed status actions (check / refresh), then the glossary. */
@@ -195,31 +216,35 @@ function Header({ onOpenSearch }) {
     const result = await model.actions.poll({ dryRun: true })
     notify(pt(t, 'toast.pollDone', { accepted: result?.accepted?.length ?? 0, ignored: result?.ignored?.length ?? 0 }))
   }, { reload: model.reload })
-  return h(Fragment, null,
-    h('header', { className: 'sa-head' },
-      h('div', { className: 'sa-head-title' },
-        h('h1', { className: 'sa-title' }, t('title')),
-        // Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable.
-        h('div', { className: 'sa-mobile-tools' },
-          h(Menu, { label: pt(t, 'actions.more'), iconName: 'more', items: [
+  return <>
+    <header className="sa-head">
+      <div className="sa-head-title">
+        <h1 className="sa-title">{t('title')}</h1>
+        {/* Phones get one overflow trigger instead of four unlabeled 28px icons; the same actions remain reachable. */}
+        <div className="sa-mobile-tools">
+          <Menu label={pt(t, 'actions.more')} iconName="more" items={[
             { key: 'search', label: pt(t, 'actions.search'), onSelect: onOpenSearch },
             { key: 'check', label: pt(t, 'actions.checkNow'), disabled: poll.busy, onSelect: () => { void poll.run() } },
             { key: 'refresh', label: pt(t, 'actions.refreshStatus'), onSelect: () => { void model.reload() } },
             { key: 'glossary', label: t('glossary'), onSelect: () => setGlossaryOpen(true) },
-          ] }))),
-      h('div', { className: 'sa-head-tools', style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-        h(GlobalStatus, null),
-        h(IconButton, { id: 'sa-search-trigger', icon: h(Icon, { name: 'search', size: 16 }), label: pt(t, 'actions.search'),
-          title: `${pt(t, 'actions.search')} · Ctrl+K`, variant: 'outline', onClick: onOpenSearch }),
-        h(IconButton, { icon: h(Icon, { name: 'message', size: 16 }), label: pt(t, 'actions.checkNow'),
-          title: pt(t, 'actions.checkNow'), variant: 'outline', disabled: poll.busy, 'aria-busy': poll.busy ? 'true' : undefined,
-          onClick: () => { void poll.run() } }),
-        h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'actions.refreshStatus'),
-          title: pt(t, 'actions.refreshStatus'), variant: 'outline', onClick: () => { void model.reload() } }),
-        h(IconButton, { icon: h(Icon, { name: 'question', size: 16 }), label: t('glossary'), title: t('glossary'),
-          variant: 'outline', onClick: () => setGlossaryOpen(true) }),
-      )),
-    h(GlossaryModal, { open: glossaryOpen, onClose: () => setGlossaryOpen(false) }))
+          ]} />
+        </div>
+      </div>
+      <div className="sa-head-tools" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
+        <GlobalStatus />
+        <IconButton id="sa-search-trigger" icon={<Icon name="search" size={16} />} label={pt(t, 'actions.search')}
+          title={`${pt(t, 'actions.search')} · Ctrl+K`} variant="outline" onClick={onOpenSearch} />
+        <IconButton icon={<Icon name="message" size={16} />} label={pt(t, 'actions.checkNow')}
+          title={pt(t, 'actions.checkNow')} variant="outline" disabled={poll.busy} aria-busy={poll.busy ? 'true' : undefined}
+          onClick={() => { void poll.run() }} />
+        <IconButton icon={<Icon name="refresh" size={16} />} label={pt(t, 'actions.refreshStatus')}
+          title={pt(t, 'actions.refreshStatus')} variant="outline" onClick={() => { void model.reload() }} />
+        <IconButton icon={<Icon name="question" size={16} />} label={t('glossary')} title={t('glossary')}
+          variant="outline" onClick={() => setGlossaryOpen(true)} />
+      </div>
+    </header>
+    <GlossaryModal open={glossaryOpen} onClose={() => setGlossaryOpen(false)} />
+  </>
 }
 
 /** Route → the page component for that tab. Pages receive the route as a prop (detail id included). */
@@ -237,8 +262,9 @@ function pageView(page) {
 function Pages({ route }) {
   useEffect(() => { document.getElementById(`sa-tab-${route.page}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [route.page])
   const Page = pageView(route.page)
-  return h('div', { className: 'sa-main', id: 'sa-page', role: 'tabpanel', 'aria-labelledby': `sa-tab-${route.page}` },
-    h(Page, { route }))
+  return <div className="sa-main" id="sa-page" role="tabpanel" aria-labelledby={`sa-tab-${route.page}`}>
+    <Page route={route} />
+  </div>
 }
 
 /** Keep one page crash from blanking the whole panel: show the error text and a reload button instead. */
@@ -248,11 +274,12 @@ class PanelBoundary extends React.Component {
   componentDidCatch(error, info) { console.error('superagent panel crashed', error, info) }
   render() {
     if (this.state.error) {
-      return h('div', { className: 'sa-main', style: { padding: 'var(--sa-sp-24)' } },
-        h('p', { className: 'sa-error', role: 'alert' }, shellText('面板渲染出错：', 'The panel failed to render: ') + String(this.state.error?.message ?? this.state.error)),
-        h('p', { className: 'sa-hint' }, shellText('这是页面级错误；刷新后若仍出现，把上面的文字发给 Superagent。',
-          'This is a page-level error. If it persists after a refresh, send the text above to Superagent.')),
-        h(Button, { variant: 'outline', onClick: () => location.reload() }, shellText('刷新页面', 'Reload page')))
+      return <div className="sa-main" style={{ padding: 'var(--sa-sp-24)' }}>
+        <p className="sa-error" role="alert">{shellText('面板渲染出错：', 'The panel failed to render: ') + String(this.state.error?.message ?? this.state.error)}</p>
+        <p className="sa-hint">{shellText('这是页面级错误；刷新后若仍出现，把上面的文字发给 Superagent。',
+          'This is a page-level error. If it persists after a refresh, send the text above to Superagent.')}</p>
+        <Button variant="outline" onClick={() => location.reload()}>{shellText('刷新页面', 'Reload page')}</Button>
+      </div>
     }
     return this.props.children
   }
@@ -299,23 +326,28 @@ function PanelShell({ location, openTab }) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openTab])
-  return h(PanelState.Provider, { value: model },
-    h('div', { className: 'sa-page' },
-      h('div', { className: 'sa-column' },
-        // The header and the six tabs are the panel's permanent chrome: they live in a fixed topbar and only the page
-        // body scrolls, so the tab bar never disappears under the window edge.
-        h('div', { className: 'sa-topbar' },
-          h(Header, { onOpenSearch: () => setSearchOpen(true) }),
-          TABS.length > 1 ? h('div', { className: 'sa-filters' },
-            h(SegmentedTabs, { items: TABS.map((value, index) => ({ value, label: t(`tab.${value}`), id: `sa-tab-${value}`,
-              panelId: 'sa-page', title: `${t(`tab.${value}`)} · Alt+${index + 1}`, shortcut: `Alt+${index + 1}` })),
-              value: location.route.page, onChange: openTab, label: t('pageLabel') })) : null),
-        // The body is the only scroll container, and a plain overflow div is not keyboard-scrollable in Safari: make it a
-        // named region so it can take focus and arrow keys/page keys reach the page body.
-        h('div', { ref: scroller, className: 'sa-scroll', tabIndex: 0, role: 'region',
-          'aria-label': pt(t, 'shell.scrollLabel') },
-          h(PanelBoundary, null, h(Pages, { route: location.route }))),
-        h(GlobalSearch, { open: searchOpen, onClose: () => setSearchOpen(false) }))))
+  return <PanelState.Provider value={model}>
+    <div className="sa-page">
+      <div className="sa-column">
+        {/* The header and the six tabs are the panel's permanent chrome: they live in a fixed topbar and only the page
+            body scrolls, so the tab bar never disappears under the window edge. */}
+        <div className="sa-topbar">
+          <Header onOpenSearch={() => setSearchOpen(true)} />
+          {TABS.length > 1 ? <div className="sa-filters">
+            <SegmentedTabs items={TABS.map((value, index) => ({ value, label: t(`tab.${value}`), id: `sa-tab-${value}`,
+              panelId: 'sa-page', title: `${t(`tab.${value}`)} · Alt+${index + 1}`, shortcut: `Alt+${index + 1}` }))}
+              value={location.route.page} onChange={openTab} label={t('pageLabel')} />
+          </div> : null}
+        </div>
+        {/* The body is the only scroll container, and a plain overflow div is not keyboard-scrollable in Safari: make it a
+            named region so it can take focus and arrow keys/page keys reach the page body. */}
+        <div ref={scroller} className="sa-scroll" tabIndex={0} role="region" aria-label={pt(t, 'shell.scrollLabel')}>
+          <PanelBoundary><Pages route={location.route} /></PanelBoundary>
+        </div>
+        <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      </div>
+    </div>
+  </PanelState.Provider>
 }
 
 /** Root panel component: route history above the single status poll and the provider that shares it. */
@@ -347,7 +379,8 @@ function App({ openSession, t }) {
     ? { route: current.stack.at(-1), stack: current.stack.slice(0, -1) }
     : { route: current.route.id ? { page: current.route.page } : HOME, stack: [] }), [move])
   const openTab = useCallback(tab => move(() => ({ stack: [], route: { page: tab } })), [move])
-  return h(PanelProvider, { t, openSession, navigate, back, route: location.route,
-    backLabel: routeLabel(t, location.stack.at(-1) ?? (location.route.id ? { page: location.route.page } : HOME)) },
-    h(PanelShell, { location, openTab }))
+  return <PanelProvider t={t} openSession={openSession} navigate={navigate} back={back} route={location.route}
+    backLabel={routeLabel(t, location.stack.at(-1) ?? (location.route.id ? { page: location.route.page } : HOME))}>
+    <PanelShell location={location} openTab={openTab} />
+  </PanelProvider>
 }
