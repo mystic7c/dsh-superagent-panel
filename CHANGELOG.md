@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.38] — 2026-11-13
+
+按 `/impeccable audit`（对着 DESIGN.md 契约跑的 16/20 审计）逐条修复。核心一条是 token 语义错用：`--dsw-alias-bg-overlay`
+是叠加用的薄染层，深色主题下解析成 `#61666b`，菜单/弹窗的二次文本只有 3.85:1。
+
+### 内容
+- 新增 `--sa-surface-raised`（= `var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-overlay))`），`.sa-menu-pop` 与
+  `.sa-modal` 改用它。深色下弹窗描述 3.85 → 8.03:1、菜单说明 3.27 → 6.83:1，浅色下底变纯白。
+- `.sa-info`（16px）与 `.sa-sender-remove`（约 8×12）加 24×24 的居中命中盒（`::before`），图形尺寸不变，满足 2.5.8。
+- `.sa-sender-remove:focus-visible` 的圆角从 2px 改回 `--sa-r-sm`（检测器唯一命中的越界刻度）。
+- 禁用态不透明度 0.4 → 0.55（按钮、图标按钮、分段控件），文字不再"消失"。
+- `.sa-modal:focus-visible` 补焦点环：弹窗接管焦点时键盘用户仍能看到落点。
+- `DESIGN.md`：Neutral 一节把 Overlay 改述为"薄染层"、新增 Raised 一节；Modal 组件绑定 `surface-raised`；
+  `.impeccable/design.json` 同步。
+
+### 验证
+- 隔离 DSH web 实例（真实工单数据）实测：浅色菜单底 `#fff`、说明 5.50:1；切深色后底 `#353638`、说明 6.83:1、
+  弹窗描述 8.03:1；`.sa-info` 与 sender chip 的 × 在 ±11px 处仍命中；390 / 600 / 760 三档容器无横向溢出。
+- `node --check index.js`、`build-client --check`（22 fragments，11682 行）、`check-keys`（967/513/1359）、
+  `node --test`（555 pass）、`render-check`（194 checks / 0 fail）。
+
 ## [0.4.37] — 2026-11-13
 
 真浏览器点检（隔离 DSH web 实例 + 真实工单数据）发现的漏项：触发页的三个筛选分段把「条数」只写在 `title`

@@ -26,6 +26,9 @@ const PANEL_CSS = `
   --sa-line: var(--dsw-alias-border-l2);
   /* Single sticky offset: the topbar height every sticky/scroll-margin rule derives from (audit M1/M9). */
   --sa-sticky-top: 64px;
+  /* Raised surface (menus, modals). --dsw-alias-bg-overlay is a tint, not an elevation: in the dark theme it resolves
+     to bluish-700, where secondary text lands at 3.85:1. layer-3 is the real elevated fill in both themes. */
+  --sa-surface-raised: var(--dsw-alias-bg-layer-3, var(--dsw-alias-bg-overlay));
   --sa-focus: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-brand-primary));
   /* Text-only tokens raised to WCAG AA on the panel's light surfaces: the theme's tertiary label is 3.71:1 and its
      link colour 4.23:1 on white, so meta text and links mix in a little of the primary label. Shape/fill uses of the
@@ -130,7 +133,7 @@ const PANEL_CSS = `
 .sa-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sa-sp-4); border: none;
   border-radius: var(--sa-r-sm); background: transparent; padding: 0 var(--sa-sp-12); color: var(--dsw-alias-label-primary);
   font: inherit; font-size: var(--sa-fs-body); line-height: 1; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.sa-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.sa-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .sa-btn:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-btn-md { height: 32px; }
 .sa-btn-sm { height: 28px; padding: 0 var(--sa-sp-8); font-size: var(--sa-fs-meta); }
@@ -148,7 +151,7 @@ const PANEL_CSS = `
   cursor: pointer; }
 .sa-icon-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-icon-btn:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.55; }
 .sa-icon-btn[data-variant='outline'] { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md);
   background: transparent; }
 .sa-icon-btn[data-variant='outline']:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
@@ -156,7 +159,7 @@ const PANEL_CSS = `
 .sa-menu { position: relative; display: inline-flex; flex: none; }
 .sa-menu-pop { position: absolute; top: calc(100% + var(--sa-sp-4)); z-index: 40; min-width: 184px; max-width: 320px;
   padding: var(--sa-sp-4); display: flex; flex-direction: column; gap: var(--sa-sp-2);
-  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-overlay);
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--sa-surface-raised);
   box-shadow: var(--dsw-elevation-prominent); }
 .sa-menu-pop[data-align='end'] { right: 0; }
 /* An open row menu must escape the row's stacking context: later rows paint their action buttons above it otherwise. */
@@ -193,7 +196,7 @@ const PANEL_CSS = `
 .sa-segment:hover:not(:disabled), .sa-segment[aria-checked='true'] { color: var(--dsw-alias-label-primary); }
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
-.sa-segment:disabled { cursor: default; opacity: 0.4; }
+.sa-segment:disabled { cursor: default; opacity: 0.55; }
 
 /* Variant: stage filter chips. Each stage is one pill and the active one is the only tinted surface, so the row reads
    as "which slice of the queue" rather than as a second tab bar (the page tabs already own that shape). */
@@ -505,10 +508,13 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   padding: 2px var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-pill);
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-sender-chip .sa-mono { font-size: var(--sa-fs-meta); color: var(--dsw-alias-label-primary); }
-.sa-sender-remove { border: 0; background: none; padding: 0; margin: 0; color: var(--sa-label-tertiary);
+.sa-sender-remove { position: relative; border: 0; background: none; padding: 0; margin: 0; color: var(--sa-label-tertiary);
   font: inherit; line-height: 1; cursor: pointer; }
+/* The glyph stays 12px; the pointer target is the 24px minimum (WCAG 2.5.8) around it. */
+.sa-sender-remove::before { content: ''; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px;
+  transform: translate(-50%, -50%); }
 .sa-sender-remove:hover { color: var(--dsw-alias-state-error-primary); }
-.sa-sender-remove:focus-visible { outline: var(--sa-focus); outline-offset: 1px; border-radius: 2px; }
+.sa-sender-remove:focus-visible { outline: var(--sa-focus); outline-offset: 1px; border-radius: var(--sa-r-sm); }
 
 /* ---------- forms ---------- */
 .sa-form { display: flex; flex-direction: column; gap: var(--sa-sp-24); min-width: 0; }
@@ -758,9 +764,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-modal-mask { position: absolute; inset: 0; background: var(--dsw-alias-bg-mask-1, color-mix(in srgb, var(--dsw-alias-bg-base) 45%, transparent)); }
 .sa-modal { position: relative; display: flex; flex-direction: column; gap: var(--sa-sp-12);
   width: min(560px, 100%); max-height: min(80vh, 720px); overflow: auto; overscroll-behavior: contain;
-  border-radius: var(--sa-r-lg); padding: var(--sa-sp-16) var(--sa-sp-24) var(--sa-sp-16); background: var(--dsw-alias-bg-overlay);
+  border-radius: var(--sa-r-lg); padding: var(--sa-sp-16) var(--sa-sp-24) var(--sa-sp-16); background: var(--sa-surface-raised);
   color: var(--dsw-alias-label-primary); box-shadow: var(--dsw-elevation-prominent); animation: sa-modal-in 120ms ease-out; }
 .sa-modal:focus { outline: none; }
+.sa-modal:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 .sa-modal-header { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-12); }
 .sa-modal-header h2 { margin: 0; font-size: var(--sa-fs-title); line-height: 1.35; font-weight: 600; }
 .sa-modal-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0;
@@ -775,8 +782,11 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   border-radius: var(--sa-r-md, 8px); background: var(--dsw-alias-toast-bg, var(--dsw-alias-bg-overlay));
   color: var(--dsw-alias-toast-label, var(--dsw-alias-label-primary-foreground)); box-shadow: var(--dsw-elevation-prominent);
   font-size: var(--sa-fs-body, 13px); line-height: 1.5; overflow-wrap: anywhere; }
-.sa-info { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0;
+.sa-info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0;
   border: 0; background: none; color: var(--sa-label-tertiary); cursor: help; }
+/* Same trick as the chip remove: 16px icon, 24px target. */
+.sa-info::before { content: ''; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px;
+  transform: translate(-50%, -50%); }
 .sa-info:hover, .sa-info:focus-visible { color: var(--dsw-alias-label-secondary); }
 .sa-info:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
 .sa-info-warn { color: var(--sa-warn-text); }
