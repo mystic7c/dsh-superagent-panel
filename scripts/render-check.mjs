@@ -1,25 +1,33 @@
 // Headless render check for the panel (no browser, no CDP).
 //
-// Loads the real client fragments with React + jsdom from the local harness, feeds them fixtures built from the
-// real engine state (read-only: state.load() never reconciles or writes), and walks the acceptance flow:
+// Loads the real client fragments with React + jsdom, feeds them fixtures built from the engine state
+// (read-only: state.load() never reconciles or writes), and walks the acceptance flow:
 // overview -> 去验收 -> ticket detail -> 验收通过 -> back to the desk.
 //
+//   npm ci            # once, installs jsdom/react/react-dom (devDependencies)
 //   node scripts/render-check.mjs
 //
-// It depends on /tmp/sa-harness (jsdom + react + react-dom), which the desktop image provides for verification.
+// It needs no desktop app, no CDP and no operator state: when DSH_SUPERAGENT_STATE_DIR is unset or empty the
+// script builds its own fixture state under a temp dir, so a clean clone can run the same 170+ checks.
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
-const harness = join('/tmp', 'sa-harness')
-const requireHarness = createRequire(join(harness, 'package.json'))
-const { JSDOM } = requireHarness('jsdom')
-const React = requireHarness('react')
-const ReactDOM = requireHarness('react-dom/client')
+const requireRepo = createRequire(join(root, 'package.json'))
+let JSDOM, React, ReactDOM
+try {
+  ;({ JSDOM } = requireRepo('jsdom'))
+  React = requireRepo('react')
+  ReactDOM = requireRepo('react-dom/client')
+} catch (error) {
+  console.error('render-check needs jsdom + react + react-dom: run `npm ci` in the repo root first.')
+  console.error(String(error?.message ?? error))
+  process.exit(2)
+}
 
 const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',
   { url: 'http://127.0.0.1:1/', pretendToBeVisual: true })
@@ -37,7 +45,19 @@ try { Object.defineProperty(global, 'navigator', { value: window.navigator, conf
 
 // ---- fixtures from the real live state (read-only) ---------------------------------------------------------------
 const { Engine } = await import('../lib/live/engine.js')
-const stateDir = process.env.DSH_SUPERAGENT_STATE_DIR ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
+// Operator machines keep their real live.json; a clean clone (or CI) has none, so the committed fixture is copied
+// into a throw-away temp dir and the config-dependent checks (repositories, UAT link, Octo groups, worker backends)
+// run there instead of skipping. Nothing outside that temp dir is read or written.
+const requestedStateDir = process.env.DSH_SUPERAGENT_STATE_DIR
+  ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
+const stateDir = existsSync(join(requestedStateDir, 'live.json')) ? requestedStateDir : prepareFixtureState()
+function prepareFixtureState () {
+  const dir = mkdtempSync(join(tmpdir(), 'sa-render-'))
+  const fixture = readFileSync(join(root, 'test', 'fixtures', 'live.json'), 'utf8').split('@STATE@').join(dir)
+  writeFileSync(join(dir, 'live.json'), fixture)
+  console.log(`STATE fixture ${dir}`)
+  return dir
+}
 const engine = new Engine({ stateDir, log: () => {} })
 await engine.state.load()
 // Real in-flight work must not leak into these checks: while a gate runs, the Ticket under review is `working`
@@ -170,6 +190,37 @@ engine.evidence.documents.set('tkt_demo_accept', {
 
 engine.lastStatus = { phase: 'ok', mode: 'sync', at: new Date().toISOString() }
 engine.started = true
+// Intake history (one thread, its trigger message and the rule decision) is what makes the Eval and Triggers pages
+// render rows at all. Real machines carry it; a clean clone does not, so seed one neutral record set. The text is
+// deliberately synthetic — these checks must read the same on any machine.
+{
+  const threadKey = 'octo:fixture-group-a'
+  const at = new Date(Date.now() - 5 * 60_000).toISOString()
+  engine.state.threads[threadKey] = {
+    key: threadKey, source: 'octo', title: '演示群 A', createdAt: at, lastAt: at }
+  engine.state.triggers.trg_fixture = {
+    id: 'trg_fixture', source: 'octo', at, threads: [threadKey], human: true,
+    actor: { source: 'octo', id: 'demo', name: { zh: '演示', en: 'demo' } },
+    text: '依据这个SQL，把报表导出的金额列补上合计行。',
+    eventId: 1, messageId: 'fixture-1',
+    channel: { source: 'octo', thread: 'fixture-group-a', channelType: 2,
+      address: { channelId: 'fixture-group-a', channelType: 2 } },
+    disposition: { decisionId: 'dec_fixture', fanout: ['tkt_demo_accept'], acked: [] },
+  }
+  engine.state.decisions.dec_fixture = {
+    id: 'dec_fixture', threadKey, triggerIds: ['trg_fixture'], at,
+    kind: 'accept', strength: 'explicit',
+    reason: [{ code: 'explicitRequest', values: { text: '依据这个SQL，把报表导出的金额列补上合计行。' } }],
+    rules: [
+      { id: 'R1', name: '群内明确请求', matched: true, reason: '来自监听群的人类请求' },
+      { id: 'R2', name: '来源与身份过滤', matched: true, reason: '监听群内的人类文本消息' },
+      { id: 'R3', name: '高风险主题', matched: true, reason: '未命中高风险主题' },
+    ],
+    ticketId: 'tkt_demo_accept',
+    runs: [{ runId: 'run_demo', ticketId: 'tkt_demo_accept' }],
+    shadow: { status: 'ok', model: 'demo-judge', category: 'request', verdict: 'accept', probability: 0.93, riskP: 0.2 },
+  }
+}
 // P0: the panel now reads the derived inbox; build it from the same fixture state. Saving is stubbed so this read-only
 // check never writes inbox.json into the operator's real state directory.
 await engine.inbox.load()
