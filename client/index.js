@@ -120,6 +120,12 @@ function isExternal(url) {
   } catch { return false }
 }
 
+/** Only an absolute http(s) URL may be written into an href. Everything else (javascript:, data:, relative paths)
+    is rendered as inert text: URLs shown here come from live.json, GitLab and Octo payloads. */
+function safeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
+}
+
 
 // ---- 05-style.js ----
 /* Panel stylesheet rendered into the panel subtree. Every color is a Harness theme token (`--dsw-alias-*`); sizing
@@ -775,7 +781,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-md li:last-child { margin-bottom: 0; }
 .sa-md-heading { font-weight: 600; }
 .sa-event-text { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.sa-ellipsis { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(100%, 640px); }
 .sa-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
@@ -2249,10 +2255,14 @@ function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', ic
           onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, t('confirm'))) }))
 }
 
-/** External link; new tab only for links that leave this origin. */
+/** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
+    (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
+    payloads, so an unchecked scheme would be a stored-XSS sink. */
 function ExternalLink({ href, children, icon = 'external' }) {
-  const external = isExternal(href)
-  return h('a', { className: 'sa-inline-link', href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
+  const safe = safeHttpUrl(href)
+  if (!safe) return h('span', { className: 'sa-inline-link' }, children)
+  const external = isExternal(safe)
+  return h('a', { className: 'sa-inline-link', href: safe, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
     icon ? h(Icon, { name: icon, size: 13 }) : null, icon ? ' ' : null, children)
 }
 
@@ -3762,15 +3772,21 @@ function ticketEvidence(t, ticket, view) {
   const mr = links.mergeRequest ?? {}
   // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
   // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
-  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  // A merged/deployed Ticket is past that stage: saying "waiting for PR" beside a 已合并 tag contradicts the state.
+  const merged = ['merged', 'deployed'].includes(ticket?.status)
+    || links.verification?.merged === true || links.acceptance?.ok === true
+  const prWaiting = !merged && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
     const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
-      : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
-    return mr.webUrl
-      ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
-        title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
+      : merged ? pt(t, 'ticket.mergedYes')
+        : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
+    const href = safeHttpUrl(mr.webUrl)
+    return href
+      ? h('a', { className: 'sa-inline-link sa-mono', href, target: '_blank', rel: 'noopener noreferrer',
+        title: href, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
+  if (merged) return h('span', { className: 'sa-mono' }, pt(t, 'ticket.mergedYes'))
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
     const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
@@ -4238,8 +4254,9 @@ function MergeRequestCard({ ticket }) {
   // push mode records only the GitHub `/pull/new/` URL before any PR number exists; the URL alone is MR evidence.
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
+  const delivered = merged || ['merged', 'deployed'].includes(ticket?.status) || links.acceptance?.ok === true
   const rows = []
-  const prWaiting = !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  const prWaiting = !delivered && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
@@ -4765,7 +4782,9 @@ function LiveOverviewPage({ route }) {
   const lifetime = engine.events ?? {}
   const activeText = activeTickets.length
     ? pt(t, 'ov.pulseActive', { count: activeTickets.length, progress: progressOf(activeTickets[0]) })
-    : pt(t, 'ov.pulseIdleActive')
+    : paused ? pt(t, 'ov.pulsePaused')
+      : config.enabled === false ? pt(t, 'ov.pulseOff')
+        : pt(t, 'ov.pulseIdleActive')
   const pulseRows = [
     [pt(t, 'ov.pulseEngine'), h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-8)' } },
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
@@ -4846,7 +4865,7 @@ function LiveOverviewPage({ route }) {
     h('span', { style: { flex: '0 1 auto', minWidth: 0, fontSize: 'var(--sa-fs-body)', lineHeight: 1.5,
       color: 'var(--dsw-alias-label-primary)' } }, pt(t, 'ov.idleTitle')),
     h(Button, { variant: 'outline', size: 'sm',
-      onClick: () => navigate(handled > 0 ? { page: 'execution' } : { page: 'source' }) },
+      onClick: () => navigate(handled > 0 ? { page: 'execution', stage: 'done' } : { page: 'source' }) },
     pt(t, handled > 0 ? 'actions.viewHandled' : 'actions.openSource')))
 
   // Legacy desk (hosts without `inbox`): the latest 20 status-derived Ticket rows; the count may exceed the list.
@@ -5007,8 +5026,9 @@ Object.assign(PAGE_TEXT, {
   'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
     'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
   // A repository card is enabled by the executor switch, not the engine switch: say the switch that actually enables it.
-  'src.disabledRepo': ['已禁用：打开「启用执行器」（设置→运行）并保存。',
-    'Disabled: turn on “Executor enabled” under Settings → Runtime and save.'],
+  // The repo itself is on; do not call it "disabled" while only the executor is off.
+  'src.disabledRepo': ['执行器未启用：打开「启用执行器」（设置→运行）并保存。',
+    'Executor off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
   'src.filtered': ['被过滤消息', 'Filtered messages'],
@@ -5038,7 +5058,7 @@ Object.assign(PAGE_TEXT, {
   'src.signalSearch': ['搜索原始信号', 'Search raw signals'],
   'src.signalRepo': ['按仓库筛选', 'Filter by repository'],
   'src.signalRepoPlaceholder': ['仓库 ID…', 'Repository ID…'],
-  'src.signalReason': ['按原因筛选', 'Filter by reason'],
+  'src.signalReasonFilter': ['按原因筛选', 'Filter by reason'],
   'src.signalReasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
   'src.signalFrom': ['开始日期', 'From date'],
   'src.signalTo': ['结束日期', 'To date'],
@@ -5561,7 +5581,7 @@ function LiveSourcePage({ route }) {
             onChange: event => setSigQuery(event?.target?.value ?? '') }),
           h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
             onChange: event => setSigRepo(event?.target?.value ?? '') }),
-          h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReason'),
+          h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
             onChange: event => setSigReason(event?.target?.value ?? '') }),
           h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
             onChange: event => setSigFrom(event?.target?.value ?? '') }),
@@ -6492,7 +6512,7 @@ function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, cle
       action: h(Button, { variant: 'outline', size: 'sm', onClick: () => setRange('all') }, pt(t, 'ev.windowAll')) })
   }
   return h(EmptyState, { icon: 'filter', title: pt(t, 'ev.emptyFilterTitle'), hint: pt(t, 'ev.emptyFilterHint'),
-    action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
+    action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { clearAll(); setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
 }
 
 const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
@@ -8867,6 +8887,14 @@ Object.assign(PAGE_TEXT, {
   'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
   'repos.add': ['添加仓库', 'Add repository'],
   'repos.disabledTag': ['已停用', 'Disabled'],
+  'repos.enable': ['启用仓库', 'Enable repository'],
+  'repos.disable': ['停用仓库', 'Disable repository'],
+  'repos.enableTitle': ['启用仓库 {name}？', 'Enable repository {name}?'],
+  'repos.disableTitle': ['停用仓库 {name}？', 'Disable repository {name}?'],
+  'repos.enableMessage': ['启用后该仓库重新接收新工单，并按闸门与验收设置执行。', 'When enabled, this repository takes new Tickets again under its gates and acceptance settings.'],
+  'repos.disableMessage': ['停用后不再接收或派发新任务，历史记录保留；正在执行的任务不受影响。', 'When disabled, it takes no new work; history is kept and running work is unaffected.'],
+  'repos.enableSaved': ['仓库 {name} 已启用。', 'Repository {name} enabled.'],
+  'repos.disableSaved': ['仓库 {name} 已停用。', 'Repository {name} disabled.'],
   'repos.edit': ['编辑', 'Edit'],
   'repos.editTitle': ['编辑仓库 {name}', 'Edit repository {name}'],
   'repos.editHint': ['下面显示当前值：保存前先核对路径与闸门命令；停用后不再接收或派发新任务，历史记录保留。令牌不在此处回显。',

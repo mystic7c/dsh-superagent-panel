@@ -1173,8 +1173,8 @@ pushRoot.render(React.createElement(App, { openSession: async () => {}, t }))
 await sleep(900)
 console.log('STEP push rendered')
 const pushText = rootElement.textContent ?? ''
-check('a legacy push record with only a /pull/new/ URL waits for the PR instead of claiming one exists',
-  pushText.includes('已推送，等待创建 PR') && !pushText.includes('PR 已创建') && !pushText.includes('还没有合并请求'),
+check('a merged legacy push record no longer claims it is waiting for the PR',
+  !pushText.includes('已推送，等待创建 PR') && !pushText.includes('PR 已创建') && pushText.includes('已合入目标分支'),
   pushText.slice(0, 400))
 check('push-mode MR card keeps the merged state after the PR entry link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
 
