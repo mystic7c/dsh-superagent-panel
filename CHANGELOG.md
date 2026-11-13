@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.4] — 2026-11-14
+
+### 变更
+- `client/src/30-shell.js` 从 `h(...)` 迁移到 JSX（P2 第三步，issue #34）：`GlobalStatus`、`GlobalSearch`、
+  `Header`、`Pages`、`PanelBoundary`、`PanelShell`、`App` 只改写法。`PanelBoundary` 仍是 class 组件（它要
+  `getDerivedStateFromError`），`Back`/`globalHealth`/`pageView` 等纯函数不动。
+- 组件型 props 直接用元素：`icon={<Icon name="search" size={16} />}`、`<PanelState.Provider value={model}>`，
+  与原来的 `h(Component, props, children)` 同构。
+- 产物 485,926 → 485,946 字节（+20），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
 ## [0.5.3] — 2026-11-14
 
 ### 变更
