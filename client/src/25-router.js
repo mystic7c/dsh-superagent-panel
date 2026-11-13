@@ -12,7 +12,10 @@ function parseRoute(value) {
   if (!TABS.includes(page)) return undefined
   const raw = value?.id
   const id = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, ROUTE_ID_MAX) : undefined
-  return id ? { page, id } : { page }
+  // An optional run pins the run an Eval/source record points at; the detail scrolls to it without changing the page.
+  const rawRun = value?.run
+  const run = typeof rawRun === 'string' && rawRun.trim() ? rawRun.trim().slice(0, ROUTE_ID_MAX) : undefined
+  return id ? { page, id, ...(run ? { run } : {}) } : { page }
 }
 const ROUTE_KEY = 'superagent-panel/route'
 function initialLocation() {

@@ -16,6 +16,7 @@ import { saveSettings, syncSource, setPaused, retryTicket, stopTicket, dismissDe
   savePrompts, previewPromptsFor, setupCheck, resetDemo, ActionError } from './lib/actions.js'
 import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
+import { DELIVERABLES, enabledBackends } from './lib/live/routing.js'
 import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
   resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
@@ -243,6 +244,11 @@ export function apply(ctx, config = {}) {
           send(res, 200, engine.signalsView?.({
             status: url.searchParams.get('status') ?? undefined,
             source: url.searchParams.get('source') ?? undefined,
+            q: url.searchParams.get('q') ?? '',
+            repoId: url.searchParams.get('repo') ?? '',
+            reason: url.searchParams.get('reason') ?? '',
+            from: url.searchParams.get('from') ?? '',
+            to: url.searchParams.get('to') ?? '',
             offset: Number(url.searchParams.get('offset') ?? 0),
             limit: Number(url.searchParams.get('limit') ?? 50),
           }) ?? { items: [], total: 0, counts: { all: 0, pending: 0, processed: 0, ignored: 0, skipped: 0, failed: 0 } })
@@ -383,12 +389,29 @@ export function apply(ctx, config = {}) {
           return
         }
         // Store one repository's GitLab token in the token file that repository already declares (never returns it).
+        // AC-10: edit/disable one existing repository. Validation (paths, gate list, duplicates) happens in live-json;
+        // a refused edit never mutates live.json and never falls back to the built-in gates.
+        if (method === 'POST' && second === 'repo' && third && !segments[3]) {
+          try {
+            const result = await engine.updateRepo(third, body?.patch ?? body ?? {})
+            send(res, 200, { ...result, config: engine.configView() })
+            return
+          } catch (error) {
+            throw new ActionError(400, `保存仓库失败：${error instanceof Error ? error.message : String(error)}`)
+          }
+        }
         if (method === 'POST' && second === 'repo' && third && segments[3] === 'token') {
           const config = engine.readConfig().config
           const repo = config.repos.find(item => item.id === third)
           if (!repo) throw new ActionError(404, `未知仓库：${third}`)
           const saved = await saveRepoToken(repo, body?.token)
           send(res, 200, { repo: { id: repo.id, tokenConfigured: saved.configured } })
+          return
+        }
+        // AC-11: a fixed read-only probe (config file, runtime, repo path, token presence, one platform GET). It never
+        // runs a configured gate, creates a Ticket, starts a worker or writes state.
+        if (method === 'POST' && second === 'config' && third === 'test') {
+          send(res, 200, await engine.testConfig({ repoId: body?.repoId }))
           return
         }
         if (method === 'POST' && second === 'reload') {
@@ -400,14 +423,37 @@ export function apply(ctx, config = {}) {
           send(res, 200, await engine.pollOnce({ dryRun }))
           return
         }
+        if (method === 'POST' && second === 'route') {
+          // Draft-time routing preview: no Ticket, no run, no side effects (AC-01).
+          send(res, 200, engine.routePreview({ title: body?.title, body: body?.body, selection: body?.selection }))
+          return
+        }
         if (method === 'POST' && second === 'ticket' && third === undefined) {
           const repoId = body?.repoId
-          if (repoId !== undefined && !engine.readConfig().config.repos.some(repo => repo.id === repoId)) {
+          const config = engine.readConfig().config
+          if (repoId !== undefined && !config.repos.some(repo => repo.id === repoId)) {
             throw new ActionError(400, `未知仓库：${repoId}`)
           }
+          // A manual routing choice is validated here (not silently ignored) and persisted on the Ticket.
+          const selection = body?.route
+          if (selection !== undefined && (typeof selection !== 'object' || selection === null || Array.isArray(selection))) {
+            throw new ActionError(400, 'route 必须是对象')
+          }
+          if (selection?.backend !== undefined && !enabledBackends(config).includes(selection.backend)) {
+            throw new ActionError(400, `后端未启用：${selection.backend}`)
+          }
+          if (selection?.deliverable !== undefined && !DELIVERABLES.includes(selection.deliverable)) {
+            throw new ActionError(400, `未知交付类型：${selection.deliverable}`)
+          }
+          // A manual route that the chosen backend cannot execute is rejected at creation, not persisted and left to
+          // fail on the first run: it still cannot bypass the capability limit.
+          const preview = engine.routePreview({ title: body?.title, body: body?.body, selection })
+          if (preview?.route?.unsupported) {
+            throw new ActionError(400, `所选路由不可用：${preview.route.unsupported}`)
+          }
           const ticket = await injectTicket({ engine, title: body?.title, body: body?.body, channelId: body?.channelId,
-            repoId })
-          send(res, 200, { ticket })
+            repoId, route: selection })
+          send(res, 200, { ticket, route: ticket.routePreview })
           return
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'run') {
@@ -458,6 +504,16 @@ export function apply(ctx, config = {}) {
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result?.invalid) throw new ActionError(409, result.invalid)
           send(res, 200, { run: result.run, ticket: result.ticket })
+          return
+        }
+        // AC-02/03: stop one active Ticket. The request is durable and idempotent; stages already finished stay as
+        // evidence, and the executor refuses every stage after it notices the flag.
+        if (method === 'POST' && second === 'ticket' && third && segments[3] === 'stop') {
+          const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+          const result = await engine.requestStop(third, { note, by: body?.by })
+          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
+          if (result?.invalid) throw new ActionError(409, result.invalid)
+          send(res, 200, { ticket: engine.ticketView?.(third)?.ticket ?? result.ticket, stopping: result.stopping })
           return
         }
         // P1-4: answer a worker's parked question; the Ticket re-runs with the answer in context.
@@ -546,7 +602,14 @@ export function apply(ctx, config = {}) {
           return
         }
         if (method === 'GET' && second === 'threads') {
-          send(res, 200, engine.threadsView({ filter: url.searchParams.get('filter') ?? 'all' }))
+          send(res, 200, engine.threadsView({ filter: url.searchParams.get('filter') ?? 'all',
+            q: url.searchParams.get('q') ?? '',
+            repoId: url.searchParams.get('repo') ?? '',
+            reason: url.searchParams.get('reason') ?? '',
+            from: url.searchParams.get('from') ?? '',
+            to: url.searchParams.get('to') ?? '',
+            offset: Number(url.searchParams.get('offset') ?? 0),
+            limit: Number(url.searchParams.get('limit') ?? 50) }))
           return
         }
         if (method === 'GET' && second === 'thread' && third) {
@@ -562,7 +625,20 @@ export function apply(ctx, config = {}) {
         if (method === 'GET' && second === 'decisions') {
           send(res, 200, engine.decisionsView({ kind: url.searchParams.get('kind') ?? 'all',
             window: url.searchParams.get('window') ?? 'all',
+            q: url.searchParams.get('q') ?? '', repoId: url.searchParams.get('repo') ?? '',
+            reason: url.searchParams.get('reason') ?? '',
+            from: url.searchParams.get('from') ?? '', to: url.searchParams.get('to') ?? '',
+            view: url.searchParams.get('view') ?? 'all',
             offset: Number(url.searchParams.get('offset') ?? 0), limit: Number(url.searchParams.get('limit') ?? 50) }))
+          return
+        }
+        // AC-08/09: durable delivery evidence, independent of the operation-ledger window and the worktree.
+        if (method === 'GET' && second === 'evidence' && third) {
+          const value = segments[3] === 'compare'
+            ? engine.evidenceCompare(third, url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined)
+            : engine.evidenceView(third)
+          if (!value) throw new ActionError(404, '没有这段交付证据')
+          send(res, 200, value)
           return
         }
         throw new ActionError(404, `未知引擎接口：${method} ${segments.slice(1).join('/')}`)

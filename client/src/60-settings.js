@@ -12,6 +12,22 @@ Object.assign(PAGE_TEXT, {
   'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
     'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
   'wf.hint': ['自动模式先由验收后端只读评估；复杂任务按 规划 → 实现 → 闸门 → 独立验收 执行。返工预算在「运行」里调。', 'Auto mode uses a read-only assessment by the review backend; complex tasks run planning, implementation, gates and independent review. The repair budget lives under Run.'],
+  // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
+  'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
+  'st.routeDeliverable': ['交付目标', 'Deliverable'],
+  'st.routeBackend': ['执行后端', 'Backend'],
+  'st.routeAuto': ['自动', 'Auto'],
+  'st.routeChange': ['代码改动', 'Code change'],
+  'st.routeReport': ['只读报告', 'Read-only report'],
+  'st.routeCapabilities': ['所需能力', 'Capabilities'],
+  'st.routeCapEdit': ['改文件', 'Edit files'],
+  'st.routeCapExec': ['跑命令', 'Run commands'],
+  'st.routeCapWeb': ['联网', 'Web access'],
+  'st.routeCapReport': ['报告/提问', 'Report/questions'],
+  'st.routeManualHint': ['人工选择会随工单保存并用于后续运行；能力上限仍然生效，不能把测试交给不会执行命令的后端。',
+    'A manual choice is saved on the Ticket and used by later runs; capability limits still apply, so a backend that cannot run commands cannot take a verification Ticket.'],
+  'st.routeUnsupported': ['当前后端缺少能力：{caps}', 'The chosen backend lacks: {caps}'],
+  'st.routePreviewFailed': ['暂时无法预览路由，仍可直接创建。', 'Routing preview is unavailable; you can still create the Ticket.'],
 })
 /* LiveSettingsPage: live.json configuration in seven groups (contract §6.6). The left column switches groups and the
    right column edits one group at a time. What runs the work is split out of the executor groups: `run` owns how work
@@ -59,6 +75,46 @@ Object.assign(PAGE_TEXT, {
   'st.capClaudeResume': ['-p 一次性会话', '-p one-shot session'],
   'st.capChangedPaths': ['git changedPaths', 'git changedPaths'],
   'repos.add': ['添加仓库', 'Add repository'],
+  'repos.disabledTag': ['已停用', 'Disabled'],
+  'repos.edit': ['编辑', 'Edit'],
+  'repos.editTitle': ['编辑仓库 {name}', 'Edit repository {name}'],
+  'repos.editHint': ['下面显示当前值：保存前先核对路径与闸门命令；停用后不再接收或派发新任务，历史记录保留。令牌不在此处回显。',
+    'Current values are shown below: check the path and gate commands before saving. A disabled repository takes no new work, while its history is kept. Tokens are never shown here.'],
+  'repos.editSaved': ['仓库配置已保存，历史版本已记录。', 'Repository saved; a history version was recorded.'],
+  'repos.editInvalid': ['闸门必须是有效的 JSON 数组。', 'Gates must be a valid JSON array.'],
+  'repos.editDiff': ['保存前差异', 'Changes to save'],
+  'repos.editNoChanges': ['尚未修改。', 'No changes yet.'],
+  'repos.editGateCount': ['{count} 个闸门', '{count} gates'],
+  'repos.gateName': ['闸门名称', 'Gate name'],
+  'repos.gateCommand': ['命令', 'Command'],
+  'repos.gateCwd': ['工作目录（相对仓库）', 'Working directory (repository-relative)'],
+  'repos.gateCwdPlaceholder': ['留空 = 仓库根目录', 'Empty = repository root'],
+  'repos.gateTimeout': ['超时（毫秒）', 'Timeout (ms)'],
+  'repos.gateOnFail': ['失败策略', 'Failure policy'],
+  'repos.gateOnFail.manual': ['人工处置', 'Manual'],
+  'repos.gateOnFail.auto_repair': ['自动返工', 'Auto repair'],
+  'repos.gateDryRun': ['干跑命令（可选）', 'Dry-run command (optional)'],
+  'repos.gateAdd': ['添加闸门', 'Add gate'],
+  'repos.gateRemove': ['删除这个闸门', 'Remove this gate'],
+  'repos.gateEmptyEditor': ['还没有闸门；保存后按默认闸门执行。', 'No gates yet; saving keeps the default gates.'],
+  'repos.gateDiff': ['闸门「{name}」', 'Gate “{name}”'],
+  'repos.gateFieldRequired': ['闸门名称和命令不能为空。', 'A gate needs a name and a command.'],
+  'repos.editGateInvalid': ['JSON 无效', 'invalid JSON'],
+  'repos.test': ['测试配置', 'Test configuration'],
+  'repos.testing': ['检查中…', 'Checking…'],
+  'repos.testOk': ['配置检查通过', 'Configuration check passed'],
+  'repos.testFail': ['配置检查未通过', 'Configuration check failed'],
+  'repos.check.config': ['配置文件', 'Config file'],
+  'repos.check.node': ['Node.js 运行时', 'Node.js runtime'],
+  'repos.check.repo': ['本地仓库', 'Local repository'],
+  'repos.check.token': ['平台令牌', 'Platform token'],
+  'repos.check.connection': ['平台连接', 'Platform connection'],
+  'repos.check.enabled': ['仓库启用', 'Repository enabled'],
+  'repos.testHint': ['只做固定的只读检查：配置文件、运行时、路径、令牌是否配置、平台连通性；不执行闸门、不建单、不启动 worker。',
+    'Runs only fixed read-only checks: config file, runtime, path, token presence and platform connectivity. It never runs gates, creates Tickets or starts workers.'],
+  'repos.gatesJson': ['闸门定义（JSON）', 'Gate definitions (JSON)'],
+  'repos.gatesJsonHint': ['每项包含 name/command，可选 cwd（相对仓库路径）、timeoutMs、onFail、dryRunCommand。目录越界或重复名称会被拒绝。',
+    'Each entry has name/command plus optional cwd (relative to the repository), timeoutMs, onFail and dryRunCommand. Escaping paths and duplicate names are rejected.'],
   'repos.addTitle': ['添加仓库', 'Add repository'],
   'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
     'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
@@ -305,8 +361,14 @@ Object.assign(PAGE_TEXT, {
   'st.allowReply': ['允许回群消息', 'Allow group replies'],
   'st.allowReplyHint': ['执行器把状态与结果回复到来源群。', 'The executor posts status and results back to the source group.'],
   'st.paused': ['暂停处理', 'Pause processing'],
-  'st.pausedHint': ['暂停后不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
-    'While paused: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedHint': ['总暂停：不轮询、不自动执行、不核对 UAT；已排队的工单保持不动。',
+    'Total pause: no polling, no auto-run and no UAT verification; queued Tickets stay as they are.'],
+  'st.pausedIntake': ['暂停接单（保留游标）', 'Pause intake (keep cursor)'],
+  'st.pausedIntakeHint': ['不读取新消息，来源游标不前进：恢复后这些请求仍然会进来。已在跑的工单不受影响。',
+    'Reads no new messages and does not advance the source cursor, so they arrive after resuming. Running work is unaffected.'],
+  'st.pausedDispatch': ['暂停派发（保留队列）', 'Pause dispatch (keep queue)'],
+  'st.pausedDispatchHint': ['不自动开始新的工单；队列和在跑任务都保留，手工开始仍可用。',
+    'Starts no new Ticket automatically; the queue and running work are kept and manual starts still work.'],
   'st.mrMode': ['发布 MR 方式', 'MR creation mode'],
   'st.mrModeHint': ['api：用 GitLab API 建 MR；push：用 git push options 建 MR。',
     'api: create the MR through the GitLab API; push: create it with git push options.'],
@@ -472,6 +534,8 @@ function settingsPatchOf(group, draft) {
       if (key in draft) patch[key] = draft[key] === true
     }
     if ('paused' in draft) patch.paused = draft.paused === true
+    if ('pausedIntake' in draft) patch.pausedIntake = draft.pausedIntake === true
+    if ('pausedDispatch' in draft) patch.pausedDispatch = draft.pausedDispatch === true
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
     if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
@@ -659,9 +723,23 @@ function WorkerCapabilityCard({ currentBackend }) {
       }))))
 }
 
-function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
-  const { t } = usePanel()
+const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
+  token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
+
+function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
+  const { t, actions } = usePanel()
   const [token, setToken] = useState('')
+  const [test, setTest] = useState({ busy: false })
+  const runTest = async () => {
+    setTest({ busy: true })
+    try {
+      const result = await actions.testConfig(repo.id)
+      setTest({ busy: false, result })
+    } catch (error) {
+      setTest({ busy: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
     [pt(t, 'repo.project'), repo.project ? h('span', { className: 'sa-mono' }, String(repo.project)) : t('empty')],
@@ -677,11 +755,29 @@ function ReposCard({ repo, isDefault, onSaveToken, tokenBusy }) {
       h('span', { className: 'sa-section-icon' }, h(Icon, { name: 'pull', size: 16 })),
       h('span', { className: 'sa-card-title' }, repo.name ?? repo.id),
       isDefault ? h(Tag, { tone: 'quiet' }, pt(t, 'repo.default')) : null,
+      repo.enabled === false ? h(Tag, { tone: 'warning' }, pt(t, 'repos.disabledTag')) : null,
       h(Tag, { tone: repo.tokenConfigured ? 'outline' : 'warning' },
         repo.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')),
       repo.name && repo.id && repo.name !== repo.id
         ? h('span', { className: 'sa-mono sa-hint' }, String(repo.id)) : null),
     h(KeyValues, { rows }),
+    h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'settings', size: 14 }),
+        onClick: () => onEdit?.(repo) }, pt(t, 'repos.edit')),
+      h(ConfirmButton, { label: pt(t, repo.enabled === false ? 'repos.enable' : 'repos.disable'),
+        title: pt(t, repo.enabled === false ? 'repos.enableTitle' : 'repos.disableTitle'),
+        message: pt(t, repo.enabled === false ? 'repos.enableMessage' : 'repos.disableMessage', { name: repo.name ?? repo.id }),
+        onConfirm: async () => { await onToggle?.(repo) } }),
+      h(Button, { variant: 'outline', size: 'sm', icon: h(Icon, { name: 'shield', size: 14 }),
+        disabled: test.busy, onClick: () => { void runTest() } },
+      pt(t, test.busy ? 'repos.testing' : 'repos.test'))),
+    test.result || test.error
+      ? h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
+        h('span', { className: 'sa-field-head' }, pt(t, test.error || test.result?.ok === false ? 'repos.testFail' : 'repos.testOk')),
+        h(Hint, null, test.error ?? (test.result.checks ?? []).map(check =>
+          `${check.skipped ? '○' : check.ok ? '✓' : '✕'} ${testLabel(check.id)}${check.detail ? ` · ${check.detail}` : ''}`).join(' / ')),
+        h(Hint, null, pt(t, 'repos.testHint')))
+      : null,
     h('div', { className: 'sa-field', style: { marginTop: 'var(--sa-sp-8)' } },
       h('span', { className: 'sa-field-head' }, pt(t, 'repo.token')),
       h('div', { style: { display: 'flex', width: '100%', minWidth: 0 } },
@@ -726,6 +822,10 @@ function LiveSettingsPage({ route }) {
   const [octoGroupQuery, setOctoGroupQuery] = useState('')
   const [configSampleOpen, setConfigSampleOpen] = useState(false)
   const [repoModalOpen, setRepoModalOpen] = useState(false)
+  // AC-10: existing repositories stay editable without losing their id/history; the modal shows the current values.
+  const [repoEdit, setRepoEdit] = useState(undefined)
+  const [repoEditBusy, setRepoEditBusy] = useState(false)
+  const [repoEditError, setRepoEditError] = useState(undefined)
   const [repoForm, setRepoForm] = useState(emptyRepoForm)
   const [repoSaving, setRepoSaving] = useState(false)
   const [repoError, setRepoError] = useState(undefined)
@@ -870,6 +970,48 @@ function LiveSettingsPage({ route }) {
     } finally { setRepoSaving(false) }
   }
 
+  const openRepoEdit = (repo) => {
+    // AC-10: edit one gate field at a time instead of hand-writing the whole gates JSON. A deep clone keeps the form
+    // independent from the loaded config (cancel must not mutate it).
+    const gates = Array.isArray(repo.gates) ? JSON.parse(JSON.stringify(repo.gates)) : []
+    setRepoEdit({ id: repo.id, name: repo.name ?? repo.id, repo: repo.repo ?? '', gates })
+    setRepoEditError(undefined)
+  }
+  const editGate = (index, key, value) => {
+    setRepoEdit(previous => {
+      if (!previous) return previous
+      const gates = previous.gates.map((gate, position) => position === index ? { ...gate, [key]: value } : gate)
+      return { ...previous, gates }
+    })
+  }
+  const saveRepoEdit = async () => {
+    if (repoEditBusy || !repoEdit) return
+    const gates = repoEdit.gates.map(gate => {
+      const clean = { name: String(gate.name ?? '').trim(), command: String(gate.command ?? '').trim() }
+      if (gate.cwd) clean.cwd = String(gate.cwd).trim()
+      if (Number.isFinite(Number(gate.timeoutMs)) && Number(gate.timeoutMs) > 0) clean.timeoutMs = Number(gate.timeoutMs)
+      if (gate.onFail) clean.onFail = gate.onFail
+      if (gate.dryRunCommand) clean.dryRunCommand = String(gate.dryRunCommand).trim()
+      return clean
+    })
+    if (gates.some(gate => !gate.name || !gate.command)) { setRepoEditError(pt(t, 'repos.gateFieldRequired')); return }
+    setRepoEditBusy(true)
+    setRepoEditError(undefined)
+    try {
+      await actions.updateRepo(repoEdit.id, { name: repoEdit.name.trim() || repoEdit.id, repo: repoEdit.repo.trim(), gates })
+      await reload()
+      setRepoEdit(undefined)
+      notify(pt(t, 'repos.editSaved'))
+    } catch (failure) { setRepoEditError(errorText(failure)) } finally { setRepoEditBusy(false) }
+  }
+  const toggleRepo = async (repo) => {
+    try {
+      await actions.updateRepo(repo.id, { enabled: repo.enabled === false })
+      await reload()
+      notify(pt(t, repo.enabled === false ? 'repos.enableSaved' : 'repos.disableSaved', { name: repo.name ?? repo.id }))
+    } catch (failure) { notify(errorText(failure), 'error') }
+  }
+
   /** Load saved live.json versions; the list contains configuration only, never tokens. */
   const openHistory = async () => {
     setHistoryOpen(true)
@@ -938,7 +1080,8 @@ function LiveSettingsPage({ route }) {
         ? h(Fragment, null,
           h('p', { className: 'sa-hint', role: 'status' }, pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })),
           h('div', { className: 'sa-cards-2' }, repos.map(repo => h(ReposCard, { key: repo.id, repo,
-            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id }))))
+            isDefault: repo.id === defaultRepoId, onSaveToken: saveRepoTokenFor, tokenBusy: tokenSaving === repo.id,
+            onEdit: openRepoEdit, onToggle: toggleRepo }))))
         : h(EmptyState, { icon: 'pull', title: pt(t, 'repos.empty'),
           action: h('div', { className: 'sa-actions' },
             config.file ? h(CopyButton, { value: config.file, label: pt(t, 'st.copyConfigPath') }) : null,
@@ -1400,6 +1543,8 @@ function LiveSettingsPage({ route }) {
       switchRow('executor.enabled', 'st.execEnabled', 'st.execEnabledHint', executor.enabled === true),
       switchRow('executor.autoRun', 'st.autoRun', 'st.autoRunHint', executor.autoRun === true),
       switchRow('paused', 'st.paused', 'st.pausedHint', config.paused === true || data.paused === true),
+      switchRow('pausedIntake', 'st.pausedIntake', 'st.pausedIntakeHint', config.pausedIntake === true),
+      switchRow('pausedDispatch', 'st.pausedDispatch', 'st.pausedDispatchHint', config.pausedDispatch === true),
       h('div', { className: 'sa-field' },
         h('span', { className: 'sa-field-head' }, pt(t, 'st.mrMode')),
         h(Select, { label: pt(t, 'st.mrMode'), disabled: frozen,
@@ -1630,6 +1775,31 @@ function LiveSettingsPage({ route }) {
   const writableGroups = SETTINGS_GROUPS.filter(group => !group.reference)
   const referenceGroups = SETTINGS_GROUPS.filter(group => group.reference)
 
+  // AC-10: show what saving will change before the request leaves the panel. Compare against the loaded repository,
+  // not the draft, so a no-op save is visibly a no-op and token-only fields never enter the preview.
+  const repoEditRows = (() => {
+    if (!repoEdit) return []
+    const current = repos.find(item => item.id === repoEdit.id) ?? {}
+    const rows = []
+    const nameNow = current.name ?? current.id
+    if (repoEdit.name !== nameNow) rows.push([pt(t, 'repos.field.name'), nameNow, repoEdit.name])
+    const repoNow = current.repo ?? ''
+    if (repoEdit.repo !== repoNow) rows.push([pt(t, 'repos.field.repo'), repoNow, repoEdit.repo])
+    // Field-level gate diff: changing a command, cwd, timeout or failure policy must be visible, not hidden behind an
+    // unchanged gate count (review P2 AC-10).
+    const gatesBefore = Array.isArray(current.gates) ? current.gates : []
+    const gatesAfter = repoEdit.gates
+    const count = Math.max(gatesBefore.length, gatesAfter.length)
+    for (let index = 0; index < count; index += 1) {
+      const before = gatesBefore[index]
+      const after = gatesAfter[index]
+      if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) continue
+      rows.push([pt(t, 'repos.gateDiff', { name: after?.name || before?.name || `#${index + 1}` }),
+        before ? JSON.stringify(before) : '—', after ? JSON.stringify(after) : '—'])
+    }
+    return rows
+  })()
+
   return h(Fragment, null,
     h('div', { className: 'sa-settings-intro' },
       h(Hint, null, pt(t, 'st.pageIntro')),
@@ -1664,6 +1834,69 @@ function LiveSettingsPage({ route }) {
           h(Button, { variant: 'outline', size: 'sm', disabled: historyBusy,
             onClick: () => { void restoreHistory(entry.id) } }, pt(t, 'st.historyRestore')))))
         : (!historyBusy && !historyError ? h(Hint, null, pt(t, 'st.historyEmpty')) : null)) : null,
+    repoEdit ? h(Modal, { open: true, onClose: () => { if (!repoEditBusy) setRepoEdit(undefined) },
+      title: pt(t, 'repos.editTitle', { name: repoEdit.name || repoEdit.id }), closeLabel: t('close'), className: 'sa-repo-modal',
+      footer: h(Fragment, null,
+        h(Button, { variant: 'ghost', disabled: repoEditBusy, onClick: () => setRepoEdit(undefined) }, t('cancel')),
+        h(Button, { variant: 'primary', disabled: repoEditBusy, onClick: () => { void saveRepoEdit() } },
+          repoEditBusy ? t('saving') : t('save'))) },
+      h('p', { className: 'sa-hint' }, pt(t, 'repos.editHint')),
+      h('div', { className: 'sa-repo-diff' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'repos.editDiff')),
+        repoEditRows.length
+          ? repoEditRows.map(([label, before, after], index) => h('div', { key: index, className: 'sa-diff-row' },
+            h('span', { className: 'sa-diff-label' }, label),
+            h('code', { className: 'sa-mono sa-diff-old' }, before || '—'),
+            h('span', { className: 'sa-hint', 'aria-hidden': 'true' }, '→'),
+            h('code', { className: 'sa-mono sa-diff-new' }, after || '—')))
+          : h('p', { className: 'sa-hint' }, pt(t, 'repos.editNoChanges'))),
+      h('div', { className: 'sa-form-grid' },
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.name')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.name, 'aria-label': pt(t, 'repos.field.name'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, name: event.target.value })) })),
+        h('label', { className: 'sa-field' },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.field.repo')),
+          h(Input, { className: 'sa-input-full', value: repoEdit.repo, 'aria-label': pt(t, 'repos.field.repo'),
+            onChange: event => setRepoEdit(previous => ({ ...previous, repo: event.target.value })) })),
+        h('div', { className: 'sa-field', style: { gridColumn: '1 / -1' } },
+          h('span', { className: 'sa-field-head' }, pt(t, 'repos.gates')),
+          repoEdit.gates.length
+            ? repoEdit.gates.map((gate, index) => h('div', { key: index, className: 'sa-card',
+              style: { marginBottom: 8, padding: 10 } },
+              h('div', { className: 'sa-form-grid' },
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateName')),
+                  h(Input, { className: 'sa-input-full', value: gate.name ?? '', 'aria-label': pt(t, 'repos.gateName'),
+                    onChange: event => editGate(index, 'name', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCommand')),
+                  h(Input, { className: 'sa-input-full', value: gate.command ?? '', 'aria-label': pt(t, 'repos.gateCommand'),
+                    onChange: event => editGate(index, 'command', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateCwd')),
+                  h(Input, { className: 'sa-input-full', value: gate.cwd ?? '', placeholder: pt(t, 'repos.gateCwdPlaceholder'),
+                    'aria-label': pt(t, 'repos.gateCwd'), onChange: event => editGate(index, 'cwd', event.target.value) })),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateTimeout')),
+                  h(Input, { className: 'sa-input-full', type: 'number', min: 1, value: gate.timeoutMs ?? '',
+                    'aria-label': pt(t, 'repos.gateTimeout'),
+                    onChange: event => editGate(index, 'timeoutMs', event.target.value) })),
+                h(Select, { label: pt(t, 'repos.gateOnFail'), value: gate.onFail ?? 'manual',
+                  options: [{ value: 'manual', label: pt(t, 'repos.gateOnFail.manual') },
+                    { value: 'auto_repair', label: pt(t, 'repos.gateOnFail.auto_repair') }],
+                  onChange: value => editGate(index, 'onFail', value) }),
+                h('label', { className: 'sa-field' },
+                  h('span', { className: 'sa-field-head' }, pt(t, 'repos.gateDryRun')),
+                  h(Input, { className: 'sa-input-full', value: gate.dryRunCommand ?? '',
+                    'aria-label': pt(t, 'repos.gateDryRun'), onChange: event => editGate(index, 'dryRunCommand', event.target.value) }))),
+              h(Button, { variant: 'ghost', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+                gates: previous.gates.filter((item, position) => position !== index) })) }, pt(t, 'repos.gateRemove'))))
+            : h('p', { className: 'sa-hint' }, pt(t, 'repos.gateEmptyEditor')),
+          h(Button, { variant: 'outline', size: 'sm', onClick: () => setRepoEdit(previous => ({ ...previous,
+            gates: [...previous.gates, { name: '', command: '', onFail: 'manual' }] })) }, pt(t, 'repos.gateAdd')),
+          h('small', { className: 'sa-hint' }, pt(t, 'repos.gatesJsonHint')))),
+      repoEditError ? h('p', { className: 'sa-banner sa-danger' }, repoEditError) : null) : null,
     repoModalOpen ? h(Modal, { open: true, onClose: () => { if (!repoSaving) setRepoModalOpen(false) },
       title: pt(t, 'repos.addTitle'), closeLabel: t('close'), className: 'sa-repo-modal',
       footer: h(Fragment, null,
