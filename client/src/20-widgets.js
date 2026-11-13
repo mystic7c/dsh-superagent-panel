@@ -86,10 +86,14 @@ function ConfirmButton({ label, title, message, onConfirm, variant = 'ghost', ic
           onClick: () => { void confirm.run().then(done => { if (done) setOpen(false) }) } }, t('confirm'))) }))
 }
 
-/** External link; new tab only for links that leave this origin. */
+/** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
+    (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
+    payloads, so an unchecked scheme would be a stored-XSS sink. */
 function ExternalLink({ href, children, icon = 'external' }) {
-  const external = isExternal(href)
-  return h('a', { className: 'sa-inline-link', href, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
+  const safe = safeHttpUrl(href)
+  if (!safe) return h('span', { className: 'sa-inline-link' }, children)
+  const external = isExternal(safe)
+  return h('a', { className: 'sa-inline-link', href: safe, target: external ? '_blank' : undefined, rel: external ? 'noopener noreferrer' : undefined },
     icon ? h(Icon, { name: icon, size: 13 }) : null, icon ? ' ' : null, children)
 }
 

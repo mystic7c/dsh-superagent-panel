@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.4.34] — 2026-11-13
+
+按代码评审与实机点击评审收口：修掉 URL 注入、干跑消费上下文、发布/回答的并发与干跑语义，补齐实机暴露的
+i18n 与状态文案问题；数据加载不再把权限错误当成空状态。
+
+### 内容
+- 安全：`ExternalLink` 只接受 http(s) URL，其余渲染为纯文本；Markdown 链接沿用原有 http(s) 白名单。
+- 干跑：`pollSync`/`pollEvents` 的 `attachContext` 移到 dry-run 返回之后，且只对会入库的仓库执行；实机干跑不再
+  在内存里消费 contextOnly 决策。
+- 执行器：`executeTicket/publishTicket/answerTicket/resumeTicket/resumeInterruptedTicket` 共用进程内工单锁
+  （重复调用报 `already busy`）；`publishTicket` 只接受 ready/failed/pushed；回答追问沿用原 run 的 dryRun；
+  发布修复只对 `onFail=auto_repair` 的闸门生效；去掉重复的 stop 清理；CLI worker 接收 `AbortSignal`，停止会
+  立即终止 CLI 进程组；采用已合并 MR 时不再把工单回退成 ci-pending/mr-open。
+- 数据：`live-state/inbox/signals/operations/acceptance/store` 只在 ENOENT 时按空状态初始化，EACCES/EIO 直接
+  抛错；`live-json` 写入遇到损坏配置拒绝覆盖并提示；新增仓库不再硬编码 `createMr:api`，并拒绝重复本地路径。
+- Host：同源判断比较 host（HTTPS/反代可用）；非法 URL 编码返回 400；`normalizeRepo` 容忍不完整 base。
+- 视图：`signalsView`/`decisionsView` 每次请求只读一次配置；无仓库时 `verifySeconds` 为 null；`requestStop` 走
+  `atomic()` 队列；标题上限 64→160。
+- 客户端：修复重复 `src.signalReason`（原因列显示“按原因筛选”）；补齐 8 个 `repos.*` 文案；仓库卡片改为
+  “执行器未启用”；暂停时概览不再说“等待群消息”；“查看已处理工单”带 `stage=done`；评估筛选空态提供清除筛选；
+  已合并工单不再显示“已推送，等待创建 PR”；信号标题不再被 300px 截断。
+- 工具：`check-keys` 支持三元表达式取 key，并检测重复 PAGE_TEXT key。
+
+### 验证
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
+（938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（551 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过）。
+
 ## [0.4.33] — 2026-11-13
 
 落地产品评审六项改进（AC-01…AC-12）并按七轮独立验收返工收口：路由贯穿分阶段执行、停止真正取消 worker 与
