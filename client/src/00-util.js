@@ -106,3 +106,50 @@ function isExternal(url) {
     return typeof location === 'undefined' || target.origin !== location.origin
   } catch { return false }
 }
+
+/** Only an absolute http(s) URL may be written into an href. Everything else (javascript:, data:, relative paths)
+    is rendered as inert text: URLs shown here come from live.json, GitLab and Octo payloads. */
+function safeHttpUrl(url) {
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
+}
+
+/* ---------- shareable URL state (deep links) ----------
+   The panel lives inside a host SPA that owns the address bar, so it only ever claims a fragment of its own
+   (`#<prefix>=<json>`; anything else belongs to the host). Reads and writes are best-effort: an opaque origin can
+   throw on history, and a host is free to rewrite the URL at any moment, which must never break the panel. */
+
+/** Longest fragment this panel agrees to decode: a route is a few hundred characters, so anything bigger is not ours. */
+const HASH_STATE_MAX = 4096
+
+/** Build the fragment for `value`; the exact string is also what `writeHashState` compares against and returns. */
+function hashStateFragment(prefix, value) {
+  return `#${prefix}=${encodeURIComponent(JSON.stringify(value))}`
+}
+
+/** Decode the JSON object stored by this panel under `#<prefix>=`; `undefined` for a foreign, absent or corrupt one. */
+function readHashState(prefix) {
+  try {
+    if (typeof location === 'undefined') return undefined
+    const hash = String(location.hash ?? '')
+    const marker = `#${prefix}=`
+    if (!hash.startsWith(marker) || hash.length > HASH_STATE_MAX) return undefined
+    const value = JSON.parse(decodeURIComponent(hash.slice(marker.length)))
+    return value && typeof value === 'object' ? value : undefined
+  } catch { return undefined }
+}
+
+/** Rewrite the panel's fragment in place and return it, or `undefined` when the URL was left alone. `replaceState`
+    (never hash assignment) keeps the host's back/forward entries untouched; a non-empty fragment that is not ours is
+    the host's own state and is preserved rather than overwritten. */
+function writeHashState(prefix, value) {
+  try {
+    if (typeof location === 'undefined' || typeof history === 'undefined' || typeof history.replaceState !== 'function') return undefined
+    const marker = `#${prefix}=`
+    const current = String(location.hash ?? '')
+    if (current && !current.startsWith(marker)) return undefined
+    const next = hashStateFragment(prefix, value)
+    if (current === next) return next
+    history.replaceState(history.state, '', `${location.pathname}${location.search}${next}`)
+    return next
+  } catch { return undefined }
+}

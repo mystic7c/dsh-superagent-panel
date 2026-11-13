@@ -59,7 +59,7 @@ Object.assign(PAGE_TEXT, {
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
-    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
+    evidenceMr: ['MR #{iid}', 'MR #{iid}'], evidencePr: ['PR 已创建', 'PR opened'], evidencePrWaiting: ['已推送，等待创建 PR', 'Pushed; waiting for PR'], evidenceCause: ['原因：{cause}', 'Cause: {cause}'],
     evidenceReview: ['待你验收', 'Review UAT'], evidenceMerge: ['待你合并', 'Merge MR'],
     evidenceRunning: ['本轮 {minutes} 分', '{minutes} min'],
     evidenceGate: ['等你处理闸门 {name}', 'Gate {name} needs you'], evidenceGateWait: ['等你处理闸门', 'Gate needs you'],
@@ -138,7 +138,11 @@ Object.assign(PAGE_TEXT, {
     dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'], refreshCi: ['刷新 CI', 'Refresh CI'],
     verify: ['核对合并/UAT', 'Verify merge/UAT'], originLink: ['来源触发', 'Origin trigger'],
     retryUnavailable: ['执行器未启用，只能干跑。', 'The executor is disabled; dry run only.'],
-    stopUnavailable: ['当前引擎还没有停止接口。', 'The engine has no stop endpoint yet.'],
+    stopUnavailable: ['当前没有可停止的执行。', 'There is no active run to stop.'],
+    stopping: ['正在停止…', 'Stopping…'], stopConfirm: ['请求停止这个工单？已完成的动作会保留，之后不会再提交、推送或发布。',
+      'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
+    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
+      'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
     publishUnavailable: ['缺少推送权限、执行器未启用或没有 GitLab token。', 'Push is not allowed, the executor is off, or the GitLab token is missing.'],
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
@@ -207,12 +211,20 @@ Object.assign(PAGE_TEXT, {
   'auto.daily': ['每天 {time}', 'Daily {time}'],
   'auto.nextAt': ['下次运行 {time}', 'Next run {time}'],
   'auto.skip.paused': ['处理已暂停', 'Processing is paused'],
+  'auto.skip.dispatchPaused': ['派发已暂停（保留队列）', 'Dispatch is paused (queue kept)'],
   'auto.skip.executorDisabled': ['执行器未启用', 'The executor is disabled'],
   'auto.skip.working': ['工单正在执行', 'The Ticket is running'],
   'auto.skip.parked': ['工单在等人/等回答', 'The Ticket waits for a person'],
   'auto.skip.maxExecutions': ['已达到执行次数上限', 'The execution limit is reached'],
+  'auto.skip.repoDisabled': ['仓库已停用，不再派发新任务', 'The repository is disabled; no new work is dispatched'],
+  'auto.skip.noRepo': ['工单没有可用的仓库', 'No repository is available for this Ticket'],
   'auto.skip.due': ['已到执行时间', 'The scheduled time arrived'],
   // push mode records only the GitHub `/pull/new/` URL: the PR itself is opened by `.github/workflows/auto-pr.yml`.
+  'ticket.prWaiting': ['已推送，等待创建 PR', 'Pushed; waiting for PR'],
+  'ticket.prState': ['PR 状态', 'PR state'],
+  'ticket.acceptState': ['人工验收', 'Human acceptance'],
+  'ticket.acceptedYes': ['已通过', 'Accepted'],
+  'ticket.acceptedNo': ['未验收', 'Not accepted'],
   'mr.pushHint': ['这个 PR 由推送后的 auto-pr workflow 自动创建；合并状态由目标分支历史判定。',
     'This PR is created automatically by the post-push auto-pr workflow; merge state comes from the target branch history.'],
   // P2-7: GitLab observation upgrades shown on the MR card.
@@ -259,6 +271,19 @@ Object.assign(PAGE_TEXT, {
     resumeDone: ['已恢复处理。', 'Processing resumed.'],
     configReloaded: ['配置已重载。', 'Configuration reloaded.'],
   },
+  // Stage rail: the colour-coded icon is aria-hidden, so each step also prints its state word (WIG 1.4.1).
+  'railState.done': ['完成', 'Done'],
+  'railState.ongoing': ['进行中', 'Ongoing'],
+  'railState.warning': ['有警告', 'Warning'],
+  'railState.error': ['失败', 'Failed'],
+  'railState.idle': ['未开始', 'Not started'],
+  // Polled ticket list: announce the count that changed, never the whole list (WIG A6).
+  'list.status': ['共 {count} 张工单', '{count} tickets'],
+  // Manual create form: a placeholder is not a label (WIG B).
+  'st.titleLabel': ['工单标题', 'Ticket title'],
+  'st.bodyLabel': ['需求正文', 'Request body'],
+  // A raw run error opens in a fold instead of stretching the row (WIG B).
+  'run.rawError': ['原始错误', 'Raw error'],
 })
 
 const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
@@ -345,14 +370,20 @@ function automationChip(t, ticket) {
   if (!automation || automation.enabled !== true || automation.mode === 'off') return null
   const label = automationSummaryText(t, automation)
   if (!label) return null
-  return h(Tag, { key: 'automation', tone: 'info',
-    title: automation.nextAt ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) }) : undefined },
-  label)
+  const nextAt = automation.nextAt
+    ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) })
+    : ''
+  // The next run used to live in a title tooltip only (no touch, no keyboard): a focusable InfoTip exposes it.
+  return h(Fragment, { key: 'automation' },
+    h(Tag, { tone: 'info' }, label),
+    nextAt ? h(InfoTip, { key: 'automation-next', text: nextAt }) : null)
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
-const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'executor-disabled': 'auto.skip.executorDisabled',
-  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions', due: 'auto.skip.due' }
+const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
+  'executor-disabled': 'auto.skip.executorDisabled',
+  working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions',
+  'repo-disabled': 'auto.skip.repoDisabled', 'no-repo': 'auto.skip.noRepo', due: 'auto.skip.due' }
 function autoSkipReasonText(t, reason) {
   const key = AUTO_SKIP_KEYS[String(reason ?? '')]
   return key ? pt(t, key) : String(reason ?? '')
@@ -431,6 +462,11 @@ function ticketStatus(ticket) {
   const acceptance = ticketAcceptanceOf(ticket)
   if (acceptance.state === 'accepted') {
     return { ...view, group: 'done', needsHuman: false, primary: 'none', acceptance }
+  }
+  // AC-03: a stop that has been requested but not yet confirmed is its own visible state. Leaving the chip on
+  // "执行中" was indistinguishable from a run that is not stopping, and the stop action is already disabled.
+  if (ticket?.stopRequested) {
+    return { ...view, acceptance, labelKey: 'ticket.stopping', needsHuman: false, primary: 'none' }
   }
   return { ...view, acceptance }
 }
@@ -567,6 +603,7 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
         disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
       h(ConfirmButton, {
         label: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
+        confirmLabel: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
         title: onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle'),
         message: onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage'),
         variant: 'primary', icon: 'play', onConfirm: onStart,
@@ -747,7 +784,7 @@ function failureLabel(t, error) {
  * shipped it, the Chinese cause of a failed run, or the current run's age — exactly one of those, never a status or a
  * result a chip already states (P0 §3.6.4: state + acceptance/result + time are the row's whole information budget).
  */
-function ticketEvidence(t, ticket, view) {
+function ticketEvidence(t, ticket, view, now = Date.now()) {
   const links = ticket?.links ?? {}
   const assignments = Array.isArray(ticket?.assignments) ? ticket.assignments : []
   // A parked gate: the gate's name is the evidence a person needs; the state and the wait are on the chips.
@@ -759,20 +796,37 @@ function ticketEvidence(t, ticket, view) {
   const recovered = view?.group === 'done' || ['merged', 'deployed'].includes(ticket?.status)
   if (failed && !recovered) {
     const raw = String(failed.report?.text ?? '')
-    return h('span', { title: raw || undefined }, pt(t, 'row.evidenceCause', { cause: failureLabel(t, raw) }))
+    const cause = failureLabel(t, raw)
+    // The full error was tooltip-only (no touch, no keyboard): the short cause stays visible and the raw text sits
+    // behind a focusable info control when it says more than the sentence. The wrapper lifts it above the row's
+    // stretched link overlay so it stays operable.
+    return h(Fragment, null,
+      raw.trim() && raw.trim() !== cause
+        ? h('span', { style: { position: 'relative', zIndex: 1 } }, h(InfoTip, { text: raw }))
+        : null,
+      h('span', null, pt(t, 'row.evidenceCause', { cause })))
   }
   const mr = links.mergeRequest ?? {}
-  // push mode has a PR URL but no iid until the repo's auto-pr workflow opens it; the URL alone is still evidence.
+  // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
+  // branch is pushed and waits for the PR, and the link is labelled as the create entry (not "PR opened").
+  // A merged/deployed Ticket is past that stage: saying "waiting for PR" beside a 已合并 tag contradicts the state.
+  const merged = ['merged', 'deployed'].includes(ticket?.status)
+    || links.verification?.merged === true || links.acceptance?.ok === true
+  const prWaiting = !merged && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
   if (mr.iid || mr.webUrl) {
-    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid }) : pt(t, 'row.evidencePr')
-    return mr.webUrl
-      ? h('a', { className: 'sa-inline-link sa-mono', href: mr.webUrl, target: '_blank', rel: 'noopener noreferrer',
-        title: mr.webUrl, onClick: event => event.stopPropagation() }, label)
+    const label = mr.iid ? pt(t, 'row.evidenceMr', { iid: mr.iid })
+      : merged ? pt(t, 'ticket.mergedYes')
+        : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
+    const href = safeHttpUrl(mr.webUrl)
+    return href
+      ? h('a', { className: 'sa-inline-link sa-mono', href, target: '_blank', rel: 'noopener noreferrer',
+        title: href, onClick: event => event.stopPropagation() }, label)
       : h('span', { className: 'sa-mono' }, label)
   }
+  if (merged) return h('span', { className: 'sa-mono' }, pt(t, 'ticket.mergedYes'))
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
-    const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(running.startedAt)) / 60_000))
+    const minutes = Math.max(0, Math.floor((now - Date.parse(running.startedAt)) / 60_000))
     return pt(t, 'row.evidenceRunning', { minutes })
   }
   return ''
@@ -786,7 +840,7 @@ function ticketEvidence(t, ticket, view) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
-function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra }) {
+function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
   const { t, navigate, notify } = usePanel()
   const model = usePanelData()
   const act = actions ?? model?.actions
@@ -827,16 +881,26 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
     refreshCi: () => { void refreshCi.run() },
     dryRun: () => { void dryRun.run() },
     publish: () => setPending({ kind: 'publish' }),
-    external: () => window.open(primary.href, '_blank', 'noopener'),
     detail: open,
   }
-  const primaryButton = primary ? h(Button, { variant: 'primary', size: 'sm', disabled: Boolean(busyOf[primary.kind]),
-    title: primary.kind === 'publish' && !canPublish ? pt(t, 'ticket.publishUnavailable') : undefined,
-    onClick: event => { event.stopPropagation(); branches[primary.kind]() } }, pt(t, primary.labelKey)) : null
+  const externalHref = primary?.kind === 'external' ? safeHttpUrl(primary.href) : ''
+  // A real link, not window.open: middle-click, Cmd-click and copy-link keep working, and it is keyboard reachable
+  // (`.sa-btn` is class-based, so an <a> with the same classes renders as the same primary button).
+  const primaryButton = !primary ? null
+    : primary.kind === 'external'
+      ? externalHref
+        ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm', href: externalHref, target: '_blank',
+          rel: 'noopener noreferrer', style: { textDecoration: 'none' },
+          onClick: event => event.stopPropagation() }, pt(t, primary.labelKey))
+        // An unsafe URL never becomes a link; the same action degrades to opening the detail.
+        : h(Button, { variant: 'primary', size: 'sm',
+          onClick: event => { event.stopPropagation(); open() } }, pt(t, primary.labelKey))
+      : h(Button, { variant: 'primary', size: 'sm', disabled: Boolean(busyOf[primary.kind]),
+        onClick: event => { event.stopPropagation(); branches[primary.kind]() } }, pt(t, primary.labelKey))
   const allItems = [
     { key: 'dryRun', label: pt(t, 'menu.dryRun'), onSelect: () => { void dryRun.run() }, disabled: dryRun.busy },
     { key: 'publish', label: pt(t, 'menu.publish'), onSelect: () => setPending({ kind: 'publish' }),
-      disabled: publish.busy || !canPublish, title: canPublish ? undefined : pt(t, 'ticket.publishUnavailable') },
+      disabled: publish.busy || !canPublish },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), onSelect: () => { void refreshCi.run() }, disabled: refreshCi.busy || !hasMr },
     { key: 'verify', label: pt(t, 'menu.verify'), onSelect: () => { void verify.run() }, disabled: verify.busy },
     ...view.group === 'failed'
@@ -853,6 +917,10 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   })
   const stopInner = { onClick: event => event.stopPropagation(),
     onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() } }
+  // The unavailable-publish reason is shared by the primary button and the ⋯ menu entry: one focusable info control
+  // instead of a title tooltip (unreachable on touch, and a disabled menu item cannot take focus at all).
+  const publishUnavailableTip = !canPublish && items.some(item => item.key === 'publish')
+    ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null
   // Multi-repository panels say which repository a Ticket belongs to; a plain text span, not a Tag, so the three-tag
   // budget of the row stays for state and result.
   const repoList = panelRepos(data)
@@ -887,30 +955,36 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   if (showRepo) chips.push(h('span', { key: 'repo', className: 'sa-hint' }, String(repoName)))
   if (extra) chips.push(h('span', { key: 'extra', className: 'sa-hint' }, extra))
 
-  // The row itself is a plain div (mouse convenience); the title is a real <button> so keyboard users get one focus
-  // stop, and the primary/⋯ controls are siblings of it — never buttons nested inside a role=button row (G6). The
-  // evidence rail is the third track of the execution ledger; other pages hide it via CSS and keep the flex row.
-  const evidence = ticketEvidence(t, ticket, view)
+  // The title is a real <button> so keyboard users get one focus stop, and the primary/⋯ controls are siblings of it —
+  // never buttons nested inside a role=button row (G6). The evidence rail is the third track of the execution ledger;
+  // other pages hide it via CSS and keep the flex row.
+  const evidence = ticketEvidence(t, ticket, view, now)
   return h('li', null,
-    h('div', { className: 'sa-row sa-row-openable', onClick: open },
+    // The row div is not the click target any more: the title is a real button carrying `.sa-open`, whose stretched
+    // `::after` covers the whole row, so the row's primary action is one keyboard-reachable button (WIG: div click).
+    h('div', { className: 'sa-row sa-row-openable' },
       h(StatusIcon, { state: rowIconState, size: 16 }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
-          h('button', { type: 'button', className: 'sa-row-open',
+          h('button', { type: 'button', className: 'sa-row-open sa-open',
             'aria-label': `${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`,
-            onClick: event => { event.stopPropagation(); open() } },
-          h('span', { style: { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+            onClick: open },
+          h('span', { className: 'sa-ellipsis' },
             ticket.title || pt(t, 'row.untitled')))),
         h('div', { className: 'sa-row-meta' }, chips)),
       h('span', { className: 'sa-row-evidence' }, evidence),
       h('div', { className: 'sa-row-actions', ...stopInner },
+        publishUnavailableTip,
         primaryButton,
         compact || !items.length ? null : h(Menu, { label: pt(t, 'menu.label'), items, align: 'end' }))),
     h(Modal, { open: Boolean(pending), onClose: () => setPending(null), title: pt(t, 'ticket.publish'),
       closeLabel: t('close'), description: pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: publish.busy, onClick: () => { void publish.run() } }, t('confirm'))) }),
+        // Pending actions name the verb, never the generic 确认; the dialog closes only when the action succeeded.
+        h(Button, { variant: 'primary', disabled: publish.busy,
+          onClick: () => { void publish.run().then(done => { if (done) setPending(null) }) } },
+          pt(t, 'ticket.publish'))) }),
     h(Modal, { open: dismissOpen, onClose: () => setDismissOpen(false), title: pt(t, 'detail.dismissTitle'),
       closeLabel: t('close'),
       description: pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
@@ -918,15 +992,22 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
       footer: h(Fragment, null,
         h(Button, { variant: 'ghost', onClick: () => setDismissOpen(false) }, t('cancel')),
         h(Button, { variant: 'primary', disabled: dismiss.busy,
-          onClick: async () => { await dismiss.run(); setDismissOpen(false) } }, t('confirm'))) }))
+          onClick: async () => { if (await dismiss.run()) setDismissOpen(false) } }, pt(t, 'detail.dismiss'))) }))
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
-function TicketList({ tickets, page = 'execution', actions, reload }) {
+function TicketList({ tickets, page = 'execution', actions, reload, now }) {
+  const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
-  if (!list.length) return null
-  return h('ul', { className: 'sa-list' }, list.map(ticket =>
-    h(TicketRow, { key: ticket.id, ticket, page, actions, reload })))
+  // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
+  // mounted when the list empties, so "0 tickets" is announced too instead of the region vanishing mid-announcement.
+  const status = h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' },
+    pt(t, 'list.status', { count: list.length }))
+  if (!list.length) return status
+  return h(Fragment, null,
+    status,
+    h('ul', { className: 'sa-list' }, list.map(ticket =>
+      h(TicketRow, { key: ticket.id, ticket, page, actions, reload, now }))))
 }
 
 // Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
@@ -962,12 +1043,18 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
+const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
+
 function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [repoId, setRepoId] = useState(undefined)
+  const [deliverable, setDeliverable] = useState('')
+  const [backend, setBackend] = useState('')
+  const [preview, setPreview] = useState()
+  const [previewError, setPreviewError] = useState()
   const [busy, setBusy] = useState(false)
   const [created, setCreated] = useState()
   const [failure, setFailure] = useState()
@@ -975,13 +1062,39 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const repos = panelRepos(data)
   const defaultRepo = panelDefaultRepo(data)
   const usableRepo = repos.some(repo => repo.id === repoId) ? repoId : defaultRepo
+  const selection = { ...(backend ? { backend } : {}), ...(deliverable ? { deliverable } : {}) }
+  const selectionKey = JSON.stringify(selection)
+  // Draft preview: the operator sees the automatic judgement (deliverable / capabilities / backend) before creating,
+  // and any manual choice is previewed through the same resolver the executor uses — so the preview cannot promise a
+  // route the run then refuses.
+  useEffect(() => {
+    if (!`${title}${body}`.trim()) { setPreview(undefined); setPreviewError(undefined); return }
+    let alive = true
+    const timer = setTimeout(() => {
+      const actions = model?.actions
+      if (!actions?.previewRoute) return
+      actions.previewRoute({ title: title.trim(), body: body.trim() || undefined, selection })
+        .then(result => { if (alive) { setPreview(result); setPreviewError(undefined) } })
+        .catch(error => { if (alive) { setPreview(undefined); setPreviewError(error) } })
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [title, body, selectionKey])
+  const route = preview?.route
+  const capabilityText = (route?.capabilities ?? []).map(capability =>
+    pt(t, ROUTE_CAP_KEYS[capability] ?? capability)).join(' · ') || '—'
+  // Before the first preview arrives, offer the declared backends so the operator can pick one immediately; the
+  // preview response then narrows the list to the enabled set.
+  const enabledBackends = preview?.options?.backends
+    ?? (typeof ROUTE_BACKENDS !== 'undefined' ? ROUTE_BACKENDS.map(backend => backend.value) : ['dsh', 'codex', 'claude'])
+  const backendOptions = [{ value: '', label: pt(t, 'st.routeAuto') },
+    ...enabledBackends.map(value => ({ value, label: value }))]
   const submit = async () => {
     if (busy || !title.trim()) return
     setBusy(true)
     setFailure(undefined)
     try {
       const response = await model.actions.createTicket({ title: title.trim(), body: body.trim() || undefined,
-        repoId: usableRepo || undefined })
+        repoId: usableRepo || undefined, route: Object.keys(selection).length ? selection : undefined })
       // POST engine/ticket answers { ticket }; accept a bare ticket too so a future host shape change cannot hide the
       // created state (and onDone callers get the Ticket, not the envelope).
       const ticket = response?.ticket ?? response
@@ -996,7 +1109,8 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
       setBusy(false)
     }
   }
-  return h('div', { className: 'sa-field' },
+  // A real form: Enter submits, every field carries a name, and title/body get a visible label (a placeholder is not one).
+  return h('form', { className: 'sa-field', onSubmit: event => { event.preventDefault(); void submit() } },
     heading ? h('span', { className: 'sa-field-head' }, pt(t, 'st.manualTitle')) : null,
     heading ? h(Hint, null, pt(t, 'st.manualHint')) : null,
     repos.length
@@ -1007,17 +1121,46 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
           onChange: next => setRepoId(next) }),
         h(Hint, null, pt(t, 'st.manualRepoHint', { name: repos.find(repo => repo.id === defaultRepo)?.name ?? defaultRepo ?? '—' })))
       : null,
-    h(Input, { value: title, placeholder: pt(t, 'st.titlePh'), 'aria-label': pt(t, 'st.titlePh'), disabled: busy,
+    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-title' }, pt(t, 'st.titleLabel')),
+    h(Input, { id: 'sa-manual-title', name: 'title', value: title, placeholder: pt(t, 'st.titlePh'), disabled: busy,
       onChange: event => setTitle(event.target.value) }),
-    h('textarea', { className: 'sa-textarea', rows: 3, value: body, placeholder: pt(t, 'st.bodyPh'),
-      'aria-label': pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-body' }, pt(t, 'st.bodyLabel')),
+    h('textarea', { id: 'sa-manual-body', name: 'body', className: 'sa-textarea', rows: 3, value: body,
+      placeholder: pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
+    // Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
+    // Ticket by the host; an unsupported combination is warned about here and rejected by the executor.
+    h('div', { className: 'sa-route-controls' },
+      h(Select, { label: pt(t, 'st.routeDeliverable'), value: deliverable, disabled: busy,
+        options: [{ value: '', label: pt(t, 'st.routeAuto') },
+          { value: 'change', label: pt(t, 'st.routeChange') },
+          { value: 'report', label: pt(t, 'st.routeReport') }],
+        onChange: next => setDeliverable(next) }),
+      h(Select, { label: pt(t, 'st.routeBackend'), value: backend, disabled: busy, options: backendOptions,
+        onChange: next => setBackend(next) })),
+    route
+      ? h('div', { className: 'sa-route-preview' },
+        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreviewTitle')),
+        h('p', null,
+          `${pt(t, `detail.workType.${route.workType}`)} · `,
+          `${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `,
+          `${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `,
+          `${pt(t, 'st.routeBackend')}: ${route.backend}`,
+          route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`),
+        route.unsupported
+          ? h('p', { className: 'sa-error' }, pt(t, 'st.routeUnsupported', { caps: route.unsupported }))
+          : null)
+      : null,
+    previewError ? h(Hint, { tone: 'warning' }, pt(t, 'st.routePreviewFailed')) : null,
+    Object.keys(selection).length
+      ? h(Hint, null, pt(t, 'st.routeManualHint'))
+      : null,
     // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
     // give a modal caller an explicit cancel next to it (critique 2026-11-11).
     h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
       onCancel ? h(Button, { variant: 'ghost', size: 'md', onClick: onCancel }, t('cancel')) : null,
-      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }),
-        disabled: busy || !title.trim(), onClick: () => { void submit() } }, pt(t, 'st.create'))),
-    created?.id ? h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }), type: 'submit',
+        disabled: busy || !title.trim(), 'aria-busy': busy ? 'true' : undefined }, pt(t, 'st.create'))),
+    created?.id ? h('div', { className: 'sa-actions', role: 'status', 'aria-live': 'polite' },
       h(StatusText, { state: 'done' }, pt(t, 'st.created')),
       h('code', { className: 'sa-mono' }, shortId(created.id, 10))) : null,
     failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
@@ -1044,7 +1187,7 @@ function FunnelBar({ flow }) {
     h('div', { className: 'sa-funnel-steps' }, steps.flatMap((step, index) => [
       index ? h('span', { key: `arrow-${step.key}`, className: 'sa-funnel-arrow', 'aria-hidden': 'true' }, '→') : null,
       h('div', { key: step.key, className: 'sa-funnel-step' },
-        h('span', { className: 'sa-funnel-value' }, String(step.value)),
+        h('span', { className: 'sa-funnel-value' }, ovCount(step.value, t.lang)),
         h('span', { className: 'sa-funnel-label' }, pt(t, step.labelKey))),
     ]),
       contextOnly > 0 ? h('span', { className: 'sa-funnel-branch' }, pt(t, 'funnelBranch', { count: contextOnly })) : null),
@@ -1110,9 +1253,10 @@ function GateSummary({ ticket }) {
   return h('div', { className: 'sa-gates' },
     gates.map((gate, index) => {
       const ok = gate.exitCode === 0 && !gate.timedOut
-      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate',
-        'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
+      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate' },
         h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
+        // The passed/failed word is visible text, not an aria-label on a plain span (ignored by many screen readers).
+        h('span', { className: 'sa-hint' }, pt(t, ok ? 'gate.passed' : 'gate.failed')),
         ok ? null : h('span', { className: 'sa-hint' },
           gate.timedOut ? pt(t, 'gate.timedOut')
             : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
@@ -1154,17 +1298,20 @@ function StageRail({ ticket, detail = false }) {
       result: gates.length ? `${gatePassed}/${gates.length}` : '' },
     { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
       result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
-        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, 'row.evidencePr') : '' },
+        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, !mergeRequest.iid && (mergeRequest.pending === true || Boolean(mergeRequest.webUrl)) ? 'row.evidencePrWaiting' : 'row.evidencePr') : '' },
     { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
   ]
   return h('ol', { className: detail ? 'sa-rail sa-rail-detail' : 'sa-rail' },
+    // The stage name carries no state: the state icon is aria-hidden and colour-coded, so each step also prints its
+    // state word (done/ongoing/warning/error/idle) in the result slot. Never colour-only (WIG 1.4.1).
     stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
       h(detail ? 'span' : 'div', { className: 'sa-rail-dot' },
         h(StatusIcon, { state: stage.state, size: 14 }),
         h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`)),
-        detail && stage.result ? h('span', { className: 'sa-rail-result' }, stage.result) : null))))
+        h('span', { className: 'sa-rail-result' },
+          [pt(t, `railState.${stage.state}`), detail ? stage.result : ''].filter(Boolean).join(' · '))))))
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
@@ -1178,7 +1325,10 @@ function MergeRequestCard({ ticket }) {
   // push mode records only the GitHub `/pull/new/` URL before any PR number exists; the URL alone is MR evidence.
   const hasMr = Boolean(mr.iid || mr.webUrl)
   const merged = mr.state === 'merged' || verification.merged === true
+  const delivered = merged || ['merged', 'deployed'].includes(ticket?.status) || links.acceptance?.ok === true
   const rows = []
+  const prWaiting = !delivered && !mr.iid && (mr.pending === true || Boolean(mr.webUrl))
+  if (prWaiting) rows.push([pt(t, 'ticket.prState'), pt(t, 'ticket.prWaiting')])
   if (mr.iid) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, `MR #${mr.iid}`)])
   else if (mr.webUrl) rows.push([pt(t, 'ticket.mrLink'), h(ExternalLink, { href: mr.webUrl }, pt(t, 'ticket.openPr'))])
   if (mr.state) rows.push([pt(t, 'ticket.mrState'), providerStateText(t, MR_STATE_KEYS, mr.state)])
@@ -1186,6 +1336,8 @@ function MergeRequestCard({ ticket }) {
   if (!mr.state && verification.merged === true) rows.push([pt(t, 'ticket.mergeState'), pt(t, 'ticket.mergedYes')])
   if (pipeline.status) rows.push([pt(t, 'ticket.pipeline'), providerStateText(t, PIPELINE_STATE_KEYS, pipeline.status)])
   if (autoMerge.state) rows.push([pt(t, 'ticket.autoMerge'), providerStateText(t, AUTO_MERGE_KEYS, autoMerge.state)])
+  // AC-05: acceptance is its own evidence even when the deliverable is a pushed branch.
+  rows.push([pt(t, 'ticket.acceptState'), links.acceptance?.ok === true ? pt(t, 'ticket.acceptedYes') : pt(t, 'ticket.acceptedNo')])
   rows.push([pt(t, 'ticket.target'), ticket?.targetBranch ?? '—'])
   // P2-7: a draft MR and a CI result from another commit are both warnings the operator must see before trusting it.
   const draft = mr.draft === true || mr.workInProgress === true
@@ -1221,8 +1373,13 @@ function UatCard({ ticket }) {
   if (verification.sha) rows.push([pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, liveShortId(verification.sha, 8))])
   if (verification.merged !== undefined) rows.push([pt(t, 'ticket.mergeState'),
     pt(t, verification.merged ? 'ticket.mergedYes' : 'ticket.mergedNo')])
-  if (verification.uat) rows.push([pt(t, 'ticket.uatReachable'),
-    verification.uat.ok ? `✓ ${verification.uat.status ?? ''}`.trim() : `✗ ${verification.uat.error ?? ''}`.trim()])
+  if (verification.uat) {
+    // A mark alone reads as a bare "✓" when the provider sent no status: the reachability word is always visible.
+    const uatState = pt(t, verification.uat.ok ? 'ticket.uatReachable' : 'ticket.uatUnreachable')
+    const uatDetail = verification.uat.ok ? verification.uat.status : verification.uat.error
+    const uatMark = verification.uat.ok ? '✓ ' : '✗ '
+    rows.push([pt(t, 'ticket.uatReachable'), `${uatMark}${uatState}${uatDetail ? ` · ${uatDetail}` : ''}`])
+  }
   if (verification.changed !== undefined) rows.push([pt(t, 'ticket.uatChange'),
     verification.changed ? pt(t, 'ticket.uatChanged') : pt(t, 'ticket.uatSame')])
   // History uses the one absolute stamp the rest of the detail page uses (T7); relative time is only for
@@ -1246,8 +1403,8 @@ function UatCard({ ticket }) {
 // The six page fragments are being rewritten against the new components above; until every page lands, keep the
 // old composition seams alive so an intermediate build cannot blank a page with a ReferenceError.
 function LiveFrame({ children }) { return h(Fragment, null, children) }
-function LiveTicketList({ tickets, page = 'overview', actions, reload }) {
-  return h(TicketList, { tickets, page, actions, reload })
+function LiveTicketList({ tickets, page = 'overview', actions, reload, now }) {
+  return h(TicketList, { tickets, page, actions, reload, now })
 }
 function LiveRunRows({ runs, limit = Infinity }) {
   const { t } = usePanel()
@@ -1255,13 +1412,19 @@ function LiveRunRows({ runs, limit = Infinity }) {
   if (!list.length) return h(Hint, null, t('empty'))
   return h('ul', { className: 'sa-list' }, list.map(run => {
     const view = runView(t, run)
+    const cause = run.error ? failureLabel(t, run.error) : ''
+    const raw = run.error ? String(run.error) : ''
     return h('li', { key: run.id, className: 'sa-row' },
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(StatusIcon, { state: view.state, size: 14 }),
           h('span', null, view.label),
           h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
-        run.error ? h('p', { className: 'sa-error' }, String(run.error)) : null))
+        // A raw worker error can be a whole stack: the short cause stays inline and the untruncated text folds.
+        run.error ? h('p', { className: 'sa-error' }, cause) : null,
+        run.error && raw.trim() !== cause
+          ? h(Folded, { summary: pt(t, 'run.rawError') }, h(ClampText, { text: raw }))
+          : null))
   }))
 }
 function LiveStatusTags({ engine, config }) {

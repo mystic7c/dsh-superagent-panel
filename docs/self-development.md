@@ -47,7 +47,7 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 ## 分支策略（GitFlow）
 
 - `main`：发布分支，只接收 `release/**` 与 `hotfix/**` 的合并；每次发布打 tag（`v0.4.13` 起）。本机安装跟随
-  `main` 的打包产物（见「本机安装（main 打包产物）」），不再从 stable clone link。
+  `main` 的打包产物（见「本机安装（main 打包产物）」）。
 - `develop`：集成分支，工单的 `feature/<ticketId>` 都合到这里；`live.json` 的 `baseBranch`/`targetBranch` 指向它。
 - `feature/**`：执行器为每张工单推送的交付分支，auto-pr 以 `develop` 为 base 开 PR。
 - `release/<version>`（从 `develop` 切出）与 `hotfix/<version>`（从 `main` 切出）：auto-pr 以 `main` 为 base 开 PR；
@@ -64,7 +64,7 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 | `syntax` | `node --check index.js` | Host 半 `index.js` 语法 |
 | `client-build` | `node scripts/build-client.mjs --check` | `client/index.js` 与 `client/src/` 是否同步（改了源码没重建就失败） |
 | `i18n` | `node scripts/check-keys.mjs` | 客户端用到的文案 key 都存在，且中英文词典 key 一致 |
-| `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 398 个） |
+| `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 541 个） |
 | `render` | `node scripts/render-check.mjs` | jsdom 渲染回归（jsdom/React 来自 `/tmp/sa-harness`） |
 | `isolated` | `node scripts/isolated-verify.mjs` | 起一个隔离 DSH（临时 `DSH_HOME`/state、随机端口）加载本工作树的面板代码，用 Chrome headless CDP 实机渲染并检查侧栏入口、页签与空状态、console 无错误；结束后清理 |
 
@@ -98,23 +98,21 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 ## 入口
 
-执行页 →「手工建单」→ 仓库下拉选择 **DSH Superagent Panel**（`live.json` 的默认仓库是 `ml-ebs`，别沿用默认），
+执行页 →「手工建单」→ 仓库下拉选择 **DSH Superagent Panel**（`live.json` 的默认仓库多半不是本仓库，别沿用默认），
 填写标题与需求后创建；工单随后按上面的流程推进。自开发的典型操作路径是：手工建单 → 工单详情「干跑执行」
 （worker 改工作树、跑闸门、不推送）→ 确认改动后「发布 MR」（重跑闸门再提交、推送）。合入 `develop` 只更新
 集成分支，不会更新本机安装；把新版本装进日常界面要显式安装 `main` 的 tarball（见「本机安装（main 打包产物）」）。
 
 ## 本机安装（main 打包产物）
 
-本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树，也不是 stable clone：
+本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树：
 
-- profile 依赖是 `file:<tarball 绝对路径>`（例如
-  `file:/Users/mlamp/Documents/workspace/private/dsh-plugins/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`）。
+- profile 依赖是 `file:<tarball 绝对路径>`（例如 `file:/abs/path/to/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`，
+  换成你自己机器上的路径）。
 - `~/.dsh/profiles/desktop/node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的**实体目录**，
   不是指向开发仓库的 `link:`。
 - 升级必须**显式安装新 tarball**，再在面板的插件管理里重载插件并刷新页面；合并进 `develop`、在工作树里跑闸门
   都不会改动安装目录或运行态。
-- 旧的 stable clone（`../dsh-superagent-panel-stable`）不再是安装源，只保留作**回滚参考**；不要再用
-  `dsh plugin add` / `link:` 把它接回 profile。
 
 ### 本地打包与安装
 
