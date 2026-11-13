@@ -1,5 +1,9 @@
 # dsh-superagent-panel
 
+[![ci](https://github.com/mystic7c/dsh-superagent-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/mystic7c/dsh-superagent-panel/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](package.json)
+
 Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 插件：在 Web UI 里打开「超级智能体」面板，
 管理主动型编码智能体（Superagent）的工单、来源、触发、评估、执行器与部署配置。
 
@@ -7,10 +11,9 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype)；宿主侧按原型的数据/API
 契约重新实现为**可持久化、可写、与本机 DSH 同源**的本地管理服务。
 
-**当前版本：0.4.31**（版本历史见 [CHANGELOG.md](CHANGELOG.md)；0.4.13 起交付走 GitFlow：工单分支 feature→develop，release/hotfix 走独立分支）。
-运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。设计参照来自对
-[LobeHub（CAO 平台）](https://github.com/lobehub/lobehub) 的研究（本地报告 `spec/lobehub-research-2026-11.md`，
-不随插件分发）。
+版本历史见 [CHANGELOG.md](CHANGELOG.md)，发布包见 [Releases](https://github.com/mystic7c/dsh-superagent-panel/releases)；
+0.4.13 起交付走 GitFlow：`feature/*` → `develop`，release/hotfix 走独立分支合入 `main`。
+运行可复盘、闸门可停、待办可寻址、任务可自动化、验收与信号有独立台账。
 
 ## 功能
 
@@ -30,7 +33,7 @@ Superagent 管理面板 —— 一个带**左侧栏入口**的 DeepSeek Harness 
 
 ## 安装
 
-前置：DSH（含 Web UI）、Node.js ≥ 18。
+前置：DSH（含 Web UI）、Node.js ≥ 20。
 
 ```bash
 # 在 DSH 会话中让 agent 执行，或通过 Plugin Manager 安装该目录
@@ -103,18 +106,22 @@ CHANGELOG.md        版本与能力变更记录
 
 ## 开发与验证
 
+前置：Node.js ≥ 20。干净 clone 只需一次依赖安装（jsdom + React，仅用于渲染回归）：
+
 ```bash
+npm ci                                 # 安装 devDependencies（无运行时依赖）
 node scripts/build-client.mjs          # 从 client/src 生成 client/index.js
-node scripts/build-client.mjs --check  # 校验产物是否最新
+node scripts/build-client.mjs --check  # 校验产物是否最新（CI 强制）
 node --check index.js                  # Host 半语法检查
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（当前 555 个）
 node scripts/check-keys.mjs            # 双语 key 覆盖检查
-node scripts/render-check.mjs          # jsdom 渲染回归（当前 190/190）
+node scripts/render-check.mjs          # jsdom 渲染回归（当前 194/194；无 live.json 时用内置 fixture）
 node scripts/isolated-verify.mjs       # 隔离 DSH + Chrome headless CDP 实机验证（需本机 Chrome）
 node scripts/verify-panel.mjs capture  # 需要 CDP 9222 的隔离 DSH 实例；截图到 verification/
 ```
 
-`npm run test` 等价于 Host 测试，`npm run verify` 等价于构建产物与 i18n 校验。`spec/` 与 `verification/` 是本地
+`npm run test` 等价于 Host 测试，`npm run verify` 等价于构建产物与 i18n 校验。前七条在干净 clone 上都能跑，
+CI 也跑这七条；最后两条需要本机桌面 DSH + Chrome，属于发布前的人工闸门。`spec/` 与 `verification/` 是本地
 设计/验收材料（gitignore），不随插件分发。
 
 改客户端后刷新页面；改 Host 半（`index.js`/`lib`）后在 Plugin Manager 里禁用→启用该插件（或重启 DSH）。

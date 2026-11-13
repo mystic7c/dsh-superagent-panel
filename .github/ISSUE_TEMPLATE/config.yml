@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安全漏洞
+    url: https://github.com/mystic7c/dsh-superagent-panel/security/advisories/new
+    about: 私密报告安全问题，不要开公开 issue
+  - name: 使用与配置问题
+    url: https://github.com/mystic7c/dsh-superagent-panel/blob/develop/docs/self-development.md
+    about: 先看文档里的自开发与配置说明

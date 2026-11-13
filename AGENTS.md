@@ -34,11 +34,12 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 ## 每次改动的最低要求
 
 ```bash
+npm ci                                              # 首次：安装 devDependencies（无运行时依赖）
 node --check index.js                              # Host 半语法
 node scripts/build-client.mjs --check               # 客户端产物是否最新（改了 client/src 先跑 node scripts/build-client.mjs）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
-node scripts/render-check.mjs                      # jsdom 渲染回归（依赖 /tmp/sa-harness）
+node scripts/render-check.mjs                      # jsdom 渲染回归（干净 clone 先 npm ci；无 live.json 时用内置 fixture）
 ```
 
 - 改了客户端源码：先 `node scripts/build-client.mjs`，把 `client/index.js` 一起提交，否则闸门失败。
@@ -66,16 +67,6 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（依赖
 
 ## 交付语义（GitHub 仓库）
 
-`live.json` 里本仓库的仓库项使用 `verifyMode: "manual"`、`createMr: "push"`、`ci: false`，分支策略是 GitFlow：
-`main` 只放发布（打 tag），`develop` 是集成分支，工单的 `feature/<ticketId>` 合入 `develop`：
-
-- 执行器跑完闸门、提交并推送 `feature/<ticketId>` 分支；对 github.com 仓库**不带 GitLab push options**推送
-  （GitHub 忽略这些选项，且实测带 options 的推送会被服务端以 `no voting servers succeeded` 拒绝），
-  `.github/workflows/auto-pr.yml` 按前缀开 PR：`feature/**` → `develop`，`release/**`、`hotfix/**` → `main`，
-  人工评审合并。
-- 合并请用 merge commit（不要 squash）——面板靠 `git merge-base --is-ancestor <commit> origin/develop` 判断是否
-  合入集成分支（分支取自 `baseBranch`）。
-- 面板侧工单先到 `mr-open`（从推送输出解析 `/pull/new/` 链接），合并进 `develop` 后自动转 `merged`，再由人验收。
-- 发布由人做：`develop` → `main` 的 PR 合并（merge commit），打 tag `vX.Y.Z`；本机安装只认 `main` 的打包
-  tarball——显式安装新 tarball（`scripts/local-install.mjs`）后重载插件。不要直接向
-  `main`/`develop` 推改动（bootstrap 例外，由维护者执行）。
+分支模型、交付桥（`.github/workflows/auto-pr.yml` 按前缀开 PR）、合并方式与发布流程见
+[`docs/delivery.md`](docs/delivery.md)。给 Agent 的三条硬线：不推 `main`/`develop`，不 squash 合并，
+推送不带 GitLab push options。
