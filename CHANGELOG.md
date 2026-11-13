@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.37] — 2026-11-13
+
+真浏览器点检（隔离 DSH web 实例 + 真实工单数据）发现的漏项：触发页的三个筛选分段把「条数」只写在 `title`
+里，键盘与读屏都拿不到（WIG A3 同类问题在 0.4.36 清扫时漏掉了这一处）。
+
+### 内容
+- `SegmentedControl` 支持 `option.description`，渲染为按钮内的 `.sa-sr-only` 文案，因此可访问名变成
+  「已订阅 4 条」；`45-trigger.js` 的三个筛选项同时传 `title`（悬停仍显示）与 `description`（读屏/语音输入可见）。
+- 其余 0.4.36 改动在真机同路径点检中表现正常（见 `verification/ui-review-team.md` 的「真机点检」一节）。
+
+### 验证
+- `node scripts/build-client.mjs`（22 fragments，11672 行）、`node scripts/check-keys.mjs`（967 literal / 513 shared /
+  1359 page-local）、`node --test lib/store.test.js lib/live/*.test.js`（555 pass）、`node scripts/render-check.mjs` 全绿；
+  隔离实例里重载后 `.sa-segment` 的可访问名已含条数。
+
 ## [0.4.36] — 2026-11-13
 
 按 Web Interface Guidelines 全渲染层审查（89 条）与 CSS 设计审查（14 条）逐条修复；不改变页面信息架构，只修
