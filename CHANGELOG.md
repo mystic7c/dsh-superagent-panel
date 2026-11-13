@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.7] — 2026-11-14
+
+### 变更
+- `client/src/60-settings.js`（2306 行，420 处 `h(...)`）从 `h(...)` 迁移到 JSX（P2 第六步，issue #34）：
+  `SettingsSwitchRow`、`SettingsStatusLine`、`WorkerCapabilityCard`、`ReposCard`、`settingsHeading`、`saveBarFor`、
+  `reloadButton`、`renderRepos`、`renderOctoToken`、`renderGroupPicker`、`renderSenders`、`renderSource`、`renderEval`、
+  `renderReview`、`renderRun`、`renderWorker`、`renderWrite`、`renderPrompt`、`settingsNavButton`、`repoFieldError`，
+  以及四个对话框（变更历史、编辑仓库、添加仓库、配置示例）与最终返回树。
+- 添加仓库的表单原本十二个字段各写一遍，抽成 `repoInputField(key, labelKey, { required, placeholder, hintKey })`
+  一个 helper；编辑仓库的差异表 `repoEditRows`、闸门编辑器、各组的保存/丢弃/重载逻辑保持不变。
+- 产物 486,236 → 484,636 字节（−1,600），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：958 literal keys / 513 shared / 1359 page-local，OK（数字从 967 降到 958，是因为
+  九个字段标签改成通过 `repoInputField` 的 `labelKey` 参数传入，不再出现在 `pt(t, '…')` 字面量位置；键本身没变）。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+- 真实浏览器（隔离实例 + 夹具状态）：设置页各组切换、添加仓库对话框（13 个字段、必填校验报「请填写此项。」并聚焦
+  `sa-repo-field-id`）、编辑仓库对话框（12 个输入、闸门编辑）、配置示例对话框（`pre` 360 字）均正常渲染，无控制台报错。
+  截图 `verification/browser-run-settings-0.5.7.png`、`verification/browser-run-add-repo-0.5.7.png`。
+
 ## [0.5.6] — 2026-11-14
 
 ### 变更
