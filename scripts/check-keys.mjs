@@ -3,9 +3,22 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { createRequire } from 'node:module'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = join(root, 'client', 'src')
+
+// Fragments may contain JSX, so they are compiled exactly like the bundle does before evaluation.
+const require = createRequire(import.meta.url)
+let esbuild
+try {
+  esbuild = require('esbuild')
+} catch (error) {
+  console.error('check-keys needs esbuild: run `npm ci` in the repo root first.')
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(2)
+}
+
 // The bundle prelude provides React and these hooks; the checker repeats it so fragments can be evaluated.
 const PRELUDE = `
 const React = { createElement: () => null, useState: () => [], useEffect: () => {}, useRef: () => ({}), useMemo: () => ({}), Component: class {},
@@ -15,7 +28,10 @@ const h = React.createElement
 `
 const load = (names) => {
   const text = names.map(name => readFileSync(join(src, name), 'utf8')).join('\n')
-  const factory = new Function(`${PRELUDE}${text}\nreturn { DICTS, TEXT, PAGE_TEXT }`)
+  const { code } = esbuild.transformSync(`${PRELUDE}${text}`, {
+    loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'React.Fragment', target: 'es2022',
+  })
+  const factory = new Function(`${code}\nreturn { DICTS, TEXT, PAGE_TEXT }`)
   return factory()
 }
 // Load every fragment in build order so `Object.assign(PAGE_TEXT, ...)` contributions are visible.
