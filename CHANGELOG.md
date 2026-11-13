@@ -19,7 +19,9 @@ CLI 进程组、恢复时对远端推送对账、评测与来源深链可回溯�
 - 文档：README、`docs/self-development.md`、`docs/feature-maturity.md` 与实际测试数、停止能力对齐。
 
 ### 验证
-- `node --check index.js`；`node scripts/build-client.mjs --check`；`node scripts/check-keys.mjs`；`node --test lib/store.test.js lib/live/*.test.js`；`node scripts/render-check.mjs`（数字见下方合并后版本节）。
+`node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10826 行）；`node scripts/check-keys.mjs`
+（882 literal / 513 shared / 1295 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（541 通过 0 失败）；
+`node scripts/render-check.mjs`（194 项检查全过，含仓库闸门保存后刷新的回归断言）。
 
 ## [0.4.32] — 2026-11-13
 

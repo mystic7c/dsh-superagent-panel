@@ -337,6 +337,18 @@ window.fetch = global.fetch = async (input, init = {}) => {
     })
   }
   if (method === 'POST' && p === 'engine/poll') return json({ fetched: 0, accepted: [], ignored: [], skipped: [], dryRun: true })
+  // AC-10: saving one repository edit answers with the saved summary and the config view, exactly like the Host; the
+  // fixture is mutated in memory only so the check never writes live.json.
+  const repoEditRoute = /^engine\/repo\/([^/]+)$/.exec(p)
+  if (method === 'POST' && repoEditRoute) {
+    const body = init.body ? JSON.parse(String(init.body)) : {}
+    const patch = body.patch ?? body
+    const list = Array.isArray(fixtures.status.repos) ? fixtures.status.repos : []
+    const repo = list.find(item => item.id === decodeURIComponent(repoEditRoute[1]))
+    if (repo) Object.assign(repo, patch)
+    fixtures.status.config = { ...(fixtures.status.config ?? {}), repos: list }
+    return json({ repo, config: fixtures.status.config })
+  }
   return json({})
 }
 
@@ -817,8 +829,6 @@ check('repository edit previews the diff before saving',
 // the pre-save diff even when the gate count is unchanged.
 const addGate = [...rootElement.querySelectorAll('.sa-modal button')]
   .find(button => (button.textContent ?? '').trim() === '添加闸门')
-addGate?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-await sleep(80)
 const gateNameInput = rootElement.querySelector('.sa-modal input[aria-label="闸门名称"]')
 const gateCommandInput = rootElement.querySelector('.sa-modal input[aria-label="命令"]')
 check('repository gate editor exposes per-gate fields and add/remove controls',
@@ -836,6 +846,20 @@ if (gateNameInput && gateCommandInput) {
   await sleep(80)
   check('a gate field change appears in the pre-save diff',
     /闸门「render-gate」/.test(text()) && /echo changed/.test(text()), text().slice(-400))
+  // AC-10: the saved edit must survive a reload — the card previously kept showing the old name-only projection and
+  // the reopened editor came back empty.
+  const saveRepoButton = [...rootElement.querySelectorAll('.sa-modal button')]
+    .find(button => (button.textContent ?? '').trim() === '保存')
+  saveRepoButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(400)
+  check('saving a repository edit keeps the edited gate on the card', text().includes('render-gate'), text().slice(-400))
+  const reopenRepoButton = [...rootElement.querySelectorAll('.sa-main button')]
+    .find(button => (button.textContent ?? '').trim() === '编辑')
+  reopenRepoButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(150)
+  const reopenedGates = [...rootElement.querySelectorAll('.sa-modal input[aria-label="闸门名称"]')].map(node => node.value)
+  check('the reopened repository editor shows the saved gate fields',
+    reopenedGates.includes('render-gate'), JSON.stringify(reopenedGates))
 }
 const cancelRepo = [...rootElement.querySelectorAll('.sa-modal button, .sa-dialog button')]
   .find(button => /取消|关闭/.test((button.textContent ?? '').trim()))
