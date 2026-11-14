@@ -407,13 +407,13 @@ window.fetch = global.fetch = async (input, init = {}) => {
 
 // ---- load the real client modules ------------------------------------------------------------------------------
 const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = loadClient({
-  App: '30-shell.js',
-  translate: '06-i18n.js',
-  DICTS: '06-i18n.js',
-  PAGE_TEXT: '21-localtext.js',
-  MarkdownLite: '20-widgets.js',
-  PANEL_CSS: '05-style.js',
-  settingsPatchOf: '60-settings.js',
+  App: 'shell.js',
+  translate: 'i18n.js',
+  DICTS: 'i18n.js',
+  PAGE_TEXT: 'localtext.js',
+  MarkdownLite: 'widgets.js',
+  PANEL_CSS: 'style.js',
+  settingsPatchOf: 'settings.js',
 }, { react: React })
 
 const t = (key, values) => {
@@ -508,7 +508,7 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
   const headerText = rootElement.querySelector('.sa-global-status')?.textContent ?? ''
   check('header shows the running count', /执行中\s*\d+/.test(headerText), headerText)
   // Mobile header geometry: the overflow trigger must ride the title row (full-width there), never the status row —
-  // if it moved back into .sa-head-tools its 40px hit area would sit on the status line again (see 05-style.js 600px).
+  // if it moved back into .sa-head-tools its 40px hit area would sit on the status line again (see style.js 600px).
   const head = rootElement.querySelector('.sa-head')
   const titleRow = head?.querySelector('.sa-head-title')
   const toolsRow = head?.querySelector('.sa-head-tools')

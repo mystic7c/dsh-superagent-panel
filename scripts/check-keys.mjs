@@ -14,9 +14,9 @@ import { loadClient } from './client-exports.mjs'
 const stubReact = { Component: class {}, Fragment: {}, createContext: () => ({}), createElement: () => null,
   useCallback: () => {}, useContext: () => undefined, useEffect: () => {}, useLayoutEffect: () => {},
   useMemo: () => ({}), useRef: () => ({}), useState: () => [] }
-const { DICTS, PAGE_TEXT } = loadClient({ DICTS: '06-i18n.js', PAGE_TEXT: '21-localtext.js' }, { react: stubReact })
+const { DICTS, PAGE_TEXT } = loadClient({ DICTS: 'i18n.js', PAGE_TEXT: 'localtext.js' }, { react: stubReact })
 const order = readdirSync(src).filter(name => name.endsWith('.js')).sort()
-const fragments = order.filter(name => !['06-i18n.js', '21-localtext.js', '00-react.js', 'index.js'].includes(name))
+const fragments = order.filter(name => !['i18n.js', 'localtext.js', 'react.js', 'index.js'].includes(name))
 const used = new Map()
 const definitions = new Map()
 const duplicateKeys = []
