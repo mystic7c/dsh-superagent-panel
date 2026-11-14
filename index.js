@@ -648,12 +648,18 @@ export function apply(ctx, config = {}) {
         }
         // AC-08/09: durable delivery evidence, independent of the operation-ledger window and the worktree.
         if (method === 'GET' && second === 'evidence' && third) {
-          const value = segments[3] === 'compare'
-            ? engine.evidenceCompare(third, url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined)
-            : engine.evidenceView(third)
-          if (!value) throw new ActionError(404, '没有这段交付证据')
-          send(res, 200, value)
-          return
+          if (segments[3] === 'compare') {
+            const compared = engine.evidenceCompare(third, url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined)
+            if (!compared) throw new ActionError(404, '没有可比较的交付证据')
+            send(res, 200, compared)
+            return
+          }
+          const value = engine.evidenceView(third)
+          if (value) { send(res, 200, value); return }
+          // A ticket that exists but never delivered anything is an empty result, not a read failure: the detail page
+          // renders `detail.evidenceEmpty` for it, while a real error would show the retry state instead.
+          if (engine.ticketView(third)) { send(res, 200, { ticketId: third, rounds: [] }); return }
+          throw new ActionError(404, '没有这段交付证据')
         }
         throw new ActionError(404, `未知引擎接口：${method} ${segments.slice(1).join('/')}`)
       }
