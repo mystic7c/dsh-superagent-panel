@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.0.0] — 2026-11-14
+
+第一个公开发布版本。仓库转为 public，npm 上以 `@mystic7c/dsh-superagent-panel` 发布（`publishConfig.access: public`，
+`private` 已移除）。
+
+### 自 0.9.13 起
+- 无功能变化；只改分发元数据与安装文档：`package.json` 去掉 `"private": true`、加 `publishConfig`，版本 1.0.0；
+  README 的「安装」一节改成 npm 优先，tarball 与本地 checkout 作为备选。
+
+### 1.0 之前发生了什么（0.4.39 → 1.0.0 摘要）
+- **0.4.39–0.9.4**：开源准备（LICENSE / CI / `npm ci` 与 lockfile / 可复现的 jsdom 渲染回归 / CONTRIBUTING、COC、
+  SECURITY、issue 与 PR 模板）、客户端构建层从「手写拼接」换成 esbuild（产物 782 KB → 481 KB + sourcemap）、
+  客户端全面迁移到 JSX、客户端拆成真正的 ESM 模块并把文件名语义化。
+- **0.9.5–0.9.12**：`checkJs` 分档推进到全量（Host 半 + 客户端入口，28 个文件、0 错误）；删除旧「演示管理层」
+  1,752 行与 25 条遗留路由；交付桥覆盖 `fix/**`、`chore/**`、`docs/**`；README 重写并拆出 `docs/pages.md`
+  与 `docs/quickstart.md`；历史中的内部域名/仓库名/本机路径用 `git-filter-repo` 重写清除。
+- **0.9.13**：修「改动 diff」弹窗在工单已消失时永远停在「正在读取 diff…」。
+
+### 验证
+- `check:js` 0（28 文件）、`types` 通过、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360、
+  Host 554 pass / 0 fail、render-check 198 checks / 0 failed / 0 skipped、`isolated-verify` PASS（console errors 0）。
+- `npm pack` 后在干净临时目录 `npm i <tgz>` + `dsh plugin --profile <临时> add <tgz>` 可启动面板。
+
 ## [0.9.13] — 2026-11-14
 
 ### 修复
