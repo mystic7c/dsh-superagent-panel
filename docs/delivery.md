@@ -10,6 +10,9 @@
 | 分支前缀 | 目标 |
 | --- | --- |
 | `feature/**` | `develop` |
+| `fix/**` | `develop` |
+| `chore/**` | `develop` |
+| `docs/**` | `develop` |
 | `release/**` | `main` |
 | `hotfix/**` | `main` |
 
