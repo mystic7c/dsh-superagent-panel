@@ -1,8 +1,10 @@
 /* A small, safe Markdown subset for ticket bodies and messages: headings, lists, paragraphs, bold, inline code and
    http(s) links. Raw HTML is never interpreted; every string ends up as React text. */
 
-const LINK_PATTERN = /(https?:\/\/[^\s<>()]+)/g
-function linkify(text) {
+import { when } from "./06-i18n.js"
+import { React, h } from "./00-react.js"
+export const LINK_PATTERN = /(https?:\/\/[^\s<>()]+)/g
+export function linkify(text) {
   const parts = []
   let last = 0
   for (const match of String(text ?? '').matchAll(LINK_PATTERN)) {
@@ -15,7 +17,7 @@ function linkify(text) {
 }
 /** Split inline Markdown (`**bold**`, ``code``, `[text](url)` and bare URLs) into renderable parts. A relative
     target keeps its label as a reference instead of becoming a dead link inside the app shell. */
-function inlines(text) {
+export function inlines(text) {
   const parts = []
   const source = String(text ?? '')
   const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<>()]+)/g
@@ -39,8 +41,8 @@ function inlines(text) {
 }
 /** A pasted SQL/program dump is often un-fenced. Detect it so the transcript stays readable instead of wrapping it as
     prose: long lines plus SQL keywords, or several code marks on multiple lines. */
-const CODE_SQL = /\b(SELECT|FROM|WHERE|JOIN|GROUP BY|ORDER BY|HAVING|INSERT INTO|UPDATE|DELETE FROM|CREATE|ALTER|DROP|BEGIN|DECLARE|COMMIT)\b/i
-function looksLikeCode(value) {
+export const CODE_SQL = /\b(SELECT|FROM|WHERE|JOIN|GROUP BY|ORDER BY|HAVING|INSERT INTO|UPDATE|DELETE FROM|CREATE|ALTER|DROP|BEGIN|DECLARE|COMMIT)\b/i
+export function looksLikeCode(value) {
   const text = String(value ?? '')
   const lines = text.split('\n')
   const longLine = lines.some(line => line.length > 120)
@@ -54,7 +56,7 @@ function looksLikeCode(value) {
 }
 
 /** Split a message into headings, ordered/unordered lists, fenced code blocks and paragraphs. */
-function markdownBlocks(text) {
+export function markdownBlocks(text) {
   const blocks = []
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   let paragraph = []

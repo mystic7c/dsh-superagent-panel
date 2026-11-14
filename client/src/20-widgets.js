@@ -4,13 +4,19 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
+import { Icon, cx, hhmmss, isExternal, safeHttpUrl } from "./00-util.js"
+import { GLOSSARY, GLOSSARY_VALUES, errorText, fullTime, readableMarkers, translate, when } from "./06-i18n.js"
+import { inlines, markdownBlocks } from "./07-md.js"
+import { Button, CopyButton, IconButton, InfoTip, Modal, STATUS_STATES, StatusIcon, StatusText, Tag, controlIcon } from "./10-controls.js"
+import { same, useAction, usePanel } from "./15-api.js"
+import { Fragment, React, h, useState } from "./00-react.js"
 /** Relative time with an absolute tooltip; the only timestamp renderer pages need. */
-function When({ at }) {
+export function When({ at }) {
   const { t } = usePanel()
   return <time dateTime={at} title={fullTime(at, t.lang)}>{when(at, t.lang)}</time>
 }
 
-function Section({ title, count, icon, hint, action, badge, id, children }) {
+export function Section({ title, count, icon, hint, action, badge, id, children }) {
   return <section className="sa-section" id={id}>
     <h2 className="sa-section-title">
       {icon ? <span className="sa-section-icon">{controlIcon(icon, 15)}</span> : null}
@@ -25,9 +31,9 @@ function Section({ title, count, icon, hint, action, badge, id, children }) {
   </section>
 }
 
-function Hint({ children }) { return <p className="sa-hint">{children}</p> }
+export function Hint({ children }) { return <p className="sa-hint">{children}</p> }
 
-function KeyValues({ rows, className }) {
+export function KeyValues({ rows, className }) {
   return <dl className={className ? `sa-kv ${className}` : 'sa-kv'}>
     {rows.map(([key, value], index) => <div key={index} style={{ display: 'contents' }}>
       <dt>{key}</dt><dd>{value}</dd>
@@ -35,7 +41,7 @@ function KeyValues({ rows, className }) {
   </dl>
 }
 
-function Inlines({ parts, depth = 0 }) {
+export function Inlines({ parts, depth = 0 }) {
   return <>{parts.map((part, index) => part.kind === 'bold' ? <strong key={index}>{part.text}</strong>
     : part.kind === 'code' ? <code key={index} className="sa-code" translate="no">{part.text}</code>
     // Link labels can carry their own inline markup (`[`file.sql`](path)`); parse the label instead of printing its
@@ -54,7 +60,7 @@ function Inlines({ parts, depth = 0 }) {
 }
 
 /** Render a safe Markdown subset; raw HTML is shown as text. Fenced code gets its own block with a copy control. */
-function MarkdownLite({ text }) {
+export function MarkdownLite({ text }) {
   return <div className="sa-md">{markdownBlocks(text).map((block, index) => {
     if (block.kind === 'code') {
       return <div key={index} className="sa-md-code">
@@ -81,7 +87,7 @@ function MarkdownLite({ text }) {
   })}</div>
 }
 
-function ClampText({ text, limit = 480, lines = 8 }) {
+export function ClampText({ text, limit = 480, lines = 8 }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const long = String(text ?? '').length > limit || String(text ?? '').split('\n').length > lines
@@ -96,7 +102,7 @@ function ClampText({ text, limit = 480, lines = 8 }) {
 
 /** Destructive/irreversible action behind a confirmation dialog that states the consequence. `confirmLabel` names the
     action on the button ("Publish MR", "Delete branch and ignore"); the generic "Confirm" is only the fallback. */
-function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant = 'ghost', icon }) {
+export function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant = 'ghost', icon }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const confirm = useAction(onConfirm)
@@ -114,7 +120,7 @@ function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant
 /** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
     (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
     payloads, so an unchecked scheme would be a stored-XSS sink. */
-function ExternalLink({ href, children, icon = 'external' }) {
+export function ExternalLink({ href, children, icon = 'external' }) {
   const safe = safeHttpUrl(href)
   if (!safe) return <span className="sa-inline-link">{children}</span>
   const external = isExternal(safe)
@@ -124,7 +130,7 @@ function ExternalLink({ href, children, icon = 'external' }) {
 }
 
 /** Legacy loading/error line; new code uses ErrorState/Skeleton. */
-function LoadState({ error, loading }) {
+export function LoadState({ error, loading }) {
   const { t } = usePanel()
   if (error) return <p className="sa-error" role="alert">{errorText(error)}</p>
   return loading ? <Hint>{t('loading')}</Hint> : null
@@ -132,7 +138,7 @@ function LoadState({ error, loading }) {
 
 /** Detail-page head: back (route history), 20/600 title, meta line and actions. `showBack` is false for a detail
     rendered as a master-detail pane, where there is no list route to return to. */
-function PageHead({ title, meta, actions, showBack = true, headRef }) {
+export function PageHead({ title, meta, actions, showBack = true, headRef }) {
   const { back, backLabel, t } = usePanel()
   return <div ref={headRef} className="sa-page-head">
     {showBack ? <div className="sa-page-head-top">
@@ -147,7 +153,7 @@ function PageHead({ title, meta, actions, showBack = true, headRef }) {
 }
 
 /** Positive empty state: one teaching sentence plus one next step. `state` ('done') tints it as a success message. */
-function EmptyState({ icon = 'inbox', title, hint, action, state }) {
+export function EmptyState({ icon = 'inbox', title, hint, action, state }) {
   return <div className="sa-empty" data-state={state}>
     {icon ? <span className="sa-empty-icon">
       {state ? <StatusIcon state={state} size={20} spin={false} /> : <Icon name={icon} size={20} />}
@@ -161,7 +167,7 @@ function EmptyState({ icon = 'inbox', title, hint, action, state }) {
 }
 
 /** Plain-language error with a retry and a folded raw value (never a bare stack trace). */
-function ErrorState({ error, onRetry }) {
+export function ErrorState({ error, onRetry }) {
   const { t } = usePanel()
   const message = error instanceof Error ? error.message : String(error ?? '')
   const raw = error instanceof Error ? (error.stack || error.message) : message
@@ -176,9 +182,9 @@ function ErrorState({ error, onRetry }) {
   </div>
 }
 
-const SKELETON_WIDTHS = ['100%', '92%', '78%', '86%', '64%', '72%']
+export const SKELETON_WIDTHS = ['100%', '92%', '78%', '86%', '64%', '72%']
 /** Section-level loading skeleton; polled data keeps its old render, so this is first paint only. */
-function Skeleton({ rows = 3, variant = 'section' }) {
+export function Skeleton({ rows = 3, variant = 'section' }) {
   const { t } = usePanel()
   const count = Math.max(1, Math.min(12, Number(rows) || 3))
   return <div className={cx('sa-skeleton', `sa-skeleton-${variant}`)} role="status" aria-busy="true" aria-label={t('loading')}>
@@ -189,7 +195,7 @@ function Skeleton({ rows = 3, variant = 'section' }) {
 }
 
 /** Block-level save bar: invisible while clean, explicit while dirty/saving/saved/error (contract §6.6). */
-function SaveBar({ state, savedAt, error, onSave, onRetry, onDiscard, dirty }) {
+export function SaveBar({ state, savedAt, error, onSave, onRetry, onDiscard, dirty }) {
   const { t } = usePanel()
   const current = state ?? (dirty ? 'dirty' : 'idle')
   if (current === 'idle') return null
@@ -215,7 +221,7 @@ function SaveBar({ state, savedAt, error, onSave, onRetry, onDiscard, dirty }) {
 }
 
 /** Monospace raw value (ids, paths, gate codes, JSON): copyable and folded by default. */
-function RawValue({ label, text, json, openLabel }) {
+export function RawValue({ label, text, json, openLabel }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const value = json === undefined || json === null ? String(text ?? '') : typeof json === 'string' ? json : JSON.stringify(json, null, 2)
@@ -235,7 +241,7 @@ function RawValue({ label, text, json, openLabel }) {
 }
 
 /** Lightweight disclosure row for secondary content. */
-function Folded({ summary, children }) {
+export function Folded({ summary, children }) {
   return <details className="sa-folded">
     <summary className="sa-folded-summary"><Icon name="chevron-right" size={14} /><span>{summary}</span></summary>
     <div className="sa-folded-body">{children}</div>
@@ -243,7 +249,7 @@ function Folded({ summary, children }) {
 }
 
 /** Page-head ? button: renders the glossary + status legend dialog. */
-function GlossaryButton() {
+export function GlossaryButton() {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   return <>
@@ -254,7 +260,7 @@ function GlossaryButton() {
 }
 
 /** Glossary + state legend, all content from 06-i18n.js (GLOSSARY / GLOSSARY_VALUES / term.* / meaning.* / legend.*). */
-function GlossaryModal({ open, onClose }) {
+export function GlossaryModal({ open, onClose }) {
   const { t } = usePanel()
   return <Modal open={open} onClose={onClose} title={t('glossary')} closeLabel={t('close')} description={t('glossaryIntro')}
     className="sa-glossary-modal">

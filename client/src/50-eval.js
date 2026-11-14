@@ -4,6 +4,18 @@
    strength and rule hit count on one meta line, and folds open to the rule-by-rule result plus the raw decision.
    Data: GET engine/decisions?kind=&window= (host increments, contract §4). */
 
+import { API, Icon } from "./00-util.js"
+import { reasonLabel, when } from "./06-i18n.js"
+import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switch, Tag } from "./10-controls.js"
+import { same, stay, usePanel } from "./15-api.js"
+import { EmptyState, ErrorState, Folded, Hint, RawValue, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { remember } from "./25-router.js"
+import { useLiveResource } from "./32-live-model.js"
+import { decisionKindView, liveShortId } from "./34-live-ui.js"
+import { ThreadRuleRows } from "./48-thread-detail.js"
+import { apply } from "./90-apply.js"
+import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'ev.intro': ['引擎的每次判断：结果、原因、强度与命中规则。', 'Every judgement the engine made: outcome, reason, strength and matched rules.'],
   'ev.title': ['评估记录', 'Evaluations'],
@@ -68,23 +80,23 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** Endpoint `kind` values in display order; labels come from the shared decision vocabulary. */
-const EVAL_KINDS = ['all', 'accept', 'reopen', 'stop', 'ignore', 'unavailable']
-const evalKindLabel = (t, kind) => kind === 'all' ? pt(t, 'decisionFilter.all') : pt(t, `decision.${kind}`)
+export const EVAL_KINDS = ['all', 'accept', 'reopen', 'stop', 'ignore', 'unavailable']
+export const evalKindLabel = (t, kind) => kind === 'all' ? pt(t, 'decisionFilter.all') : pt(t, `decision.${kind}`)
 
 /** Strength vocabulary is closed; an unknown value falls back to the raw string instead of a missing key. */
-const EVAL_STRENGTHS = ['explicit', 'inferred']
+export const EVAL_STRENGTHS = ['explicit', 'inferred']
 
 /** Locale-correct percent formatting for the model probability (P2): `Intl` instead of hand-built `${round(p*100)}%`. */
-const EVAL_PERCENT_FORMAT = {
+export const EVAL_PERCENT_FORMAT = {
   en: new Intl.NumberFormat('en', { style: 'percent', maximumFractionDigits: 0 }),
   zh: new Intl.NumberFormat('zh-CN', { style: 'percent', maximumFractionDigits: 0 }),
 }
-function evalPercent(t, value) {
+export function evalPercent(t, value) {
   return (EVAL_PERCENT_FORMAT[t.lang] ?? EVAL_PERCENT_FORMAT.en).format(value)
 }
 
 /** Human label for the decision model's shadow verdict; unknown values stay visible as the raw string. */
-function evalShadowVerdict(t, verdict) {
+export function evalShadowVerdict(t, verdict) {
   if (verdict === 'accept') return pt(t, 'ev.shadowAccept')
   if (verdict === 'reject') return pt(t, 'ev.shadowReject')
   if (verdict === 'uncertain') return pt(t, 'ev.shadowUncertain')
@@ -92,7 +104,7 @@ function evalShadowVerdict(t, verdict) {
 }
 
 /** One tag per decision: the model's calibrated probability + the action it would have taken under the thresholds. */
-function evalModelTag(t, decision) {
+export function evalModelTag(t, decision) {
   const shadow = decision?.shadow
   const model = shadow ?? decision?.model
   if (!model || typeof model !== 'object') return null
@@ -109,7 +121,7 @@ function evalModelTag(t, decision) {
 
 /** One message excerpt for the row title: the host's decision preview, or — for payloads/histories whose Trigger text
     is gone — the request title the reason already carries. Empty only when neither exists. */
-function evalMessagePreview(decision) {
+export function evalMessagePreview(decision) {
   const preview = typeof decision.preview === 'string' ? decision.preview.trim() : ''
   if (preview) return preview
   return (Array.isArray(decision.reason) ? decision.reason : decision.reason ? [decision.reason] : [])
@@ -121,7 +133,7 @@ function evalMessagePreview(decision) {
 /** Visible identity of a decision: what the row can show. Two decisions with the same identity are one judgement
     repeated (a re-evaluation or a duplicate accept), so the list folds them into one row with ×N instead of printing
     two rows the operator cannot tell apart. */
-function evalGroupKey(decision) {
+export function evalGroupKey(decision) {
   const rules = Array.isArray(decision.rules) ? decision.rules : []
   const hit = rules.filter(rule => rule.matched).length
   // A request can be judged more than once (re-evaluation, duplicate accept) and produce different Tickets. The group
@@ -139,7 +151,7 @@ function evalGroupKey(decision) {
 }
 
 /** Newest-first groups of decisions that differ only by time; order follows the first (newest) occurrence. */
-function groupEvalDecisions(items) {
+export function groupEvalDecisions(items) {
   const groups = new Map()
   for (const decision of items) {
     const key = evalGroupKey(decision)
@@ -154,7 +166,7 @@ function groupEvalDecisions(items) {
 
 /** One decision row: the message it judged as the title, the shape-coded outcome as a leading tag, then reason,
     strength, rule hit count and the Ticket link on one meta line, followed by the folded rule-by-rule result. */
-function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLinks = []) {
+export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLinks = []) {
   const view = decisionKindView(decision)
   const label = pt(t, view.labelKey)
   const kindLabel = label === view.labelKey ? String(view.kind) : label
@@ -230,7 +242,7 @@ function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = [], runLi
 }
 
 /** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
+export function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
   const noRecords = (counts.all ?? 0) === 0
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
@@ -244,14 +256,14 @@ function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, cle
     action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { clearAll(); setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
 }
 
-const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
+export const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ', repo: 'evalRepo',
   reason: 'evalReason', from: 'evalFrom', to: 'evalTo', view: 'evalView', offset: 'evalOffset' }
-const EVAL_PAGE_SIZE = 25
-const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
-const EVAL_VIEWS = ['all', 'divergence', 'override']
+export const EVAL_PAGE_SIZE = 25
+export const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
+export const EVAL_VIEWS = ['all', 'divergence', 'override']
 
 /** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
-function evalUrlState() {
+export function evalUrlState() {
   try {
     const params = new URLSearchParams(window.location.search)
     const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
@@ -264,7 +276,7 @@ function evalUrlState() {
   } catch { return { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 } }
 }
 
-function rememberEvalFilters(next) {
+export function rememberEvalFilters(next) {
   try {
     const url = new URL(window.location.href)
     for (const [key, param] of Object.entries(EVAL_URL_KEYS)) {
@@ -277,13 +289,13 @@ function rememberEvalFilters(next) {
 }
 
 /** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
-function dateBound(value, end = false) {
+export function dateBound(value, end = false) {
   if (!value) return ''
   const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
   return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
-function LiveEvalPage() {
+export function LiveEvalPage() {
   const { t, navigate } = usePanel()
   const initial = useRef(evalUrlState())
   const [kind, setKind] = useState(initial.current.kind)

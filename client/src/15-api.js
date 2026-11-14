@@ -2,14 +2,18 @@
    The live panel reads everything through the engine's own endpoints (32-live-model); the provider therefore
    only owns transport, routing helpers and the toast — it no longer polls a global `state` document. */
 
-class ApiError extends Error {
+import { API } from "./00-util.js"
+import { PANEL_CSS } from "./05-style.js"
+import { errorText } from "./06-i18n.js"
+import { React, createContext, h, useCallback, useContext, useEffect, useMemo, useRef, useState } from "./00-react.js"
+export class ApiError extends Error {
   constructor(message, status, details = {}) { super(message); this.status = status; this.details = details }
   get issues() { return this.details.issues ?? [] }
   get missing() { return this.status === 404 && !this.details.unreachable }
 }
 
 /** Call one management endpoint; every request is marked so the host can refuse cross-site posts. */
-async function apiCall(t, path, method, body) {
+export async function apiCall(t, path, method, body) {
   let response
   try {
     response = await fetch(`${API}/${path}`, { method, headers: { 'x-superagent-request': '1', ...body === undefined ? {} : { 'content-type': 'application/json' } },
@@ -33,7 +37,7 @@ async function apiCall(t, path, method, body) {
 }
 
 /** Build the typed route caller used by every view: `call('GET engine/ticket/:id', { id })`. */
-function caller(t) {
+export function caller(t) {
   return (route, ...rest) => {
     const [method, pattern] = route.split(' ')
     const request = rest[0] ?? {}
@@ -44,10 +48,10 @@ function caller(t) {
   }
 }
 
-const HIDDEN_FACTOR = 6
-const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b)
+export const HIDDEN_FACTOR = 6
+export const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b)
 /** Poll one endpoint while mounted, backing off while the document is hidden and keeping the last good value. */
-function usePoll(load, deps, intervalMs = 5000) {
+export function usePoll(load, deps, intervalMs = 5000) {
   const [state, setState] = useState({})
   const loader = useRef(load)
   loader.current = load
@@ -79,20 +83,20 @@ function usePoll(load, deps, intervalMs = 5000) {
 }
 
 /** Panel context: transport, router helpers and the shared toast; page data lives in PanelState (32-live-model). */
-const Panel = createContext(undefined)
-const PanelState = createContext(undefined)
-function usePanel() {
+export const Panel = createContext(undefined)
+export const PanelState = createContext(undefined)
+export function usePanel() {
   const value = useContext(Panel)
   if (!value) throw new Error('Superagent panel rendered outside its provider')
   return value
 }
-function usePanelData() {
+export function usePanelData() {
   const value = useContext(PanelState)
   if (!value) throw new Error('Superagent panel rendered outside its provider')
   return value
 }
 /** Wrap an async action with re-entrancy protection, busy state, optional reload, and a toast on failure. */
-function useAction(action, options = {}) {
+export function useAction(action, options = {}) {
   const { notify } = usePanel()
   const [busy, setBusy] = useState(false)
   const running = useRef(false)
@@ -107,20 +111,20 @@ function useAction(action, options = {}) {
   return { run, busy }
 }
 
-function Toast({ text, toastKey, onDone, holdMs = 4000 }) {
+export function Toast({ text, toastKey, onDone, holdMs = 4000 }) {
   const done = useRef(onDone)
   done.current = onDone
   useEffect(() => { const timer = setTimeout(() => done.current(), holdMs + 1000); return () => clearTimeout(timer) }, [toastKey, holdMs])
   return h('div', { className: 'sa-toast', role: 'status' }, text)
 }
 
-const stay = () => {}
-const noSession = async () => {}
+export const stay = () => {}
+export const noSession = async () => {}
 /**
  * One provider for the whole panel: the typed caller, routing callbacks, session opener and the toast.
  * `route` is passed down as well so a page can tell a list view from a deep-linked detail view.
  */
-function PanelProvider({ t, openSession = noSession, navigate = stay, back = stay, backLabel = '', route, children }) {
+export function PanelProvider({ t, openSession = noSession, navigate = stay, back = stay, backLabel = '', route, children }) {
   const copy = useRef(t)
   copy.current = t
   const call = useMemo(() => caller(key => copy.current(key)), [])

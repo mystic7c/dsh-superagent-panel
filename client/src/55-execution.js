@@ -7,26 +7,37 @@
    renders the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared
    status model for the executor load and the paused flag. */
 
+import { Icon } from "./00-util.js"
+import { when } from "./06-i18n.js"
+import { Button, IconButton, InfoTip, Menu, Modal, SegmentedControl, Switch, Tag } from "./10-controls.js"
+import { same, useAction, usePanel, usePanelData } from "./15-api.js"
+import { ConfirmButton, EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { useLiveResource } from "./32-live-model.js"
+import { setupStateOf } from "./33-setup.js"
+import { AutomationBar, ExecutorLoad, ManualTicketForm, TICKET_GROUP_ORDER, TicketGroups, TicketList, failureLabel, panelRepoOf, runTriggerLabel, ticketStatus } from "./34-live-ui.js"
+import { TicketDetail } from "./58-ticket-detail.js"
+import { Fragment, React, h, useCallback, useEffect, useState } from "./00-react.js"
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
 // `dismissed` is not a lifecycle stage: it is the cleanup slice of the finished history (a person dropped the Ticket),
 // kept as its own stage because "what did we abandon after a failed run" is a question the Overview points here with.
-const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done', 'dismissed']
-const EXEC_DONE_RECENT = 10
+export const EXEC_STAGES = ['all', 'waiting', 'failed', 'working', 'queued', 'done', 'dismissed']
+export const EXEC_DONE_RECENT = 10
 // P1-8: the execution list's view state survives a page switch inside the same browser session.
-const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
-const EXEC_VIEW_DEFAULTS = { groupBy: 'stage', sort: 'updated', showDone: true }
-function execReadView() {
+export const EXEC_VIEW_KEY = 'superagent-panel/exec-view'
+export const EXEC_VIEW_DEFAULTS = { groupBy: 'stage', sort: 'updated', showDone: true }
+export function execReadView() {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(EXEC_VIEW_KEY) ?? 'null') ?? {}
     return { groupBy: parsed.groupBy === 'repo' ? 'repo' : 'stage',
       sort: parsed.sort === 'created' ? 'created' : 'updated', showDone: parsed.showDone !== false }
   } catch { return { ...EXEC_VIEW_DEFAULTS } }
 }
-function execSaveView(view) {
+export function execSaveView(view) {
   try { sessionStorage.setItem(EXEC_VIEW_KEY, JSON.stringify(view)) } catch { /* private mode keeps the in-memory view */ }
 }
 /** Newest-first by the chosen timestamp; a Ticket without the field falls back to the other one, never to "now". */
-function execSortTickets(tickets, sort) {
+export function execSortTickets(tickets, sort) {
   const field = sort === 'created' ? 'createdAt' : 'updatedAt'
   return [...tickets].sort((left, right) => String(right?.[field] ?? right?.createdAt ?? '')
     .localeCompare(String(left?.[field] ?? left?.createdAt ?? '')))
@@ -98,7 +109,7 @@ Object.assign(PAGE_TEXT, {
 /** The finished group's one line: accepted sign-offs, dismissed Tickets, and Tickets that completed after a failed
     run was retried. The three numbers overlap on purpose (a retried Ticket is normally also accepted): they annotate
     the same history, they are not a partition of it. */
-function execDoneSummary(t, doneTickets) {
+export function execDoneSummary(t, doneTickets) {
   const list = Array.isArray(doneTickets) ? doneTickets : []
   const hasFailedRun = ticket => (Array.isArray(ticket.assignments) ? ticket.assignments : [])
     .some(assignment => assignment?.report?.state === 'failed')
@@ -110,7 +121,7 @@ function execDoneSummary(t, doneTickets) {
 }
 
 /** List view: executor strip, pause confirmation, manual entry, stage filter, then the stage groups. */
-function ExecutionQueuePage({ route }) {
+export function ExecutionQueuePage({ route }) {
   const { t, notify, navigate } = usePanel()
   const model = usePanelData()
   const list = useLiveResource('engine/tickets', {})
@@ -368,6 +379,6 @@ function ExecutionQueuePage({ route }) {
 
 /** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
     arrives from the Overview's watch items, which deep-link the dismissed slice). */
-function LiveExecutionPage({ route }) {
+export function LiveExecutionPage({ route }) {
   return route?.id ? h(TicketDetail, { id: route.id, page: 'execution', focusRun: route.run }) : h(ExecutionQueuePage, { route })
 }

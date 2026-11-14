@@ -4,6 +4,16 @@
    ThreadDetail — facts → evaluation (the latest decision lives there now) plus the message timeline — so this page only
    owns filtering, selection and the pane switch. */
 
+import { API, Icon } from "./00-util.js"
+import { when } from "./06-i18n.js"
+import { Button, IconButton, Input, SegmentedControl, StatusText } from "./10-controls.js"
+import { same, usePanel, usePanelData } from "./15-api.js"
+import { EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { remember } from "./25-router.js"
+import { useLiveResource } from "./32-live-model.js"
+import { ThreadDetail } from "./48-thread-detail.js"
+import { React, h, useEffect, useRef, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'trg.title': ['线程', 'Threads'],
   'trg.filter': ['线程筛选', 'Thread filter'],
@@ -41,21 +51,21 @@ Object.assign(PAGE_TEXT, {
     'Pick a Thread to see its facts, evaluation and where each message went.'],
 })
 
-const THREAD_FILTERS = ['subscribed', 'recent', 'all']
+export const THREAD_FILTERS = ['subscribed', 'recent', 'all']
 /** Thread row state → shape + label: subscribed (has Tickets) ✓, active in the last 24h ring, otherwise the idle dot. */
-const THREAD_STATE = {
+export const THREAD_STATE = {
   subscribed: { state: 'done', labelKey: 'trg.status.subscribed' },
   recent: { state: 'ongoing', labelKey: 'trg.status.recent' },
   idle: { state: 'idle', labelKey: 'trg.status.idle' },
 }
-const THREAD_SOURCE_ICON = { octo: 'message', gitlab: 'pull' }
+export const THREAD_SOURCE_ICON = { octo: 'message', gitlab: 'pull' }
 
-function threadViewOf(row) {
+export function threadViewOf(row) {
   return THREAD_STATE[row?.state] ?? THREAD_STATE.idle
 }
 
 /** Source id → its short label (Octo / GitLab); an unknown id stays readable as-is instead of showing a bare key. */
-function threadSourceLabel(t, source) {
+export function threadSourceLabel(t, source) {
   const key = `trg.source.${source}`
   const text = pt(t, key)
   return text === key ? String(source ?? '') : text
@@ -66,7 +76,7 @@ function threadSourceLabel(t, source) {
  * human title it stores the key as the title, so resolve the watched chat title from the status config instead, and
  * fall back to a generic noun (without the id) when even that is unknown.
  */
-function threadTitleOf(t, row, octoConfig) {
+export function threadTitleOf(t, row, octoConfig) {
   const key = String(row?.key ?? '')
   const title = typeof row?.title === 'string' ? row.title.trim() : ''
   const rawKeyTitle = !title || title === key || /^[a-z][a-z0-9]*:[0-9a-f]{6,}$/i.test(title)
@@ -79,19 +89,19 @@ function threadTitleOf(t, row, octoConfig) {
 
 /** The page frame the panel renders into. The viewport is the wrong measure inside a DSH rail (sidebar + right rail
     decide how much room the page actually has), so the hook measures this element instead. */
-const COMPACT_MAX_WIDTH = 960
+export const COMPACT_MAX_WIDTH = 960
 
-function triggerPageFrame() {
+export function triggerPageFrame() {
   return typeof document === 'undefined' ? null : document.querySelector('.sa-page')
 }
 
 /** Width of the page frame, or undefined while it has no measurable layout (not mounted yet, or a layout-less test). */
-function triggerPageWidth() {
+export function triggerPageWidth() {
   const width = triggerPageFrame()?.clientWidth
   return Number.isFinite(width) && width > 0 ? width : undefined
 }
 
-function triggerViewportIsCompact() {
+export function triggerViewportIsCompact() {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     && window.matchMedia(`(max-width: ${COMPACT_MAX_WIDTH}px)`).matches
 }
@@ -102,7 +112,7 @@ function triggerViewportIsCompact() {
  * element through a ResizeObserver so the pane switch and the CSS never disagree. `matchMedia` stays as the fallback
  * while the frame is not mounted yet (a deep link can render before the shell) or has no layout (jsdom/render-check).
  */
-function useCompactTriggerLayout() {
+export function useCompactTriggerLayout() {
   const [compact, setCompact] = useState(() => {
     const width = triggerPageWidth()
     return width === undefined ? triggerViewportIsCompact() : width <= COMPACT_MAX_WIDTH
@@ -175,13 +185,13 @@ function useCompactTriggerLayout() {
  * value through while still giving every hook a stable owner. The aliases keep it working if the detail's prop is
  * renamed to `threadKey`/`id` while this page is being wired up.
  */
-function ThreadDetailView({ threadKey, showBack }) {
+export function ThreadDetailView({ threadKey, showBack }) {
   return ThreadDetail({ key: threadKey, threadKey, id: threadKey, showBack })
 }
 
 /** ↑/↓/Home/End move focus between the row buttons; the row buttons themselves keep native Enter/Space activation.
     Only one row is in the Tab order (roving tabindex), so a 50-row page is one Tab stop, not fifty (WIG A4/P2). */
-function threadRowKeyDown(event) {
+export function threadRowKeyDown(event) {
   const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
   const edge = event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : ''
   if (!step && !edge) return
@@ -198,7 +208,7 @@ function threadRowKeyDown(event) {
 /** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. The open action
     is one real `<button>` whose `::after` covers the whole row (the `.sa-open` pattern), so the row is a list item with
     native semantics instead of a `<li role="button">` (P1/A4). */
-function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tabbable = false }) {
+export function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tabbable = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
   return h('li', {
@@ -223,22 +233,22 @@ function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tab
       h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
-const TRG_PAGE_SIZE = 50
-const TRG_SCROLL_KEY = 'superagent-panel/trigger-scroll'
+export const TRG_PAGE_SIZE = 50
+export const TRG_SCROLL_KEY = 'superagent-panel/trigger-scroll'
 
 /** The panel scrolls inside `.sa-scroll`; remember the list position so opening a Ticket/Thread can return to it. */
-function triggerScrollTop() {
+export function triggerScrollTop() {
   try {
     const scroller = document.querySelector('.sa-scroll')
     const y = scroller ? scroller.scrollTop : window.scrollY
     return Number.isFinite(y) && y > 0 ? y : 0
   } catch { return 0 }
 }
-function rememberTriggerScroll() {
+export function rememberTriggerScroll() {
   const y = triggerScrollTop()
   if (y > 0) try { sessionStorage.setItem(TRG_SCROLL_KEY, String(y)) } catch { /* private mode */ }
 }
-function restoreTriggerScroll() {
+export function restoreTriggerScroll() {
   try {
     const y = Number(sessionStorage.getItem(TRG_SCROLL_KEY) ?? 0)
     if (!(y > 0)) return
@@ -249,9 +259,9 @@ function restoreTriggerScroll() {
 }
 // The filter is part of the same deep-link state as the text filters (A5): a reload/back must restore the visible
 // slice, not silently drop back to the default one.
-const TRG_URL_KEYS = { filter: 'trgFilter', q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom',
+export const TRG_URL_KEYS = { filter: 'trgFilter', q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom',
   to: 'trgTo', offset: 'trgOffset' }
-function trgUrlState() {
+export function trgUrlState() {
   try {
     const params = new URLSearchParams(window.location.search)
     const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
@@ -264,13 +274,13 @@ function trgUrlState() {
 }
 
 /** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
-function trgDayBound(value, end = false) {
+export function trgDayBound(value, end = false) {
   if (!value) return ''
   const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
   return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
-function LiveTriggerPage({ route }) {
+export function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
   const initial = useRef(trgUrlState())
