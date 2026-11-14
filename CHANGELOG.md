@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.6.0] — 2026-11-14
+
+### 变更
+- **P2 完成**：客户端六个片段全部从 `h(...)` 迁移到 JSX（issue #34）。0.5.2–0.5.7 六个补丁版本合起来是这一步：
+  `10-controls.js`、`20-widgets.js`、`30-shell.js`、`34-live-ui.js`、`58-ticket-detail.js`、`60-settings.js`，
+  共 6,657 行、约 2,000 处调用点，产物 485,801 → 484,636 字节，产物契约与 `window.__ModuleLoader__.load` 工厂不变。
+- 构建层先切成 `loader: 'jsx'` + `jsxFactory: 'h'`（只换 loader 时产物逐字节相同），之后每个文件一个 PR 单独迁移，
+  diff 里只有写法变化；`scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 同步改成先用 esbuild 编译再求值。
+- `60-settings.js` 里十二个重复的仓库字段收敛成 `repoInputField(key, labelKey, { required, placeholder, hintKey })`，
+  动态标签统一改成大写变量（`const Dot = detail ? 'span' : 'div'`）。
+- 阶段意义：从此 `client/src` 可以按文件读写 JSX，P3（issue #35，真正的 ESM 模块边界）才有动手的前提。
+
+### 验证
+- 每个补丁版本的 PR 都跑过完整闸门：`node --check client/index.js`、`build-client --check`（22 片段）、
+  `check-keys`、Host 555 pass、`render-check` 194 checks / 0 failed / 0 skipped、`isolated-verify` PASS（console errors 0）；
+  CI 的 `test (22)` / `test (24)` 两个矩阵全绿后才 merge。
+- 真实浏览器（隔离 DSH 实例 + `test/fixtures/live.json` 夹具状态）验过：概览/设置各组、执行列表、工单详情
+  （改动内容/验收/自动化/阶段链路/运行记录/时间线）、添加仓库对话框（13 字段 + 必填校验）、编辑仓库对话框、
+  配置示例对话框，均无控制台报错。
+
 ## [0.5.7] — 2026-11-14
 
 ### 变更
