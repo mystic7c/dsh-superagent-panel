@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.4] — 2026-11-14
+
+### 变更
+- 新增 `scripts/dev.mjs` 与 `npm run dev`：用 `dev` profile（软链到本工作树）起一个 DSH 实例并打印带 token 的 URL，
+  自动按 runtime CLI → app bundle → PATH 的顺序找 `dsh`，参数原样转发。
+- `AGENTS.md` 的「本机两种安装态」把开发态收成一个命令，并补充两条注意事项（dev 实例用临时
+  `DSH_SUPERAGENT_STATE_DIR`；全局 `~/.dsh/cordis.patch.yml` 的 MCP 条目也会加载，连不上只告警）。
+- `dev` profile 已补齐 bundles（`dsh-base` + `dsh-web-app` + 本插件），此前只带 `dsh-base`，起不来 Web UI。
+
+### 为什么
+「边改边看」如果只写在文档里，每次都要拼全路径、记 profile 名；收成一条命令后这条路径才有可能天天走。
+
+### 验证
+- `node scripts/dev.mjs --help` 能转发到 dsh；用临时 `DSH_SUPERAGENT_STATE_DIR` 实起一次实例：
+  `GET /superagent/api/engine/status` → 200（`phase: disabled`，`x-superagent-request: 1` 头），
+  停掉后端口关闭、进程退出。`--dump-config` 显示 `superagent-panel` 与 `dsh-web-app` 都在合成树里。
+
 ## [0.9.3] — 2026-11-14
 
 ### 变更
