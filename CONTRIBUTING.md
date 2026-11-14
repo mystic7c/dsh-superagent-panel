@@ -23,6 +23,10 @@ CI 用 `node scripts/build-client.mjs --check` 逐字节校验（`client/index.j
 esbuild 版本在 `devDependencies` 里**精确锁定**——换版本会改变压缩后的字节，属于一次需要重新生成产物的显式改动，
 请在同一个提交里说明并重跑 `--check`。
 
+片段可以写 JSX，也可以继续写 `h(...)`：构建把整段按 `loader: 'jsx'` 编译、`jsxFactory` 指向 prelude 里的
+`h`，两种写法编译成同一个运行时调用，所以**按文件逐个迁移**是安全的（迁移一个文件只改一个文件的 diff）。
+`scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 用同一套 esbuild 参数编译片段，`h` 与 JSX 都能跑。
+
 ## 改动前必跑的四道门
 
 ```bash

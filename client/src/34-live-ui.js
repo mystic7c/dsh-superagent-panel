@@ -374,9 +374,10 @@ function automationChip(t, ticket) {
     ? pt(t, 'auto.nextAt', { time: fullTime(automation.nextAt, PANEL_LANG) || String(automation.nextAt) })
     : ''
   // The next run used to live in a title tooltip only (no touch, no keyboard): a focusable InfoTip exposes it.
-  return h(Fragment, { key: 'automation' },
-    h(Tag, { tone: 'info' }, label),
-    nextAt ? h(InfoTip, { key: 'automation-next', text: nextAt }) : null)
+  return <Fragment key="automation">
+    <Tag tone="info">{label}</Tag>
+    {nextAt ? <InfoTip key="automation-next" text={nextAt} /> : null}
+  </Fragment>
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
@@ -478,9 +479,9 @@ function ticketStatus(ticket) {
 function rowAcceptanceChip(t, view) {
   const acceptance = view?.acceptance
   if (!acceptance || acceptance.state === 'none') return null
-  if (acceptance.state === 'accepted') return h(Tag, { key: 'acceptance', tone: 'success' }, pt(t, 'row.acceptanceAccepted'))
-  if (acceptance.state === 'rejected') return h(Tag, { key: 'acceptance', tone: 'danger' }, pt(t, 'row.acceptanceRejected'))
-  return h(Tag, { key: 'acceptance', tone: 'warning' }, pt(t, view.primary === 'merge' ? 'row.evidenceMerge' : 'row.evidenceReview'))
+  if (acceptance.state === 'accepted') return <Tag key="acceptance" tone="success">{pt(t, 'row.acceptanceAccepted')}</Tag>
+  if (acceptance.state === 'rejected') return <Tag key="acceptance" tone="danger">{pt(t, 'row.acceptanceRejected')}</Tag>
+  return <Tag key="acceptance" tone="warning">{pt(t, view.primary === 'merge' ? 'row.evidenceMerge' : 'row.evidenceReview')}</Tag>
 }
 
 /** Latest run of one Ticket: the detail payload carries `ticket.runs`; list rows rely on the status document's index. */
@@ -560,7 +561,7 @@ function PilotStatusTag({ status, group = 'pilotTicketStatus' }) {
   const { t } = usePanel()
   const key = `${group}.${status}`
   const label = pt(t, key)
-  return h(Tag, { tone: pilotTone(status) }, label === key ? status : label)
+  return <Tag tone={pilotTone(status)}>{label === key ? status : label}</Tag>
 }
 
 /** Status tag for a raw ticket; the Chinese label always comes from `ticketStatus`. */
@@ -568,7 +569,7 @@ function TicketStatusTag({ ticket }) {
   const { t } = usePanel()
   const view = ticketStatus(ticket)
   const unknown = view.key === 'unknown' && ticket?.status ? `（${ticket.status}）` : ''
-  return h(Tag, { tone: view.tone }, pt(t, view.labelKey) + unknown)
+  return <Tag tone={view.tone}>{pt(t, view.labelKey) + unknown}</Tag>
 }
 
 /**
@@ -587,27 +588,30 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
   const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
   const progressText = progress && progress.done < progress.total
     ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
-  return h('div', { className: 'sa-automation', role: 'group', 'aria-label': title,
-    'data-compact': compact ? 'true' : undefined },
-    h('div', { className: 'sa-automation-main' },
-      // The icon travels with the title: as a sibling of the flex-basis block it wrapped onto a line of its own on a
-      // 390px panel, leaving a lone warning triangle above the sentence (critique 2026-11-11).
-      h('div', { className: 'sa-automation-head' },
-        h(StatusIcon, { state: 'warning', size: 16 }),
-        h('span', { className: 'sa-automation-title' }, title)),
-      h('span', { className: 'sa-automation-facts' }, facts.join(' · '),
-        progressText ? h(Fragment, null, ' · ', progressText) : null),
-      compact ? null : h('span', { className: 'sa-hint' }, hint)),
-    h('div', { className: 'sa-automation-actions' },
-      onCheck ? h(Button, { variant: 'ghost', size: 'sm', icon: h(Icon, { name: 'message', size: 14 }),
-        disabled: checkBusy, onClick: onCheck }, pt(t, 'actions.checkNow')) : null,
-      h(ConfirmButton, {
-        label: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
-        confirmLabel: onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start'),
-        title: onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle'),
-        message: onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage'),
-        variant: 'primary', icon: 'play', onConfirm: onStart,
-      })))
+  return <div className="sa-automation" role="group" aria-label={title} data-compact={compact ? 'true' : undefined}>
+    <div className="sa-automation-main">
+      {/* The icon travels with the title: as a sibling of the flex-basis block it wrapped onto a line of its own on a
+          390px panel, leaving a lone warning triangle above the sentence (critique 2026-11-11). */}
+      <div className="sa-automation-head">
+        <StatusIcon state="warning" size={16} />
+        <span className="sa-automation-title">{title}</span>
+      </div>
+      <span className="sa-automation-facts">{facts.join(' · ')}
+        {progressText ? <> · {progressText}</> : null}
+      </span>
+      {compact ? null : <span className="sa-hint">{hint}</span>}
+    </div>
+    <div className="sa-automation-actions">
+      {onCheck ? <Button variant="ghost" size="sm" icon={<Icon name="message" size={14} />}
+        disabled={checkBusy} onClick={onCheck}>{pt(t, 'actions.checkNow')}</Button> : null}
+      <ConfirmButton
+        label={onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start')}
+        confirmLabel={onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start')}
+        title={onlyPaused ? pt(t, 'automation.resumeTitle') : pt(t, 'automation.startTitle')}
+        message={onlyPaused ? pt(t, 'automation.resumeMessage') : pt(t, 'automation.startMessage')}
+        variant="primary" icon="play" onConfirm={onStart} />
+    </div>
+  </div>
 }
 
 /** The one result worth a second tag in a row. */
@@ -800,11 +804,12 @@ function ticketEvidence(t, ticket, view, now = Date.now()) {
     // The full error was tooltip-only (no touch, no keyboard): the short cause stays visible and the raw text sits
     // behind a focusable info control when it says more than the sentence. The wrapper lifts it above the row's
     // stretched link overlay so it stays operable.
-    return h(Fragment, null,
-      raw.trim() && raw.trim() !== cause
-        ? h('span', { style: { position: 'relative', zIndex: 1 } }, h(InfoTip, { text: raw }))
-        : null,
-      h('span', null, pt(t, 'row.evidenceCause', { cause })))
+    return <>
+      {raw.trim() && raw.trim() !== cause
+        ? <span style={{ position: 'relative', zIndex: 1 }}><InfoTip text={raw} /></span>
+        : null}
+      <span>{pt(t, 'row.evidenceCause', { cause })}</span>
+    </>
   }
   const mr = links.mergeRequest ?? {}
   // AC-05: a push-mode create link is not a Pull Request. Only an iid proves one exists; until then the row says the
@@ -819,11 +824,11 @@ function ticketEvidence(t, ticket, view, now = Date.now()) {
         : prWaiting ? pt(t, 'row.evidencePrWaiting') : pt(t, 'row.evidencePr')
     const href = safeHttpUrl(mr.webUrl)
     return href
-      ? h('a', { className: 'sa-inline-link sa-mono', href, target: '_blank', rel: 'noopener noreferrer',
-        title: href, onClick: event => event.stopPropagation() }, label)
-      : h('span', { className: 'sa-mono' }, label)
+      ? <a className="sa-inline-link sa-mono" href={href} target="_blank" rel="noopener noreferrer"
+        title={href} onClick={event => event.stopPropagation()}>{label}</a>
+      : <span className="sa-mono">{label}</span>
   }
-  if (merged) return h('span', { className: 'sa-mono' }, pt(t, 'ticket.mergedYes'))
+  if (merged) return <span className="sa-mono">{pt(t, 'ticket.mergedYes')}</span>
   const running = assignments.at(-1)
   if (view?.group === 'working' && running?.startedAt) {
     const minutes = Math.max(0, Math.floor((now - Date.parse(running.startedAt)) / 60_000))
@@ -889,14 +894,14 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const primaryButton = !primary ? null
     : primary.kind === 'external'
       ? externalHref
-        ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm', href: externalHref, target: '_blank',
-          rel: 'noopener noreferrer', style: { textDecoration: 'none' },
-          onClick: event => event.stopPropagation() }, pt(t, primary.labelKey))
+        ? <a className="sa-btn sa-btn-primary sa-btn-sm" href={externalHref} target="_blank"
+          rel="noopener noreferrer" style={{ textDecoration: 'none' }}
+          onClick={event => event.stopPropagation()}>{pt(t, primary.labelKey)}</a>
         // An unsafe URL never becomes a link; the same action degrades to opening the detail.
-        : h(Button, { variant: 'primary', size: 'sm',
-          onClick: event => { event.stopPropagation(); open() } }, pt(t, primary.labelKey))
-      : h(Button, { variant: 'primary', size: 'sm', disabled: Boolean(busyOf[primary.kind]),
-        onClick: event => { event.stopPropagation(); branches[primary.kind]() } }, pt(t, primary.labelKey))
+        : <Button variant="primary" size="sm"
+          onClick={event => { event.stopPropagation(); open() }}>{pt(t, primary.labelKey)}</Button>
+      : <Button variant="primary" size="sm" disabled={Boolean(busyOf[primary.kind])}
+        onClick={event => { event.stopPropagation(); branches[primary.kind]() }}>{pt(t, primary.labelKey)}</Button>
   const allItems = [
     { key: 'dryRun', label: pt(t, 'menu.dryRun'), onSelect: () => { void dryRun.run() }, disabled: dryRun.busy },
     { key: 'publish', label: pt(t, 'menu.publish'), onSelect: () => setPending({ kind: 'publish' }),
@@ -920,19 +925,19 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   // The unavailable-publish reason is shared by the primary button and the ⋯ menu entry: one focusable info control
   // instead of a title tooltip (unreachable on touch, and a disabled menu item cannot take focus at all).
   const publishUnavailableTip = !canPublish && items.some(item => item.key === 'publish')
-    ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null
+    ? <InfoTip text={pt(t, 'ticket.publishUnavailable')} warn /> : null
   // Multi-repository panels say which repository a Ticket belongs to; a plain text span, not a Tag, so the three-tag
   // budget of the row stays for state and result.
   const repoList = panelRepos(data)
   const repoName = ticket.repoName ?? panelRepoOf(data, ticket.repoId)?.name ?? ticket.repoId
   const showRepo = repoList.length > 1 && Boolean(repoName)
   const chips = [
-    h(Tag, { key: 'state', tone: view.tone }, pt(t, view.labelKey)),
+    <Tag key="state" tone={view.tone}>{pt(t, view.labelKey)}</Tag>,
   ]
   // A dismissed Ticket is only neutral if it never failed; one dismissed right after a failed run says so.
   const failedBeforeDismiss = view.key === 'dismissed'
     && (Array.isArray(ticket.assignments) ? ticket.assignments : []).some(assignment => assignment?.report?.state === 'failed')
-  if (failedBeforeDismiss) chips.push(h(Tag, { key: 'dismissed-after-failure', tone: 'warning' }, pt(t, 'dismissedAfterFailure')))
+  if (failedBeforeDismiss) chips.push(<Tag key="dismissed-after-failure" tone="warning">{pt(t, 'dismissedAfterFailure')}</Tag>)
   // The left rail is the fast scan line; a done-but-accepted Ticket and a dismissed-after-failure Ticket must not
   // both read as the same hollow "idle" dot. Keep the phase keys/tags, only make the shape honest.
   const rowIconState = view.acceptance?.state === 'accepted' ? 'done'
@@ -941,7 +946,7 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   // P1-5: a run interrupted by a plugin reload / host restart is resumable — the row says so before the phase label
   // (which still reads "排队中" after reconcile) can be mistaken for a healthy queue entry.
   const interrupted = ticketRunInterrupted(ticket, data?.runs)
-  if (interrupted) chips.push(h(Tag, { key: 'interrupted', tone: 'warning' }, pt(t, 'row.interrupted')))
+  if (interrupted) chips.push(<Tag key="interrupted" tone="warning">{pt(t, 'row.interrupted')}</Tag>)
   // The middle slot is the person's sign-off when the Ticket has one, otherwise the one result worth a second tag
   // (P0 §3.6.4: 状态 + 验收/结果, never both). Time is the third chip and only where the row has room; the overview
   // (compact) keeps exactly two. The repository name stays a plain hint, outside the tag budget.
@@ -950,49 +955,57 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
   const scheduleChip = automationChip(t, ticket)
   if (acceptanceChip) chips.push(acceptanceChip)
   else if (scheduleChip) chips.push(scheduleChip)
-  else if (result) chips.push(h(Tag, { key: 'result', tone: result.tone }, pt(t, result.labelKey)))
-  if (!compact && !interrupted) chips.push(h(When, { key: 'at', at: ticket.updatedAt ?? ticket.createdAt }))
-  if (showRepo) chips.push(h('span', { key: 'repo', className: 'sa-hint' }, String(repoName)))
-  if (extra) chips.push(h('span', { key: 'extra', className: 'sa-hint' }, extra))
+  else if (result) chips.push(<Tag key="result" tone={result.tone}>{pt(t, result.labelKey)}</Tag>)
+  if (!compact && !interrupted) chips.push(<When key="at" at={ticket.updatedAt ?? ticket.createdAt} />)
+  if (showRepo) chips.push(<span key="repo" className="sa-hint">{String(repoName)}</span>)
+  if (extra) chips.push(<span key="extra" className="sa-hint">{extra}</span>)
 
   // The title is a real <button> so keyboard users get one focus stop, and the primary/⋯ controls are siblings of it —
   // never buttons nested inside a role=button row (G6). The evidence rail is the third track of the execution ledger;
   // other pages hide it via CSS and keep the flex row.
   const evidence = ticketEvidence(t, ticket, view, now)
-  return h('li', null,
-    // The row div is not the click target any more: the title is a real button carrying `.sa-open`, whose stretched
-    // `::after` covers the whole row, so the row's primary action is one keyboard-reachable button (WIG: div click).
-    h('div', { className: 'sa-row sa-row-openable' },
-      h(StatusIcon, { state: rowIconState, size: 16 }),
-      h('div', { className: 'sa-row-main' },
-        h('div', { className: 'sa-row-title' },
-          h('button', { type: 'button', className: 'sa-row-open sa-open',
-            'aria-label': `${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`,
-            onClick: open },
-          h('span', { className: 'sa-ellipsis' },
-            ticket.title || pt(t, 'row.untitled')))),
-        h('div', { className: 'sa-row-meta' }, chips)),
-      h('span', { className: 'sa-row-evidence' }, evidence),
-      h('div', { className: 'sa-row-actions', ...stopInner },
-        publishUnavailableTip,
-        primaryButton,
-        compact || !items.length ? null : h(Menu, { label: pt(t, 'menu.label'), items, align: 'end' }))),
-    h(Modal, { open: Boolean(pending), onClose: () => setPending(null), title: pt(t, 'ticket.publish'),
-      closeLabel: t('close'), description: pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
-      footer: h(Fragment, null,
-        h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        // Pending actions name the verb, never the generic 确认; the dialog closes only when the action succeeded.
-        h(Button, { variant: 'primary', disabled: publish.busy,
-          onClick: () => { void publish.run().then(done => { if (done) setPending(null) }) } },
-          pt(t, 'ticket.publish'))) }),
-    h(Modal, { open: dismissOpen, onClose: () => setDismissOpen(false), title: pt(t, 'detail.dismissTitle'),
-      closeLabel: t('close'),
-      description: pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
-        branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' }),
-      footer: h(Fragment, null,
-        h(Button, { variant: 'ghost', onClick: () => setDismissOpen(false) }, t('cancel')),
-        h(Button, { variant: 'primary', disabled: dismiss.busy,
-          onClick: async () => { if (await dismiss.run()) setDismissOpen(false) } }, pt(t, 'detail.dismiss'))) }))
+  return <li>
+    {/* The row div is not the click target any more: the title is a real button carrying `.sa-open`, whose stretched
+        `::after` covers the whole row, so the row's primary action is one keyboard-reachable button (WIG: div click). */}
+    <div className="sa-row sa-row-openable">
+      <StatusIcon state={rowIconState} size={16} />
+      <div className="sa-row-main">
+        <div className="sa-row-title">
+          <button type="button" className="sa-row-open sa-open"
+            aria-label={`${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`}
+            onClick={open}>
+            <span className="sa-ellipsis">{ticket.title || pt(t, 'row.untitled')}</span>
+          </button>
+        </div>
+        <div className="sa-row-meta">{chips}</div>
+      </div>
+      <span className="sa-row-evidence">{evidence}</span>
+      <div className="sa-row-actions" {...stopInner}>
+        {publishUnavailableTip}
+        {primaryButton}
+        {compact || !items.length ? null : <Menu label={pt(t, 'menu.label')} items={items} align="end" />}
+      </div>
+    </div>
+    <Modal open={Boolean(pending)} onClose={() => setPending(null)} title={pt(t, 'ticket.publish')}
+      closeLabel={t('close')} description={pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id })}
+      footer={<>
+        <Button variant="ghost" onClick={() => setPending(null)}>{t('cancel')}</Button>
+        {/* Pending actions name the verb, never the generic 确认; the dialog closes only when the action succeeded. */}
+        <Button variant="primary" disabled={publish.busy}
+          onClick={() => { void publish.run().then(done => { if (done) setPending(null) }) }}>
+          {pt(t, 'ticket.publish')}
+        </Button>
+      </>} />
+    <Modal open={dismissOpen} onClose={() => setDismissOpen(false)} title={pt(t, 'detail.dismissTitle')}
+      closeLabel={t('close')}
+      description={pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
+        branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })}
+      footer={<>
+        <Button variant="ghost" onClick={() => setDismissOpen(false)}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={dismiss.busy}
+          onClick={async () => { if (await dismiss.run()) setDismissOpen(false) }}>{pt(t, 'detail.dismiss')}</Button>
+      </>} />
+  </li>
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
@@ -1001,13 +1014,15 @@ function TicketList({ tickets, page = 'execution', actions, reload, now }) {
   const list = Array.isArray(tickets) ? tickets : []
   // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
   // mounted when the list empties, so "0 tickets" is announced too instead of the region vanishing mid-announcement.
-  const status = h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' },
-    pt(t, 'list.status', { count: list.length }))
+  const status = <span className="sa-sr-only" role="status" aria-live="polite">
+    {pt(t, 'list.status', { count: list.length })}
+  </span>
   if (!list.length) return status
-  return h(Fragment, null,
-    status,
-    h('ul', { className: 'sa-list' }, list.map(ticket =>
-      h(TicketRow, { key: ticket.id, ticket, page, actions, reload, now }))))
+  return <>
+    {status}
+    <ul className="sa-list">{list.map(ticket =>
+      <TicketRow key={ticket.id} ticket={ticket} page={page} actions={actions} reload={reload} now={now} />)}</ul>
+  </>
 }
 
 // Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
@@ -1031,12 +1046,13 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
   // header that preceded the section it described, and repeating it for each stage turned a four-column list into
   // three little tables. The groups that follow share the same tracks.
   const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map((group, index) =>
-    h(Section, { key: group, title: pt(t, `group.${group}`),
-      count: groupCounts?.[group] === false ? undefined : grouped.get(group).length,
-      badge: groupNotes?.[group] ?? null },
-      index === 0 ? header ?? null : null,
-      h(TicketList, { tickets: grouped.get(group), page, actions, reload })))
-  return className ? h('div', { className }, rendered) : h(Fragment, null, rendered)
+    <Section key={group} title={pt(t, `group.${group}`)}
+      count={groupCounts?.[group] === false ? undefined : grouped.get(group).length}
+      badge={groupNotes?.[group] ?? null}>
+      {index === 0 ? header ?? null : null}
+      <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} />
+    </Section>)
+  return className ? <div className={className}>{rendered}</div> : <>{rendered}</>
 }
 
 /**
@@ -1110,62 +1126,68 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
     }
   }
   // A real form: Enter submits, every field carries a name, and title/body get a visible label (a placeholder is not one).
-  return h('form', { className: 'sa-field', onSubmit: event => { event.preventDefault(); void submit() } },
-    heading ? h('span', { className: 'sa-field-head' }, pt(t, 'st.manualTitle')) : null,
-    heading ? h(Hint, null, pt(t, 'st.manualHint')) : null,
-    repos.length
-      ? h(Fragment, null,
-        h('span', { className: 'sa-field-head' }, pt(t, 'repo.label')),
-        h(Select, { label: pt(t, 'repo.label'), value: usableRepo ?? '', disabled: busy,
-          options: repos.map(repo => ({ value: repo.id, label: repo.name ?? repo.id })),
-          onChange: next => setRepoId(next) }),
-        h(Hint, null, pt(t, 'st.manualRepoHint', { name: repos.find(repo => repo.id === defaultRepo)?.name ?? defaultRepo ?? '—' })))
-      : null,
-    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-title' }, pt(t, 'st.titleLabel')),
-    h(Input, { id: 'sa-manual-title', name: 'title', value: title, placeholder: pt(t, 'st.titlePh'), disabled: busy,
-      onChange: event => setTitle(event.target.value) }),
-    h('label', { className: 'sa-field-head', htmlFor: 'sa-manual-body' }, pt(t, 'st.bodyLabel')),
-    h('textarea', { id: 'sa-manual-body', name: 'body', className: 'sa-textarea', rows: 3, value: body,
-      placeholder: pt(t, 'st.bodyPh'), disabled: busy, onChange: event => setBody(event.target.value) }),
-    // Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
-    // Ticket by the host; an unsupported combination is warned about here and rejected by the executor.
-    h('div', { className: 'sa-route-controls' },
-      h(Select, { label: pt(t, 'st.routeDeliverable'), value: deliverable, disabled: busy,
-        options: [{ value: '', label: pt(t, 'st.routeAuto') },
+  return <form className="sa-field" onSubmit={event => { event.preventDefault(); void submit() }}>
+    {heading ? <span className="sa-field-head">{pt(t, 'st.manualTitle')}</span> : null}
+    {heading ? <Hint>{pt(t, 'st.manualHint')}</Hint> : null}
+    {repos.length
+      ? <>
+        <span className="sa-field-head">{pt(t, 'repo.label')}</span>
+        <Select label={pt(t, 'repo.label')} value={usableRepo ?? ''} disabled={busy}
+          options={repos.map(repo => ({ value: repo.id, label: repo.name ?? repo.id }))}
+          onChange={next => setRepoId(next)} />
+        <Hint>{pt(t, 'st.manualRepoHint', { name: repos.find(repo => repo.id === defaultRepo)?.name ?? defaultRepo ?? '—' })}</Hint>
+      </>
+      : null}
+    <label className="sa-field-head" htmlFor="sa-manual-title">{pt(t, 'st.titleLabel')}</label>
+    <Input id="sa-manual-title" name="title" value={title} placeholder={pt(t, 'st.titlePh')} disabled={busy}
+      onChange={event => setTitle(event.target.value)} />
+    <label className="sa-field-head" htmlFor="sa-manual-body">{pt(t, 'st.bodyLabel')}</label>
+    <textarea id="sa-manual-body" name="body" className="sa-textarea" rows={3} value={body}
+      placeholder={pt(t, 'st.bodyPh')} disabled={busy} onChange={event => setBody(event.target.value)} />
+    {/* Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
+        Ticket by the host; an unsupported combination is warned about here and rejected by the executor. */}
+    <div className="sa-route-controls">
+      <Select label={pt(t, 'st.routeDeliverable')} value={deliverable} disabled={busy}
+        options={[{ value: '', label: pt(t, 'st.routeAuto') },
           { value: 'change', label: pt(t, 'st.routeChange') },
-          { value: 'report', label: pt(t, 'st.routeReport') }],
-        onChange: next => setDeliverable(next) }),
-      h(Select, { label: pt(t, 'st.routeBackend'), value: backend, disabled: busy, options: backendOptions,
-        onChange: next => setBackend(next) })),
-    route
-      ? h('div', { className: 'sa-route-preview' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'st.routePreviewTitle')),
-        h('p', null,
-          `${pt(t, `detail.workType.${route.workType}`)} · `,
-          `${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `,
-          `${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `,
-          `${pt(t, 'st.routeBackend')}: ${route.backend}`,
-          route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`),
-        route.unsupported
-          ? h('p', { className: 'sa-error' }, pt(t, 'st.routeUnsupported', { caps: route.unsupported }))
-          : null)
-      : null,
-    previewError ? h(Hint, { tone: 'warning' }, pt(t, 'st.routePreviewFailed')) : null,
-    Object.keys(selection).length
-      ? h(Hint, null, pt(t, 'st.routeManualHint'))
-      : null,
-    // The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
-    // give a modal caller an explicit cancel next to it (critique 2026-11-11).
-    h('div', { className: 'sa-actions', style: { justifyContent: 'flex-end' } },
-      onCancel ? h(Button, { variant: 'ghost', size: 'md', onClick: onCancel }, t('cancel')) : null,
-      h(Button, { variant: 'primary', size: 'md', icon: h(Icon, { name: 'plus', size: 16 }), type: 'submit',
-        disabled: busy || !title.trim(), 'aria-busy': busy ? 'true' : undefined }, pt(t, 'st.create'))),
-    created?.id ? h('div', { className: 'sa-actions', role: 'status', 'aria-live': 'polite' },
-      h(StatusText, { state: 'done' }, pt(t, 'st.created')),
-      h('code', { className: 'sa-mono' }, shortId(created.id, 10))) : null,
-    failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
+          { value: 'report', label: pt(t, 'st.routeReport') }]}
+        onChange={next => setDeliverable(next)} />
+      <Select label={pt(t, 'st.routeBackend')} value={backend} disabled={busy} options={backendOptions}
+        onChange={next => setBackend(next)} />
+    </div>
+    {route
+      ? <div className="sa-route-preview">
+        <span className="sa-field-head">{pt(t, 'st.routePreviewTitle')}</span>
+        <p>
+          {`${pt(t, `detail.workType.${route.workType}`)} · `}
+          {`${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `}
+          {`${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `}
+          {`${pt(t, 'st.routeBackend')}: ${route.backend}`}
+          {route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}
+        </p>
+        {route.unsupported
+          ? <p className="sa-error">{pt(t, 'st.routeUnsupported', { caps: route.unsupported })}</p>
+          : null}
+      </div>
+      : null}
+    {previewError ? <Hint tone="warning">{pt(t, 'st.routePreviewFailed')}</Hint> : null}
+    {Object.keys(selection).length
+      ? <Hint>{pt(t, 'st.routeManualHint')}</Hint>
+      : null}
+    {/* The dialog's only submit used to be a 28px button at the left edge of the body: make it the primary action and
+        give a modal caller an explicit cancel next to it (critique 2026-11-11). */}
+    <div className="sa-actions" style={{ justifyContent: 'flex-end' }}>
+      {onCancel ? <Button variant="ghost" size="md" onClick={onCancel}>{t('cancel')}</Button> : null}
+      <Button variant="primary" size="md" icon={<Icon name="plus" size={16} />} type="submit"
+        disabled={busy || !title.trim()} aria-busy={busy ? 'true' : undefined}>{pt(t, 'st.create')}</Button>
+    </div>
+    {created?.id ? <div className="sa-actions" role="status" aria-live="polite">
+      <StatusText state="done">{pt(t, 'st.created')}</StatusText>
+      <code className="sa-mono">{shortId(created.id, 10)}</code>
+    </div> : null}
+    {failure ? <p className="sa-error" role="alert">{errorText(failure)}</p> : null}
+  </form>
 }
-
 // ---- overview building blocks ---------------------------------------------------------------------------------
 
 /** 24h flow: 到达 → 评估 → 接单. 过滤 is a branch of arrival (context-only messages), not a stage, and `dropped`
@@ -1183,16 +1205,19 @@ function FunnelBar({ flow }) {
     { key: 'judged', labelKey: 'funnelJudged', value: judged },
     { key: 'accepted', labelKey: 'funnelAccepted', value: accepted },
   ]
-  return h('div', { className: 'sa-funnel' },
-    h('div', { className: 'sa-funnel-steps' }, steps.flatMap((step, index) => [
-      index ? h('span', { key: `arrow-${step.key}`, className: 'sa-funnel-arrow', 'aria-hidden': 'true' }, '→') : null,
-      h('div', { key: step.key, className: 'sa-funnel-step' },
-        h('span', { className: 'sa-funnel-value' }, ovCount(step.value, t.lang)),
-        h('span', { className: 'sa-funnel-label' }, pt(t, step.labelKey))),
-    ]),
-      contextOnly > 0 ? h('span', { className: 'sa-funnel-branch' }, pt(t, 'funnelBranch', { count: contextOnly })) : null),
-    // The three numbers are already on screen; only the outbound failure count is new information here.
-    dropped > 0 ? h('p', { className: 'sa-funnel-summary' }, pt(t, 'funnelDropped', { count: dropped })) : null)
+  return <div className="sa-funnel">
+    <div className="sa-funnel-steps">{steps.flatMap((step, index) => [
+      index ? <span key={`arrow-${step.key}`} className="sa-funnel-arrow" aria-hidden="true">→</span> : null,
+      <div key={step.key} className="sa-funnel-step">
+        <span className="sa-funnel-value">{ovCount(step.value, t.lang)}</span>
+        <span className="sa-funnel-label">{pt(t, step.labelKey)}</span>
+      </div>,
+    ])}
+      {contextOnly > 0 ? <span className="sa-funnel-branch">{pt(t, 'funnelBranch', { count: contextOnly })}</span> : null}
+    </div>
+    {/* The three numbers are already on screen; only the outbound failure count is new information here. */}
+    {dropped > 0 ? <p className="sa-funnel-summary">{pt(t, 'funnelDropped', { count: dropped })}</p> : null}
+  </div>
 }
 
 /** Executor load: composition of running/queued/waiting/failed. No fake denominator without maxWorkers. */
@@ -1211,16 +1236,20 @@ function ExecutorLoad({ load, labels = true }) {
   // The bar is segmented, so it only means something with its legend: the same counts and words as the stage filter
   // sit under it, and the segment colours are read through those words rather than guessed.
   if (total === 0) return null
-  return h('div', { className: 'sa-executor-load' },
-    h('div', { className: 'sa-loadbar' },
-      h('div', { className: 'sa-loadbar-track', role: 'img', style: { display: 'flex' },
-        'aria-label': counts.map(entry => pt(t, entry.key, { count: entry.value })).join(' · ') },
-        counts.filter(entry => entry.value > 0).map(entry =>
-          h('span', { key: entry.key, className: 'sa-loadbar-fill', 'data-tone': entry.tone,
-            style: { display: 'block', width: `${(entry.value / total) * 100}%` } }))),
-      labels ? h('div', { className: 'sa-loadbar-meta' },
-        counts.map(entry => h('span', { key: entry.key }, pt(t, entry.key, { count: entry.value }))),
-        load.paused ? h(Tag, { key: 'paused', tone: 'warning' }, pt(t, 'loadbarPaused')) : null) : null))
+  return <div className="sa-executor-load">
+    <div className="sa-loadbar">
+      <div className="sa-loadbar-track" role="img" style={{ display: 'flex' }}
+        aria-label={counts.map(entry => pt(t, entry.key, { count: entry.value })).join(' · ')}>
+        {counts.filter(entry => entry.value > 0).map(entry =>
+          <span key={entry.key} className="sa-loadbar-fill" data-tone={entry.tone}
+            style={{ display: 'block', width: `${(entry.value / total) * 100}%` }} />)}
+      </div>
+      {labels ? <div className="sa-loadbar-meta">
+        {counts.map(entry => <span key={entry.key}>{pt(t, entry.key, { count: entry.value })}</span>)}
+        {load.paused ? <Tag key="paused" tone="warning">{pt(t, 'loadbarPaused')}</Tag> : null}
+      </div> : null}
+    </div>
+  </div>
 }
 
 // ---- detail building blocks -----------------------------------------------------------------------------------
@@ -1249,19 +1278,22 @@ function latestGatesOf(ticket) {
 function GateSummary({ ticket }) {
   const { t } = usePanel()
   const { gates } = latestGatesOf(ticket)
-  if (!gates.length) return h(Hint, null, pt(t, 'gate.none'))
-  return h('div', { className: 'sa-gates' },
-    gates.map((gate, index) => {
+  if (!gates.length) return <Hint>{pt(t, 'gate.none')}</Hint>
+  return <div className="sa-gates">
+    {gates.map((gate, index) => {
       const ok = gate.exitCode === 0 && !gate.timedOut
-      return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate' },
-        h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
-        // The passed/failed word is visible text, not an aria-label on a plain span (ignored by many screen readers).
-        h('span', { className: 'sa-hint' }, pt(t, ok ? 'gate.passed' : 'gate.failed')),
-        ok ? null : h('span', { className: 'sa-hint' },
-          gate.timedOut ? pt(t, 'gate.timedOut')
+      return <span key={`${gate.name ?? 'gate'}-${index}`} className="sa-gate">
+        <StatusText state={ok ? 'done' : 'error'}>{ticketGateLabel(t, gate.name)}</StatusText>
+        {/* The passed/failed word is visible text, not an aria-label on a plain span (ignored by many screen readers). */}
+        <span className="sa-hint">{pt(t, ok ? 'gate.passed' : 'gate.failed')}</span>
+        {ok ? null : <span className="sa-hint">
+          {gate.timedOut ? pt(t, 'gate.timedOut')
             : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
-              : ''))
-    }))
+              : ''}
+        </span>}
+      </span>
+    })}
+  </div>
 }
 
 /** Seven stages of one ticket: 触发 → 评估 → 工单 → 执行 → 闸门 → MR → UAT. */
@@ -1303,15 +1335,22 @@ function StageRail({ ticket, detail = false }) {
       result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
         : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
   ]
-  return h('ol', { className: detail ? 'sa-rail sa-rail-detail' : 'sa-rail' },
-    // The stage name carries no state: the state icon is aria-hidden and colour-coded, so each step also prints its
-    // state word (done/ongoing/warning/error/idle) in the result slot. Never colour-only (WIG 1.4.1).
-    stages.map(stage => h('li', { key: stage.key, className: 'sa-rail-step', 'data-state': stage.state },
-      h(detail ? 'span' : 'div', { className: 'sa-rail-dot' },
-        h(StatusIcon, { state: stage.state, size: 14 }),
-        h('span', { className: 'sa-rail-label' }, pt(t, `rail.${stage.key}`)),
-        h('span', { className: 'sa-rail-result' },
-          [pt(t, `railState.${stage.state}`), detail ? stage.result : ''].filter(Boolean).join(' · '))))))
+  return <ol className={detail ? 'sa-rail sa-rail-detail' : 'sa-rail'}>
+    {/* The stage name carries no state: the state icon is aria-hidden and colour-coded, so each step also prints its
+        state word (done/ongoing/warning/error/idle) in the result slot. Never colour-only (WIG 1.4.1). */}
+    {stages.map(stage => {
+      const Dot = detail ? 'span' : 'div'
+      return <li key={stage.key} className="sa-rail-step" data-state={stage.state}>
+        <Dot className="sa-rail-dot">
+          <StatusIcon state={stage.state} size={14} />
+          <span className="sa-rail-label">{pt(t, `rail.${stage.key}`)}</span>
+          <span className="sa-rail-result">
+            {[pt(t, `railState.${stage.state}`), detail ? stage.result : ''].filter(Boolean).join(' · ')}
+          </span>
+        </Dot>
+      </li>
+    })}
+  </ol>
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
@@ -1343,24 +1382,27 @@ function MergeRequestCard({ ticket }) {
   const draft = mr.draft === true || mr.workInProgress === true
   const stale = pipeline.stale && typeof pipeline.stale === 'object' ? pipeline.stale : undefined
   const badges = [
-    draft ? h(Tag, { key: 'draft', tone: 'warning' }, pt(t, 'mr.draft')) : null,
-    stale ? h(Tag, { key: 'stale', tone: 'warning' }, pt(t, 'mr.stale')) : null,
+    draft ? <Tag key="draft" tone="warning">{pt(t, 'mr.draft')}</Tag> : null,
+    stale ? <Tag key="stale" tone="warning">{pt(t, 'mr.stale')}</Tag> : null,
   ].filter(Boolean)
-  return h('div', { className: 'sa-card' },
-    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'ticket.mrCard'))),
-    badges.length ? h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } }, badges) : null,
-    draft ? h(Folded, { summary: pt(t, 'mr.draft') }, h('p', { className: 'sa-hint' }, pt(t, 'mr.draftHint'))) : null,
-    stale
-      ? h(Folded, { summary: pt(t, 'mr.stale') }, h('p', { className: 'sa-hint' },
-        pt(t, 'mr.staleHint', { head: liveShortId(stale.headSha, 8) || '—', latest: liveShortId(stale.latestSha, 8) || '—' })))
-      : null,
-    hasMr || pipeline.status || autoMerge.state || merged
-      ? h(Fragment, null,
-        h(KeyValues, { rows }),
-        mr.webUrl && !mr.iid
-          ? h('p', { className: 'sa-hint', style: { marginTop: 'var(--sa-sp-8)' } }, pt(t, 'mr.pushHint'))
-          : null)
-      : h(Hint, null, liveText('还没有合并请求。', 'No merge request yet.')))
+  return <div className="sa-card">
+    <div className="sa-card-head"><span className="sa-card-title">{pt(t, 'ticket.mrCard')}</span></div>
+    {badges.length ? <div className="sa-actions" style={{ marginBottom: 'var(--sa-sp-8)' }}>{badges}</div> : null}
+    {draft ? <Folded summary={pt(t, 'mr.draft')}><p className="sa-hint">{pt(t, 'mr.draftHint')}</p></Folded> : null}
+    {stale
+      ? <Folded summary={pt(t, 'mr.stale')}><p className="sa-hint">
+        {pt(t, 'mr.staleHint', { head: liveShortId(stale.headSha, 8) || '—', latest: liveShortId(stale.latestSha, 8) || '—' })}
+      </p></Folded>
+      : null}
+    {hasMr || pipeline.status || autoMerge.state || merged
+      ? <>
+        <KeyValues rows={rows} />
+        {mr.webUrl && !mr.iid
+          ? <p className="sa-hint" style={{ marginTop: 'var(--sa-sp-8)' }}>{pt(t, 'mr.pushHint')}</p>
+          : null}
+      </>
+      : <Hint>{liveText('还没有合并请求。', 'No merge request yet.')}</Hint>}
+  </div>
 }
 
 /** UAT acceptance card: merge state, commit, reachability, build change and the deploy job. */
@@ -1394,41 +1436,46 @@ function UatCard({ ticket }) {
     rows.push([pt(t, 'ticket.deployJob'),
       `${deployName ? `${deployName} · ` : ''}${deployMark}${providerStateText(t, PIPELINE_STATE_KEYS, deployStatusRaw)}`])
   }
-  return h('div', { className: 'sa-card' },
-    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'ticket.uatCard'))),
-    rows.length ? h(KeyValues, { rows }) : h(Hint, null, liveText('还没有 UAT 验收记录。', 'No UAT acceptance yet.')))
+  return <div className="sa-card">
+    <div className="sa-card-head"><span className="sa-card-title">{pt(t, 'ticket.uatCard')}</span></div>
+    {rows.length ? <KeyValues rows={rows} /> : <Hint>{liveText('还没有 UAT 验收记录。', 'No UAT acceptance yet.')}</Hint>}
+  </div>
 }
 
 // ---- transitional shims ---------------------------------------------------------------------------------------
 // The six page fragments are being rewritten against the new components above; until every page lands, keep the
 // old composition seams alive so an intermediate build cannot blank a page with a ReferenceError.
-function LiveFrame({ children }) { return h(Fragment, null, children) }
+function LiveFrame({ children }) { return <>{children}</> }
 function LiveTicketList({ tickets, page = 'overview', actions, reload, now }) {
-  return h(TicketList, { tickets, page, actions, reload, now })
+  return <TicketList tickets={tickets} page={page} actions={actions} reload={reload} now={now} />
 }
 function LiveRunRows({ runs, limit = Infinity }) {
   const { t } = usePanel()
   const list = Array.isArray(runs) ? runs.slice(0, limit) : []
-  if (!list.length) return h(Hint, null, t('empty'))
-  return h('ul', { className: 'sa-list' }, list.map(run => {
+  if (!list.length) return <Hint>{t('empty')}</Hint>
+  return <ul className="sa-list">{list.map(run => {
     const view = runView(t, run)
     const cause = run.error ? failureLabel(t, run.error) : ''
     const raw = run.error ? String(run.error) : ''
-    return h('li', { key: run.id, className: 'sa-row' },
-      h('div', { className: 'sa-row-main' },
-        h('div', { className: 'sa-row-title' },
-          h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', null, view.label),
-          h('span', { className: 'sa-mono sa-hint' }, liveShortId(run.id))),
-        // A raw worker error can be a whole stack: the short cause stays inline and the untruncated text folds.
-        run.error ? h('p', { className: 'sa-error' }, cause) : null,
-        run.error && raw.trim() !== cause
-          ? h(Folded, { summary: pt(t, 'run.rawError') }, h(ClampText, { text: raw }))
-          : null))
-  }))
+    return <li key={run.id} className="sa-row">
+      <div className="sa-row-main">
+        <div className="sa-row-title">
+          <StatusIcon state={view.state} size={14} />
+          <span>{view.label}</span>
+          <span className="sa-mono sa-hint">{liveShortId(run.id)}</span>
+        </div>
+        {/* A raw worker error can be a whole stack: the short cause stays inline and the untruncated text folds. */}
+        {run.error ? <p className="sa-error">{cause}</p> : null}
+        {run.error && raw.trim() !== cause
+          ? <Folded summary={pt(t, 'run.rawError')}><ClampText text={raw} /></Folded>
+          : null}
+      </div>
+    </li>
+  })}</ul>
 }
 function LiveStatusTags({ engine, config }) {
   const { t } = usePanel()
-  return h('div', { className: 'sa-actions' },
-    h(StatusText, { state: globalHealth({ engine, config }).state }, pt(t, globalHealth({ engine, config }).labelKey)))
+  return <div className="sa-actions">
+    <StatusText state={globalHealth({ engine, config }).state}>{pt(t, globalHealth({ engine, config }).labelKey)}</StatusText>
+  </div>
 }
