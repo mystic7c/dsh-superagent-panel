@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.10] — 2026-11-14
+
+### 变更
+- `tsconfig.check.json` 的 tranche 3：`lib/live/engine.js`、`shadow.js` 进 `files`；`engine.js` 会拉进 `executor.js`，
+  所以三个文件一起清零（清单 23 → 25 个文件，`npm run check:js` 0 错误）。`index.js` 仍在清单外（会牵出整条引擎链，
+  留最后一档）。
+- 修法全是类型标注，没有行为改动：给「解构出一个 options 对象」的函数补 `@param {any} [options]`
+  （`engine.js` 的 `deriveInboxItems`/`routePreview`/`signalsView`/`operationsView`/`acceptTicket`/`dismissTicket` 等，
+  `executor.js` 的 `runCommand`/`gateCommandFor`/`workerBrief`/`createRunRecorder`/`markRunComplete`/`executeTicketInner` 等，
+  `shadow.js` 的 `collectShadowSamples`）；`error.code`/`error.status`、`records.ticket.routeSelection`、
+  `candidate.signalId`、`built.decision`、`check.onFail`、`worktreeDiff` 的返回联合等用 `/** @type {any} */` 收口；
+  `deps = {}` 统一改成 `deps = /** @type {any} */ ({})`，`log` 参数标成 `(line: string) => void`。
+- `lib/live/shadow.js` 的 `collectShadowSamples` 补了 `@param {any} [options]`。
+
+### 为什么
+`check:js` 分档的价值是「新代码在已清档的模块里必须类型干净」。`engine`/`executor`/`shadow` 互相 import，
+不一起清零就无法单独入档；它们是 Host 半最重的三个文件（放探针时 257/161/267 个错误），清零后
+`npm run check:js` 覆盖了除 `index.js` 之外的整个 Host 引擎。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`。
+- `--check` 23 modules / 481,052 bytes（未动客户端）；`check-keys` 958 / 513 / 1359。
+- Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`；`isolated-verify` PASS（console errors 0）。
+
 ## [0.9.9] — 2026-11-14
 
 ### 变更
