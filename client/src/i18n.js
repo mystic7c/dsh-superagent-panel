@@ -463,13 +463,20 @@ export const GLOSSARY_VALUES = {
 export const DICTS = {}
 for (const lang of ['zh', 'en']) {
   const index = lang === 'zh' ? 0 : 1
-  DICTS[lang] = Object.fromEntries(Object.entries(TEXT).map(([key, value]) => {
-    if (Array.isArray(value)) return [key, value[index]]
+  /** @type {Array<[string, any]>} */
+  const pairs = []
+  for (const [key, value] of Object.entries(TEXT)) {
+    if (Array.isArray(value)) {
+      pairs.push([key, value[index]])
+      continue
+    }
     // Nested groups (`decision.accept`, `glossaryGroup.roles`, …) become flat dotted keys.
+    /** @type {Record<string, any>} */
     const flat = {}
     for (const [suffix, pair] of Object.entries(value)) flat[`${key}.${suffix}`] = pair[index]
-    return [key, flat]
-  }).flatMap(([key, value]) => typeof value === 'string' ? [[key, value]] : Object.entries(value)))
+    pairs.push(...Object.entries(flat))
+  }
+  DICTS[lang] = Object.fromEntries(pairs)
 }
 
 /** Translate one key with `{name}` interpolation; unknown keys render as the key so a missing entry is visible. */

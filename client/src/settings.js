@@ -666,6 +666,8 @@ export function settingsUatView(t, uat) {
     on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. The hint is tied to
     the switch with aria-describedby, so it is announced with the switch instead of only sitting next to it. */
 export let settingsSwitchHintSeq = 0
+/** @param {{ label: any, hint?: any, badge?: any, tip?: any, tipWarn?: boolean, checked?: any, disabled?: any,
+    onChange?: (checked: boolean) => void }} props */
 export function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled, onChange }) {
   const inputRef = useRef(null)
   const seqRef = useRef(null)
@@ -693,6 +695,7 @@ export function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, d
 
 /** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
     check/reload/test result is announced when it appears, and aria-busy marks the trigger while work runs. */
+/** @param {{ view?: any, note?: any, busy?: any }} props */
 export function SettingsStatusLine({ view, note, busy }) {
   const { t } = usePanel()
   if (!view) return null
@@ -978,7 +981,8 @@ export function LiveSettingsPage({ route }) {
       const focusable = target.matches('input, select, textarea, button, a[href]')
         ? target
         : target.querySelector('input, select, textarea, button, a[href], [tabindex]')
-      const node = focusable ?? target
+      // The selector only matches HTML focusables, but `querySelector` widens the result to `Element`.
+      const node = /** @type {HTMLElement | null} */ (focusable ?? target)
       if (node && typeof node.focus === 'function') node.focus({ preventScroll: true })
     }, 120)
     return () => clearTimeout(timer)

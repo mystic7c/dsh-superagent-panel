@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.9.12] — 2026-11-14
+
+### 变更
+- checkJs 的最后一档：`tsconfig.check.json` 加入 `client/src/index.js`，`npm run check:js` 现在覆盖**全部代码**——
+  Host 半（`index.js` + `lib/`）与整个客户端（入口 `index.js` 顺着 import 检查每个片段）。清单 26 → 28 个文件，
+  0 个错误。
+- 客户端补完的 JSDoc/类型（只加类型，不改行为，含两个子代理并行完成的两个大文件）：
+  - `types/dsh.d.ts` 补 `declare namespace JSX`（`Element`/`IntrinsicAttributes.key`/`IntrinsicElements`/`
+    ElementChildrenAttribute`）——这一步把 390 个错误降到 276；`SlotEntry.label` 放宽为 `string | (() => string)`，
+    依据是 `dsh-client-ui-plugin-manager` 里传的是 thunk。
+  - `client/src/controls.js`（14 个基础控件）、`widgets.js`（16 个展示组件）的 props 一律可选，并用
+    `[attribute: string]: any` 承接 `...rest`。
+  - `markdown.js` 增加 `MarkdownBlock` 联合类型；`i18n.js` 的字典构建从 `flatMap` 改成显式循环（保留原分组规则）；
+    `live-model.js` 增加 `EngineActions`（35 个动作的签名与参数顺序）；`apply.js` 收口 `ctx.get?.(…)`；
+    `shell.js` 修 DOM 聚焦与类组件 `props`；`live-ui.js` 补 `TicketRow`/`TicketList`/`ManualTicketForm`（`onCancel?`）。
+  - `ticket-detail.js` 增加 `DiffRequestState`（对照 `lib/live/diff.js` 的 `worktreeDiff` 与 `engine.js` 的
+    `ticketDiff` 的真实返回形状）+ `DiffCard` 的 `@param`；`settings.js` 给 `SettingsSwitchRow`/`SettingsStatusLine`
+    补可选 props，并把 DOM 聚焦处的 `Element` 收口成 `HTMLElement`。
+- 文档同步：`AGENTS.md`/`CONTRIBUTING.md`/`README.md` 的闸门说明从「Host 半全量、客户端尚未入档」改为
+  「Host 半 + 客户端入口全量」。
+
+### 验证
+- `npm run check:js` 0 错误（28 个文件）；`npm run types` 通过。
+- `node scripts/build-client.mjs` → 23 modules / 481,032 bytes（JSDoc 被压缩器去掉，产物只少了 20 字节的代码改动）；
+  `node --check client/index.js` OK；`check-keys` 958/513/1359。
+- `node --test lib/live/*.test.js` → 554 pass / 0 fail。
+- `node scripts/render-check.mjs` → 194 checks / 0 failed / 0 skipped。
+- `node scripts/isolated-verify.mjs` → PASS，console errors 0，六个 tab 都在。
+
 ## [0.9.11] — 2026-11-14
 
 > 发布说明：v0.9.11 是 0.9.5–0.9.11 的汇总发布（checkJs 分档、删除旧管理层、交付桥前缀、Host 半全量入档），

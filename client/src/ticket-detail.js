@@ -948,7 +948,36 @@ export function DiffBody({ text }) {
   </div>
 }
 
-/** Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place. */
+/**
+ * The dialog's own on-demand request state: a read in flight, the host's worktree diff, or the failure that ended it.
+ * @typedef {{
+ *   loading?: boolean,
+ *   error?: any,
+ *   path?: string,
+ *   data?: {
+ *     available?: boolean,
+ *     reason?: string,
+ *     path?: string,
+ *     worktree?: string,
+ *     baseSha?: string | null,
+ *     baseMissing?: boolean,
+ *     ticketId?: string,
+ *     runId?: string,
+ *     diff?: string,
+ *     bytes?: number,
+ *     omitted?: number,
+ *     truncated?: boolean,
+ *     files?: {
+ *       path?: string, additions?: number, deletions?: number, digest?: string,
+ *       binary?: boolean, truncated?: boolean,
+ *     }[],
+ *   } | null,
+ * }} DiffRequestState
+ */
+/**
+ * Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place.
+ * @param {{ state?: DiffRequestState, onRetry?: () => void }} props
+ */
 export function DiffCard({ state = {}, onRetry }) {
   const { t } = usePanel()
   if (state.loading) return <Skeleton rows={4} />

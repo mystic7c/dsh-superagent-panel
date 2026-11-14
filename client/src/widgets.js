@@ -11,11 +11,13 @@ import { Button, CopyButton, IconButton, InfoTip, Modal, STATUS_STATES, StatusIc
 import { same, useAction, usePanel } from "./api.js"
 import { Fragment, React, h, useState } from "./react.js"
 /** Relative time with an absolute tooltip; the only timestamp renderer pages need. */
+/** @param {{ at?: any }} props */
 export function When({ at }) {
   const { t } = usePanel()
   return <time dateTime={at} title={fullTime(at, t.lang)}>{when(at, t.lang)}</time>
 }
 
+/** @param {{ title?: any, count?: any, icon?: any, hint?: any, action?: any, badge?: any, id?: string, children?: any }} props */
 export function Section({ title, count, icon, hint, action, badge, id, children }) {
   return <section className="sa-section" id={id}>
     <h2 className="sa-section-title">
@@ -31,8 +33,10 @@ export function Section({ title, count, icon, hint, action, badge, id, children 
   </section>
 }
 
-export function Hint({ children }) { return <p className="sa-hint">{children}</p> }
+/** @param {{ children?: any, tone?: string }} props — `tone` is accepted for call-site symmetry; the paragraph keeps the inline style */
+export function Hint({ children, tone: _tone }) { return <p className="sa-hint">{children}</p> }
 
+/** @param {{ rows?: any[], className?: string }} props */
 export function KeyValues({ rows, className }) {
   return <dl className={className ? `sa-kv ${className}` : 'sa-kv'}>
     {rows.map(([key, value], index) => <div key={index} style={{ display: 'contents' }}>
@@ -41,6 +45,7 @@ export function KeyValues({ rows, className }) {
   </dl>
 }
 
+/** @param {{ parts?: any[], depth?: number }} props */
 export function Inlines({ parts, depth = 0 }) {
   return <>{parts.map((part, index) => part.kind === 'bold' ? <strong key={index}>{part.text}</strong>
     : part.kind === 'code' ? <code key={index} className="sa-code" translate="no">{part.text}</code>
@@ -72,7 +77,7 @@ export function MarkdownLite({ text }) {
       </div>
     }
     if (block.kind === 'list') {
-      const List = block.ordered ? 'ol' : 'ul'
+      const List = /** @type {any} */ (block.ordered ? 'ol' : 'ul')
       return <List key={index}>
         {block.items.map((item, at) => <li key={at}><Inlines parts={inlines(item)} /></li>)}
       </List>
@@ -80,13 +85,14 @@ export function MarkdownLite({ text }) {
     // Markdown headings keep their rank in the document outline: the page already owns h2, so `#`/`##` land on h3 and
     // deeper levels step down from there instead of every heading collapsing into a styled paragraph.
     if (block.kind === 'heading') {
-      const Heading = `h${Math.min(6, 2 + (block.level ?? 2))}`
+      const Heading = /** @type {any} */ (`h${Math.min(6, 2 + (block.level ?? 2))}`)
       return <Heading key={index} className="sa-md-heading"><Inlines parts={inlines(block.text)} /></Heading>
     }
     return <p key={index}><Inlines parts={inlines(block.text)} /></p>
   })}</div>
 }
 
+/** @param {{ text?: any, limit?: number, lines?: number }} props */
 export function ClampText({ text, limit = 480, lines = 8 }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
@@ -102,6 +108,7 @@ export function ClampText({ text, limit = 480, lines = 8 }) {
 
 /** Destructive/irreversible action behind a confirmation dialog that states the consequence. `confirmLabel` names the
     action on the button ("Publish MR", "Delete branch and ignore"); the generic "Confirm" is only the fallback. */
+/** @param {{ label?: any, title?: any, message?: any, confirmLabel?: any, onConfirm?: (...args: any[]) => any, variant?: string, icon?: any }} props */
 export function ConfirmButton({ label, title, message, confirmLabel, onConfirm, variant = 'ghost', icon }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
@@ -120,6 +127,7 @@ export function ConfirmButton({ label, title, message, confirmLabel, onConfirm, 
 /** External link; new tab only for links that leave this origin. Anything that is not a plain http(s) URL
     (javascript:, data:, vbscript:, …) renders as inert text: URLs here come from operator config and GitLab/Octo
     payloads, so an unchecked scheme would be a stored-XSS sink. */
+/** @param {{ href?: any, children?: any, icon?: any }} props */
 export function ExternalLink({ href, children, icon = 'external' }) {
   const safe = safeHttpUrl(href)
   if (!safe) return <span className="sa-inline-link">{children}</span>
@@ -130,6 +138,7 @@ export function ExternalLink({ href, children, icon = 'external' }) {
 }
 
 /** Legacy loading/error line; new code uses ErrorState/Skeleton. */
+/** @param {{ error?: any, loading?: any }} props */
 export function LoadState({ error, loading }) {
   const { t } = usePanel()
   if (error) return <p className="sa-error" role="alert">{errorText(error)}</p>
@@ -138,6 +147,7 @@ export function LoadState({ error, loading }) {
 
 /** Detail-page head: back (route history), 20/600 title, meta line and actions. `showBack` is false for a detail
     rendered as a master-detail pane, where there is no list route to return to. */
+/** @param {{ title?: any, meta?: any, actions?: any, showBack?: boolean, headRef?: any }} props */
 export function PageHead({ title, meta, actions, showBack = true, headRef }) {
   const { back, backLabel, t } = usePanel()
   return <div ref={headRef} className="sa-page-head">
@@ -153,6 +163,7 @@ export function PageHead({ title, meta, actions, showBack = true, headRef }) {
 }
 
 /** Positive empty state: one teaching sentence plus one next step. `state` ('done') tints it as a success message. */
+/** @param {{ icon?: any, title?: any, hint?: any, action?: any, state?: any }} props */
 export function EmptyState({ icon = 'inbox', title, hint, action, state }) {
   return <div className="sa-empty" data-state={state}>
     {icon ? <span className="sa-empty-icon">
@@ -167,6 +178,7 @@ export function EmptyState({ icon = 'inbox', title, hint, action, state }) {
 }
 
 /** Plain-language error with a retry and a folded raw value (never a bare stack trace). */
+/** @param {{ error?: any, onRetry?: () => void }} props */
 export function ErrorState({ error, onRetry }) {
   const { t } = usePanel()
   const message = error instanceof Error ? error.message : String(error ?? '')
@@ -184,6 +196,7 @@ export function ErrorState({ error, onRetry }) {
 
 export const SKELETON_WIDTHS = ['100%', '92%', '78%', '86%', '64%', '72%']
 /** Section-level loading skeleton; polled data keeps its old render, so this is first paint only. */
+/** @param {{ rows?: number, variant?: string }} props */
 export function Skeleton({ rows = 3, variant = 'section' }) {
   const { t } = usePanel()
   const count = Math.max(1, Math.min(12, Number(rows) || 3))
@@ -195,6 +208,7 @@ export function Skeleton({ rows = 3, variant = 'section' }) {
 }
 
 /** Block-level save bar: invisible while clean, explicit while dirty/saving/saved/error (contract §6.6). */
+/** @param {{ state?: any, savedAt?: any, error?: any, onSave?: (...args: any[]) => any, onRetry?: () => void, onDiscard?: () => void, dirty?: any }} props */
 export function SaveBar({ state, savedAt, error, onSave, onRetry, onDiscard, dirty }) {
   const { t } = usePanel()
   const current = state ?? (dirty ? 'dirty' : 'idle')
@@ -221,6 +235,7 @@ export function SaveBar({ state, savedAt, error, onSave, onRetry, onDiscard, dir
 }
 
 /** Monospace raw value (ids, paths, gate codes, JSON): copyable and folded by default. */
+/** @param {{ label?: any, text?: any, json?: any, openLabel?: any }} props */
 export function RawValue({ label, text, json, openLabel }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
@@ -241,6 +256,7 @@ export function RawValue({ label, text, json, openLabel }) {
 }
 
 /** Lightweight disclosure row for secondary content. */
+/** @param {{ summary?: any, children?: any }} props */
 export function Folded({ summary, children }) {
   return <details className="sa-folded">
     <summary className="sa-folded-summary"><Icon name="chevron-right" size={14} /><span>{summary}</span></summary>

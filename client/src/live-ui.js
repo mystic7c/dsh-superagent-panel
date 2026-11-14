@@ -857,6 +857,7 @@ export function ticketEvidence(t, ticket, view, now = Date.now()) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
+/** @param {{ ticket: any, page?: string, actions?: any, reload?: any, compact?: boolean, extra?: any, now?: any }} props */
 export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
   const { t, navigate, notify } = usePanel()
   const model = usePanelData()
@@ -1021,6 +1022,7 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
+/** @param {{ tickets: any[], page?: string, actions?: any, reload?: any, now?: any }} props */
 export function TicketList({ tickets, page = 'execution', actions, reload, now }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
@@ -1073,6 +1075,8 @@ export function TicketGroups({ tickets, page = 'execution', actions, reload, cla
  */
 export const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
 
+/** Inline manual-ticket form. `onCancel` is optional: the settings page embeds it without a cancel affordance.
+ * @param {{ onDone?: any, onCancel?: () => void, heading?: boolean }} props */
 export function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
