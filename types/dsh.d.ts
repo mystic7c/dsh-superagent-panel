@@ -68,7 +68,8 @@ declare namespace DSH {
     key?: string
     order?: number
     locale?: string
-    label?: string
+    /** Sidebar text. The shell accepts either a string or a thunk resolved at render time. */
+    label?: string | (() => string)
     icon?: unknown
     [extra: string]: unknown
   }
@@ -123,5 +124,24 @@ interface Window {
    */
   __ModuleLoader__?: {
     load(definition: { id: string; factory(require: (id: string) => unknown): unknown }): void
+  }
+}
+
+/**
+ * The client is compiled with `jsx: 'transform'` + `jsxFactory: 'h'`, so JSX here is classic-runtime syntax and TS
+ * looks up the same global namespace. Minimal declarations only: `key` is a framework attribute (never a component
+ * prop), and `Element` is whatever the factory returned, which for this codebase is always `any`.
+ */
+declare namespace JSX {
+  type Element = any
+  interface IntrinsicAttributes {
+    key?: any
+  }
+  /** The factory receives the tag name as a plain string, so intrinsic elements are untyped props by design. */
+  interface IntrinsicElements {
+    [tagName: string]: any
+  }
+  interface ElementChildrenAttribute {
+    children: {}
   }
 }

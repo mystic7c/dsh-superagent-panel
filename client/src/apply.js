@@ -14,7 +14,7 @@ export function SidebarIcon({ size }) {
 export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(async (sessionId) => {
-    const workspace = ctx.get?.('uiWorkspace')
+    const workspace = /** @type {{ openSession?: (id: string) => void } | undefined} */ (ctx.get?.('uiWorkspace'))
     if (workspace?.openSession) { workspace.openSession(sessionId); return }
     throw new Error('这个 Harness 版本没有 uiWorkspace 服务，无法打开 Session。')
   }, [ctx])
@@ -29,7 +29,8 @@ export function apply(ctx) {
   // Dictionaries are optional: the panel has its own translator, but registering them lets the host's locale service
   // resolve our namespace for titles and any future surface that reads it.
   try {
-    const locale = ctx.get?.('locale')
+    const locale = /** @type {{ register: (namespace: string, language: string, dict: any) => void } | undefined} */ (
+      ctx.get?.('locale'))
     if (locale?.register) {
       locale.register(LOCALE_NS, 'zh-CN', DICTS.zh)
       locale.register(LOCALE_NS, 'zh', DICTS.zh)

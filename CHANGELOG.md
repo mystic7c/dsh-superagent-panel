@@ -1,5 +1,73 @@
 # Changelog
 
+## [1.0.0] — 2026-11-14
+
+第一个公开发布版本。仓库转为 public，npm 上以 `@mystic7c/dsh-superagent-panel` 发布（`publishConfig.access: public`，
+`private` 已移除）。
+
+### 自 0.9.13 起
+- 无功能变化；只改分发元数据与安装文档：`package.json` 去掉 `"private": true`、加 `publishConfig`，版本 1.0.0；
+  README 的「安装」一节改成 npm 优先，tarball 与本地 checkout 作为备选。
+
+### 1.0 之前发生了什么（0.4.39 → 1.0.0 摘要）
+- **0.4.39–0.9.4**：开源准备（LICENSE / CI / `npm ci` 与 lockfile / 可复现的 jsdom 渲染回归 / CONTRIBUTING、COC、
+  SECURITY、issue 与 PR 模板）、客户端构建层从「手写拼接」换成 esbuild（产物 782 KB → 481 KB + sourcemap）、
+  客户端全面迁移到 JSX、客户端拆成真正的 ESM 模块并把文件名语义化。
+- **0.9.5–0.9.12**：`checkJs` 分档推进到全量（Host 半 + 客户端入口，28 个文件、0 错误）；删除旧「演示管理层」
+  1,752 行与 25 条遗留路由；交付桥覆盖 `fix/**`、`chore/**`、`docs/**`；README 重写并拆出 `docs/pages.md`
+  与 `docs/quickstart.md`；历史中的内部域名/仓库名/本机路径用 `git-filter-repo` 重写清除。
+- **0.9.13**：修「改动 diff」弹窗在工单已消失时永远停在「正在读取 diff…」。
+
+### 验证
+- `check:js` 0（28 文件）、`types` 通过、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360、
+  Host 554 pass / 0 fail、render-check 198 checks / 0 failed / 0 skipped、`isolated-verify` PASS（console errors 0）。
+- `npm pack` 后在干净临时目录 `npm i <tgz>` + `dsh plugin --profile <临时> add <tgz>` 可启动面板。
+
+## [0.9.13] — 2026-11-14
+
+### 修复
+- 「改动 diff」弹窗在工单已不存在时会永远停在「正在读取 diff…」。`engine.ticketDiff(...)` 对已删除/重置的工单返回
+  `undefined`（`lib/live/engine.js` 的 `ticketDiff`），而 `loadDiff` 会把 `{ path, data: undefined }` 存进对话框状态——
+  既不 `loading` 也不 `error`，于是 `DiffCard` 的 `if (!data) return <Hint>{ticket.diffLoading}</Hint>` 一直成立。
+- 修法：`loadDiff` 区分「读到了」与「读完了但没有数据」，后者记 `{ path, gone: true }`；新增纯函数
+  `diffPlaceholderKey(state)` 决定占位文案（`ticket.diffLoading` / 新增的 `ticket.diffTicketGone` / `null`），
+  `DiffCard` 按它渲染；正常路径（工单还在、只是没执行过）仍走原来的 `data.available !== true` 分支，行为不变。
+
+### 验证
+- `scripts/render-check.mjs` 新增 4 条断言（在飞行中 / 读完但数据为空 / 已加载 / 读取失败），总数 194 → **198 checks，
+  0 failed / 0 skipped**；其中「读完但数据为空」在没有修复时会渲染成「正在读取 diff…」，这条断言会失败。
+- `npm run check:js` 0、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360（新增一个 key）、
+  Host 554 pass / 0 fail、`isolated-verify` PASS（console errors 0）。
+
+## [0.9.12] — 2026-11-14
+
+### 变更
+- checkJs 的最后一档：`tsconfig.check.json` 加入 `client/src/index.js`，`npm run check:js` 现在覆盖**全部代码**——
+  Host 半（`index.js` + `lib/`）与整个客户端（入口 `index.js` 顺着 import 检查每个片段）。清单 26 → 28 个文件，
+  0 个错误。
+- 客户端补完的 JSDoc/类型（只加类型，不改行为，含两个子代理并行完成的两个大文件）：
+  - `types/dsh.d.ts` 补 `declare namespace JSX`（`Element`/`IntrinsicAttributes.key`/`IntrinsicElements`/`
+    ElementChildrenAttribute`）——这一步把 390 个错误降到 276；`SlotEntry.label` 放宽为 `string | (() => string)`，
+    依据是 `dsh-client-ui-plugin-manager` 里传的是 thunk。
+  - `client/src/controls.js`（14 个基础控件）、`widgets.js`（16 个展示组件）的 props 一律可选，并用
+    `[attribute: string]: any` 承接 `...rest`。
+  - `markdown.js` 增加 `MarkdownBlock` 联合类型；`i18n.js` 的字典构建从 `flatMap` 改成显式循环（保留原分组规则）；
+    `live-model.js` 增加 `EngineActions`（35 个动作的签名与参数顺序）；`apply.js` 收口 `ctx.get?.(…)`；
+    `shell.js` 修 DOM 聚焦与类组件 `props`；`live-ui.js` 补 `TicketRow`/`TicketList`/`ManualTicketForm`（`onCancel?`）。
+  - `ticket-detail.js` 增加 `DiffRequestState`（对照 `lib/live/diff.js` 的 `worktreeDiff` 与 `engine.js` 的
+    `ticketDiff` 的真实返回形状）+ `DiffCard` 的 `@param`；`settings.js` 给 `SettingsSwitchRow`/`SettingsStatusLine`
+    补可选 props，并把 DOM 聚焦处的 `Element` 收口成 `HTMLElement`。
+- 文档同步：`AGENTS.md`/`CONTRIBUTING.md`/`README.md` 的闸门说明从「Host 半全量、客户端尚未入档」改为
+  「Host 半 + 客户端入口全量」。
+
+### 验证
+- `npm run check:js` 0 错误（28 个文件）；`npm run types` 通过。
+- `node scripts/build-client.mjs` → 23 modules / 481,032 bytes（JSDoc 被压缩器去掉，产物只少了 20 字节的代码改动）；
+  `node --check client/index.js` OK；`check-keys` 958/513/1359。
+- `node --test lib/live/*.test.js` → 554 pass / 0 fail。
+- `node scripts/render-check.mjs` → 194 checks / 0 failed / 0 skipped。
+- `node scripts/isolated-verify.mjs` → PASS，console errors 0，六个 tab 都在。
+
 ## [0.9.11] — 2026-11-14
 
 > 发布说明：v0.9.11 是 0.9.5–0.9.11 的汇总发布（checkJs 分档、删除旧管理层、交付桥前缀、Host 半全量入档），

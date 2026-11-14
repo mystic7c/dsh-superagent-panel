@@ -23,7 +23,13 @@ Superagent 的循环（读消息 → 判是否接单 → 开 worktree 干活 →
 
 前置：DeepSeek Harness（含 Web UI）、Node.js ≥ 22。
 
-从 [Releases](https://github.com/mystic7c/dsh-superagent-panel/releases) 下载最新 tarball：
+从 npm 安装（推荐）：
+
+```bash
+dsh plugin --profile desktop add @mystic7c/dsh-superagent-panel
+```
+
+或从 [Releases](https://github.com/mystic7c/dsh-superagent-panel/releases) 下载 tarball：
 
 ```bash
 dsh plugin --profile desktop add "file:/path/to/mystic7c-dsh-superagent-panel-<version>.tgz"
@@ -56,7 +62,7 @@ node --check index.js                  # Host 半语法
 node --test lib/live/*.test.js
 node scripts/check-keys.mjs            # 中英文 key 覆盖
 npm run types                          # types/dsh.d.ts 自身能否通过 tsc
-npm run check:js                       # checkJs 清单（Host 半全量）
+npm run check:js                       # checkJs 清单（Host 半 + 客户端入口）
 node scripts/render-check.mjs          # jsdom 渲染回归
 ```
 

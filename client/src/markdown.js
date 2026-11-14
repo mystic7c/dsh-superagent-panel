@@ -55,8 +55,18 @@ export function looksLikeCode(value) {
   return false
 }
 
-/** Split a message into headings, ordered/unordered lists, fenced code blocks and paragraphs. */
+/**
+ * @typedef {{ kind: 'code', lang: string, text: string }
+ *   | { kind: 'p', text: string }
+ *   | { kind: 'heading', level: number, text: string }
+ *   | { kind: 'list', ordered: boolean, items: string[] }} MarkdownBlock
+ */
+
+/** Split a message into headings, ordered/unordered lists, fenced code blocks and paragraphs.
+ * @param {string} text
+ * @returns {MarkdownBlock[]} */
 export function markdownBlocks(text) {
+  /** @type {MarkdownBlock[]} */
   const blocks = []
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   let paragraph = []

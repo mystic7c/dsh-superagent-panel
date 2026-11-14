@@ -67,14 +67,15 @@ node --check index.js                              # Host 半语法
 node scripts/build-client.mjs --check               # 客户端产物是否最新（改了 client/src 先跑 node scripts/build-client.mjs）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                       # types/dsh.d.ts 自身能否通过 tsc
-npm run check:js                                    # checkJs 清单（Host 半全量；客户端片段尚未入档）
+npm run check:js                                    # checkJs 清单（全量：Host 半 + 客户端入口）
 node --test lib/live/*.test.js                     # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（干净 clone 先 npm ci；无 live.json 时用内置 fixture）
 ```
 
 - 改了客户端源码：先 `node scripts/build-client.mjs`，把 `client/index.js` 一起提交，否则闸门失败。
 - 改了 `tsconfig.check.json` 里的任何一个文件：跑 `npm run check:js`；给一个旧文件补完 JSDoc 后把它加进 `files`，
-  不要为了让绿灯把文件移出去（这一档只增不减）。Host 半已全量入档（0.9.11），客户端片段仍未入档。
+  不要为了让绿灯把文件移出去（这一档只增不减）。0.9.12 起 Host 半与客户端入口 `client/src/index.js` 都已入档，
+  清单外的客户端片段只有新文件才需要手动追加。
 - 改了 Host 半或客户端行为：必须补/改对应测试（`lib/live/*.test.js` 或 `scripts/render-check.mjs`），
   不能只改代码不补断言。
 - 提交信息沿用 `fix(0.4.x): 一句话` / `feat(0.4.x): 一句话`；每个改动在 `CHANGELOG.md` 顶部加一节

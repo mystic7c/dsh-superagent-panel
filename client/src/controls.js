@@ -16,7 +16,8 @@ export function controlIcon(icon, size = 16) {
   return typeof icon === 'string' ? <Icon name={icon} size={size} /> : icon
 }
 
-/** Shape-coded state icon. `ongoing` spins by default; `spin` forces/forbids the rotation. */
+/** Shape-coded state icon. `ongoing` spins by default; `spin` forces/forbids the rotation.
+ * @param {{ state?: string, size?: number, spin?: boolean, className?: string }} props */
 export function StatusIcon({ state = 'idle', size = 16, spin, className }) {
   const key = STATUS_STATES.includes(state) ? state : 'idle'
   const spinning = spin === undefined ? key === 'ongoing' : spin
@@ -37,6 +38,7 @@ export function StatusIcon({ state = 'idle', size = 16, spin, className }) {
 }
 
 /** Shape + text; the only allowed way to show a state, so WCAG 1.4.1 holds. */
+/** @param {{ state?: string, children?: any }} props */
 export function StatusText({ state = 'idle', children }) {
   return <span className="sa-status-text" data-state={STATUS_STATES.includes(state) ? state : 'idle'}>
     <StatusIcon state={state} size={14} />
@@ -44,6 +46,7 @@ export function StatusText({ state = 'idle', children }) {
   </span>
 }
 
+/** @param {{ variant?: string, size?: string, icon?: any, className?: string, children?: any, type?: string, [attribute: string]: any }} props */
 export function Button({ variant = 'ghost', size = 'md', icon, className, children, type = 'button', ...rest }) {
   return <button type={type} className={cx('sa-btn', `sa-btn-${variant}`, `sa-btn-${size}`, className)} {...rest}>
     {icon !== undefined && icon !== null ? <span className="sa-btn-icon">{controlIcon(icon, size === 'sm' ? 14 : 16)}</span> : null}
@@ -51,16 +54,19 @@ export function Button({ variant = 'ghost', size = 'md', icon, className, childr
   </button>
 }
 
+/** @param {{ icon?: any, label?: any, onClick?: any, disabled?: any, title?: any, variant?: string, [attribute: string]: any }} props */
 export function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
   return <button type="button" className="sa-icon-btn" data-variant={variant}
     aria-label={label ?? title} title={title ?? label} disabled={disabled} onClick={onClick} {...rest}>{controlIcon(icon, 16)}</button>
 }
 
+/** @param {{ tone?: string, title?: any, children?: any }} props */
 export function Tag({ tone = 'outline', title, children }) {
   return <span className="sa-tag" data-tone={tone} title={title}>{children}</span>
 }
 
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
+/** @param {{ items?: any[], value?: string, onChange?: (key: string) => void, label?: any, className?: string }} props */
 export function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
   const walk = (event) => {
@@ -85,6 +91,7 @@ export function SegmentedTabs({ items, value, onChange, label, className }) {
 }
 
 /** Secondary filter pills (contract §5.2): one radio group, arrow keys move and select, roving tabindex. */
+/** @param {{ options?: any[], value?: string, onChange?: (value: string) => void, label?: any, disabled?: any, className?: string }} props */
 export function SegmentedControl({ options = [], value, onChange, label, disabled, className }) {
   const list = useRef(null)
   const selectable = options.filter(option => !option.disabled && !disabled)
@@ -114,6 +121,7 @@ export function SegmentedControl({ options = [], value, onChange, label, disable
 
 /** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
     identifier fields (repo, branch, ref, path) default to spellCheck=false so the browser stops underlining them. */
+/** @param {{ icon?: any, className?: string, inputRef?: any, label?: any, spellCheck?: boolean, [attribute: string]: any }} props */
 export function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
   return <span className={cx('sa-input', className)}>
     {icon !== undefined ? <span className="sa-input-icon">{controlIcon(icon, 14)}</span> : null}
@@ -121,6 +129,7 @@ export function Input({ icon, className, inputRef, label, spellCheck, ...rest })
   </span>
 }
 
+/** @param {{ options?: any[], value?: string, onChange?: (value: string) => void, label?: any, className?: string, disabled?: any }} props */
 export function Select({ options = [], value, onChange, label, className, disabled }) {
   return <select className={cx('sa-select', className)} value={value ?? ''} aria-label={label} disabled={disabled}
     onChange={event => onChange(event.target.value)}>
@@ -131,6 +140,7 @@ export function Select({ options = [], value, onChange, label, className, disabl
 /** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
     hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
     visible text lives outside the label (it may be omitted when the text is inside). */
+/** @param {{ checked?: any, onChange?: (checked: boolean) => void, label?: any, className?: string, disabled?: any, inputRef?: any }} props */
 export function Switch({ checked, onChange, label, className, disabled, inputRef }) {
   return <span className={cx('sa-switch', className)}>
     <input ref={inputRef} type="checkbox" role="switch" className="sa-switch-input"
@@ -141,6 +151,7 @@ export function Switch({ checked, onChange, label, className, disabled, inputRef
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
+/** @param {{ open?: any, onClose?: () => void, title?: any, closeLabel?: any, description?: any, footer?: any, className?: any, restoreTo?: any, children?: any }} props */
 export function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
   const dialog = useRef(null)
   const close = useRef(onClose)
@@ -191,6 +202,7 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
 }
 
 /** Tooltip trigger for hover, keyboard focus and touch; positioned with fixed coordinates so it escapes scroll clips. */
+/** @param {{ text?: any, icon?: string, warn?: any }} props */
 export function InfoTip({ text, icon = 'question', warn }) {
   const anchor = useRef(null)
   const bubble = useRef(null)
@@ -225,6 +237,7 @@ export function InfoTip({ text, icon = 'question', warn }) {
  * row (critique 2026-11-05 #22). The icon prop is kept for callers that need a leading glyph, but the overview no
  * longer passes a gear. `sa-disclosure-*` class hooks stay in place so the stylesheet owns the look.
  */
+/** @param {{ icon?: any, title?: any, open?: any, onToggle?: () => void, collapsedContent?: any, children?: any }} props */
 export function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
   return <div className="sa-disclosure" data-open={open || undefined}>
     <button type="button" className="sa-disclosure-row" aria-expanded={open} onClick={onToggle}>
@@ -261,6 +274,7 @@ export const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
 /** Overflow menu. A label + current value makes it a view picker (`text`); the default trigger is the ⋯ icon.
     Click outside / Escape close, ↑↓/Home/End move, Enter/Space select; `item.checked` turns the item into a radio
     choice (menuitemradio) and marks the current one. */
+/** @param {{ label?: any, items?: any[], iconName?: string, align?: string, text?: any }} props */
 export function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
@@ -360,6 +374,7 @@ export function Menu({ label, items = [], iconName = 'more', align = 'end', text
 }
 
 /** Copy a value, then confirm with a short live "copied" state (no modal, no toast). */
+/** @param {{ value: any, label?: any }} props */
 export function CopyButton({ value, label }) {
   const { t } = usePanel()
   const [copied, setCopied] = useState(false)
