@@ -1,10 +1,10 @@
 /* Client entry: registers the sidebar icon and the main management panel. Everything is guarded so a registration
    problem can never blank the Web boot; the panel then reports the host as unreachable instead. */
 
-import { LOCALE_NS, PANEL_ID, SuperagentIcon } from "./00-util.js"
-import { DICTS, detectLang, translate, useTranslator } from "./06-i18n.js"
-import { App, PanelBoundary } from "./30-shell.js"
-import { React, h, useCallback } from "./00-react.js"
+import { LOCALE_NS, PANEL_ID, SuperagentIcon } from "./util.js"
+import { DICTS, detectLang, translate, useTranslator } from "./i18n.js"
+import { App, PanelBoundary } from "./shell.js"
+import { React, h, useCallback } from "./react.js"
 export const inject = ['slots', 'locale']
 
 export function SidebarIcon({ size }) {

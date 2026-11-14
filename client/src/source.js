@@ -4,16 +4,16 @@
    keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
    no request of its own. */
 
-import { API, Icon, hhmm, shortId } from "./00-util.js"
-import { errorText, localized, translate, when } from "./06-i18n.js"
-import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./10-controls.js"
-import { same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
-import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { useLiveResource } from "./32-live-model.js"
-import { setupStateOf } from "./33-setup.js"
-import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./34-live-ui.js"
-import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./00-react.js"
+import { API, Icon, hhmm, shortId } from "./util.js"
+import { errorText, localized, translate, when } from "./i18n.js"
+import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
+import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
+import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { useLiveResource } from "./live-model.js"
+import { setupStateOf } from "./setup.js"
+import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
+import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'src.summary': ['已启用 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
   'src.summaryNoSync': ['已启用 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],

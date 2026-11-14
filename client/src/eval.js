@@ -4,18 +4,18 @@
    strength and rule hit count on one meta line, and folds open to the rule-by-rule result plus the raw decision.
    Data: GET engine/decisions?kind=&window= (host increments, contract §4). */
 
-import { API, Icon } from "./00-util.js"
-import { reasonLabel, when } from "./06-i18n.js"
-import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switch, Tag } from "./10-controls.js"
-import { same, stay, usePanel } from "./15-api.js"
-import { EmptyState, ErrorState, Folded, Hint, RawValue, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { remember } from "./25-router.js"
-import { useLiveResource } from "./32-live-model.js"
-import { decisionKindView, liveShortId } from "./34-live-ui.js"
-import { ThreadRuleRows } from "./48-thread-detail.js"
-import { apply } from "./90-apply.js"
-import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./00-react.js"
+import { API, Icon } from "./util.js"
+import { reasonLabel, when } from "./i18n.js"
+import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switch, Tag } from "./controls.js"
+import { same, stay, usePanel } from "./api.js"
+import { EmptyState, ErrorState, Folded, Hint, RawValue, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { remember } from "./router.js"
+import { useLiveResource } from "./live-model.js"
+import { decisionKindView, liveShortId } from "./live-ui.js"
+import { ThreadRuleRows } from "./thread-detail.js"
+import { apply } from "./apply.js"
+import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'ev.intro': ['引擎的每次判断：结果、原因、强度与命中规则。', 'Every judgement the engine made: outcome, reason, strength and matched rules.'],
   'ev.title': ['评估记录', 'Evaluations'],
