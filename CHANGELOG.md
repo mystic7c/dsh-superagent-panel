@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.9.3] — 2026-11-14
+
+### 变更
+- `AGENTS.md` 新增「本机两种安装态（必须分清）」：`desktop` profile 是干净安装（依赖指向 Release tarball、包目录是实体目录），
+  `dev` profile 才软链到工作树供边改边看；明确禁止把仓库目录 `add` 进 `desktop`，并写清升级/核对命令
+  （`node scripts/local-install.mjs`、`--verify`）与 dev 实例起法。
+
+### 为什么
+之前用 tarball 装桌面端时，pnpm 把依赖解析成了指向工作树的 `link:`，桌面端跑的是未发布代码却显示成 0.5.1；
+这类「安装态漂移」不写在规则里，下次还会重犯。
+
+### 验证
+- 只改文档与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0 未变。
+
 ## [0.9.2] — 2026-11-14
 
 这是 v0.8.0 之后累计到 `main` 的发布：0.8.1 证据空态语义、0.8.2 CI 去人工 approve + README 带数据截图、

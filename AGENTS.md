@@ -33,6 +33,27 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 客户端改动刷新页面即生效；Host 半改动要重载插件。**验收/截图类脚本可能在 `spec/`、`verification/` 写文件，
 这两个目录被 gitignore，不要把它们的产物提交。**
 
+## 本机两种安装态（必须分清）
+
+本机同一个插件有两种装法，用途不同、互斥：
+
+| profile | 形态 | 用途 |
+| --- | --- | --- |
+| `desktop` | **干净安装**：依赖写 `file:…/releases/dsh-superagent-panel-<version>.tgz`，`node_modules/@mystic7c/dsh-superagent-panel` 是**实体目录** | 日常使用、对外演示、截图；跑的一定是发布产物 |
+| `dev` | **软链到工作树**（`link:`） | 边改边看：`node scripts/build-client.mjs` 之后刷新页面就是新代码 |
+
+硬线：
+
+- **不要把本仓库目录 `add` 进 `desktop` profile**（`dsh plugin --profile desktop add <仓库路径>`）：那会把桌面端变成
+  指向工作树的软链，你看到的就不再是 Release 里的代码，截图、验证结论、用户反馈全部失真。桌面端只从 tarball 升级：
+  `node scripts/local-install.mjs`（默认只允许在 `main` 上打包）或 `dsh plugin --profile desktop add <tgz>`。
+- 每次升级前后都用 `node scripts/local-install.mjs --verify` 核对：它只读，会打印 dependency 是否为 `file:<tarball>`、
+  包目录是实体目录还是软链，并给出结论。
+- 开发态单独起实例：`dsh --profile dev --no-open --port 0`，打开它打印的带 token 的 URL。客户端改动重建产物 + 刷新；
+  Host 半改动要重启这个 dev 实例。
+- 本机没有把 `dsh` 放进 PATH：命令写全路径
+  `"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"`，或自己加个 alias。
+
 ## 每次改动的最低要求
 
 ```bash
