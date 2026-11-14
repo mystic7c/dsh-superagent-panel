@@ -19,6 +19,7 @@ on:
   push:
     branches:
       - 'feature/**'
+      - 'fix/**'
       - 'release/**'
       - 'hotfix/**'
 

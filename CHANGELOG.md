@@ -10,6 +10,8 @@
     `evidence/:id/compare` 缺少可比较轮次时改为 `404 没有可比较的交付证据`，与「工单不存在」区分开。
   - 新增路由测试：已存在但无证据的工单 → 200 空轮次；未知工单 → 404。
 - Host 测试 555 → 556。
+- `.github/workflows/auto-pr.yml` 的触发分支补上 `fix/**`（此前只有 `feature/**`、`release/**`、`hotfix/**`，
+  `fix/` 分支要手工开 PR）。
 
 ### 验证
 - `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass / 0 fail。
