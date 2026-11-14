@@ -6,14 +6,62 @@ import { when } from "./i18n.js"
 import { Panel, PanelState, same, usePanel, usePoll } from "./api.js"
 import { App, Pages } from "./shell.js"
 import { React, h, useCallback, useMemo } from "./react.js"
-/** Actions over the live engine. Every page calls these instead of building its own fetch calls. */
+/**
+ * The engine action surface. Option objects stay `any` on purpose: the host normalises them and every page passes a
+ * subset, so what matters here is the action name and argument order, not the shape of a patch.
+ *
+ * @typedef {{
+ *   poll: (options?: any) => Promise<any>,
+ *   reloadConfig: () => Promise<any>,
+ *   checkUat: () => Promise<any>,
+ *   previewRoute: (options?: any) => Promise<any>,
+ *   createTicket: (options: any) => Promise<any>,
+ *   runTicket: (id: string, options?: any) => Promise<any>,
+ *   publishTicket: (id: string, commitMessage?: string) => Promise<any>,
+ *   refreshCi: (id: string) => Promise<any>,
+ *   verifyTicket: (id: string) => Promise<any>,
+ *   acceptTicket: (id: string, options?: any) => Promise<any>,
+ *   replaySignal: (id: string) => Promise<any>,
+ *   ticketDiff: (id: string, options?: any) => Promise<any>,
+ *   addRevision: (id: string, text: string) => Promise<any>,
+ *   resumeTicket: (id: string) => Promise<any>,
+ *   stopTicket: (id: string, options?: any) => Promise<any>,
+ *   answerTicket: (id: string, answer: any) => Promise<any>,
+ *   loadSignals: (options?: any) => Promise<any>,
+ *   setAutomation: (id: string, patch: any) => Promise<any>,
+ *   labelSignal: (id: string, label: string, note?: string) => Promise<any>,
+ *   readInbox: (id: string) => Promise<any>,
+ *   resolveInbox: (id: string, options?: any) => Promise<any>,
+ *   loadInbox: () => Promise<any>,
+ *   gateAction: (id: string, action: string, note?: string) => Promise<any>,
+ *   dismissTicket: (id: string, note?: string) => Promise<any>,
+ *   patchSettings: (patch: any) => Promise<any>,
+ *   saveRepoToken: (repoId: string, token: string) => Promise<any>,
+ *   testConfig: (repoId?: string) => Promise<any>,
+ *   saveOctoToken: (token: string) => Promise<any>,
+ *   listOctoGroups: () => Promise<any>,
+ *   addRepo: (repo: any, options?: any) => Promise<any>,
+ *   updateRepo: (repoId: string, patch: any) => Promise<any>,
+ *   settingsHistory: () => Promise<any>,
+ *   restoreSettings: (id: string) => Promise<any>,
+ *   pause: (paused: boolean) => Promise<any>,
+ *   updateSetting: (key: string, value: any) => Promise<any>
+ * }} EngineActions
+ */
+
+/**
+ * Actions over the live engine. Every page calls these instead of building its own fetch calls.
+ *
+ * @param {(path: string, options?: any) => Promise<any>} call
+ * @returns {EngineActions}
+ */
 export function useEngineActions(call) {
   return useMemo(() => ({
-    poll: ({ dryRun = true } = {}) => call('POST engine/poll', { body: { dryRun } }),
+    poll: ({ dryRun = true } = /** @type {any} */ ({})) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
     checkUat: async () => (await call('POST engine/uat-check')).uat,
     // Draft routing preview (AC-01): same resolver as execution, no Ticket/run/write side effects.
-    previewRoute: ({ title, body, selection } = {}) => call('POST engine/route',
+    previewRoute: ({ title, body, selection } = /** @type {any} */ ({})) => call('POST engine/route',
       { body: { title, body, ...(selection ? { selection } : {}) } }),
     // `repoId` routes a manual Ticket to one of the configured repositories (contract §12.2); omitted = defaultRepo.
     // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
@@ -25,23 +73,23 @@ export function useEngineActions(call) {
     verifyTicket: (id) => call('POST engine/ticket/:id/verify', { id }),
     // Human acceptance of a deployed UAT build: records the sign-off so the ticket leaves "needs you". P1 adds
     // `intents` (unmet / new-idea / no-evidence) to a rejection so the executor knows why the round was sent back.
-    acceptTicket: (id, { ok = true, note, intents } = {}) => call('POST engine/ticket/:id/accept',
+    acceptTicket: (id, { ok = true, note, intents } = /** @type {any} */ ({})) => call('POST engine/ticket/:id/accept',
       { id, body: { ok, note, ...(Array.isArray(intents) && intents.length ? { intents } : {}) } }),
     // P1 (§9): replay one filtered/failed raw signal through the current rules.
     replaySignal: (id) => call('POST engine/signal/:id/replay', { id }),
     // P1 §3.2: the on-demand worktree diff behind the Ticket detail's "view diff".
-    ticketDiff: (id, { runId, path } = {}) => call('GET engine/ticket/:id/diff',
+    ticketDiff: (id, { runId, path } = /** @type {any} */ ({})) => call('GET engine/ticket/:id/diff',
       { id, query: { ...(runId ? { runId } : {}), ...(path ? { path } : {}) } }),
     // Append one human requirement revision; the host starts a dry-run rerun on the same worktree.
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
     // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
-    stopTicket: (id, { note } = {}) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
+    stopTicket: (id, { note } = /** @type {any} */ ({})) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),
     // P1 (§8.1): recent raw signals, read by the Source page (status/source/limit are optional filters).
-    loadSignals: ({ status, source, limit } = {}) => call('GET engine/signals', { query: { status, source, limit } }),
+    loadSignals: ({ status, source, limit } = /** @type {any} */ ({})) => call('GET engine/signals', { query: { status, source, limit } }),
     // P2-1: one Ticket's automation config (mode/enabled/intervalMinutes/at/maxExecutions patch; the host normalises).
     setAutomation: (id, patch) => call('POST engine/ticket/:id/automation', { id, body: patch ?? {} }),
     // P2-8: human quality label on one raw signal (correct | false_wake | missed_wake | cleared).
@@ -50,7 +98,7 @@ export function useEngineActions(call) {
     // Actionable inbox (P0 contract §2): read one item, resolve a non-blocking one, and fetch the list for the
     // overview. A blocking item can only be settled by its real action (gate/accept), never by resolveInbox.
     readInbox: (id) => call('POST engine/inbox/:id/read', { id }),
-    resolveInbox: (id, { action, note } = {}) => call('POST engine/inbox/:id/resolve', { id, body: { action, note } }),
+    resolveInbox: (id, { action, note } = /** @type {any} */ ({})) => call('POST engine/inbox/:id/resolve', { id, body: { action, note } }),
     loadInbox: () => call('GET engine/inbox'),
     // The three human decisions on a parked gate (P0-3): release skips the gate and delivers, retry re-runs the
     // gates, stop fails the Ticket. The host answers { run, ticket }.
@@ -68,7 +116,7 @@ export function useEngineActions(call) {
     // Read-only list of the bot's Octo groups, used by the settings picker.
     listOctoGroups: () => call('GET engine/octo/groups'),
     // Add one repository definition to live.json; the token is saved separately on the repo card.
-    addRepo: (repo, { makeDefault = false } = {}) => call('POST engine/repos', { body: { repo, makeDefault } }),
+    addRepo: (repo, { makeDefault = false } = /** @type {any} */ ({})) => call('POST engine/repos', { body: { repo, makeDefault } }),
     updateRepo: (repoId, patch) => call('POST engine/repo/:id', { id: repoId, body: { patch } }),
     // Saved live.json versions and rollback; entries are configuration-only (no token values).
     settingsHistory: () => call('GET engine/settings/history'),

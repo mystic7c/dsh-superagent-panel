@@ -152,7 +152,7 @@ export function GlobalSearch({ open, onClose }) {
     navigate(route)
     onClose()
     if (typeof requestAnimationFrame !== 'function') return
-    requestAnimationFrame(() => document.querySelector('.sa-scroll')?.focus())
+    requestAnimationFrame(() => /** @type {HTMLElement | null} */ (document.querySelector('.sa-scroll'))?.focus())
   }
   const groups = result ? [
     { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => <button
@@ -298,7 +298,7 @@ export class PanelBoundary extends React.Component {
         <Button variant="outline" onClick={() => location.reload()}>{shellText('刷新页面', 'Reload page')}</Button>
       </div>
     }
-    return this.props.children
+    return /** @type {any} */ (this).props.children
   }
 }
 

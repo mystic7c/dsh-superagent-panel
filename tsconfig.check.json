@@ -1,5 +1,5 @@
 {
-  "//": "checkJs 清单：Host 半全部文件（含 index.js）。修好一个新文件就加进 files；不要为了让绿灯移除文件。",
+  "//": "checkJs 清单：Host 半与客户端入口全部入档（0.9.12 起）。修好一个新文件就加进 files；不要为了让绿灯移除文件。",
   "compilerOptions": {
     "target": "es2022",
     "module": "esnext",
@@ -47,6 +47,7 @@
     "lib/live/live-json.js",
     "lib/live/worker.js",
     "lib/live/engine.js",
-    "lib/live/shadow.js"
+    "lib/live/shadow.js",
+    "client/src/index.js"
   ]
 }
