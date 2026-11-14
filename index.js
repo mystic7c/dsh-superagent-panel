@@ -21,6 +21,8 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
+// The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
+// the host's own type packages, so reading and checking it does not tie the plugin to one DSH release.
 export const inject = ['webServer']
 const PREFIX = '/superagent/api'
 const MAX_BODY = 128 * 1024
@@ -164,6 +166,11 @@ const routes = {
   'GET prompts': ({ host, query }) => promptsView(host, query.get('revision') === null ? undefined : Number(query.get('revision'))),
 }
 
+/** Host half: registers the `/superagent/api` routes and starts the live engine.
+ *
+ * @param {DSH.HostPluginContext} ctx
+ * @param {DSH.PluginConfig} [config]
+ */
 export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
   const store = new Store(stateDir)

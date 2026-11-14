@@ -42,6 +42,8 @@ jobs:
         run: node scripts/build-client.mjs --check
       - name: Locale keys cover both languages
         run: node scripts/check-keys.mjs
+      - name: Hand-written declarations still type-check
+        run: npm run types
       - name: Host tests
         run: node --test lib/store.test.js lib/live/*.test.js
       - name: Client render regression (jsdom, fixture state)

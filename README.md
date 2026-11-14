@@ -55,8 +55,12 @@ node scripts/build-client.mjs          # client/src → client/index.js（esbuil
 node --check index.js                  # Host 半语法
 node --test lib/store.test.js lib/live/*.test.js
 node scripts/check-keys.mjs            # 中英文 key 覆盖
+npm run types                          # types/dsh.d.ts 自身能否通过 tsc
 node scripts/render-check.mjs          # jsdom 渲染回归
 ```
+
+`types/dsh.d.ts` 是手写的宿主契约（Host 的 `apply` 上下文、Client 的 slots/locale、`window.__ModuleLoader__`），
+刻意不依赖 DSH 自己的类型包；`npm run types` 只检查这份声明本身能否通过 `tsc`。
 
 `client/index.js` 与 `client/index.js.map` 是提交进仓库的构建产物，改了 `client/src` 必须重新构建并一起提交
 （CI 会校验 `--check`）。改客户端刷新页面即可；改 Host 半（`index.js`、`lib/`）需要在 Plugin Manager 里

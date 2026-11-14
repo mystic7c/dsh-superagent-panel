@@ -1,0 +1,14 @@
+{
+  "//": "Checks only the hand-written declarations in types/. The shipped code is plain JS and is verified by its own gates (check-keys, render-check, the test suite); this config exists so types/dsh.d.ts cannot rot.",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["types/**/*.d.ts"]
+}
