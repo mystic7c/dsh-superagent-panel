@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.9.5] — 2026-11-14
+
+### 变更
+- 新增 `tsconfig.check.json` 与 `npm run check:js`：用 `checkJs` 真正类型检查 JS 源码，但只覆盖
+  「分档清单」里已经清零的文件。第一档是 Host 侧 21 个不依赖 `engine`/`executor` 的叶子模块
+  （`lib/util.js`、`lib/prompts.js`、`lib/live/{repo,worker-tools,workflow,workflow-worker,acceptance,evidence,
+  operations,worker-cli,review-json,diff,github,routing,eval,judge,octo,gitlab}.js`），0 错误。
+- `ci.yml` 增加同名步骤；`AGENTS.md`、`CONTRIBUTING.md`、`README.md`、`docs/ui-workflow.md` 的验收命令同步，
+  并写明规则：修好一个旧文件就把它加进 `files`，不要为了让绿灯把文件移出去。
+- 给第一档文件补齐 JSDoc：批量把 27 处 `{ … } = {}` 默认参数标成 `Record<string, any>`（TS 会把 `{}` 推成空对象类型，
+  属性访问全报 TS2339）；`acceptance.js` 的 `requirement`、`repo.js` 的 `prepareWorktree`、`worker-tools.js` 的
+  `registerWorkerTools` 补参数/返回类型；`eval.js` 的 `ignore` 闭包、`gitlab.js` 的 `createGitlabClient`、
+  `octo.js` 的 `firstDefined`/`toNumberOrRaw`、`review-json.js` 的 `log` 与扩展注册表补显式类型；
+  `prompts.js` 的 `defaultChanged` 拆出带类型的 `changedPart`，避免 `flatMap` 返回联合数组。
+
+### 为什么
+P4（类型契约）此前只做了一半：`types/dsh.d.ts` 只校验声明本身，源码里 700 多个 `checkJs` 错误完全没进闸门，
+类型注解写了也不验。一次性清零需要跨十几个模块补 JSDoc，一个 PR 不可审，所以改成只增不减的分档清单：
+CI 从第一天起就守住已清零的部分，剩下的按 `engine`/`executor`/客户端逐档推进。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js` 通过。
+- `node scripts/build-client.mjs --check` 23 modules / 481,052 bytes（只改 Host 半，客户端产物不变）。
+- `node scripts/check-keys.mjs` 958 / 513 / 1359。
+- Host 测试 556 pass / 0 fail。
+- `node scripts/render-check.mjs`（`DSH_SUPERAGENT_STATE_DIR=/tmp/rc-t1`）194 checks / 0 failed / 0 skipped。
+- `node scripts/isolated-verify.mjs` PASS，console errors 0。
+
 ## [0.9.4] — 2026-11-14
 
 ### 变更

@@ -1,6 +1,6 @@
 {
   "name": "@mystic7c/dsh-superagent-panel",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "type": "module",
   "description": "Superagent 管理面板：待办/工单/运行观测/自动化/验收/来源与部署设置（DSH 插件）。",
@@ -50,7 +50,8 @@
     "types": "tsc -p tsconfig.json",
     "test": "node --test lib/store.test.js lib/live/*.test.js",
     "verify": "node scripts/build-client.mjs --check && node scripts/check-keys.mjs",
-    "dev": "node scripts/dev.mjs"
+    "dev": "node scripts/dev.mjs",
+    "check:js": "tsc -p tsconfig.check.json"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": "*"
@@ -68,6 +69,7 @@
     "operations"
   ],
   "devDependencies": {
+    "@types/node": "22.19.1",
     "esbuild": "0.28.2",
     "jsdom": "24.1.3",
     "react": "18.3.1",
