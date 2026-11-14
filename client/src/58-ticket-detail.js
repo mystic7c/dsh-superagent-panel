@@ -371,7 +371,7 @@ function ticketReduceMotion() {
 /** Timeline timestamps are read as absolute times first (critique #11): no "20 小时前" at the start of a row. */
 function TicketStamp({ at }) {
   const { t } = usePanel()
-  return h('time', { dateTime: at, title: fullTime(at, t.lang) }, ticketStamp(at, t.lang))
+  return <time dateTime={at} title={fullTime(at, t.lang)}>{ticketStamp(at, t.lang)}</time>
 }
 
 /**
@@ -441,29 +441,35 @@ function TicketTimeline({ ticket, runs }) {
   const [expanded, setExpanded] = useState(false)
   const events = ticketEvents(t, ticket, runs)
   const shown = expanded ? events : events.slice(-TIMELINE_RECENT)
-  return h(Fragment, null,
-    events.length > TIMELINE_RECENT
-      ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.timelineRecent', { count: shown.length, total: events.length }))
-      : null,
-    h('ol', { id: 'sa-timeline-events', className: 'sa-timeline' }, shown.map((event, index) => h('li', { key: index, className: 'sa-event' },
-      h('div', { className: 'sa-event-actor' },
-        h(StatusIcon, { state: event.state, size: 14 }),
-        h(TicketStamp, { at: event.at }),
-        h('span', null, event.stepName ? ticketStepLabel(t, event.stepName) : pt(t, event.labelKey)),
-        event.dry ? h(Tag, { tone: 'outline' }, pt(t, 'ticket.dryTag')) : null),
-      event.sha
-        ? h('div', { className: 'sa-actions' },
-          h('code', { className: 'sa-mono', title: event.sha }, String(event.sha).slice(0, 7)),
-          h(CopyButton, { value: event.sha }),
-          event.detail ? h('span', { className: 'sa-hint', title: event.detailTitle }, event.detail) : null)
-        : event.detail ? h('p', { className: 'sa-event-text', title: event.detailTitle }, event.detail) : null))),
-    events.length > TIMELINE_RECENT
-      ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)' } },
-        h(Button, { variant: 'ghost', size: 'sm', icon: expanded ? 'chevron-up' : 'chevron-down',
-          'aria-expanded': expanded, 'aria-controls': 'sa-timeline-events',
-          onClick: () => setExpanded(value => !value) },
-        expanded ? pt(t, 'ticket.timelineCollapse') : pt(t, 'ticket.timelineShowAll', { count: events.length })))
-      : null)
+  return <>
+    {events.length > TIMELINE_RECENT
+      ? <p className="sa-hint">{pt(t, 'ticket.timelineRecent', { count: shown.length, total: events.length })}</p>
+      : null}
+    <ol id="sa-timeline-events" className="sa-timeline">{shown.map((event, index) => <li key={index} className="sa-event">
+      <div className="sa-event-actor">
+        <StatusIcon state={event.state} size={14} />
+        <TicketStamp at={event.at} />
+        <span>{event.stepName ? ticketStepLabel(t, event.stepName) : pt(t, event.labelKey)}</span>
+        {event.dry ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+      </div>
+      {event.sha
+        ? <div className="sa-actions">
+          <code className="sa-mono" title={event.sha}>{String(event.sha).slice(0, 7)}</code>
+          <CopyButton value={event.sha} />
+          {event.detail ? <span className="sa-hint" title={event.detailTitle}>{event.detail}</span> : null}
+        </div>
+        : event.detail ? <p className="sa-event-text" title={event.detailTitle}>{event.detail}</p> : null}
+    </li>)}</ol>
+    {events.length > TIMELINE_RECENT
+      ? <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-8)' }}>
+        <Button variant="ghost" size="sm" icon={expanded ? 'chevron-up' : 'chevron-down'}
+          aria-expanded={expanded} aria-controls="sa-timeline-events"
+          onClick={() => setExpanded(value => !value)}>
+          {expanded ? pt(t, 'ticket.timelineCollapse') : pt(t, 'ticket.timelineShowAll', { count: events.length })}
+        </Button>
+      </div>
+      : null}
+  </>
 }
 
 /** worker event type (P0 §1.1 trace) → icon, label and the shape its row gets. */
@@ -482,9 +488,10 @@ const TRACE_LIMIT = 80
  */
 function TicketLazyFolded({ summary, children }) {
   const [open, setOpen] = useState(false)
-  return h('details', { className: 'sa-folded', onToggle: event => setOpen(event.currentTarget.open) },
-    h('summary', { className: 'sa-folded-summary' }, h(Icon, { name: 'chevron-right', size: 14 }), h('span', null, summary)),
-    open ? h('div', { className: 'sa-folded-body' }, children) : null)
+  return <details className="sa-folded" onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary className="sa-folded-summary"><Icon name="chevron-right" size={14} /><span>{summary}</span></summary>
+    {open ? <div className="sa-folded-body">{children}</div> : null}
+  </details>
 }
 
 /** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
@@ -498,20 +505,23 @@ function RunTrace({ run }) {
   const summary = omitted > 0
     ? pt(t, 'ticket.traceCountOmitted', { count: trace.length, shown: shown.length })
     : pt(t, 'ticket.traceCount', { count: trace.length })
-  return h(TicketLazyFolded, { summary },
-    h('ol', { className: 'sa-timeline' }, shown.map((event, index) => {
+  return <TicketLazyFolded summary={summary}>
+    <ol className="sa-timeline">{shown.map((event, index) => {
       const kind = TRACE_KINDS[event.type] ?? { icon: 'circle', state: 'idle', labelKey: 'ticket.traceAssistant' }
       const full = typeof event.summary === 'string' ? event.summary : ''
       // A clipped summary says so and keeps the full text reachable on hover/focus (audit P3).
       const text = full.length > 300 ? `${full.slice(0, 300)}…` : full
-      return h('li', { key: index, className: 'sa-event' },
-        h('div', { className: 'sa-event-actor' },
-          h(StatusIcon, { state: kind.state, size: 13, spin: false }),
-          typeof event.at === 'string' && event.at ? h(TicketStamp, { at: event.at }) : null,
-          h('span', null, pt(t, kind.labelKey)),
-          event.name ? h('span', { className: 'sa-mono sa-hint' }, String(event.name)) : null),
-        text ? h('p', { className: 'sa-event-text', title: full.length > 300 ? full : undefined }, text) : null)
-    })))
+      return <li key={index} className="sa-event">
+        <div className="sa-event-actor">
+          <StatusIcon state={kind.state} size={13} spin={false} />
+          {typeof event.at === 'string' && event.at ? <TicketStamp at={event.at} /> : null}
+          <span>{pt(t, kind.labelKey)}</span>
+          {event.name ? <span className="sa-mono sa-hint">{String(event.name)}</span> : null}
+        </div>
+        {text ? <p className="sa-event-text" title={full.length > 300 ? full : undefined}>{text}</p> : null}
+      </li>
+    })}</ol>
+  </TicketLazyFolded>
 }
 
 /** P1-2: the handoff an executor leaves behind (what is done, what comes next), folded under its run. */
@@ -522,10 +532,11 @@ function RunHandoff({ run }) {
   const nextAction = typeof handoff?.nextAction === 'string' ? handoff.nextAction.trim() : ''
   const changed = Array.isArray(handoff?.changedPaths) ? handoff.changedPaths.filter(path => typeof path === 'string') : []
   if (!summary && !nextAction && !changed.length) return null
-  return h(Folded, { summary: pt(t, 'detail.handoff') },
-    summary ? h('p', { className: 'sa-event-text' }, summary) : null,
-    changed.length ? h('p', { className: 'sa-hint' }, h('span', { className: 'sa-mono' }, changed.join(' · '))) : null,
-    nextAction ? h('p', { className: 'sa-hint' }, pt(t, 'detail.handoffNext', { next: nextAction })) : null)
+  return <Folded summary={pt(t, 'detail.handoff')}>
+    {summary ? <p className="sa-event-text">{summary}</p> : null}
+    {changed.length ? <p className="sa-hint"><span className="sa-mono">{changed.join(' · ')}</span></p> : null}
+    {nextAction ? <p className="sa-hint">{pt(t, 'detail.handoffNext', { next: nextAction })}</p> : null}
+  </Folded>
 }
 
 /** P1-4: the worker's own report (progress / artifacts / verify). A parked question is handled by the answer banner. */
@@ -537,35 +548,46 @@ function RunReport({ run }) {
   const artifacts = Array.isArray(report.artifacts) ? report.artifacts.filter(entry => entry && typeof entry === 'object') : []
   const verify = Array.isArray(report.verify) ? report.verify.filter(entry => entry && typeof entry === 'object') : []
   if (!progress.length && !artifacts.length && !verify.length) return null
-  return h(Folded, { summary: pt(t, 'detail.report') },
-    progress.length
-      ? h('div', null,
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportProgress', { count: progress.length })),
-        h('ul', { className: 'sa-list' }, progress.map((entry, index) => h('li', { key: index, className: 'sa-row' },
-          h('div', { className: 'sa-row-main' },
-            h('div', { className: 'sa-row-title' }, h('span', null, String(entry.text ?? ''))),
-            entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
-      : null,
-    artifacts.length
-      ? h('div', null,
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportArtifacts', { count: artifacts.length })),
-        h('ul', { className: 'sa-list' }, artifacts.map((entry, index) => h('li', { key: index, className: 'sa-row' },
-          h('div', { className: 'sa-row-main' },
-            h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-mono' }, String(entry.path ?? ''))),
-            entry.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(entry.note))) : null)))))
-      : null,
-    verify.length
-      ? h('div', null,
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.reportVerify', { count: verify.length })),
-        h('ul', { className: 'sa-list' }, verify.map((entry, index) => h('li', { key: index, className: 'sa-row' },
-          h('div', { className: 'sa-row-main' },
-            h('div', { className: 'sa-row-title' }, h('span', null, String(entry.name ?? ''))),
-            h('div', { className: 'sa-row-meta' },
-              entry.command ? h('span', { className: 'sa-mono' }, String(entry.command)) : null,
-              entry.expectedOutput
-                ? h('span', { className: 'sa-hint' }, pt(t, 'detail.reportExpected', { text: String(entry.expectedOutput) }))
-                : null))))))
-      : null)
+  return <Folded summary={pt(t, 'detail.report')}>
+    {progress.length
+      ? <div>
+        <p className="sa-hint">{pt(t, 'detail.reportProgress', { count: progress.length })}</p>
+        <ul className="sa-list">{progress.map((entry, index) => <li key={index} className="sa-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title"><span>{String(entry.text ?? '')}</span></div>
+            {entry.at ? <div className="sa-row-meta"><TicketStamp at={entry.at} /></div> : null}
+          </div>
+        </li>)}</ul>
+      </div>
+      : null}
+    {artifacts.length
+      ? <div>
+        <p className="sa-hint">{pt(t, 'detail.reportArtifacts', { count: artifacts.length })}</p>
+        <ul className="sa-list">{artifacts.map((entry, index) => <li key={index} className="sa-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title"><span className="sa-mono">{String(entry.path ?? '')}</span></div>
+            {entry.note ? <div className="sa-row-meta"><span className="sa-hint">{String(entry.note)}</span></div> : null}
+          </div>
+        </li>)}</ul>
+      </div>
+      : null}
+    {verify.length
+      ? <div>
+        <p className="sa-hint">{pt(t, 'detail.reportVerify', { count: verify.length })}</p>
+        <ul className="sa-list">{verify.map((entry, index) => <li key={index} className="sa-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title"><span>{String(entry.name ?? '')}</span></div>
+            <div className="sa-row-meta">
+              {entry.command ? <span className="sa-mono">{String(entry.command)}</span> : null}
+              {entry.expectedOutput
+                ? <span className="sa-hint">{pt(t, 'detail.reportExpected', { text: String(entry.expectedOutput) })}</span>
+                : null}
+            </div>
+          </div>
+        </li>)}</ul>
+      </div>
+      : null}
+  </Folded>
 }
 
 /** P2-2: gate failure policy labels (contract §1.1); a missing field always means `manual`. */
@@ -601,7 +623,7 @@ function TicketGateResults({ ticket, record }) {
   const pending = ticket?.pendingGate
     ?? run?.pendingGate
     ?? (Array.isArray(ticket?.runs) ? ticket.runs.find(entry => entry?.pendingGate)?.pendingGate : undefined)
-  if (!gates.length && !pending) return h(Hint, null, pt(t, 'gate.none'))
+  if (!gates.length && !pending) return <Hint>{pt(t, 'gate.none')}</Hint>
   const policies = gates.map(gate => gateOnFailOf(gate, record))
   const sharedPolicy = policies.length && policies.every(policy => policy === policies[0]) ? policies[0] : undefined
   // Render the gates this run actually has. A repository can configure its own names (ebs-deploy, ebs-access, …), so a
@@ -611,33 +633,39 @@ function TicketGateResults({ ticket, record }) {
     const policy = gateOnFailOf(gate, record)
     // The label gets its outcome as a text alternative: shape+colour alone leaves a screen reader with a bare name.
     // `role="group"` makes that label a valid accessible name on a generic span (aria-label alone on a span is ignored).
-    return h('span', { key: `${gate.name ?? 'gate'}-${index}`, className: 'sa-gate', role: 'group',
-      'aria-label': `${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}` },
-      h(StatusText, { state: ok ? 'done' : 'error' }, ticketGateLabel(t, gate.name)),
-      ok ? null : h('span', { className: 'sa-hint' },
-        gate.timedOut ? pt(t, 'gate.timedOut')
+    return <span key={`${gate.name ?? 'gate'}-${index}`} className="sa-gate" role="group"
+      aria-label={`${ticketGateLabel(t, gate.name)} · ${pt(t, ok ? 'gate.passed' : 'gate.failed')}`}>
+      <StatusText state={ok ? 'done' : 'error'}>{ticketGateLabel(t, gate.name)}</StatusText>
+      {ok ? null : <span className="sa-hint">
+        {gate.timedOut ? pt(t, 'gate.timedOut')
           : gate.exitCode !== undefined && gate.exitCode !== null ? pt(t, 'gate.exitCode', { code: gate.exitCode })
-            : ''),
-      // The failure policy is one fact about the Ticket's gates, so it is said once under the row; only a mixed set
-      // needs a tag per gate to tell them apart (T13).
-      sharedPolicy ? null : h(Tag, { tone: policy === 'auto_repair' ? 'info' : 'outline',
-        title: pt(t, policy === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
-      pt(t, GATE_ONFAIL_KEYS[policy])))
+            : ''}
+      </span>}
+      {/* The failure policy is one fact about the Ticket's gates, so it is said once under the row; only a mixed set
+          needs a tag per gate to tell them apart (T13). */}
+      {sharedPolicy ? null : <Tag tone={policy === 'auto_repair' ? 'info' : 'outline'}
+        title={pt(t, policy === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual')}>
+        {pt(t, GATE_ONFAIL_KEYS[policy])}
+      </Tag>}
+    </span>
   }
-  return h(Fragment, null,
-    h('div', { className: 'sa-gates' },
-      pending
-        ? h('span', { className: 'sa-gate', role: 'group',
-          'aria-label': `${ticketGateLabel(t, pending.name)} · ${pt(t, 'detail.gatePendingTag')}` },
-          h(StatusText, { state: 'error' }, ticketGateLabel(t, pending.name)),
-          h(Tag, { tone: 'warning' }, pt(t, 'detail.gatePendingTag')))
-        : null,
-      gates.map(gateRow)),
-    gates.length
-      ? h('p', { className: 'sa-hint' }, sharedPolicy
+  return <>
+    <div className="sa-gates">
+      {pending
+        ? <span className="sa-gate" role="group"
+          aria-label={`${ticketGateLabel(t, pending.name)} · ${pt(t, 'detail.gatePendingTag')}`}>
+          <StatusText state="error">{ticketGateLabel(t, pending.name)}</StatusText>
+          <Tag tone="warning">{pt(t, 'detail.gatePendingTag')}</Tag>
+        </span>
+        : null}
+      {gates.map(gateRow)}
+    </div>
+    {gates.length
+      ? <p className="sa-hint">{sharedPolicy
         ? pt(t, 'detail.gatePolicy', { policy: pt(t, GATE_ONFAIL_KEYS[sharedPolicy]) })
-        : pt(t, 'detail.gatePolicyMixed'))
-      : null)
+        : pt(t, 'detail.gatePolicyMixed')}</p>
+      : null}
+  </>
 }
 
 /** Acceptance record status → label key (P1-3). Unknown values stay visible instead of being hidden. */
@@ -675,58 +703,73 @@ function AcceptanceRecordCard({ record }) {
     ?? plan.find(item => item.id === check?.id || item.name === check?.name)?.onFail)
   const decision = round?.userDecision && typeof round.userDecision === 'object' ? round.userDecision : undefined
   const intents = Array.isArray(decision?.intents) ? decision.intents.filter(intent => typeof intent === 'string') : []
-  return h('div', { className: 'sa-card' },
-    h('div', { className: 'sa-card-head' },
-      h('span', { className: 'sa-card-title' }, pt(t, 'detail.acceptRecord')),
-      h('span', { className: 'sa-actions' },
-        h(Tag, { tone: ACCEPTANCE_TONE[status] ?? 'outline' }, acceptanceStatusLabel(t, status)),
-        round ? h('span', { className: 'sa-hint' },
-          pt(t, 'detail.acceptRound', { round: round.roundIndex ?? '—', status: acceptanceStatusLabel(t, round.status) })) : null,
-        // P2-2: a round that needed automatic repair says how many rounds it used and how it ended.
-        repair && repair.status && repair.status !== 'none'
-          ? h(Tag, { tone: REPAIR_STATUS_TONE[String(repair.status)] ?? 'outline',
-            title: pt(t, 'detail.repairRunHint') },
-          `${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`)
-          : null)),
-    record.requirement ? h('p', { className: 'sa-hint' }, pt(t, 'detail.acceptRequirement', { text: String(record.requirement) })) : null,
-    checks.length
-      ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.acceptChecks', { count: checks.length })),
-        h('ul', { className: 'sa-list' }, checks.map((check, index) => {
+  return <div className="sa-card">
+    <div className="sa-card-head">
+      <span className="sa-card-title">{pt(t, 'detail.acceptRecord')}</span>
+      <span className="sa-actions">
+        <Tag tone={ACCEPTANCE_TONE[status] ?? 'outline'}>{acceptanceStatusLabel(t, status)}</Tag>
+        {round ? <span className="sa-hint">
+          {pt(t, 'detail.acceptRound', { round: round.roundIndex ?? '—', status: acceptanceStatusLabel(t, round.status) })}
+        </span> : null}
+        {/* P2-2: a round that needed automatic repair says how many rounds it used and how it ended. */}
+        {repair && repair.status && repair.status !== 'none'
+          ? <Tag tone={REPAIR_STATUS_TONE[String(repair.status)] ?? 'outline'}
+            title={pt(t, 'detail.repairRunHint')}>
+            {`${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`}
+          </Tag>
+          : null}
+      </span>
+    </div>
+    {record.requirement ? <p className="sa-hint">{pt(t, 'detail.acceptRequirement', { text: String(record.requirement) })}</p> : null}
+    {checks.length
+      ? <div style={{ marginTop: 'var(--sa-sp-8)' }}>
+        <p className="sa-hint">{pt(t, 'detail.acceptChecks', { count: checks.length })}</p>
+        <ul className="sa-list">{checks.map((check, index) => {
           const checkStatus = String(check.status ?? '')
           const outputTail = typeof check.outputTail === 'string' ? check.outputTail : ''
-          return h('li', { key: check.id ?? index, className: 'sa-row' },
-            h(StatusIcon, { state: ACCEPTANCE_CHECK_STATE[checkStatus] ?? 'idle', size: 14, spin: false }),
-            h('div', { className: 'sa-row-main' },
-              h('div', { className: 'sa-row-title' },
-                h('span', null, String(check.name ?? check.id ?? '—')),
-                h(Tag, { tone: ACCEPTANCE_CHECK_TONE[checkStatus] ?? 'outline' },
-                  pt(t, ACCEPTANCE_CHECK_KEYS[checkStatus] ?? 'detail.acceptCheck.pending')),
-                // P2-2: each check states whether its gate is auto-repaired or waits for a person (missing = manual).
-                h(Tag, { tone: onFailOfCheck(check) === 'auto_repair' ? 'info' : 'outline',
-                  title: pt(t, onFailOfCheck(check) === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual') },
-                pt(t, GATE_ONFAIL_KEYS[onFailOfCheck(check)])),
-                Number.isFinite(check.exitCode) ? h('span', { className: 'sa-mono sa-hint' }, pt(t, 'gate.exitCode', { code: check.exitCode })) : null,
-                check.timedOut ? h(Tag, { tone: 'warning' }, pt(t, 'runStop.timeout')) : null),
-              check.note ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(check.note))) : null,
-              outputTail
-                ? h(Folded, { summary: pt(t, 'detail.acceptCheckOutput') },
-                  h('div', { className: 'sa-actions' }, h(CopyButton, { value: outputTail })),
-                  h('pre', { className: 'sa-pre' }, outputTail))
-                : null))
-        })))
-      : h(Hint, null, pt(t, 'detail.acceptNoChecks')),
-    decision
-      ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-        h(Tag, { tone: decision.decision === 'rejected' ? 'danger' : 'success' },
-          pt(t, `detail.userDecision.${decision.decision === 'rejected' ? 'rejected' : decision.decision === 'overridden' ? 'overridden' : 'accepted'}`)),
-        decision.at ? h(TicketStamp, { at: decision.at }) : null,
-        decision.note ? h('span', { className: 'sa-hint' }, String(decision.note)) : null,
-        intents.length
-          ? h('span', { className: 'sa-hint' },
-            `${pt(t, 'detail.acceptIntents')}：${intents.map(intent => pt(t, ACCEPTANCE_INTENT_KEYS[intent] ?? intent)).join('、')}`)
-          : null)
-      : null)
+          return <li key={check.id ?? index} className="sa-row">
+            <StatusIcon state={ACCEPTANCE_CHECK_STATE[checkStatus] ?? 'idle'} size={14} spin={false} />
+            <div className="sa-row-main">
+              <div className="sa-row-title">
+                <span>{String(check.name ?? check.id ?? '—')}</span>
+                <Tag tone={ACCEPTANCE_CHECK_TONE[checkStatus] ?? 'outline'}>
+                  {pt(t, ACCEPTANCE_CHECK_KEYS[checkStatus] ?? 'detail.acceptCheck.pending')}
+                </Tag>
+                {/* P2-2: each check states whether its gate is auto-repaired or waits for a person (missing = manual). */}
+                <Tag tone={onFailOfCheck(check) === 'auto_repair' ? 'info' : 'outline'}
+                  title={pt(t, onFailOfCheck(check) === 'auto_repair' ? 'gate.onFailHintAutoRepair' : 'gate.onFailHintManual')}>
+                  {pt(t, GATE_ONFAIL_KEYS[onFailOfCheck(check)])}
+                </Tag>
+                {Number.isFinite(check.exitCode) ? <span className="sa-mono sa-hint">{pt(t, 'gate.exitCode', { code: check.exitCode })}</span> : null}
+                {check.timedOut ? <Tag tone="warning">{pt(t, 'runStop.timeout')}</Tag> : null}
+              </div>
+              {check.note ? <div className="sa-row-meta"><span className="sa-hint">{String(check.note)}</span></div> : null}
+              {outputTail
+                ? <Folded summary={pt(t, 'detail.acceptCheckOutput')}>
+                  <div className="sa-actions"><CopyButton value={outputTail} /></div>
+                  <pre className="sa-pre">{outputTail}</pre>
+                </Folded>
+                : null}
+            </div>
+          </li>
+        })}</ul>
+      </div>
+      : <Hint>{pt(t, 'detail.acceptNoChecks')}</Hint>}
+    {decision
+      ? <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
+        <Tag tone={decision.decision === 'rejected' ? 'danger' : 'success'}>
+          {pt(t, `detail.userDecision.${decision.decision === 'rejected' ? 'rejected' : decision.decision === 'overridden' ? 'overridden' : 'accepted'}`)}
+        </Tag>
+        {decision.at ? <TicketStamp at={decision.at} /> : null}
+        {decision.note ? <span className="sa-hint">{String(decision.note)}</span> : null}
+        {intents.length
+          ? <span className="sa-hint">
+            {`${pt(t, 'detail.acceptIntents')}：${intents.map(intent => pt(t, ACCEPTANCE_INTENT_KEYS[intent] ?? intent)).join('、')}`}
+          </span>
+          : null}
+      </div>
+      : null}
+  </div>
 }
 
 /** P1-7 activity row labels; an unknown kind stays raw so a new host event is never swallowed. */
@@ -740,20 +783,23 @@ function TicketActivities({ activities }) {
   const { t } = usePanel()
   const list = Array.isArray(activities) ? activities.filter(entry => entry && typeof entry === 'object') : []
   const shown = list.slice(0, 20)
-  return h(Fragment, null,
-    h('ol', { className: 'sa-timeline' }, shown.map((entry, index) => {
+  return <>
+    <ol className="sa-timeline">{shown.map((entry, index) => {
       const kind = String(entry.kind ?? '')
       const actor = String(entry.actorKind ?? 'system')
       const transition = entry.from || entry.to ? `${entry.from ?? '—'} → ${entry.to ?? '—'}` : ''
-      return h('li', { key: entry.id ?? index, className: 'sa-event' },
-        h('div', { className: 'sa-event-actor' },
-          h(Icon, { name: ACTIVITY_ICON[actor] ?? 'circle', size: 13 }),
-          entry.at ? h(TicketStamp, { at: entry.at }) : null,
-          h('span', null, pt(t, ACTIVITY_KIND_KEYS[kind] ?? kind)),
-          transition ? h('span', { className: 'sa-hint' }, transition) : null),
-        entry.detail ? h('p', { className: 'sa-event-text' }, String(entry.detail)) : null)
-    })),
-    list.length > shown.length ? h('p', { className: 'sa-hint' }, pt(t, 'ticket.activityMore', { total: list.length, shown: shown.length })) : null)
+      return <li key={entry.id ?? index} className="sa-event">
+        <div className="sa-event-actor">
+          <Icon name={ACTIVITY_ICON[actor] ?? 'circle'} size={13} />
+          {entry.at ? <TicketStamp at={entry.at} /> : null}
+          <span>{pt(t, ACTIVITY_KIND_KEYS[kind] ?? kind)}</span>
+          {transition ? <span className="sa-hint">{transition}</span> : null}
+        </div>
+        {entry.detail ? <p className="sa-event-text">{String(entry.detail)}</p> : null}
+      </li>
+    })}</ol>
+    {list.length > shown.length ? <p className="sa-hint">{pt(t, 'ticket.activityMore', { total: list.length, shown: shown.length })}</p> : null}
+  </>
 }
 
 /** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
@@ -765,46 +811,51 @@ function runRouteTag(t, run) {
   const text = route.applied
     ? pt(t, 'detail.routeApplied', { backend, workType })
     : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
-  return h(Tag, { tone: route.applied ? 'outline' : 'info',
-    title: `${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.profile ?? ''}` }, text)
+  return <Tag tone={route.applied ? 'outline' : 'info'}
+    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.profile ?? ''}`}>{text}</Tag>
 }
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
 function TicketRunRows({ runs }) {
   const { t } = usePanel()
-  return h('ul', { className: 'sa-list' }, runs.map(run => {
+  return <ul className="sa-list">{runs.map(run => {
     const view = runView(t, run)
     const stop = runStopLabel(t, run)
     const trigger = runTriggerLabel(t, run)
     const repair = run?.repair && typeof run.repair === 'object' ? run.repair : undefined
     const repairStatus = String(repair?.status ?? '')
     const commit = typeof run.commit === 'string' ? run.commit : run.commit?.sha
-    return h('li', { key: run.id, id: `sa-run-${run.id}`, className: 'sa-row' },
-      h('div', { className: 'sa-row-main' },
-        h('div', { className: 'sa-row-title' },
-          h(StatusIcon, { state: view.state, size: 14 }),
-          h('span', null, view.label),
-          trigger ? h(Tag, { tone: 'outline' }, trigger) : null,
-          runRouteTag(t, run),
-          stop ? h(Tag, { tone: stop.tone }, stop.label) : null,
-          // P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched.
-          repair && repairStatus !== 'none'
-            ? h(Tag, { tone: REPAIR_STATUS_TONE[repairStatus] ?? 'outline', title: pt(t, 'detail.repairRunHint') },
-              `${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`)
-            : null,
-          run.dryRun ? h(Tag, { tone: 'outline' }, pt(t, 'ticket.dryTag')) : null,
-          run.startedAt ? h(TicketStamp, { at: run.startedAt }) : null,
-          h(CopyButton, { value: String(run.id), label: liveShortId(run.id) })),
-        h('div', { className: 'sa-row-meta' },
-          run.branch ? h('span', { className: 'sa-mono' }, run.branch) : null,
-          commit ? h('span', { className: 'sa-mono' }, liveShortId(commit, 8)) : null,
-          Array.isArray(run.steps) ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.stepsCount', { count: run.steps.length })) : null),
-        run.error ? h('p', { className: 'sa-error', title: String(run.error) }, failureLabel(t, run.error)) : null,
-        h(RunHandoff, { run }),
-        h(RunReport, { run }),
-        h(RunTrace, { run })))
-  }))
+    return <li key={run.id} id={`sa-run-${run.id}`} className="sa-row">
+      <div className="sa-row-main">
+        <div className="sa-row-title">
+          <StatusIcon state={view.state} size={14} />
+          <span>{view.label}</span>
+          {trigger ? <Tag tone="outline">{trigger}</Tag> : null}
+          {runRouteTag(t, run)}
+          {stop ? <Tag tone={stop.tone}>{stop.label}</Tag> : null}
+          {/* P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched. */}
+          {repair && repairStatus !== 'none'
+            ? <Tag tone={REPAIR_STATUS_TONE[repairStatus] ?? 'outline'} title={pt(t, 'detail.repairRunHint')}>
+              {`${pt(t, 'detail.repairRun', { attempts: Number(repair.attempts) || 0, max: Number(repair.max) || 0 })} · ${repairLabel(t, repair)}`}
+            </Tag>
+            : null}
+          {run.dryRun ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+          {run.startedAt ? <TicketStamp at={run.startedAt} /> : null}
+          <CopyButton value={String(run.id)} label={liveShortId(run.id)} />
+        </div>
+        <div className="sa-row-meta">
+          {run.branch ? <span className="sa-mono">{run.branch}</span> : null}
+          {commit ? <span className="sa-mono">{liveShortId(commit, 8)}</span> : null}
+          {Array.isArray(run.steps) ? <span className="sa-hint">{pt(t, 'ticket.stepsCount', { count: run.steps.length })}</span> : null}
+        </div>
+        {run.error ? <p className="sa-error" title={String(run.error)}>{failureLabel(t, run.error)}</p> : null}
+        <RunHandoff run={run} />
+        <RunReport run={run} />
+        <RunTrace run={run} />
+      </div>
+    </li>
+  })}</ul>
 }
 
 /**
@@ -879,22 +930,23 @@ function diffLineClass(line) {
 function DiffBody({ text }) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   if (lines.length && lines.at(-1) === '') lines.pop()
-  return h('div', { className: 'sa-diff' },
-    h('pre', null, lines.map((line, index) =>
-      h('span', { key: index, className: `sa-diff-line ${diffLineClass(line)}` }, line === '' ? ' ' : line))))
+  return <div className="sa-diff">
+    <pre>{lines.map((line, index) =>
+      <span key={index} className={`sa-diff-line ${diffLineClass(line)}`}>{line === '' ? ' ' : line}</span>)}</pre>
+  </div>
 }
 
 /** Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place. */
 function DiffCard({ state = {}, onRetry }) {
   const { t } = usePanel()
-  if (state.loading) return h(Skeleton, { rows: 4 })
-  if (state.error) return h(ErrorState, { error: state.error, onRetry })
+  if (state.loading) return <Skeleton rows={4} />
+  if (state.error) return <ErrorState error={state.error} onRetry={onRetry} />
   const data = state.data
-  if (!data) return h(Hint, null, pt(t, 'ticket.diffLoading'))
+  if (!data) return <Hint>{pt(t, 'ticket.diffLoading')}</Hint>
   if (data.available !== true) {
-    return h(Hint, null, data.reason === 'not-a-worktree' ? pt(t, 'ticket.diffNotGit')
+    return <Hint>{data.reason === 'not-a-worktree' ? pt(t, 'ticket.diffNotGit')
       : data.reason === 'git-failed' ? pt(t, 'ticket.diffFailed')
-      : pt(t, 'ticket.diffUnavailable'))
+      : pt(t, 'ticket.diffUnavailable')}</Hint>
   }
   const files = Array.isArray(data.files) ? data.files : []
   const additions = files.reduce((total, file) => total + (Number(file.additions) || 0), 0)
@@ -903,17 +955,18 @@ function DiffCard({ state = {}, onRetry }) {
   const limit = `${new Intl.NumberFormat(timeLocale(t.lang)).format(Math.max(1, Math.round((Number(data.bytes) || 0) / 1024)))}\u00A0KB`
   const omitted = Number(data.omitted) || 0
   const filePath = typeof data.path === 'string' && data.path ? data.path : (typeof state.path === 'string' ? state.path : '')
-  const pathRow = filePath ? h('div', { className: 'sa-mono', style: { overflowWrap: 'anywhere' } }, filePath) : null
-  const head = h('div', { className: 'sa-actions', style: { flexWrap: 'wrap' } },
-    h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffSummary', { files: files.length, additions, deletions })),
-    data.runId ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffRun', { run: shortId(data.runId, 10) })) : null,
-    data.baseSha ? h('span', { className: 'sa-hint' }, pt(t, 'ticket.diffBase', { sha: String(data.baseSha).slice(0, 8) })) : null,
-    h(CopyButton, { value: String(data.diff ?? ''), label: pt(t, 'ticket.diffCopy') }))
+  const pathRow = filePath ? <div className="sa-mono" style={{ overflowWrap: 'anywhere' }}>{filePath}</div> : null
+  const head = <div className="sa-actions" style={{ flexWrap: 'wrap' }}>
+    <span className="sa-hint">{pt(t, 'ticket.diffSummary', { files: files.length, additions, deletions })}</span>
+    {data.runId ? <span className="sa-hint">{pt(t, 'ticket.diffRun', { run: shortId(data.runId, 10) })}</span> : null}
+    {data.baseSha ? <span className="sa-hint">{pt(t, 'ticket.diffBase', { sha: String(data.baseSha).slice(0, 8) })}</span> : null}
+    <CopyButton value={String(data.diff ?? '')} label={pt(t, 'ticket.diffCopy')} />
+  </div>
   const notes = data.truncated
-    ? [h(Hint, { key: 'truncated' }, pt(t, 'ticket.diffTruncated', { limit, omitted }))]
-    : omitted > 0 ? [h(Hint, { key: 'omitted' }, pt(t, 'ticket.diffOmitted', { count: omitted }))] : []
-  if (!String(data.diff ?? '').trim()) return h(Fragment, null, pathRow, head, h(Hint, null, pt(t, 'ticket.diffEmpty')))
-  return h(Fragment, null, pathRow, head, ...notes, h(DiffBody, { text: data.diff }))
+    ? [<Hint key="truncated">{pt(t, 'ticket.diffTruncated', { limit, omitted })}</Hint>]
+    : omitted > 0 ? [<Hint key="omitted">{pt(t, 'ticket.diffOmitted', { count: omitted })}</Hint>] : []
+  if (!String(data.diff ?? '').trim()) return <>{pathRow}{head}<Hint>{pt(t, 'ticket.diffEmpty')}</Hint></>
+  return <>{pathRow}{head}{notes}<DiffBody text={data.diff} /></>
 }
 
 /** One sentence explaining what a failed run means and how to recover. */
@@ -1043,12 +1096,12 @@ function AutomationCard({ ticket, onSaved }) {
   const executions = Math.max(0, Number(stored.executions) || 0)
   const maxExecutions = Number.isFinite(Number(stored.maxExecutions)) ? Number(stored.maxExecutions) : undefined
   const facts = [
-    [pt(t, 'auto.nextRun'), stored.nextAt ? h(When, { at: stored.nextAt }) : '—'],
+    [pt(t, 'auto.nextRun'), stored.nextAt ? <When at={stored.nextAt} /> : '—'],
     [pt(t, 'auto.executions'), maxExecutions !== undefined
       ? pt(t, 'auto.executionsLimit', { count: executions, max: maxExecutions })
       : pt(t, 'auto.executionsValue', { count: executions })],
   ]
-  if (stored.lastRunAt) facts.push([pt(t, 'auto.lastRun'), h(When, { at: stored.lastRunAt })])
+  if (stored.lastRunAt) facts.push([pt(t, 'auto.lastRun'), <When at={stored.lastRunAt} />])
   if (stored.lastTrigger) {
     facts.push([pt(t, 'auto.lastTrigger'),
       pt(t, stored.lastTrigger === 'schedule' ? 'auto.triggerSchedule' : 'auto.triggerHeartbeat')])
@@ -1056,58 +1109,70 @@ function AutomationCard({ ticket, onSaved }) {
   if (stored.lastSkipReason) facts.push([pt(t, 'auto.lastSkip'), autoSkipReasonText(t, stored.lastSkipReason)])
   // Automation is a setting, not the page: it folds to a single line and expands only when the operator opens it (T11).
   const summary = automationSummaryText(t, stored) || pt(t, 'auto.modeOff')
-  return h(Section, { id: 'sa-automation', title: pt(t, 'auto.section') },
-    h(Folded, { summary },
-      h('div', { className: 'sa-card' },
-      h('div', { className: 'sa-card-head' },
-        h('span', { className: 'sa-card-title' }, automationSummaryText(t, stored) || pt(t, 'auto.modeOff')),
-        h('label', { className: 'sa-actions' },
-          h('span', { className: 'sa-hint' }, pt(t, 'auto.enabled')),
-          h(Switch, { checked: form.enabled, onChange: value => update({ enabled: value }),
-            label: pt(t, 'auto.enabled') }))),
-      h('div', { className: 'sa-field' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'auto.mode')),
-        h(SegmentedControl, { value: form.mode, onChange: setMode, label: pt(t, 'auto.mode'),
-          options: [{ value: 'off', label: pt(t, 'auto.modeOff') },
-            { value: 'heartbeat', label: pt(t, 'auto.modeHeartbeat') },
-            { value: 'schedule', label: pt(t, 'auto.modeSchedule') }] })),
-      heartbeat
-        ? h('div', { className: 'sa-field sa-field-narrow' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'auto.interval')),
-          h(Input, { type: 'number', min: 10, max: 1440, step: 5, value: form.intervalMinutes, inputRef: intervalRef,
-            'aria-label': pt(t, 'auto.interval'), 'aria-invalid': fieldErrors.intervalMinutes ? true : undefined,
-            onChange: event => update({ intervalMinutes: event.target.value }) }),
-          fieldErrors.intervalMinutes ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.intervalMinutes) : null,
-          h('small', null, pt(t, 'auto.intervalHint')))
-        : null,
-      schedule
-        ? h('div', { className: 'sa-field sa-field-narrow' },
-          h('span', { className: 'sa-field-head' }, pt(t, 'auto.at')),
-          h(Input, { type: 'time', value: form.at, inputRef: atRef, 'aria-label': pt(t, 'auto.at'),
-            'aria-invalid': fieldErrors.at ? true : undefined,
-            onChange: event => update({ at: event.target.value }) }),
-          fieldErrors.at ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.at) : null,
-          h('small', null, pt(t, 'auto.atHint')))
-        : null,
-      h('div', { className: 'sa-field sa-field-narrow' },
-        h('span', { className: 'sa-field-head' }, pt(t, 'auto.maxExecutions')),
-        h(Input, { type: 'number', min: 1, max: 10000, value: form.maxExecutions, inputRef: maxExecutionsRef,
-          placeholder: pt(t, 'auto.maxExecutionsPlaceholder'), 'aria-label': pt(t, 'auto.maxExecutions'),
-          'aria-invalid': fieldErrors.maxExecutions ? true : undefined,
-          onChange: event => update({ maxExecutions: event.target.value }) }),
-        fieldErrors.maxExecutions ? h('small', { className: 'sa-error', role: 'alert' }, fieldErrors.maxExecutions) : null,
-        h('small', null, pt(t, 'auto.maxExecutionsHint'))),
-      dirty || saving || failure
-        ? h(Fragment, null,
-          h('div', { className: 'sa-actions' },
-            h(Button, { variant: 'primary', size: 'sm', icon: saving ? undefined : 'check',
-              disabled: saving || !act?.setAutomation, 'aria-busy': saving || undefined,
-              onClick: () => { void save() } },
-            saving ? h(Fragment, null, h(StatusIcon, { state: 'ongoing', size: 14 }), pt(t, 'auto.saving')) : pt(t, 'auto.save')),
-            h('span', { className: 'sa-hint' }, pt(t, 'auto.disabledNote'))),
-          failure ? h('p', { className: 'sa-error', role: 'alert' }, errorText(failure)) : null)
-        : null,
-      h('div', { style: { marginTop: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: facts })))))
+  return <Section id="sa-automation" title={pt(t, 'auto.section')}>
+    <Folded summary={summary}>
+      <div className="sa-card">
+        <div className="sa-card-head">
+          <span className="sa-card-title">{automationSummaryText(t, stored) || pt(t, 'auto.modeOff')}</span>
+          <label className="sa-actions">
+            <span className="sa-hint">{pt(t, 'auto.enabled')}</span>
+            <Switch checked={form.enabled} onChange={value => update({ enabled: value })}
+              label={pt(t, 'auto.enabled')} />
+          </label>
+        </div>
+        <div className="sa-field">
+          <span className="sa-field-head">{pt(t, 'auto.mode')}</span>
+          <SegmentedControl value={form.mode} onChange={setMode} label={pt(t, 'auto.mode')}
+            options={[{ value: 'off', label: pt(t, 'auto.modeOff') },
+              { value: 'heartbeat', label: pt(t, 'auto.modeHeartbeat') },
+              { value: 'schedule', label: pt(t, 'auto.modeSchedule') }]} />
+        </div>
+        {heartbeat
+          ? <div className="sa-field sa-field-narrow">
+            <span className="sa-field-head">{pt(t, 'auto.interval')}</span>
+            <Input type="number" min={10} max={1440} step={5} value={form.intervalMinutes} inputRef={intervalRef}
+              aria-label={pt(t, 'auto.interval')} aria-invalid={fieldErrors.intervalMinutes ? true : undefined}
+              onChange={event => update({ intervalMinutes: event.target.value })} />
+            {fieldErrors.intervalMinutes ? <small className="sa-error" role="alert">{fieldErrors.intervalMinutes}</small> : null}
+            <small>{pt(t, 'auto.intervalHint')}</small>
+          </div>
+          : null}
+        {schedule
+          ? <div className="sa-field sa-field-narrow">
+            <span className="sa-field-head">{pt(t, 'auto.at')}</span>
+            <Input type="time" value={form.at} inputRef={atRef} aria-label={pt(t, 'auto.at')}
+              aria-invalid={fieldErrors.at ? true : undefined}
+              onChange={event => update({ at: event.target.value })} />
+            {fieldErrors.at ? <small className="sa-error" role="alert">{fieldErrors.at}</small> : null}
+            <small>{pt(t, 'auto.atHint')}</small>
+          </div>
+          : null}
+        <div className="sa-field sa-field-narrow">
+          <span className="sa-field-head">{pt(t, 'auto.maxExecutions')}</span>
+          <Input type="number" min={1} max={10000} value={form.maxExecutions} inputRef={maxExecutionsRef}
+            placeholder={pt(t, 'auto.maxExecutionsPlaceholder')} aria-label={pt(t, 'auto.maxExecutions')}
+            aria-invalid={fieldErrors.maxExecutions ? true : undefined}
+            onChange={event => update({ maxExecutions: event.target.value })} />
+          {fieldErrors.maxExecutions ? <small className="sa-error" role="alert">{fieldErrors.maxExecutions}</small> : null}
+          <small>{pt(t, 'auto.maxExecutionsHint')}</small>
+        </div>
+        {dirty || saving || failure
+          ? <>
+            <div className="sa-actions">
+              <Button variant="primary" size="sm" icon={saving ? undefined : 'check'}
+                disabled={saving || !act?.setAutomation} aria-busy={saving || undefined}
+                onClick={() => { void save() }}>
+                {saving ? <><StatusIcon state="ongoing" size={14} />{pt(t, 'auto.saving')}</> : pt(t, 'auto.save')}
+              </Button>
+              <span className="sa-hint">{pt(t, 'auto.disabledNote')}</span>
+            </div>
+            {failure ? <p className="sa-error" role="alert">{errorText(failure)}</p> : null}
+          </>
+          : null}
+        <div style={{ marginTop: 'var(--sa-sp-8)' }}><KeyValues rows={facts} /></div>
+      </div>
+    </Folded>
+  </Section>
 }
 
 /**
@@ -1145,9 +1210,9 @@ function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
   const compare = useLiveResource('engine/evidence/:id/compare', { id }, 30000,
     { enabled: Boolean(id) && rounds.length > 1 })
   // A read still in flight or failed is not "no evidence yet" (audit P2): render the read's own state and retry it.
-  if (error && !data) return h(ErrorState, { error, onRetry })
-  if (loading && !data) return h(Skeleton, { rows: 2 })
-  if (!rounds.length) return h(Hint, null, pt(t, 'detail.evidenceEmpty'))
+  if (error && !data) return <ErrorState error={error} onRetry={onRetry} />
+  if (loading && !data) return <Skeleton rows={2} />
+  if (!rounds.length) return <Hint>{pt(t, 'detail.evidenceEmpty')}</Hint>
   const latest = rounds.at(-1)
   const diff = compare.data
   const previous = rounds.length > 1 ? rounds.at(-2) : null
@@ -1165,56 +1230,58 @@ function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
   const requirementsAdded = diff?.acceptance?.added ?? []
   const requirementsRemoved = diff?.acceptance?.removed ?? []
   const unfinished = (diff?.gatesUnfinished ?? []).map(gate => gate.name)
-  return h('div', { className: 'sa-card' },
-    h('div', { className: 'sa-card-head' }, h('span', { className: 'sa-card-title' }, pt(t, 'detail.evidenceTitle')),
-      h(Tag, { tone: 'neutral' }, pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length }))),
-    h(KeyValues, { rows: [
-      [pt(t, 'detail.evidenceBranch'), h('span', { className: 'sa-mono' }, latest.branch || '—')],
-      [pt(t, 'ticket.commit'), h('span', { className: 'sa-mono' }, (latest.headSha ?? '—').slice(0, 8))],
+  return <div className="sa-card">
+    <div className="sa-card-head"><span className="sa-card-title">{pt(t, 'detail.evidenceTitle')}</span>
+      <Tag tone="neutral">{pt(t, 'detail.evidenceRound', { round: latest.round ?? rounds.length })}</Tag>
+    </div>
+    <KeyValues rows={[
+      [pt(t, 'detail.evidenceBranch'), <span className="sa-mono">{latest.branch || '—'}</span>],
+      [pt(t, 'ticket.commit'), <span className="sa-mono">{(latest.headSha ?? '—').slice(0, 8)}</span>],
       [pt(t, 'detail.evidenceFilesLabel'), pt(t, 'detail.evidenceFiles', { count: (latest.files ?? []).length })],
       [pt(t, 'ticket.gates'), pt(t, 'detail.evidenceGates', { passed, total: (latest.gates ?? []).length })],
-    ] }),
-    h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
+    ]} />
+    <p className="sa-hint">{pt(t, 'detail.evidencePlatform', { pushed: platform.pushed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
       pr: platform.pr ?? pt(t, 'detail.prNone'), merged: platform.merged ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
       deployed: platform.deployed ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo'),
-      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })),
-    diff
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
-        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length }))
+      accepted: platform.accepted ? pt(t, 'detail.evidenceYes') : pt(t, 'detail.evidenceNo') })}</p>
+    {diff
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceCompare', { added: diff.files.added.length,
+        removed: diff.files.removed.length, changed: diff.files.changed.length, gates: diff.gates.length })}</p>
       : rounds.length < 2
-        ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNoHistory'))
-        : null,
-    incompleteLine ? h('p', { className: 'sa-hint' }, incompleteLine) : null,
-    uncertainAdded || uncertainRemoved
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUncertain', {
-        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') }))
-      : null,
-    latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidencePatchTruncated', {
-        bytes: new Intl.NumberFormat(timeLocale(t.lang)).format(Number(latest.patch?.bytes ?? previous?.patch?.bytes ?? 0)) }))
-      : null,
-    diff?.baseline?.changed
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceBaseline', {
-        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) }))
-      : null,
-    unfinished.length
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') }))
-      : null,
-    diff?.gatesStale?.length
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') }))
-      : null,
-    diff?.gatesNotRun?.length
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') }))
-      : null,
-    requirementsAdded.length || requirementsRemoved.length
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceRequirements', {
+        ? <p className="sa-hint">{pt(t, 'detail.evidenceNoHistory')}</p>
+        : null}
+    {incompleteLine ? <p className="sa-hint">{incompleteLine}</p> : null}
+    {uncertainAdded || uncertainRemoved
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceUncertain', {
+        added: uncertainAdded || pt(t, 'detail.evidenceNone'), removed: uncertainRemoved || pt(t, 'detail.evidenceNone') })}</p>
+      : null}
+    {latest.patch?.truncated || diff?.incomplete?.previous?.patchTruncated || diff?.incomplete?.current?.patchTruncated
+      ? <p className="sa-hint">{pt(t, 'detail.evidencePatchTruncated', {
+        bytes: new Intl.NumberFormat(timeLocale(t.lang)).format(Number(latest.patch?.bytes ?? previous?.patch?.bytes ?? 0)) })}</p>
+      : null}
+    {diff?.baseline?.changed
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceBaseline', {
+        from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) })}</p>
+      : null}
+    {unfinished.length
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') })}</p>
+      : null}
+    {diff?.gatesStale?.length
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') })}</p>
+      : null}
+    {diff?.gatesNotRun?.length
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceNotRerun', { names: diff.gatesNotRun.join('、') })}</p>
+      : null}
+    {requirementsAdded.length || requirementsRemoved.length
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceRequirements', {
         added: requirementsAdded.join('；') || pt(t, 'detail.evidenceNone'),
-        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') }))
-      : null,
-    platform.deployCommit
-      ? h('p', { className: 'sa-hint' }, pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) }))
-      : null,
-    latest.workerSummary ? h(Folded, { summary: pt(t, 'detail.evidenceSummary') }, h('p', null, latest.workerSummary)) : null)
+        removed: requirementsRemoved.join('；') || pt(t, 'detail.evidenceNone') })}</p>
+      : null}
+    {platform.deployCommit
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceDeploy', { sha: String(platform.deployCommit).slice(0, 12) })}</p>
+      : null}
+    {latest.workerSummary ? <Folded summary={pt(t, 'detail.evidenceSummary')}><p>{latest.workerSummary}</p></Folded> : null}
+  </div>
 }
 
 function TicketDetail({ id, page = 'execution', focusRun }) {
@@ -1391,13 +1458,13 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
     for (const node of nodes) observer.observe(node)
     return () => observer.disconnect()
   }, [id, data])
-  if (!id) return h(EmptyState, { icon: 'inbox', title: pt(t, 'thread.noSelection'), hint: pt(t, 'thread.noSelectionHint') })
+  if (!id) return <EmptyState icon="inbox" title={pt(t, 'thread.noSelection')} hint={pt(t, 'thread.noSelectionHint')} />
   // P0 §3.6.6: a missing Ticket (404) is an empty state — "找不到该工单" — not a broken connection with a retry that
   // can never succeed. Any other failure keeps the URL and offers a retry.
-  if (error?.missing && !data) return h(EmptyState, { icon: 'inbox', title: pt(t, 'detail.ticketMissing'), hint: pt(t, 'detail.ticketMissingHint'),
-    action: h(Button, { variant: 'outline', size: 'sm', onClick: back }, t('back')) })
-  if (error && !data) return h(ErrorState, { error, onRetry: reload })
-  if (loading) return h(Skeleton, { rows: 5 })
+  if (error?.missing && !data) return <EmptyState icon="inbox" title={pt(t, 'detail.ticketMissing')} hint={pt(t, 'detail.ticketMissingHint')}
+    action={<Button variant="outline" size="sm" onClick={back}>{t('back')}</Button>} />
+  if (error && !data) return <ErrorState error={error} onRetry={reload} />
+  if (loading) return <Skeleton rows={5} />
 
   const ticket = data?.ticket ?? {}
   const runs = Array.isArray(data?.runs) ? data.runs : []
@@ -1452,7 +1519,7 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
     const repoIdText = repoId ? String(repoId) : ''
     repoRows.push([pt(t, 'repo.label'), repoIdText && repoIdText !== repoLabel ? `${repoLabel}（${repoIdText}）` : repoLabel])
   }
-  if (repo?.repo) repoRows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono' }, String(repo.repo))])
+  if (repo?.repo) repoRows.push([pt(t, 'repo.localPath'), <span className="sa-mono">{String(repo.repo)}</span>])
   if (repoBase || repoTarget) repoRows.push([pt(t, 'repo.branches'), `${repoBase ?? '—'} → ${repoTarget ?? '—'}`])
   if (repoVerifyMode) repoRows.push([pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repoVerifyMode)])
   if (repoAcceptance) repoRows.push([pt(t, 'repo.acceptance'), repoAcceptanceText(t, repoAcceptance)])
@@ -1461,11 +1528,11 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
     [pt(t, 'ticket.scope'), ticket.scope ?? '—'],
     [pt(t, 'ticket.policy'), decision?.policyVersion ?? '—'],
     [pt(t, 'ticket.strength'), decision?.strength ? pt(t, `strength.${decision.strength}`) : '—'],
-    [pt(t, 'ticket.origin'), trigger ? h('span', { className: 'sa-mono' }, liveShortId(trigger.id)) : '—'],
+    [pt(t, 'ticket.origin'), trigger ? <span className="sa-mono">{liveShortId(trigger.id)}</span> : '—'],
     [pt(t, 'ticket.basis'), reasonLabel(t, decision?.reason ?? ticket.origin?.reason) || '—'],
   ]
-  if (thread?.key) authRows.push([t('term.thread'), h(Button, { variant: 'ghost', size: 'sm',
-    onClick: () => navigate({ page: 'trigger', id: thread.key }) }, thread.title ?? liveShortId(thread.key))])
+  if (thread?.key) authRows.push([t('term.thread'), <Button variant="ghost" size="sm"
+    onClick={() => navigate({ page: 'trigger', id: thread.key })}>{thread.title ?? liveShortId(thread.key)}</Button>])
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
   if (routePreview) {
@@ -1515,31 +1582,33 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
   const mrUrl = ticket.links?.mergeRequest?.webUrl
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
-    ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }, pt(t, 'primary.answer'))
+    ? <Button variant="primary" size="sm" onClick={() =>
+      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
     : failed
     ? canRun
       // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
       ? workflowResumable
-        ? h(ConfirmButton, { label: pt(t, 'detail.resume'), title: pt(t, 'detail.resumeWorkflowTitle'),
-          message: pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'play',
-          confirmLabel: pt(t, 'detail.confirmResume'), onConfirm: async () => { await resume.run() } })
-        : h(ConfirmButton, { label: pt(t, 'ticket.retry'), title: pt(t, 'retryTitle'),
-          message: pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id }), variant: 'primary', icon: 'refresh',
-          confirmLabel: pt(t, 'detail.confirmRetry'), onConfirm: async () => { await retry.run() } })
+        ? <ConfirmButton label={pt(t, 'detail.resume')} title={pt(t, 'detail.resumeWorkflowTitle')}
+          message={pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="play"
+          confirmLabel={pt(t, 'detail.confirmResume')} onConfirm={async () => { await resume.run() }} />
+        : <ConfirmButton label={pt(t, 'ticket.retry')} title={pt(t, 'retryTitle')}
+          message={pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="refresh"
+          confirmLabel={pt(t, 'detail.confirmRetry')} onConfirm={async () => { await retry.run() }} />
       // A disabled control still has to say why; the reason is a focusable InfoTip next to it, not a title tooltip.
-      : h(Fragment, null,
-        h(Button, { variant: 'primary', size: 'sm', disabled: true }, pt(t, 'ticket.retry')),
-        h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }))
+      : <>
+        <Button variant="primary" size="sm" disabled>{pt(t, 'ticket.retry')}</Button>
+        <InfoTip text={pt(t, 'ticket.retryUnavailable')} warn />
+      </>
     : accepted
       // An accepted Ticket has nothing left to run: the merged MR is a real link, otherwise only the ⋯ menu stays.
-      ? (safeHttpUrl(mrUrl) ? h('a', { className: 'sa-btn sa-btn-primary sa-btn-sm',
-        href: safeHttpUrl(mrUrl), target: '_blank', rel: 'noopener noreferrer', style: { textDecoration: 'none' } },
-        pt(t, 'primary.openMr')) : null)
+      ? (safeHttpUrl(mrUrl) ? <a className="sa-btn sa-btn-primary sa-btn-sm"
+        href={safeHttpUrl(mrUrl)} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+        {pt(t, 'primary.openMr')}</a> : null)
       : needsAcceptance
-        ? h(Button, { variant: 'primary', size: 'sm', onClick: () =>
-          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) },
-        pt(t, 'primary.accept'))
+        ? <Button variant="primary" size="sm" onClick={() =>
+          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>
+          {pt(t, 'primary.accept')}
+        </Button>
         // A parked gate already carries all three decisions in the banner above this row, and running work has
         // nothing to launch — both states keep only the ⋯ menu, so the page never shows a second button that either
         // duplicates the banner or invites "start another run" (T2/T3).
@@ -1547,20 +1616,23 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
           ? null
           // P1-5: an interrupted run is resumable, so it outranks the generic dry-run action.
           : interrupted
-            ? h(Fragment, null,
-              h(Button, { variant: 'primary', size: 'sm', disabled: resume.busy || !canRun,
-                onClick: () => { void resume.run() } }, pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume')),
-              !canRun ? h(InfoTip, { text: pt(t, 'ticket.retryUnavailable'), warn: true }) : null)
+            ? <>
+              <Button variant="primary" size="sm" disabled={resume.busy || !canRun}
+                onClick={() => { void resume.run() }}>{pt(t, resume.busy ? 'detail.resumeBusy' : 'detail.resume')}</Button>
+              {!canRun ? <InfoTip text={pt(t, 'ticket.retryUnavailable')} warn /> : null}
+            </>
             : dryRunReady
-              ? h(Fragment, null,
-                h(Button, { variant: 'primary', size: 'sm', icon: 'external',
-                  disabled: busy.publish || !canPush,
-                  onClick: () => setPending('publish') }, pt(t, 'menu.publish')),
-                !canPush ? h(InfoTip, { text: pt(t, 'ticket.publishUnavailable'), warn: true }) : null)
-              : h(Fragment, null,
-                h(Button, { variant: 'primary', size: 'sm', disabled: busy.dryRun || !canRun,
-                  onClick: () => { void dryRun.run() } }, pt(t, 'ticket.dryRun')),
-                !canRun ? h(InfoTip, { text: pt(t, 'ticket.dryRunUnavailable'), warn: true }) : null)
+              ? <>
+                <Button variant="primary" size="sm" icon="external"
+                  disabled={busy.publish || !canPush}
+                  onClick={() => setPending('publish')}>{pt(t, 'menu.publish')}</Button>
+                {!canPush ? <InfoTip text={pt(t, 'ticket.publishUnavailable')} warn /> : null}
+              </>
+              : <>
+                <Button variant="primary" size="sm" disabled={busy.dryRun || !canRun}
+                  onClick={() => { void dryRun.run() }}>{pt(t, 'ticket.dryRun')}</Button>
+                {!canRun ? <InfoTip text={pt(t, 'ticket.dryRunUnavailable')} warn /> : null}
+              </>
   const menuItems = [
     { key: 'verify', label: pt(t, 'menu.verify'), icon: 'review', onSelect: () => { void verify.run() }, disabled: busy.verify },
     { key: 'ci', label: pt(t, 'menu.refreshCi'), icon: 'refresh', onSelect: () => { void refreshCi.run() },
@@ -1588,33 +1660,35 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
       ? pt(t, 'detail.confirmDismiss') : pt(t, 'detail.dismiss'),
   }
   const confirmDialog = pending
-    ? h(Modal, { open: true, onClose: () => setPending(null),
-      title: pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
-        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle'),
-      closeLabel: t('close'),
-      description: pending === 'retry'
+    ? <Modal open onClose={() => setPending(null)}
+      title={pending === 'retry' ? pt(t, 'retryTitle') : pending === 'dismiss' ? pt(t, 'detail.dismissTitle')
+        : pending === 'stop' ? pt(t, 'menu.stop') : pt(t, 'ticket.publishTitle')}
+      closeLabel={t('close')}
+      description={pending === 'retry'
         ? pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })
         : pending === 'stop'
           ? pt(t, 'ticket.stopConfirm')
         : pending === 'dismiss'
           ? pt(t, 'detail.dismissConfirm', { title: ticket.title ?? ticket.id,
             branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })
-          : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id }),
-      footer: h(Fragment, null,
-        h(Button, { variant: 'ghost', onClick: () => setPending(null) }, t('cancel')),
-        // The confirm button names the action it destroys; a destructive one (stop/dismiss) is styled as such.
-        h(Button, { variant: pending === 'dismiss' || pending === 'stop' ? 'danger' : 'primary',
-          disabled: pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
-          : pending === 'stop' ? stopRun.busy : busy.publish,
-          onClick: () => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
-            : pending === 'stop' ? stopRun : publish) } }, confirmActionLabels[pending] ?? t('confirm'))) })
+          : pt(t, 'ticket.publishConfirm', { title: ticket.title ?? ticket.id })}
+      footer={<>
+        <Button variant="ghost" onClick={() => setPending(null)}>{t('cancel')}</Button>
+        {/* The confirm button names the action it destroys; a destructive one (stop/dismiss) is styled as such. */}
+        <Button variant={pending === 'dismiss' || pending === 'stop' ? 'danger' : 'primary'}
+          disabled={pending === 'retry' ? busy.retry : pending === 'dismiss' ? busy.dismiss
+          : pending === 'stop' ? stopRun.busy : busy.publish}
+          onClick={() => { void runPending(pending === 'retry' ? retry : pending === 'dismiss' ? dismiss
+            : pending === 'stop' ? stopRun : publish) }}>{confirmActionLabels[pending] ?? t('confirm')}</Button>
+      </>} />
     : null
 
   // P1 §3.2: the diff lives behind one dialog so the reading column stays about the worker's summary.
   const diffDialog = diffOpen
-    ? h(Modal, { open: true, onClose: () => setDiffOpen(false), title: pt(t, 'ticket.diffTitle'),
-      closeLabel: t('close'), className: 'sa-diff-modal' },
-      h(DiffCard, { state: diff, onRetry: () => { if (diff.path) void loadDiff(diff.path) } }))
+    ? <Modal open onClose={() => setDiffOpen(false)} title={pt(t, 'ticket.diffTitle')}
+      closeLabel={t('close')} className="sa-diff-modal">
+      <DiffCard state={diff} onRetry={() => { if (diff.path) void loadDiff(diff.path) }} />
+    </Modal>
     : null
 
   const changes = changesOf(runs)
@@ -1624,101 +1698,120 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
   const failureRaw = String(failedRun?.error ?? '').trim()
   const failureCause = failureRaw ? failureLabel(t, failedRun.error) : ''
   const failureBanner = failedRun
-    ? h('div', { className: 'sa-banner sa-danger', role: 'alert',
-      style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
-      h(StatusIcon, { state: 'error', size: 16, spin: false }),
-      h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
-        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } }, pt(t, 'detail.failedTitle')),
-        failureCause ? h('p', { className: 'sa-error' }, failureCause) : null,
-        failureCause && failureRaw !== failureCause
-          ? h(Folded, { summary: pt(t, 'detail.rawError') }, h('p', { className: 'sa-error' }, failureRaw))
-          : null,
-        failedSteps.length
-          ? h('p', { className: 'sa-hint' }, pt(t, 'detail.failedSteps', { steps: failedSteps.join(' · ') }))
-          : null,
-        h('p', { className: 'sa-hint' }, failureHint(t, failedRun.error, failedSteps))))
+    ? <div className="sa-banner sa-danger" role="alert"
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' }}>
+      <StatusIcon state="error" size={16} spin={false} />
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
+        <strong style={{ fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 }}>{pt(t, 'detail.failedTitle')}</strong>
+        {failureCause ? <p className="sa-error">{failureCause}</p> : null}
+        {failureCause && failureRaw !== failureCause
+          ? <Folded summary={pt(t, 'detail.rawError')}><p className="sa-error">{failureRaw}</p></Folded>
+          : null}
+        {failedSteps.length
+          ? <p className="sa-hint">{pt(t, 'detail.failedSteps', { steps: failedSteps.join(' · ') })}</p>
+          : null}
+        <p className="sa-hint">{failureHint(t, failedRun.error, failedSteps)}</p>
+      </div>
+    </div>
     : null
   // P0 gate banner: what parked the run and the three human decisions; the failing output is folded and copyable.
   const gateBanner = gateBlocked
-    ? h('div', { id: 'sa-gate', className: 'sa-banner', role: 'alert',
-      style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
-      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
-      h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
-        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
-          pt(t, 'detail.gateTitle', { name: ticketGateLabel(t, pendingGate?.name) })),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.gateIntro')),
-        h(KeyValues, { rows: [
+    ? <div id="sa-gate" className="sa-banner" role="alert"
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' }}>
+      <StatusIcon state="warning" size={16} spin={false} />
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
+        <strong style={{ fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 }}>
+          {pt(t, 'detail.gateTitle', { name: ticketGateLabel(t, pendingGate?.name) })}
+        </strong>
+        <p className="sa-hint">{pt(t, 'detail.gateIntro')}</p>
+        <KeyValues rows={[
           [pt(t, 'detail.gateExit'), pendingGate?.exitCode === undefined ? '—' : String(pendingGate.exitCode)],
           [pt(t, 'detail.gateTimedOut'), pendingGate?.timedOut ? pt(t, 'detail.gateYes') : pt(t, 'detail.gateNo')],
           ...(Array.isArray(pendingGate?.changedPaths) && pendingGate.changedPaths.length
-            ? [[pt(t, 'detail.gateChanged'), h('span', { className: 'sa-mono' }, pendingGate.changedPaths.join(' · '))]] : []),
-        ] }),
-        pendingGate?.outputTail
-          ? h(Folded, { summary: pt(t, 'detail.gateOutput') },
-            h('div', { className: 'sa-actions' }, h(CopyButton, { value: String(pendingGate.outputTail) })),
-            h('pre', { className: 'sa-pre' }, String(pendingGate.outputTail)))
-          : h(Hint, null, pt(t, 'detail.gateNoOutput')),
-        h('div', { className: 'sa-actions' },
-          h(ConfirmButton, { label: pt(t, 'detail.gateRelease'), title: pt(t, 'detail.gateReleaseTitle'),
-            message: pt(t, 'detail.gateReleaseConfirm', { name: ticketGateLabel(t, pendingGate?.name),
-              title: ticket.title ?? ticket.id }),
-            confirmLabel: pt(t, 'detail.confirmGateRelease'),
-            variant: 'primary', icon: 'play', onConfirm: async () => { await gateRelease.run() } }),
-          h(Button, { variant: 'outline', size: 'sm', icon: 'refresh', disabled: gateRetry.busy,
-            onClick: () => { void gateRetry.run() } }, pt(t, 'detail.gateRetry')),
-          h(ConfirmButton, { label: pt(t, 'detail.gateStop'), title: pt(t, 'detail.gateStopTitle'),
-            message: pt(t, 'detail.gateStopConfirm', { title: ticket.title ?? ticket.id }),
-            confirmLabel: pt(t, 'detail.confirmStop'),
-            variant: 'danger', icon: 'stop', onConfirm: async () => { await gateStop.run() } }))))
+            ? [[pt(t, 'detail.gateChanged'), <span className="sa-mono">{pendingGate.changedPaths.join(' · ')}</span>]] : []),
+        ]} />
+        {pendingGate?.outputTail
+          ? <Folded summary={pt(t, 'detail.gateOutput')}>
+            <div className="sa-actions"><CopyButton value={String(pendingGate.outputTail)} /></div>
+            <pre className="sa-pre">{String(pendingGate.outputTail)}</pre>
+          </Folded>
+          : <Hint>{pt(t, 'detail.gateNoOutput')}</Hint>}
+        <div className="sa-actions">
+          <ConfirmButton label={pt(t, 'detail.gateRelease')} title={pt(t, 'detail.gateReleaseTitle')}
+            message={pt(t, 'detail.gateReleaseConfirm', { name: ticketGateLabel(t, pendingGate?.name),
+              title: ticket.title ?? ticket.id })}
+            confirmLabel={pt(t, 'detail.confirmGateRelease')}
+            variant="primary" icon="play" onConfirm={async () => { await gateRelease.run() }} />
+          <Button variant="outline" size="sm" icon="refresh" disabled={gateRetry.busy}
+            onClick={() => { void gateRetry.run() }}>{pt(t, 'detail.gateRetry')}</Button>
+          <ConfirmButton label={pt(t, 'detail.gateStop')} title={pt(t, 'detail.gateStopTitle')}
+            message={pt(t, 'detail.gateStopConfirm', { title: ticket.title ?? ticket.id })}
+            confirmLabel={pt(t, 'detail.confirmStop')}
+            variant="danger" icon="stop" onConfirm={async () => { await gateStop.run() }} />
+        </div>
+      </div>
+    </div>
     : null
   // P1-4 answer banner: the worker asked a question, so the one thing on screen is the question and the answer box.
   const answerQuestion = typeof pendingQuestion?.question === 'string' ? pendingQuestion.question : ''
   const answerBanner = awaitingAnswer
-    ? h('div', { id: 'sa-answer', className: 'sa-banner', role: 'alert',
-      style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
-      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
-      h('div', { style: { minWidth: 0, flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' } },
-        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } }, pt(t, 'detail.answerTitle')),
-        h('p', { className: 'sa-hint' }, pt(t, 'detail.answerHint')),
-        answerQuestion ? h('p', null, pt(t, 'detail.answerQuestion', { text: answerQuestion })) : null,
-        answerOptions.length
-          ? h('div', { className: 'sa-actions' },
-            h('span', { className: 'sa-hint' }, pt(t, 'detail.answerOptions')),
-            answerOptions.map((option, index) => h(Button, { key: index, size: 'sm',
-              variant: answerText === option ? 'primary' : 'outline',
-              'aria-pressed': answerText === option,
-              onClick: () => { setAnswerText(option); setAnswerError(false) } }, option)))
-          : null,
-        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
-          h('label', { htmlFor: 'sa-answer-input', className: 'sa-hint' }, pt(t, 'detail.answerLabel')),
-          h('div', { className: 'sa-actions', style: { alignItems: 'flex-end' } },
-            h('textarea', { id: 'sa-answer-input', name: 'answer', autoComplete: 'off',
-              className: 'sa-textarea', rows: 2, value: answerText,
-              placeholder: pt(t, 'detail.answerPlaceholder'),
-              'aria-invalid': answerError ? true : undefined,
-              onChange: event => { setAnswerText(event.target.value); setAnswerError(false) } }),
-            h(Button, { variant: 'primary', size: 'sm', icon: 'message',
-              disabled: answer.busy,
-              onClick: () => { void answer.run() } }, pt(t, 'detail.answerSubmit')))),
-        answerError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'detail.answerRequired')) : null,
-        previousAnswers.length
-          ? h(Folded, { summary: pt(t, 'detail.answerHistory', { count: previousAnswers.length }) },
-            h('ul', { className: 'sa-list' }, previousAnswers.map((entry, index) => h('li', { key: index, className: 'sa-row' },
-              h('div', { className: 'sa-row-main' },
-                h('div', { className: 'sa-row-title' },
-                  h('span', { style: { whiteSpace: 'pre-wrap' } }, String(entry.answer ?? ''))),
-                entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null)))))
-          : null))
+    ? <div id="sa-answer" className="sa-banner" role="alert"
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' }}>
+      <StatusIcon state="warning" size={16} spin={false} />
+      <div style={{ minWidth: 0, flex: '1 1 auto', display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
+        <strong style={{ fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 }}>{pt(t, 'detail.answerTitle')}</strong>
+        <p className="sa-hint">{pt(t, 'detail.answerHint')}</p>
+        {answerQuestion ? <p>{pt(t, 'detail.answerQuestion', { text: answerQuestion })}</p> : null}
+        {answerOptions.length
+          ? <div className="sa-actions">
+            <span className="sa-hint">{pt(t, 'detail.answerOptions')}</span>
+            {answerOptions.map((option, index) => <Button key={index} size="sm"
+              variant={answerText === option ? 'primary' : 'outline'}
+              aria-pressed={answerText === option}
+              onClick={() => { setAnswerText(option); setAnswerError(false) }}>{option}</Button>)}
+          </div>
+          : null}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
+          <label htmlFor="sa-answer-input" className="sa-hint">{pt(t, 'detail.answerLabel')}</label>
+          <div className="sa-actions" style={{ alignItems: 'flex-end' }}>
+            <textarea id="sa-answer-input" name="answer" autoComplete="off"
+              className="sa-textarea" rows={2} value={answerText}
+              placeholder={pt(t, 'detail.answerPlaceholder')}
+              aria-invalid={answerError ? true : undefined}
+              onChange={event => { setAnswerText(event.target.value); setAnswerError(false) }} />
+            <Button variant="primary" size="sm" icon="message"
+              disabled={answer.busy}
+              onClick={() => { void answer.run() }}>{pt(t, 'detail.answerSubmit')}</Button>
+          </div>
+        </div>
+        {answerError ? <p className="sa-error" role="alert">{pt(t, 'detail.answerRequired')}</p> : null}
+        {previousAnswers.length
+          ? <Folded summary={pt(t, 'detail.answerHistory', { count: previousAnswers.length })}>
+            <ul className="sa-list">{previousAnswers.map((entry, index) => <li key={index} className="sa-row">
+              <div className="sa-row-main">
+                <div className="sa-row-title">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{String(entry.answer ?? '')}</span>
+                </div>
+                {entry.at ? <div className="sa-row-meta"><TicketStamp at={entry.at} /></div> : null}
+              </div>
+            </li>)}</ul>
+          </Folded>
+          : null}
+      </div>
+    </div>
     : null
   // P1-5 interrupted banner: the reason the resume action exists, so the phase label is never read as a healthy queue.
   const interruptedStop = interrupted ? runStopLabel(t, latestRun) : null
   const interruptedBanner = interrupted
-    ? h('div', { className: 'sa-banner', style: { display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' } },
-      h(StatusIcon, { state: 'warning', size: 16, spin: false }),
-      h('div', { style: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' } },
-        h('strong', { style: { fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 } },
-          interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')),
-        h('p', { className: 'sa-hint' }, pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint'))))
+    ? <div className="sa-banner" style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--sa-sp-8)' }}>
+      <StatusIcon state="warning" size={16} spin={false} />
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
+        <strong style={{ fontSize: 'var(--sa-fs-body)', lineHeight: 1.5 }}>
+          {interruptedStop ? interruptedStop.label : pt(t, 'ticketState.interrupted')}
+        </strong>
+        <p className="sa-hint">{pt(t, latestRun?.status === 'stopped' ? 'detail.stoppedHint' : 'detail.interruptedHint')}</p>
+      </div>
+    </div>
     : null
   // A jump is only offered for a section this Ticket actually renders (dismissed/closed hide automation, a Ticket
   // without gate results hides the gates section) — the observer below uses the same filtered list.
@@ -1735,217 +1828,267 @@ function TicketDetail({ id, page = 'execution', focusRun }) {
   // stays text only: two identical 去验收 controls side by side made the header read as a duplicated action.
   const acceptanceNote = acceptanceView.state === 'none'
     ? null
-    : h('span', { className: 'sa-page-head-note' },
-      h('span', null, acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
+    : <span className="sa-page-head-note">
+      <span>{acceptanceView.state === 'pending' ? pt(t, 'detail.acceptLinePending')
         : acceptanceView.state === 'accepted'
           ? pt(t, 'detail.acceptLineAccepted', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })
-          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })),
-      needsAcceptance ? null
-        : h('button', { type: 'button', className: 'sa-textlink', onClick: () => jumpTo('sa-acceptance') },
-          pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')))
+          : pt(t, 'detail.acceptLineRejected', { time: ticketStamp(acceptanceView.at, t.lang) || '—' })}</span>
+      {needsAcceptance ? null
+        : <button type="button" className="sa-textlink" onClick={() => jumpTo('sa-acceptance')}>
+          {pt(t, acceptanceView.state === 'pending' ? 'detail.acceptLineJump' : 'detail.acceptLineView')}
+        </button>}
+    </span>
 
   // The header's right corner is the Ticket's control cluster: sign-off note, the one state-following primary action,
   // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.
-  const headActions = h(Fragment, null,
-    acceptanceNote,
-    primaryAction,
-    // AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only.
-    activeRun && !ticket.stopRequested
-      ? h(Button, { size: 'sm', variant: 'ghost', icon: 'stop', disabled: stopRun.busy, onClick: () => setPending('stop') },
-        pt(t, 'menu.stop'))
-      : null,
-    h(Menu, { label: pt(t, 'menu.label'), items: menuItems, align: 'end',
-      text: primaryAction ? undefined : pt(t, 'menu.label') }))
+  const headActions = <>
+    {acceptanceNote}
+    {primaryAction}
+    {/* AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only. */}
+    {activeRun && !ticket.stopRequested
+      ? <Button size="sm" variant="ghost" icon="stop" disabled={stopRun.busy} onClick={() => setPending('stop')}>
+        {pt(t, 'menu.stop')}
+      </Button>
+      : null}
+    <Menu label={pt(t, 'menu.label')} items={menuItems} align="end"
+      text={primaryAction ? undefined : pt(t, 'menu.label')} />
+  </>
 
-  return h(Fragment, null,
-    h(PageHead, { headRef, title: ticket.title ?? pt(t, 'ticket.loading'), actions: headActions,
-      meta: h(Fragment, null,
-        h(TicketStatusTag, { ticket }),
-        h('span', { className: 'sa-mono' }, liveShortId(ticket.id, 10)),
-        ticket.id ? h(CopyButton, { value: ticket.id, label: pt(t, 'detail.copyTicketId') }) : null,
-        ticket.updatedAt ? h(When, { at: ticket.updatedAt }) : null,
-        repoName ? h('span', { className: 'sa-hint' }, `${pt(t, 'repo.label')}：${repoName}`) : null) }),
-    error ? h(ErrorState, { error, onRetry: reload }) : null,
-    answerBanner,
-    interruptedBanner,
-    failureBanner,
-    gateBanner,
-    confirmDialog,
-    diffDialog,
-    h('nav', { className: 'sa-detail-nav', 'aria-label': pt(t, 'ticket.sectionNav') },
-      headStuck ? h('div', { className: 'sa-detail-context' },
-        h('span', { className: 'sa-detail-context-title', title: ticket.title ?? ticket.id },
-          ticket.title ?? pt(t, 'ticket.loading')),
-        h(TicketStatusTag, { ticket })) : null,
-      h('div', { className: 'sa-detail-jumps' }, jumps.map(jump => h('button', { key: jump.id, type: 'button', className: 'sa-detail-jump',
-        'data-active': activeJump === jump.id ? 'true' : undefined,
-        'aria-current': activeJump === jump.id ? 'location' : undefined,
-        onClick: () => jumpTo(jump.id) }, pt(t, jump.labelKey)))),
-      headStuck && primaryAction ? h('div', { className: 'sa-detail-context-action' }, primaryAction) : null),
+  return <>
+    <PageHead headRef={headRef} title={ticket.title ?? pt(t, 'ticket.loading')} actions={headActions}
+      meta={<>
+        <TicketStatusTag ticket={ticket} />
+        <span className="sa-mono">{liveShortId(ticket.id, 10)}</span>
+        {ticket.id ? <CopyButton value={ticket.id} label={pt(t, 'detail.copyTicketId')} /> : null}
+        {ticket.updatedAt ? <When at={ticket.updatedAt} /> : null}
+        {repoName ? <span className="sa-hint">{`${pt(t, 'repo.label')}：${repoName}`}</span> : null}
+      </>} />
+    {error ? <ErrorState error={error} onRetry={reload} /> : null}
+    {answerBanner}
+    {interruptedBanner}
+    {failureBanner}
+    {gateBanner}
+    {confirmDialog}
+    {diffDialog}
+    <nav className="sa-detail-nav" aria-label={pt(t, 'ticket.sectionNav')}>
+      {headStuck ? <div className="sa-detail-context">
+        <span className="sa-detail-context-title" title={ticket.title ?? ticket.id}>
+          {ticket.title ?? pt(t, 'ticket.loading')}
+        </span>
+        <TicketStatusTag ticket={ticket} />
+      </div> : null}
+      <div className="sa-detail-jumps">{jumps.map(jump => <button key={jump.id} type="button" className="sa-detail-jump"
+        data-active={activeJump === jump.id ? 'true' : undefined}
+        aria-current={activeJump === jump.id ? 'location' : undefined}
+        onClick={() => jumpTo(jump.id)}>{pt(t, jump.labelKey)}</button>)}</div>
+      {headStuck && primaryAction ? <div className="sa-detail-context-action">{primaryAction}</div> : null}
+    </nav>
 
-    ticket.workflow ? h(Section, { title: pt(t, 'wf.progress') },
-      // The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked".
-      h('p', null, ticketWorkflowStateLabel(t, ticket.workflow.status),
-        ticket.workflow.detail ? h('span', { className: 'sa-hint' }, ` · ${ticket.workflow.detail}`) : null),
-      ...(ticket.workflow.stages ?? []).map((stage, index) => h(Folded, {
-        key: index, summary: `${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}` },
-        h('pre', { style: { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' } },
-          stage.error ?? JSON.stringify(stage.result ?? {}, null, 2))))) : null,
+    {ticket.workflow ? <Section title={pt(t, 'wf.progress')}>
+      {/* The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked". */}
+      <p>{ticketWorkflowStateLabel(t, ticket.workflow.status)}
+        {ticket.workflow.detail ? <span className="sa-hint">{` · ${ticket.workflow.detail}`}</span> : null}</p>
+      {(ticket.workflow.stages ?? []).map((stage, index) => <Folded
+        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
+        <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {stage.error ?? JSON.stringify(stage.result ?? {}, null, 2)}
+        </pre>
+      </Folded>)}
+    </Section> : null}
 
-    // 1. What changed: repository, request body, changed files and the worker's summary — gates stay in their section.
-    h(Section, { id: 'sa-ticket-changes', title: pt(t, 'ticket.changes') },
-      repoRows.length
-        ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(KeyValues, { rows: repoRows }))
-        : null,
-      // On a wide panel the section splits the way it is read: the worker's summary (a 72ch reading column) on the
-      // left, and the evidence it talks about on the right — the changed files and the original request. On a narrow
-      // panel the grid collapses and the left column leads; the request stays folded so a long SQL paste cannot push
-      // the actual changes below the first screen (critique C24).
-      !changes.worker && !changes.files.length && !ticket.body
+    {/* 1. What changed: repository, request body, changed files and the worker's summary — gates stay in their section. */}
+    <Section id="sa-ticket-changes" title={pt(t, 'ticket.changes')}>
+      {repoRows.length
+        ? <div style={{ marginBottom: 'var(--sa-sp-8)' }}><KeyValues rows={repoRows} /></div>
+        : null}
+      {/* On a wide panel the section splits the way it is read: the worker's summary (a 72ch reading column) on the
+          left, and the evidence it talks about on the right — the changed files and the original request. On a narrow
+          panel the grid collapses and the left column leads; the request stays folded so a long SQL paste cannot push
+          the actual changes below the first screen (critique C24). */}
+      {!changes.worker && !changes.files.length && !ticket.body
         // Nothing to show at all: one sentence, not two empty columns.
-        ? h(Hint, null, pt(t, 'ticket.noChanges'))
-        : h('div', { className: 'sa-changes-grid' },
-        h('div', { className: 'sa-changes-main' },
-          h('p', { className: 'sa-hint' },
-            changes.workerRunId ? pt(t, 'ticket.workerSummaryRun', { run: liveShortId(changes.workerRunId, 10) })
-              : pt(t, 'ticket.workerSummary')),
-          changes.worker
-            ? h(MarkdownLite, { text: String(changes.worker) })
-            : h(Hint, null, pt(t, 'ticket.noChanges'))),
-        h('div', { className: 'sa-changes-side' },
-          h('div', { className: 'sa-actions' },
-            h('span', { className: 'sa-hint' }, pt(t, 'ticket.changedFiles')),
-            h('span', { className: 'sa-count', 'data-empty': changes.files.length === 0 ? 'true' : undefined }, String(changes.files.length))),
-          changes.files.length
-            ? h(Fragment, null,
-              // Each file name is the entry point to its own patch (only available while the worktree exists).
-              h('ul', { id: 'sa-changed-files', className: 'sa-list' }, (filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
-                .map((file, index) => h('li', { key: index, className: 'sa-row' },
-                  h('button', { type: 'button', className: 'sa-file-diff',
-                    title: pt(t, 'ticket.diffOpenFile', { path: file }),
-                    onClick: () => openDiff(file) },
-                  h(Icon, { name: 'diff', size: 13 }), h('span', { className: 'sa-mono' }, file))))),
-              changes.files.length > CHANGES_FILES_RECENT
-                ? h('div', { className: 'sa-actions' },
-                  h(Button, { variant: 'ghost', size: 'sm', icon: filesExpanded ? 'chevron-up' : 'chevron-down',
-                    'aria-expanded': filesExpanded, 'aria-controls': 'sa-changed-files',
-                    onClick: () => setFilesExpanded(value => !value) },
-                  pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })))
-                : null)
-            : h(Hint, null, pt(t, 'ticket.noChangedFiles')),
-          ticket.body
-            ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
-              h(Folded, { summary: pt(t, 'ticket.request') }, h(MarkdownLite, { text: ticket.body })))
-            : null,
-          h('div', { className: 'sa-revision', style: { marginTop: 'var(--sa-sp-8)' } },
-            h('div', { className: 'sa-actions' },
-              h('label', { htmlFor: 'sa-revision-input', className: 'sa-hint' }, pt(t, 'ticket.revisionTitle'))),
-            revisionBlocked
-              ? h(Hint, null, pt(t, revisionBlocked === 'answer' ? 'ticket.revisionAwaitingAnswer'
-                : revisionBlocked === 'working' ? 'ticket.revisionWorking' : 'ticket.revisionEnded'))
-              : h(Fragment, null,
-                h('textarea', { id: 'sa-revision-input', name: 'revision', autoComplete: 'off',
-                  className: 'sa-textarea sa-revision-input', rows: 4, value: revisionText,
-                  placeholder: pt(t, 'ticket.revisionPlaceholder'),
-                  'aria-invalid': revisionError ? true : undefined,
-                  disabled: revision.busy,
-                  onChange: event => { setRevisionText(event.target.value); setRevisionError(false) } }),
-                revisionError ? h('p', { className: 'sa-error', role: 'alert' }, pt(t, 'ticket.revisionRequired')) : null,
-                h('div', { className: 'sa-actions' },
-                  // Clickable while empty, so the click gets the inline reason instead of a dead disabled button (audit P3).
-                  h(Button, { variant: 'primary', size: 'sm', icon: 'play',
-                    disabled: revision.busy,
-                    onClick: () => { void revision.run() } }, pt(t, 'ticket.revisionSubmit'))),
-                h(Hint, null, pt(t, 'ticket.revisionHint'))),
-            revisions.length
-              ? h('div', { style: { marginTop: 'var(--sa-sp-8)' } },
-                h(Folded, { summary: pt(t, 'ticket.revisionHistory', { count: revisions.length }) },
-                  h('ul', { className: 'sa-list' }, revisions.map((entry, index) => h('li',
-                    { key: entry.id ?? entry.at ?? index, className: 'sa-row' },
-                    h('div', { className: 'sa-row-main' },
-                      entry.at ? h('div', { className: 'sa-row-meta' }, h(TicketStamp, { at: entry.at })) : null,
-                      h('p', { style: { margin: 0, whiteSpace: 'pre-wrap' } }, String(entry.text ?? ''))))))))
-              : null)))),
+        ? <Hint>{pt(t, 'ticket.noChanges')}</Hint>
+        : <div className="sa-changes-grid">
+          <div className="sa-changes-main">
+            <p className="sa-hint">
+              {changes.workerRunId ? pt(t, 'ticket.workerSummaryRun', { run: liveShortId(changes.workerRunId, 10) })
+                : pt(t, 'ticket.workerSummary')}
+            </p>
+            {changes.worker
+              ? <MarkdownLite text={String(changes.worker)} />
+              : <Hint>{pt(t, 'ticket.noChanges')}</Hint>}
+          </div>
+          <div className="sa-changes-side">
+            <div className="sa-actions">
+              <span className="sa-hint">{pt(t, 'ticket.changedFiles')}</span>
+              <span className="sa-count" data-empty={changes.files.length === 0 ? 'true' : undefined}>{String(changes.files.length)}</span>
+            </div>
+            {changes.files.length
+              ? <>
+                {/* Each file name is the entry point to its own patch (only available while the worktree exists). */}
+                <ul id="sa-changed-files" className="sa-list">
+                  {(filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
+                    .map((file, index) => <li key={index} className="sa-row">
+                      <button type="button" className="sa-file-diff"
+                        title={pt(t, 'ticket.diffOpenFile', { path: file })}
+                        onClick={() => openDiff(file)}>
+                        <Icon name="diff" size={13} /><span className="sa-mono">{file}</span>
+                      </button>
+                    </li>)}
+                </ul>
+                {changes.files.length > CHANGES_FILES_RECENT
+                  ? <div className="sa-actions">
+                    <Button variant="ghost" size="sm" icon={filesExpanded ? 'chevron-up' : 'chevron-down'}
+                      aria-expanded={filesExpanded} aria-controls="sa-changed-files"
+                      onClick={() => setFilesExpanded(value => !value)}>
+                      {pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })}
+                    </Button>
+                  </div>
+                  : null}
+              </>
+              : <Hint>{pt(t, 'ticket.noChangedFiles')}</Hint>}
+            {ticket.body
+              ? <div style={{ marginTop: 'var(--sa-sp-8)' }}>
+                <Folded summary={pt(t, 'ticket.request')}><MarkdownLite text={ticket.body} /></Folded>
+              </div>
+              : null}
+            <div className="sa-revision" style={{ marginTop: 'var(--sa-sp-8)' }}>
+              <div className="sa-actions">
+                <label htmlFor="sa-revision-input" className="sa-hint">{pt(t, 'ticket.revisionTitle')}</label>
+              </div>
+              {revisionBlocked
+                ? <Hint>{pt(t, revisionBlocked === 'answer' ? 'ticket.revisionAwaitingAnswer'
+                  : revisionBlocked === 'working' ? 'ticket.revisionWorking' : 'ticket.revisionEnded')}</Hint>
+                : <>
+                  <textarea id="sa-revision-input" name="revision" autoComplete="off"
+                    className="sa-textarea sa-revision-input" rows={4} value={revisionText}
+                    placeholder={pt(t, 'ticket.revisionPlaceholder')}
+                    aria-invalid={revisionError ? true : undefined}
+                    disabled={revision.busy}
+                    onChange={event => { setRevisionText(event.target.value); setRevisionError(false) }} />
+                  {revisionError ? <p className="sa-error" role="alert">{pt(t, 'ticket.revisionRequired')}</p> : null}
+                  <div className="sa-actions">
+                    {/* Clickable while empty, so the click gets the inline reason instead of a dead disabled button (audit P3). */}
+                    <Button variant="primary" size="sm" icon="play"
+                      disabled={revision.busy}
+                      onClick={() => { void revision.run() }}>{pt(t, 'ticket.revisionSubmit')}</Button>
+                  </div>
+                  <Hint>{pt(t, 'ticket.revisionHint')}</Hint>
+                </>}
+              {revisions.length
+                ? <div style={{ marginTop: 'var(--sa-sp-8)' }}>
+                  <Folded summary={pt(t, 'ticket.revisionHistory', { count: revisions.length })}>
+                    <ul className="sa-list">{revisions.map((entry, index) => <li
+                      key={entry.id ?? entry.at ?? index} className="sa-row">
+                      <div className="sa-row-main">
+                        {entry.at ? <div className="sa-row-meta"><TicketStamp at={entry.at} /></div> : null}
+                        <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{String(entry.text ?? '')}</p>
+                      </div>
+                    </li>)}</ul>
+                  </Folded>
+                </div>
+                : null}
+            </div>
+          </div>
+        </div>}
+    </Section>
 
-    // 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
-    //    tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen).
-    h(Section, { id: 'sa-acceptance', title: pt(t, 'ticket.acceptCard') },
-      // AC-08/09: durable evidence lives next to (not inside) the acceptance record.
-      h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(DeliveryEvidenceCard, { data: evidence.data, id, loading: evidence.loading, error: evidence.error, onRetry: evidence.reload })),
-      // P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them.
-      acceptanceRecord
-        ? h('div', { style: { marginBottom: 'var(--sa-sp-8)' } }, h(AcceptanceRecordCard, { record: acceptanceRecord }))
-        : null,
-      autoVerifyLimit ? h(Hint, null, pt(t, 'ticket.autoVerifyLimit')) : null,
-      hasAcceptanceEvidence
-        ? h(Fragment, null,
-          h('div', { className: 'sa-card-grid', style: { marginBottom: 'var(--sa-sp-8)' } },
-            h(MergeRequestCard, { ticket }), h(UatCard, { ticket })),
-          h('div', { className: 'sa-actions', style: { marginBottom: 'var(--sa-sp-8)' } },
-            uatUrl ? h(ExternalLink, { href: uatUrl }, pt(t, 'ticket.openUat'))
-              : manualVerify ? h(Hint, null, pt(t, 'ticket.manualVerifyHint'))
-              : h(Hint, null, pt(t, 'ticket.uatOpenHint'))))
-        : h(Hint, null, pt(t, 'ticket.acceptEmpty')),
-      accepted
-        ? h(Fragment, null,
-          ticket.links?.cleanup
-            ? h(Hint, null, ticket.links.cleanup.failed
+    {/* 2. Acceptance: MR/UAT evidence plus the human sign-off actions. The acceptance state is already the PageHead
+        tag, so this card only repeats the sign-off time once (critique #5: one "已验收" per screen). */}
+    <Section id="sa-acceptance" title={pt(t, 'ticket.acceptCard')}>
+      {/* AC-08/09: durable evidence lives next to (not inside) the acceptance record. */}
+      <div style={{ marginBottom: 'var(--sa-sp-8)' }}>
+        <DeliveryEvidenceCard data={evidence.data} id={id} loading={evidence.loading} error={evidence.error} onRetry={evidence.reload} />
+      </div>
+      {/* P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them. */}
+      {acceptanceRecord
+        ? <div style={{ marginBottom: 'var(--sa-sp-8)' }}><AcceptanceRecordCard record={acceptanceRecord} /></div>
+        : null}
+      {autoVerifyLimit ? <Hint>{pt(t, 'ticket.autoVerifyLimit')}</Hint> : null}
+      {hasAcceptanceEvidence
+        ? <>
+          <div className="sa-card-grid" style={{ marginBottom: 'var(--sa-sp-8)' }}>
+            <MergeRequestCard ticket={ticket} /> <UatCard ticket={ticket} />
+          </div>
+          <div className="sa-actions" style={{ marginBottom: 'var(--sa-sp-8)' }}>
+            {uatUrl ? <ExternalLink href={uatUrl}>{pt(t, 'ticket.openUat')}</ExternalLink>
+              : manualVerify ? <Hint>{pt(t, 'ticket.manualVerifyHint')}</Hint>
+              : <Hint>{pt(t, 'ticket.uatOpenHint')}</Hint>}
+          </div>
+        </>
+        : <Hint>{pt(t, 'ticket.acceptEmpty')}</Hint>}
+      {accepted
+        ? <>
+          {ticket.links?.cleanup
+            ? <Hint>{ticket.links.cleanup.failed
               ? pt(t, 'detail.acceptCleanupFailed', { reason: ticket.links.cleanup.failed })
-              : pt(t, 'detail.acceptCleanupDone'))
-            : null)
+              : pt(t, 'detail.acceptCleanupDone')}</Hint>
+            : null}
+        </>
         : acceptance?.ok === false
-          ? h(Hint, null, pt(t, 'ticket.acceptRejectedHint'))
-          : null,
-      canAccept && !accepted
-        ? h(Fragment, null,
-          h(Hint, null, pt(t, acceptMode === 'merged' ? 'ticket.acceptHintMerged' : 'ticket.acceptHint')),
-          // P1-3: rejection intents are optional; they ride on the accept POST only when at least one is ticked.
-          h('div', { className: 'sa-actions', style: { flexWrap: 'wrap', alignItems: 'center' } },
-            h('span', { className: 'sa-hint' }, pt(t, 'detail.acceptIntentsHint')),
-            ...ACCEPTANCE_INTENTS.map(intent => h('label', { key: intent,
-              style: { display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-4)', fontSize: 'var(--sa-fs-meta)' } },
-            h('input', { type: 'checkbox', checked: rejectIntents.includes(intent),
-              onChange: event => setRejectIntents(previous => event.target.checked
-                ? [...previous, intent] : previous.filter(item => item !== intent)) }),
-            h('span', null, pt(t, ACCEPTANCE_INTENT_KEYS[intent]))))),
-          h('div', { className: 'sa-actions' },
-            h(ConfirmButton, { label: pt(t, 'ticket.acceptPass'), title: pt(t, 'ticket.acceptPassTitle'),
-              message: pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id }),
-              confirmLabel: pt(t, 'detail.confirmAcceptPass'),
-              variant: 'primary', icon: 'decision', onConfirm: async () => { await acceptPass.run() } }),
-            h(ConfirmButton, { label: pt(t, 'ticket.acceptFail'), title: pt(t, 'ticket.acceptFailTitle'),
-              message: pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id }),
-              confirmLabel: pt(t, 'detail.confirmAcceptFail'),
-              variant: 'outline', icon: 'blocked', onConfirm: async () => { await acceptFail.run(rejectIntents) } })))
+          ? <Hint>{pt(t, 'ticket.acceptRejectedHint')}</Hint>
+          : null}
+      {canAccept && !accepted
+        ? <>
+          <Hint>{pt(t, acceptMode === 'merged' ? 'ticket.acceptHintMerged' : 'ticket.acceptHint')}</Hint>
+          {/* P1-3: rejection intents are optional; they ride on the accept POST only when at least one is ticked. */}
+          <div className="sa-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="sa-hint">{pt(t, 'detail.acceptIntentsHint')}</span>
+            {ACCEPTANCE_INTENTS.map(intent => <label key={intent}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-4)', fontSize: 'var(--sa-fs-meta)' }}>
+              <input type="checkbox" checked={rejectIntents.includes(intent)}
+                onChange={event => setRejectIntents(previous => event.target.checked
+                  ? [...previous, intent] : previous.filter(item => item !== intent))} />
+              <span>{pt(t, ACCEPTANCE_INTENT_KEYS[intent])}</span>
+            </label>)}
+          </div>
+          <div className="sa-actions">
+            <ConfirmButton label={pt(t, 'ticket.acceptPass')} title={pt(t, 'ticket.acceptPassTitle')}
+              message={pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id })}
+              confirmLabel={pt(t, 'detail.confirmAcceptPass')}
+              variant="primary" icon="decision" onConfirm={async () => { await acceptPass.run() }} />
+            <ConfirmButton label={pt(t, 'ticket.acceptFail')} title={pt(t, 'ticket.acceptFailTitle')}
+              message={pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id })}
+              confirmLabel={pt(t, 'detail.confirmAcceptFail')}
+              variant="outline" icon="blocked" onConfirm={async () => { await acceptFail.run(rejectIntents) }} />
+          </div>
+        </>
         : !canAccept && !accepted && hasAcceptanceEvidence
           // Without evidence the empty-state sentence above already says what unlocks acceptance.
-          ? h(Hint, null, pt(t, acceptMode === 'merged' ? 'ticket.acceptOnlyMerged' : 'ticket.acceptOnlyDeployed'))
-          : null),
+          ? <Hint>{pt(t, acceptMode === 'merged' ? 'ticket.acceptOnlyMerged' : 'ticket.acceptOnlyDeployed')}</Hint>
+          : null}
+    </Section>
 
-    // P2-1: the Ticket's own automation config (a Ticket without config renders the card in the off state so the
-    // operator can opt in; dismissed/closed Tickets do not offer scheduling).
-    ['dismissed', 'closed'].includes(ticket.status) ? null : h(AutomationCard, { ticket, onSaved: refreshAll }),
+    {/* P2-1: the Ticket's own automation config (a Ticket without config renders the card in the off state so the
+        operator can opt in; dismissed/closed Tickets do not offer scheduling). */}
+    {['dismissed', 'closed'].includes(ticket.status) ? null : <AutomationCard ticket={ticket} onSaved={refreshAll} />}
 
-    // 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default).
-    h(Section, { id: 'sa-ticket-stages', title: pt(t, 'ticket.stages') }, h(StageRail, { ticket: { ...ticket, runs }, detail: true })),
-    hasGateResults
-      ? h(Section, { id: 'sa-ticket-gates', title: pt(t, 'ticket.gates') },
-        h(TicketGateResults, { ticket: { ...ticket, runs }, record: acceptanceRecord }))
-      : null,
-    h(Section, { id: 'sa-ticket-runs', title: pt(t, 'ticket.runs'), count: runs.length },
-      runs.length ? h(TicketRunRows, { runs }) : h(Hint, null, pt(t, 'ticket.noRuns'))),
-    // P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
-    // looking timeline above it (T16).
-    h(Section, { id: 'sa-ticket-timeline', title: pt(t, 'ticket.timeline'), count: events.length },
-      activities.length
-        ? h(Folded, { summary: pt(t, 'ticket.activityFold', { count: activities.length }) },
-          h(TicketActivities, { activities }))
-        : null,
-      h(TicketTimeline, { ticket, runs })),
+    {/* 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default). */}
+    <Section id="sa-ticket-stages" title={pt(t, 'ticket.stages')}><StageRail ticket={{ ...ticket, runs }} detail /></Section>
+    {hasGateResults
+      ? <Section id="sa-ticket-gates" title={pt(t, 'ticket.gates')}>
+        <TicketGateResults ticket={{ ...ticket, runs }} record={acceptanceRecord} />
+      </Section>
+      : null}
+    <Section id="sa-ticket-runs" title={pt(t, 'ticket.runs')} count={runs.length}>
+      {runs.length ? <TicketRunRows runs={runs} /> : <Hint>{pt(t, 'ticket.noRuns')}</Hint>}
+    </Section>
+    {/* P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
+        looking timeline above it (T16). */}
+    <Section id="sa-ticket-timeline" title={pt(t, 'ticket.timeline')} count={events.length}>
+      {activities.length
+        ? <Folded summary={pt(t, 'ticket.activityFold', { count: activities.length })}>
+          <TicketActivities activities={activities} />
+        </Folded>
+        : null}
+      <TicketTimeline ticket={ticket} runs={runs} />
+    </Section>
 
-    // Secondary evidence and the raw escape hatch stay at the bottom.
-    h(Folded, { summary: pt(t, 'ticket.auth') },
-      h(KeyValues, { rows: authRows }),
-      rules.length ? h(Folded, { summary: pt(t, 'thread.rulesDetail') }, h(ThreadRuleRows, { rules })) : null),
-    h(RawValue, { label: pt(t, 'ticket.raw'), json: data }))
+    {/* Secondary evidence and the raw escape hatch stay at the bottom. */}
+    <Folded summary={pt(t, 'ticket.auth')}>
+      <KeyValues rows={authRows} />
+      {rules.length ? <Folded summary={pt(t, 'thread.rulesDetail')}><ThreadRuleRows rules={rules} /></Folded> : null}
+    </Folded>
+    <RawValue label={pt(t, 'ticket.raw')} json={data} />
+  </>
 }

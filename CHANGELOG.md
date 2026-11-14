@@ -1,5 +1,130 @@
 # Changelog
 
+## [0.6.0] — 2026-11-14
+
+### 变更
+- **P2 完成**：客户端六个片段全部从 `h(...)` 迁移到 JSX（issue #34）。0.5.2–0.5.7 六个补丁版本合起来是这一步：
+  `10-controls.js`、`20-widgets.js`、`30-shell.js`、`34-live-ui.js`、`58-ticket-detail.js`、`60-settings.js`，
+  共 6,657 行、约 2,000 处调用点，产物 485,801 → 484,636 字节，产物契约与 `window.__ModuleLoader__.load` 工厂不变。
+- 构建层先切成 `loader: 'jsx'` + `jsxFactory: 'h'`（只换 loader 时产物逐字节相同），之后每个文件一个 PR 单独迁移，
+  diff 里只有写法变化；`scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 同步改成先用 esbuild 编译再求值。
+- `60-settings.js` 里十二个重复的仓库字段收敛成 `repoInputField(key, labelKey, { required, placeholder, hintKey })`，
+  动态标签统一改成大写变量（`const Dot = detail ? 'span' : 'div'`）。
+- 阶段意义：从此 `client/src` 可以按文件读写 JSX，P3（issue #35，真正的 ESM 模块边界）才有动手的前提。
+
+### 验证
+- 每个补丁版本的 PR 都跑过完整闸门：`node --check client/index.js`、`build-client --check`（22 片段）、
+  `check-keys`、Host 555 pass、`render-check` 194 checks / 0 failed / 0 skipped、`isolated-verify` PASS（console errors 0）；
+  CI 的 `test (22)` / `test (24)` 两个矩阵全绿后才 merge。
+- 真实浏览器（隔离 DSH 实例 + `test/fixtures/live.json` 夹具状态）验过：概览/设置各组、执行列表、工单详情
+  （改动内容/验收/自动化/阶段链路/运行记录/时间线）、添加仓库对话框（13 字段 + 必填校验）、编辑仓库对话框、
+  配置示例对话框，均无控制台报错。
+
+## [0.5.7] — 2026-11-14
+
+### 变更
+- `client/src/60-settings.js`（2306 行，420 处 `h(...)`）从 `h(...)` 迁移到 JSX（P2 第六步，issue #34）：
+  `SettingsSwitchRow`、`SettingsStatusLine`、`WorkerCapabilityCard`、`ReposCard`、`settingsHeading`、`saveBarFor`、
+  `reloadButton`、`renderRepos`、`renderOctoToken`、`renderGroupPicker`、`renderSenders`、`renderSource`、`renderEval`、
+  `renderReview`、`renderRun`、`renderWorker`、`renderWrite`、`renderPrompt`、`settingsNavButton`、`repoFieldError`，
+  以及四个对话框（变更历史、编辑仓库、添加仓库、配置示例）与最终返回树。
+- 添加仓库的表单原本十二个字段各写一遍，抽成 `repoInputField(key, labelKey, { required, placeholder, hintKey })`
+  一个 helper；编辑仓库的差异表 `repoEditRows`、闸门编辑器、各组的保存/丢弃/重载逻辑保持不变。
+- 产物 486,236 → 484,636 字节（−1,600），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：958 literal keys / 513 shared / 1359 page-local，OK（数字从 967 降到 958，是因为
+  九个字段标签改成通过 `repoInputField` 的 `labelKey` 参数传入，不再出现在 `pt(t, '…')` 字面量位置；键本身没变）。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+- 真实浏览器（隔离实例 + 夹具状态）：设置页各组切换、添加仓库对话框（13 个字段、必填校验报「请填写此项。」并聚焦
+  `sa-repo-field-id`）、编辑仓库对话框（12 个输入、闸门编辑）、配置示例对话框（`pre` 360 字）均正常渲染，无控制台报错。
+  截图 `verification/browser-run-settings-0.5.7.png`、`verification/browser-run-add-repo-0.5.7.png`。
+
+## [0.5.6] — 2026-11-14
+
+### 变更
+- `client/src/58-ticket-detail.js`（1951 行，403 处 `h(...)`）从 `h(...)` 迁移到 JSX（P2 第五步，issue #34）：
+  `TicketStamp`、`TicketTimeline`、`TicketLazyFolded`、`RunTrace`、`RunHandoff`、`RunReport`、`TicketGateResults`、
+  `AcceptanceRecordCard`、`TicketActivities`、`TicketRunRows`、`DiffBody`、`DiffCard`、`AutomationCard`、
+  `DeliveryEvidenceCard` 以及 `TicketDetail` 整体（primaryAction 链、确认/差异对话框、四条 banner、四个 section、返回树）。
+- 只改写法：字典、`TICKET_STEP_KEYS`、纯函数（`ticketEvents`、`changesOf`、`gateOnFailOf`、`failureHint`、
+  `ticketVisibleJumps` 等）与交互逻辑不变；条件渲染仍用同一组判定。
+- 产物 486,055 → 486,236 字节（+181），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
+## [0.5.5] — 2026-11-14
+
+### 变更
+- `client/src/34-live-ui.js` 从 `h(...)` 迁移到 JSX（P2 第四步，issue #34）：`AutomationBar`、`TicketRow`、
+  `TicketList`、`TicketGroups`、`ManualTicketForm`、`FunnelBar`、`ExecutorLoad`、`GateSummary`、`StageRail`、
+  `MergeRequestCard`、`UatCard`、`ticketEvidence`、`rowAcceptanceChip`、`automationChip`、`PilotStatusTag`、
+  `TicketStatusTag` 以及三个过渡 shim 只改写法，输出逐节点等价。
+- `StageRail` 的 `span`/`div` 二选一改成大写变量 `const Dot = detail ? 'span' : 'div'`；`TicketGroups` 的
+  `className` 分支与 `TicketList` 的常驻 live region 保持原有开关逻辑。
+- 产物 485,946 → 486,055 字节（+109），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
+## [0.5.4] — 2026-11-14
+
+### 变更
+- `client/src/30-shell.js` 从 `h(...)` 迁移到 JSX（P2 第三步，issue #34）：`GlobalStatus`、`GlobalSearch`、
+  `Header`、`Pages`、`PanelBoundary`、`PanelShell`、`App` 只改写法。`PanelBoundary` 仍是 class 组件（它要
+  `getDerivedStateFromError`），`Back`/`globalHealth`/`pageView` 等纯函数不动。
+- 组件型 props 直接用元素：`icon={<Icon name="search" size={16} />}`、`<PanelState.Provider value={model}>`，
+  与原来的 `h(Component, props, children)` 同构。
+- 产物 485,926 → 485,946 字节（+20），构建层与契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0。
+
+## [0.5.3] — 2026-11-14
+
+### 变更
+- `client/src/20-widgets.js` 从 `h(...)` 迁移到 JSX（P2 第二步，issue #34）：`Section`、`KeyValues`、
+  `Inlines`、`MarkdownLite`、`ClampText`、`ConfirmButton`、`ExternalLink`、`PageHead`、`EmptyState`、
+  `ErrorState`、`Skeleton`、`SaveBar`、`RawValue`、`Folded`、`GlossaryButton`、`GlossaryModal` 只改写法，
+  输出保持逐节点等价：同样的 class 名、`data-*`、ARIA 属性与文本。
+- Markdown 标题与列表改用动态标签变量（`const Heading = \`h${...}\`、`const List = block.ordered ? 'ol' : 'ul'`），
+  JSX 里的组件名保持大写以免被当成字符串标签。
+- 产物：`client/index.js` 485,818 → 485,926 字节（+108，来自 JSX 编译后的辅助代码），契约不变。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0，真实 DSH 里六个页签都在。
+
+## [0.5.2] — 2026-11-14
+
+### 变更
+- 客户端构建层接受 JSX：esbuild 以 `loader: 'jsx'` + `jsxFactory: 'h'` 编译拼接后的片段。产物契约不变——
+  同一 esbuild 版本下，仅切换 loader 时 `client/index.js` 逐字节相同（485,801 字节）。
+- `client/src/10-controls.js` 从 `h(...)` 迁移到 JSX（P2 第一步，issue #34）：markup、class 名、ARIA 属性、
+  焦点行为与无障碍名全部保持原样，只改写法。
+- `scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 用同一套 esbuild 参数编译片段后再求值，否则 JSX
+  片段在 `new Function` 里会直接语法错误。
+- 文档：`CONTRIBUTING.md` 与 `README.md` 说明片段可写 JSX 或 `h(...)`，可以按文件逐个迁移。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段，485,818 字节）。
+- `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+
 ## [0.5.1] — 2026-11-14
 
 ### 修复
