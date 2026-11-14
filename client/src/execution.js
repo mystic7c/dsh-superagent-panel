@@ -7,17 +7,17 @@
    renders the full detail instead of the list. Data: GET engine/tickets (host increments, contract §4) plus the shared
    status model for the executor load and the paused flag. */
 
-import { Icon } from "./00-util.js"
-import { when } from "./06-i18n.js"
-import { Button, IconButton, InfoTip, Menu, Modal, SegmentedControl, Switch, Tag } from "./10-controls.js"
-import { same, useAction, usePanel, usePanelData } from "./15-api.js"
-import { ConfirmButton, EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { useLiveResource } from "./32-live-model.js"
-import { setupStateOf } from "./33-setup.js"
-import { AutomationBar, ExecutorLoad, ManualTicketForm, TICKET_GROUP_ORDER, TicketGroups, TicketList, failureLabel, panelRepoOf, runTriggerLabel, ticketStatus } from "./34-live-ui.js"
-import { TicketDetail } from "./58-ticket-detail.js"
-import { Fragment, React, h, useCallback, useEffect, useState } from "./00-react.js"
+import { Icon } from "./util.js"
+import { when } from "./i18n.js"
+import { Button, IconButton, InfoTip, Menu, Modal, SegmentedControl, Switch, Tag } from "./controls.js"
+import { same, useAction, usePanel, usePanelData } from "./api.js"
+import { ConfirmButton, EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { useLiveResource } from "./live-model.js"
+import { setupStateOf } from "./setup.js"
+import { AutomationBar, ExecutorLoad, ManualTicketForm, TICKET_GROUP_ORDER, TicketGroups, TicketList, failureLabel, panelRepoOf, runTriggerLabel, ticketStatus } from "./live-ui.js"
+import { TicketDetail } from "./ticket-detail.js"
+import { Fragment, React, h, useCallback, useEffect, useState } from "./react.js"
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
 // `dismissed` is not a lifecycle stage: it is the cleanup slice of the finished history (a person dropped the Ticket),
 // kept as its own stage because "what did we abandon after a failed run" is a question the Overview points here with.
@@ -134,7 +134,7 @@ export function ExecutionQueuePage({ route }) {
   }, [route?.stage])
   // The stage filter is in-view state, so mirror it into the route object the shell already keeps: back/forward then
   // restores the visible slice instead of resetting it (A5). Replacing the entry keeps filtering out of the history
-  // stack. (A reload still narrows the route to page/id in 25-router.js, so it falls back to the whole queue.)
+  // stack. (A reload still narrows the route to page/id in router.js, so it falls back to the whole queue.)
   const chooseStage = value => {
     setStage(value)
     navigate({ page: 'execution', ...(value === 'all' ? {} : { stage: value }) }, true)

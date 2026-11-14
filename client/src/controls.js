@@ -4,10 +4,10 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines), so files can migrate one at a time. */
 
-import { Icon, cx } from "./00-util.js"
-import { when } from "./06-i18n.js"
-import { caller, same, stay, usePanel } from "./15-api.js"
-import { React, h, useEffect, useLayoutEffect, useRef, useState } from "./00-react.js"
+import { Icon, cx } from "./util.js"
+import { when } from "./i18n.js"
+import { caller, same, stay, usePanel } from "./api.js"
+import { React, h, useEffect, useLayoutEffect, useRef, useState } from "./react.js"
 /** Six shape-coded states (contract §3.4). Color never carries the state alone: every state also has a shape. */
 export const STATUS_STATES = ['done', 'ongoing', 'warning', 'error', 'idle', 'queued']
 

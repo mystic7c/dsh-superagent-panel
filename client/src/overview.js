@@ -6,18 +6,18 @@
    stay shared with the other pages (34-live-ui). Contract: spec/impl-contract-2026-11.md §6.1; round-2 critique:
    spec/…/.impeccable/critique/2026-11-05T10-56-46Z__superagent-panel.md (O1–O7). */
 
-import { Icon, hhmm } from "./00-util.js"
-import { when } from "./06-i18n.js"
-import { Button, DisclosureRow, StatusIcon, StatusText, Tag } from "./10-controls.js"
-import { same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
-import { ClampText, ErrorState, Folded, Hint, KeyValues, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { PANEL_LANG, globalHealth } from "./30-shell.js"
-import { useLiveResource } from "./32-live-model.js"
-import { SetupBanner, SetupChecklist, setupStateOf } from "./33-setup.js"
-import { AutomationBar, FunnelBar, TicketList, TicketRow, localizedText, needsHuman, needsYouCount, problemsOf, ticketStatus } from "./34-live-ui.js"
-import { TicketDetail, ticketStepLabel } from "./58-ticket-detail.js"
-import { Fragment, React, h, useEffect, useState } from "./00-react.js"
+import { Icon, hhmm } from "./util.js"
+import { when } from "./i18n.js"
+import { Button, DisclosureRow, StatusIcon, StatusText, Tag } from "./controls.js"
+import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
+import { ClampText, ErrorState, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { PANEL_LANG, globalHealth } from "./shell.js"
+import { useLiveResource } from "./live-model.js"
+import { SetupBanner, SetupChecklist, setupStateOf } from "./setup.js"
+import { AutomationBar, FunnelBar, TicketList, TicketRow, localizedText, needsHuman, needsYouCount, problemsOf, ticketStatus } from "./live-ui.js"
+import { TicketDetail, ticketStepLabel } from "./ticket-detail.js"
+import { Fragment, React, h, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'ov.needsYou': ['需要你处理', 'Needs you'],
   'ov.inboxError': ['待办列表加载失败，概览计数可能滞后；可重试。', 'The inbox failed to load; the desk count may be stale. Retry.'],

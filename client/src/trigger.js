@@ -1,19 +1,19 @@
 /* LiveTriggerPage (contract §6.3): a filterable Thread list beside the selected Thread's detail. A wide page shows
    both panes; at ≤960 px of page width the page turns into one column and whether the route carries a thread key
-   decides which pane is visible (the detail brings its own back button). The detail is 48-thread-detail.js's
+   decides which pane is visible (the detail brings its own back button). The detail is thread-detail.js's
    ThreadDetail — facts → evaluation (the latest decision lives there now) plus the message timeline — so this page only
    owns filtering, selection and the pane switch. */
 
-import { API, Icon } from "./00-util.js"
-import { when } from "./06-i18n.js"
-import { Button, IconButton, Input, SegmentedControl, StatusText } from "./10-controls.js"
-import { same, usePanel, usePanelData } from "./15-api.js"
-import { EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { remember } from "./25-router.js"
-import { useLiveResource } from "./32-live-model.js"
-import { ThreadDetail } from "./48-thread-detail.js"
-import { React, h, useEffect, useRef, useState } from "./00-react.js"
+import { API, Icon } from "./util.js"
+import { when } from "./i18n.js"
+import { Button, IconButton, Input, SegmentedControl, StatusText } from "./controls.js"
+import { same, usePanel, usePanelData } from "./api.js"
+import { EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { remember } from "./router.js"
+import { useLiveResource } from "./live-model.js"
+import { ThreadDetail } from "./thread-detail.js"
+import { React, h, useEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'trg.title': ['线程', 'Threads'],
   'trg.filter': ['线程筛选', 'Thread filter'],
@@ -108,7 +108,7 @@ export function triggerViewportIsCompact() {
 
 /**
  * True while the page frame is ≤960 px: one column, and the route decides whether the list or the detail is shown.
- * 05-style.js already collapses `.sa-panes` with a CSS container query on `.sa-page`; this hook measures that same
+ * style.js already collapses `.sa-panes` with a CSS container query on `.sa-page`; this hook measures that same
  * element through a ResizeObserver so the pane switch and the CSS never disagree. `matchMedia` stays as the fallback
  * while the frame is not mounted yet (a deep link can render before the shell) or has no layout (jsdom/render-check).
  */

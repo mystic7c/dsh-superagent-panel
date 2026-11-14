@@ -2,10 +2,10 @@
    The live panel reads everything through the engine's own endpoints (32-live-model); the provider therefore
    only owns transport, routing helpers and the toast — it no longer polls a global `state` document. */
 
-import { API } from "./00-util.js"
-import { PANEL_CSS } from "./05-style.js"
-import { errorText } from "./06-i18n.js"
-import { React, createContext, h, useCallback, useContext, useEffect, useMemo, useRef, useState } from "./00-react.js"
+import { API } from "./util.js"
+import { PANEL_CSS } from "./style.js"
+import { errorText } from "./i18n.js"
+import { React, createContext, h, useCallback, useContext, useEffect, useMemo, useRef, useState } from "./react.js"
 export class ApiError extends Error {
   constructor(message, status, details = {}) { super(message); this.status = status; this.details = details }
   get issues() { return this.details.issues ?? [] }

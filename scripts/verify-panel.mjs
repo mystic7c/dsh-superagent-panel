@@ -337,7 +337,7 @@ async function commandGate() {
     .map((line, index) => ({ file, index: index + 1, line })).filter(entry => /t\('pilot[A-Z]/.test(entry.line)))
   push('no-t-pilot-keys', textPilotKeys.length === 0, textPilotKeys.map(hit => `${hit.file}:${hit.index}`).join(', ') || '0')
 
-  const css = readFileSync(join(srcDir, '05-style.js'), 'utf8')
+  const css = readFileSync(join(srcDir, 'style.js'), 'utf8')
   const literalFontSizes = [...new Set([...css.matchAll(/(?:^|[\s;])font-size:\s*([0-9.]+px)/g)].map(match => match[1]))]
   const fontTokens = [...new Set([...css.matchAll(/--sa-fs-[a-z]+:\s*([0-9.]+px)/g)].map(match => match[1]))].sort()
   const literalRadii = [...new Set([...css.matchAll(/(?:^|[\s;])border-radius:\s*([0-9.]+px)/g)].map(match => match[1]))]

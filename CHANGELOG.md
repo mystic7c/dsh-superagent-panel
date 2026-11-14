@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.8.0] — 2026-11-14
+
+### 变更
+- **客户端模块改成语义化文件名**：数字前缀只是拼接时代的加载顺序，P3 之后顺序已由 `client/src/index.js` 的
+  import 列表显式表达，因此 `git mv` 重命名 23 个文件——`00-react.js`→`react.js`、`00-util.js`→`util.js`、
+  `05-style.js`→`style.js`、`06-i18n.js`→`i18n.js`、`07-md.js`→`markdown.js`、`10-controls.js`→`controls.js`、
+  `15-api.js`→`api.js`、`20-widgets.js`→`widgets.js`、`21-localtext.js`→`localtext.js`、`25-router.js`→`router.js`、
+  `30-shell.js`→`shell.js`、`32-live-model.js`→`live-model.js`、`33-setup.js`→`setup.js`、`34-live-ui.js`→`live-ui.js`、
+  `35-overview.js`→`overview.js`、`40-source.js`→`source.js`、`45-trigger.js`→`trigger.js`、
+  `48-thread-detail.js`→`thread-detail.js`、`50-eval.js`→`eval.js`、`55-execution.js`→`execution.js`、
+  `58-ticket-detail.js`→`ticket-detail.js`、`60-settings.js`→`settings.js`、`90-apply.js`→`apply.js`；
+  同时更新 `index.js` 的 import 列表、`scripts/client-exports.mjs` 的映射与文档里的引用。
+  产物逐字节不变（481,039 字节，23 模块）。
+- **README 重写**：从 153 行的内部说明收缩成面向使用者的 88 行——一句话定位 + 截图、功能要点、安装（Release tarball
+  或本地 checkout）、快速开始、开发命令、文档索引；原来的逐页细节与配置/排障拆到 `docs/pages.md` 与
+  `docs/quickstart.md`，删掉原型仓库出身、GitFlow 沿革、内部自开发叙述等对外无意义的段落。
+- 新增 `docs/images/panel-overview.png`（概览页真机截图，1280×900）作为 README 首图。
+- `AGENTS.md`、`CONTRIBUTING.md`、`docs/*.md` 的交叉引用与"按数字顺序"的描述同步更新。
+
+### 验证
+- `node scripts/build-client.mjs --check`：23 模块，481,039 字节，逐字节一致。
+- `node --check client/index.js`；check-keys 958/513/1359；Host 555 pass / 0 fail。
+- `node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0，六个页签齐全。
+
 ## [0.7.0] — 2026-11-14
 
 ### 变更

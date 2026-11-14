@@ -2,10 +2,10 @@
    action set. Pages must never poll `engine/status` themselves — App owns exactly one model (30-shell) and hands
    it down through PanelState, so a 30s tick updates the header and every page together. */
 
-import { when } from "./06-i18n.js"
-import { Panel, PanelState, same, usePanel, usePoll } from "./15-api.js"
-import { App, Pages } from "./30-shell.js"
-import { React, h, useCallback, useMemo } from "./00-react.js"
+import { when } from "./i18n.js"
+import { Panel, PanelState, same, usePanel, usePoll } from "./api.js"
+import { App, Pages } from "./shell.js"
+import { React, h, useCallback, useMemo } from "./react.js"
 /** Actions over the live engine. Every page calls these instead of building its own fetch calls. */
 export function useEngineActions(call) {
   return useMemo(() => ({

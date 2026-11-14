@@ -3,18 +3,18 @@
    Pages must never translate a raw engine status themselves — they call ticketStatus/decisionKindView/dispositionView
    and render the returned label key through `pt`. */
 
-import { Icon, hhmmss, safeHttpUrl, shortId } from "./00-util.js"
-import { errorText, fullTime, translate, when } from "./06-i18n.js"
-import { Button, InfoTip, Input, Menu, Modal, Select, StatusIcon, StatusText, Tag } from "./10-controls.js"
-import { caller, same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
-import { ClampText, ConfirmButton, ExternalLink, Folded, Hint, KeyValues, Section, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { App, PANEL_LANG, Pages, globalHealth } from "./30-shell.js"
-import { ovCount } from "./35-overview.js"
-import { EXEC_STAGES } from "./55-execution.js"
-import { TicketStamp, ticketGateLabel } from "./58-ticket-detail.js"
-import { ROUTE_BACKENDS } from "./60-settings.js"
-import { Fragment, React, h, useCallback, useEffect, useState } from "./00-react.js"
+import { Icon, hhmmss, safeHttpUrl, shortId } from "./util.js"
+import { errorText, fullTime, translate, when } from "./i18n.js"
+import { Button, InfoTip, Input, Menu, Modal, Select, StatusIcon, StatusText, Tag } from "./controls.js"
+import { caller, same, stay, useAction, usePanel, usePanelData } from "./api.js"
+import { ClampText, ConfirmButton, ExternalLink, Folded, Hint, KeyValues, Section, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { App, PANEL_LANG, Pages, globalHealth } from "./shell.js"
+import { ovCount } from "./overview.js"
+import { EXEC_STAGES } from "./execution.js"
+import { TicketStamp, ticketGateLabel } from "./ticket-detail.js"
+import { ROUTE_BACKENDS } from "./settings.js"
+import { Fragment, React, h, useCallback, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   // ---- legacy dictionaries kept for `PilotStatusTag` compatibility (labels are Chinese; keys are unchanged) ----
   pilotPhase: { disabled: ['未启用', 'Disabled'], starting: ['启动中', 'Starting'], idle: ['空闲', 'Idle'],

@@ -1,8 +1,8 @@
 /* A small, safe Markdown subset for ticket bodies and messages: headings, lists, paragraphs, bold, inline code and
    http(s) links. Raw HTML is never interpreted; every string ends up as React text. */
 
-import { when } from "./06-i18n.js"
-import { React, h } from "./00-react.js"
+import { when } from "./i18n.js"
+import { React, h } from "./react.js"
 export const LINK_PATTERN = /(https?:\/\/[^\s<>()]+)/g
 export function linkify(text) {
   const parts = []
