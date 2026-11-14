@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.1] — 2026-11-14
+
+### 变更
+- 两份 2026-11 的评审文档标注状态：`docs/product-review-2026-11.md` 改为「历史输入」（六项改进已在
+  0.4.19–0.4.38 落地），`docs/panel-improvements-2026-11.md` 明确为仍然有效的行为契约。仓库公开后这两份
+  最容易让人误判「这些是待办」，先写清楚。
+
+### 验证
+- 只改 Markdown 与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0。
+
 ## [0.9.0] — 2026-11-14
 
 ### 新增
