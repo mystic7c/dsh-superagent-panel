@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.9.4] — 2026-11-14
+
+### 变更
+- 新增 `scripts/dev.mjs` 与 `npm run dev`：用 `dev` profile（软链到本工作树）起一个 DSH 实例并打印带 token 的 URL，
+  自动按 runtime CLI → app bundle → PATH 的顺序找 `dsh`，参数原样转发。
+- `AGENTS.md` 的「本机两种安装态」把开发态收成一个命令，并补充两条注意事项（dev 实例用临时
+  `DSH_SUPERAGENT_STATE_DIR`；全局 `~/.dsh/cordis.patch.yml` 的 MCP 条目也会加载，连不上只告警）。
+- `dev` profile 已补齐 bundles（`dsh-base` + `dsh-web-app` + 本插件），此前只带 `dsh-base`，起不来 Web UI。
+
+### 为什么
+「边改边看」如果只写在文档里，每次都要拼全路径、记 profile 名；收成一条命令后这条路径才有可能天天走。
+
+### 验证
+- `node scripts/dev.mjs --help` 能转发到 dsh；用临时 `DSH_SUPERAGENT_STATE_DIR` 实起一次实例：
+  `GET /superagent/api/engine/status` → 200（`phase: disabled`，`x-superagent-request: 1` 头），
+  停掉后端口关闭、进程退出。`--dump-config` 显示 `superagent-panel` 与 `dsh-web-app` 都在合成树里。
+
+## [0.9.3] — 2026-11-14
+
+### 变更
+- `AGENTS.md` 新增「本机两种安装态（必须分清）」：`desktop` profile 是干净安装（依赖指向 Release tarball、包目录是实体目录），
+  `dev` profile 才软链到工作树供边改边看；明确禁止把仓库目录 `add` 进 `desktop`，并写清升级/核对命令
+  （`node scripts/local-install.mjs`、`--verify`）与 dev 实例起法。
+
+### 为什么
+之前用 tarball 装桌面端时，pnpm 把依赖解析成了指向工作树的 `link:`，桌面端跑的是未发布代码却显示成 0.5.1；
+这类「安装态漂移」不写在规则里，下次还会重犯。
+
+### 验证
+- 只改文档与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0 未变。
+
 ## [0.9.2] — 2026-11-14
 
 这是 v0.8.0 之后累计到 `main` 的发布：0.8.1 证据空态语义、0.8.2 CI 去人工 approve + README 带数据截图、
