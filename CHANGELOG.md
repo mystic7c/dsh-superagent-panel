@@ -3,8 +3,9 @@
 ## [0.9.8] — 2026-11-14
 
 ### 变更
-- `docs/delivery.md` 的分支前缀表补上 `fix/**`、`chore/**`、`docs/**`（与 0.9.7 的 `auto-pr.yml` 触发面一致），
-  并顺手验证了 `docs/**` 分支现在也会自动开 PR。
+- `docs/delivery.md` 的分支前缀表补上 `fix/**`、`chore/**`、`docs/**`（与 0.9.7 的 `auto-pr.yml` 触发面一致）。
+- `ci.yml` 的 push 触发面补上 `docs/**`：此前 docs 分支只有 `auto-pr` 会跑，分支保护要求的 `test (22)`/`test (24)`
+  不出现，PR 反而合不了。这条 `docs/**` 分支本身就是验证：推送后 `auto-pr` 自动开了 PR，CI 也照常跑。
 
 ## [0.9.7] — 2026-11-14
 
