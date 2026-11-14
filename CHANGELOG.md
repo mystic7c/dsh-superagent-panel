@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.9.11] — 2026-11-14
+
+### 变更
+- `tsconfig.check.json` 的 tranche 4：`index.js` 入档，`npm run check:js` 现在覆盖**整个 Host 半**（含入口）。
+- `index.js` 只有 10 个错误，都是 `resumeTicket(...)` / `answerTicket(...)` 的联合返回（`{run, ticket}` vs
+  `{missing, invalid}`）在 `if (result?.missing)` 处收窄失败；修法是
+  `const result = /** @type {any} */ (await resumeTicket({ … }))`，`answerTicket` 同款。
+- `AGENTS.md` / `CONTRIBUTING.md` / `README.md` 的闸门说明改成「Host 半全量入档；客户端 `client/src/*.js` 尚未入档」。
+
+### 为什么
+`engine`/`executor` 在 0.9.10 清零后，`index.js` 的错误从 151 掉到 10——绝大多数是引擎返回类型没标注时的连锁报错。
+把入口也纳入清单，P4 的 checkJs 部分就只剩「客户端片段」这一档。
+
+### 验证
+- `npm run check:js` 0 错误（清单 26 个文件）；`npm run types` 通过；`node --check index.js`。
+- `--check` 23 modules / 481,052 bytes；`check-keys` 958 / 513 / 1359。
+- Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`。
+
 ## [0.9.10] — 2026-11-14
 
 ### 变更

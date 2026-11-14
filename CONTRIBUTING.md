@@ -48,8 +48,9 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（194 �
 ```
 
 CI 在干净 clone 上跑的就是这八条。`npm run check:js` 用的是「分档清单」：`tsconfig.check.json` 的 `files`
-只列已经补完 JSDoc 的文件（当前是 Host 侧不依赖 `engine`/`executor` 的 21 个），修好一个新文件就加进去，
-**不要为了让 CI 变绿把文件移出去**；`engine`/`executor`/客户端等大块按档推进。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
+列出已经补完 JSDoc 的文件。从 0.9.11 起这一档**覆盖整个 Host 半（含 `index.js`）**；客户端 `client/src/*.js`
+是分批迁移的 JSX 片段，还不在清单里，需要单独一档。修好一个新文件就加进去，
+**不要为了让 CI 变绿把文件移出去**。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
 DSH + Chrome（CDP），只在发布前由维护者人工执行。
 
 ## 代码规则
