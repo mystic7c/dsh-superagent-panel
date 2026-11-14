@@ -23,7 +23,6 @@
   "files": [
     "types/dsh.d.ts",
     "lib/util.js",
-    "lib/prompts.js",
     "lib/live/repo.js",
     "lib/live/worker-tools.js",
     "lib/live/workflow.js",

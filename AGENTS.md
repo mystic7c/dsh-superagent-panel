@@ -14,7 +14,8 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 
 - `index.js`：Host 半。`/superagent/api` 路由、动作分发、与宿主（DSH）交互。**改这里要在 DSH 里
   禁用→启用插件（或重启 DSH）才生效。**
-- `lib/`：旧管理层的只读投影/写操作（`views.js`、`actions.js`、`seed.js`、`prompts.js`，当前客户端不使用）。
+- `lib/util.js`：Host 与引擎共用的纯函数。旧的「管理层」（`views.js`/`actions.js`/`store.js`/`seed.js`/`prompts.js`）
+  与它挂的 25 条 `/superagent/api` 演示路由已在 0.9.6 删除，现在只有引擎一套 API。
 - `lib/live/`：真实引擎。`engine.js`（循环与状态）、`executor.js`（worktree/worker/闸门/提交/推送/PR）、
   `worker.js`（进程内 DSH worker）、`repo.js`（git 与分支守卫）、`config.js` + `repos.js` + `live-json.js`
   （live.json 与多仓库）、`octo.js`（群轮询）、`gitlab.js`（GitLab API）、`eval.js` / `judge.js`（接单评估）、
@@ -67,7 +68,7 @@ node scripts/build-client.mjs --check               # 客户端产物是否最�
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                       # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                                    # checkJs 已清零的那一档（清单在 tsconfig.check.json）
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
+node --test lib/live/*.test.js                     # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（干净 clone 先 npm ci；无 live.json 时用内置 fixture）
 ```
 

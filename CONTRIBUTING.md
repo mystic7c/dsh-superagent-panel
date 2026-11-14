@@ -43,7 +43,7 @@ node scripts/build-client.mjs --check              # 产物是否最新（CI 强
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                      # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                                   # checkJs 已清零的那一档（清单在 tsconfig.check.json）
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
+node --test lib/live/*.test.js   # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（194 条；无 live.json 时自动用 test/fixtures）
 ```
 
