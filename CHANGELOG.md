@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.8.2] — 2026-11-14
+
+### 变更
+- **CI 在投递分支的 push 上直接跑**：`ci.yml` 的 `push` 触发从 `[develop, main]` 扩到 `feature/**`、`fix/**`、
+  `release/**`、`hotfix/**`、`chore/**`。push 运行不需要人工 approve，而分支保护读的是挂在 head commit 上的
+  check run，两者的效果一致——之前每个 PR 的 `pull_request` 运行都停在 `action_required`，要手工
+  `gh api -X POST …/actions/runs/<id>/approve`。
+- README 首图从空状态换成带数据的执行页（三条排队工单、执行器负载、视图筛选），
+  文件改为 `docs/images/panel-execution.png`。
+
+### 验证
+- `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass。
+- `node scripts/build-client.mjs --check`（产物未变）；check-keys 958/513/1359；render-check 194/0。
+- 截图来自隔离 DSH 实例（fixture 状态 + 通过 Host API 建的三条工单），console errors 0。
+
 ## [0.8.1] — 2026-11-14
 
 ### 修复
