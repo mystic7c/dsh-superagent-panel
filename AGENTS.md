@@ -49,8 +49,12 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   `node scripts/local-install.mjs`（默认只允许在 `main` 上打包）或 `dsh plugin --profile desktop add <tgz>`。
 - 每次升级前后都用 `node scripts/local-install.mjs --verify` 核对：它只读，会打印 dependency 是否为 `file:<tarball>`、
   包目录是实体目录还是软链，并给出结论。
-- 开发态单独起实例：`dsh --profile dev --no-open --port 0`，打开它打印的带 token 的 URL。客户端改动重建产物 + 刷新；
-  Host 半改动要重启这个 dev 实例。
+- 边改边看：`npm run dev`（= `node scripts/dev.mjs`，内部就是 `dsh --profile dev --no-open --port 0`），
+  打开它打印的带 token 的 URL。客户端改动 = `node scripts/build-client.mjs` + 刷新页面；Host 半改动 = 重启这个实例。
+  `dev` profile 的 bundles 是 `dsh-base` + `dsh-web-app` + 本插件，依赖为 `link:` 指向本仓库。
+- 两个实例都不该同时对着同一份真实状态调试引擎：给 dev 实例加 `DSH_SUPERAGENT_STATE_DIR=<临时目录>`，
+  免得 dev 里的试跑写进 `~/.dsh/superagent/live.json`。另外全局 `~/.dsh/cordis.patch.yml` 里的 MCP 条目在 dev
+  实例也会加载，连不上时只打印一行 warning，与本插件无关。
 - 本机没有把 `dsh` 放进 PATH：命令写全路径
   `"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"`，或自己加个 alias。
 
