@@ -52,7 +52,7 @@ node scripts/build-client.mjs --check     # 产物是否与 src 同步
 node scripts/check-keys.mjs               # i18n key 完整性
 npm run types                             # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                          # checkJs 已清零的那一档（tsconfig.check.json）
-node --test lib/store.test.js lib/live/*.test.js
+node --test lib/live/*.test.js
 node scripts/render-check.mjs             # jsdom 全页回归（devDependencies 里的 jsdom + React）
 ```
 
@@ -87,7 +87,7 @@ node scripts/render-check.mjs             # jsdom 全页回归（devDependencies
 - 上下文：先跑 impeccable context，以 DESIGN.md 的 token 与 Named Rules 为准；不新建刻度
 - 编辑前先读 reference/craft-floor.md；这是裸 DOM（h = React.createElement），不要引入 JSX/Tailwind
 - 硬约束：只用手上已有的 --sa-* 与 --dsw-alias-* token；不许新增颜色，不许改信息架构
-- 验收：node scripts/build-client.mjs && node scripts/check-keys.mjs && node --test lib/store.test.js lib/live/*.test.js
+- 验收：node scripts/build-client.mjs && node scripts/check-keys.mjs && node --test lib/live/*.test.js
 - 做完把改动点写进 verification/ui-review-team.md，每条注明可机器验证的方式
 ```
 
