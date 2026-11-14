@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.9.0] — 2026-11-14
+
+### 新增
+- **手写的宿主类型契约 `types/dsh.d.ts`**（P4）：只声明本插件真正用到的两面——Host 的
+  `apply(ctx, config)`（`logger`、`effect`、`webServer.register`、`get`）与 Client 的 `apply(ctx)`
+  （`slots.inject/register`、`locale.register`、`get('uiWorkspace')`），外加 `window.__ModuleLoader__` 的
+  `load({ id, factory })`。**刻意不引用 `@deepseek-ai/dsh-*`**：那会把插件钉死在某个 DSH 版本的内部类型上，
+  而这里要的是「宿主至少提供过什么」。
+- `tsconfig.json` + `npm run types`（`tsc -p tsconfig.json`，`typescript` 5.9.3 精确锁定），只做 `noEmit`
+  检查声明文件自身；CI 增加同名步骤，这样声明不会悄悄失效。
+- `index.js` 的 `apply` 与 `client/src/apply.js` 的 `apply` 加了 JSDoc（`@param {DSH.HostPluginContext}` /
+  `{DSH.ClientPluginContext}`），编辑器装了这个包就能顺着跳进类型定义。
+
+### 变更
+- `package.json` 的 `files` 增加 `types/**/*.d.ts`；`docs/self-development.md`、`docs/ui-workflow.md`
+  里「render-check 依赖 `/tmp/sa-harness`」的旧说法改成 devDependencies（那是 P0 之后就过期的描述），
+  闸门清单补上 `npm run types`。
+
+### 验证
+- `npm run types`（tsc 5.9.3）通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
+  check-keys 958/513/1359；Host 556 pass；render-check 194 checks / 0 failed。
+
 ## [0.8.2] — 2026-11-14
 
 ### 变更
