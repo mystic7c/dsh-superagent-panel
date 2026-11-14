@@ -6,7 +6,7 @@
 
 > DeepSeek Harness 插件：在 Web UI 里管理主动型编码智能体（Superagent）——从群消息接单，到执行、闸门、验收与发布。
 
-![面板概览](docs/images/panel-overview.png)
+![执行页：工单队列与执行器](docs/images/panel-execution.png)
 
 Superagent 的循环（读消息 → 判是否接单 → 开 worktree 干活 → 跑闸门 → 发 MR → 等人验收）散落在命令行、
 聊天记录和一堆台账文件里。这个面板把它收进一个页面：哪个请求被接了、为什么被忽略、哪一步卡住了、接下来该谁动手。
