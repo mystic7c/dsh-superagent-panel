@@ -6,7 +6,7 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 
 ## 先读什么
 
-1. `README.md` 的「功能」「开发与验证」「状态与配置」三节。
+1. `README.md`（概览与安装）与 `docs/pages.md`「页面说明」、`docs/quickstart.md`「状态与配置」。
 2. `CHANGELOG.md` 最近两个版本（改动的写法、验证口径都以它为准）。
 3. 要动的文件本身，以及它的测试（`*.test.js` 与 `scripts/render-check.mjs` 里的对应断言）。
 
@@ -19,8 +19,8 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   `worker.js`（进程内 DSH worker）、`repo.js`（git 与分支守卫）、`config.js` + `repos.js` + `live-json.js`
   （live.json 与多仓库）、`octo.js`（群轮询）、`gitlab.js`（GitLab API）、`eval.js` / `judge.js`（接单评估）、
   以及 inbox/signals/operations/acceptance 等台账。
-- `client/src/*.js`：客户端源码，ES 模块，入口 `client/src/index.js`（按数字顺序 import 其余模块，
-  `00-react.js` 收敛 React/`h`/hooks），由 esbuild bundle 成 CJS 再包进 `__ModuleLoader__` 工厂；
+- `client/src/*.js`：客户端源码，ES 模块，入口 `client/src/index.js`（显式按 基础 → 外壳 → 页面 的顺序 import，
+  `react.js` 收敛 React/`h`/hooks），由 esbuild bundle 成 CJS 再包进 `__ModuleLoader__` 工厂；
   `client/index.js` 与 `client/index.js.map` 是**构建产物，必须提交**。改源码后先 `node scripts/build-client.mjs`。
 - `scripts/`：构建与验收脚本（`build-client.mjs`、`check-keys.mjs`、`render-check.mjs`、`verify-panel.mjs`、
   `isolated-verify.mjs`、`local-install.mjs` 本机打包安装）。
@@ -53,10 +53,10 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（干净
 
 ## 文档分层
 
-- `README.md` 只放项目概览、安装、5 分钟接入、简短的开发验证命令与入口链接。
+- `README.md` 只放项目概览、功能要点、安装、快速开始摘要、开发命令与文档索引（目标 100 行以内）。
 - 机制/流程/配置/排障细节放 `docs/`（例如自开发的完整操作在 `docs/self-development.md`）。
 - 版本变更写 `CHANGELOG.md`，不要把版本历史塞进 README。
-- 新增内容先判断归属，不要把长文继续塞进 README；README 超过约 250 行时先考虑拆 `docs/`。
+- 新增内容先判断归属，不要把长文继续塞进 README；页面细节进 `docs/pages.md`，配置与排障进 `docs/quickstart.md`。
 
 ## 禁止
 

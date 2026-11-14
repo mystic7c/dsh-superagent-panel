@@ -2,9 +2,9 @@
    comes from the `--sa-*` scale below (5 font sizes, 7 spacing steps, 4 radii — contract §2). No literal colors, no
    off-scale sizes: if a value is not in the scale it belongs in a control height or a border width. */
 
-import { translate, when } from "./06-i18n.js"
-import { Panel, caller } from "./15-api.js"
-import { React, h } from "./00-react.js"
+import { translate, when } from "./i18n.js"
+import { Panel, caller } from "./api.js"
+import { React, h } from "./react.js"
 export const PANEL_CSS = `
 
 /* Scale tokens. Defined on the page (and on the two surfaces that can render outside it: the crash fallback and the
