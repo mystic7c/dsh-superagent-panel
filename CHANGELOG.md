@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1] — 2026-11-14
+
+### 文档
+- `docs/delivery.md` 的「发布（维护者）」补全为四步：注释 tag → `npm pack` 并 `gh release create` 附 tarball →
+  `npm publish --access public`（先 `--dry-run` 看文件清单）→ `chore/backmerge-X.Y.Z` 回合并。
+- 起因：1.0.0 发布时 npm 发布这一步只有口头惯例，没有写在仓库里。
+
 ## [1.0.0] — 2026-11-14
 
 第一个公开发布版本。仓库转为 public，npm 上以 `@mystic7c/dsh-superagent-panel` 发布（`publishConfig.access: public`，
