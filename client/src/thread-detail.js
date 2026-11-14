@@ -4,15 +4,15 @@
    outcome is no longer printed a third time. Data: GET engine/thread/:key (host increments, contract §4); the page
    decides which thread is selected. */
 
-import { Icon, shortId } from "./00-util.js"
-import { actorName, readableMarkers, reasonLabel, translate, when } from "./06-i18n.js"
-import { Button, CopyButton, InfoTip, StatusIcon, Tag } from "./10-controls.js"
-import { same, stay, usePanel, usePanelData } from "./15-api.js"
-import { EmptyState, ErrorState, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { useLiveResource } from "./32-live-model.js"
-import { TicketStatusTag, decisionKindView, dispositionView } from "./34-live-ui.js"
-import { Fragment, React, h, useState } from "./00-react.js"
+import { Icon, shortId } from "./util.js"
+import { actorName, readableMarkers, reasonLabel, translate, when } from "./i18n.js"
+import { Button, CopyButton, InfoTip, StatusIcon, Tag } from "./controls.js"
+import { same, stay, usePanel, usePanelData } from "./api.js"
+import { EmptyState, ErrorState, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { useLiveResource } from "./live-model.js"
+import { TicketStatusTag, decisionKindView, dispositionView } from "./live-ui.js"
+import { Fragment, React, h, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'thread.octoConversation': ['Octo 会话', 'Octo conversation'],
   'thread.copyKey': ['复制线程 key', 'Copy thread key'],

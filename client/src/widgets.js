@@ -4,12 +4,12 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
-import { Icon, cx, hhmmss, isExternal, safeHttpUrl } from "./00-util.js"
-import { GLOSSARY, GLOSSARY_VALUES, errorText, fullTime, readableMarkers, translate, when } from "./06-i18n.js"
-import { inlines, markdownBlocks } from "./07-md.js"
-import { Button, CopyButton, IconButton, InfoTip, Modal, STATUS_STATES, StatusIcon, StatusText, Tag, controlIcon } from "./10-controls.js"
-import { same, useAction, usePanel } from "./15-api.js"
-import { Fragment, React, h, useState } from "./00-react.js"
+import { Icon, cx, hhmmss, isExternal, safeHttpUrl } from "./util.js"
+import { GLOSSARY, GLOSSARY_VALUES, errorText, fullTime, readableMarkers, translate, when } from "./i18n.js"
+import { inlines, markdownBlocks } from "./markdown.js"
+import { Button, CopyButton, IconButton, InfoTip, Modal, STATUS_STATES, StatusIcon, StatusText, Tag, controlIcon } from "./controls.js"
+import { same, useAction, usePanel } from "./api.js"
+import { Fragment, React, h, useState } from "./react.js"
 /** Relative time with an absolute tooltip; the only timestamp renderer pages need. */
 export function When({ at }) {
   const { t } = usePanel()
@@ -259,7 +259,7 @@ export function GlossaryButton() {
   </>
 }
 
-/** Glossary + state legend, all content from 06-i18n.js (GLOSSARY / GLOSSARY_VALUES / term.* / meaning.* / legend.*). */
+/** Glossary + state legend, all content from i18n.js (GLOSSARY / GLOSSARY_VALUES / term.* / meaning.* / legend.*). */
 export function GlossaryModal({ open, onClose }) {
   const { t } = usePanel()
   return <Modal open={open} onClose={onClose} title={t('glossary')} closeLabel={t('close')} description={t('glossaryIntro')}

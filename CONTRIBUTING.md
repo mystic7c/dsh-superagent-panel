@@ -15,11 +15,11 @@
 | Host | `index.js`（`/superagent/api` 路由与动作分发）、`lib/` | 在 DSH 里禁用→启用插件（或重启 DSH）才生效 |
 | Client | `client/src/*.js` → 构建出 `client/index.js` | 刷新页面即生效 |
 
-`client/src` 是一组真正的 ES 模块，入口是 `client/src/index.js`：它按数字顺序 `import` 每一条模块，
-把 `{ inject, apply }` 从 `90-apply.js` 再导出。模块之间用显式的 `import { … } from './xx-name.js'` 互相引用，
+`client/src` 是一组真正的 ES 模块，入口是 `client/src/index.js`：它按"基础 → 外壳 → 页面"的顺序
+`import` 每一条模块，把 `{ inject, apply }` 从 `apply.js` 再导出。模块之间用显式的 `import { … } from './xx-name.js'` 互相引用，
 不再依赖"所有声明共享一个工厂作用域"——**新增文件请同时加到 `index.js` 的 import 列表里**。
 
-React 与 `h` 不来自全局：`client/src/00-react.js` 把宿主提供的 `react` 收敛成一张导出表
+React 与 `h` 不来自全局：`client/src/react.js` 把宿主提供的 `react` 收敛成一张导出表
 （`React`、`h` 与常用 hooks），每个模块从它 `import` 自己需要的名字。JSX 通过 `jsxFactory: 'h'` 编译，
 所以 JSX 和手写 `h(...)` 都指向同一个 `h` 绑定。
 

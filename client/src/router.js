@@ -3,11 +3,11 @@
    fragment is the shareable copy (`#sa={"page":...,"id":...}`), sessionStorage is the fallback for hosts that rewrite
    or strip the fragment. */
 
-import { readHashState, writeHashState } from "./00-util.js"
-import { when } from "./06-i18n.js"
-import { Panel, same } from "./15-api.js"
-import { App, Header } from "./30-shell.js"
-import { React, h } from "./00-react.js"
+import { readHashState, writeHashState } from "./util.js"
+import { when } from "./i18n.js"
+import { Panel, same } from "./api.js"
+import { App, Header } from "./shell.js"
+import { React, h } from "./react.js"
 export const TABS = ['overview', 'source', 'trigger', 'eval', 'execution', 'settings']
 export const HOME = { page: 'overview' }
 export const ROUTE_ID_MAX = 200

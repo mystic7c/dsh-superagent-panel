@@ -1,9 +1,9 @@
 # UI 改动流程
 
-本文件是面板 UI 改动的执行流程，非安装必读；安装与面板概览见 [README](../README.md)。
+本文件是面板 UI 改动的执行流程，非安装必读；安装与面板概览见 [README](../README.md)，逐页说明见 [pages.md](pages.md)。
 
 面板是**裸 DOM（`h = React.createElement`，无 JSX）+ 手写 CSS + token 契约**的组合，样式集中在
-`client/src/05-style.js`，规范写在 `spec/panel-ui.md`。通用前端 skill 默认的 React/Tailwind/组件库假设在这里都不成立，
+`client/src/style.js`，规范写在 `spec/panel-ui.md`。通用前端 skill 默认的 React/Tailwind/组件库假设在这里都不成立，
 所以 UI 改动固定走「设计判断 → 落地 → 规则审查 → 真机回归」四段，每段只由一个角色主导。
 
 ## 两个技能，两种角色
@@ -37,10 +37,10 @@
 写进每一次 prompt，不要让模型自己判断：
 
 - **token 白名单**：只用手上已有的 `--sa-*`（`--sa-fs-*` / `--sa-sp-*` / `--sa-r-*`）与 `--dsw-alias-*`。
-  新颜色、新字号、新间距一律不加；确实缺的变量先补进 `05-style.js` 头部并在 PR 说明。
+  新颜色、新字号、新间距一律不加；确实缺的变量先补进 `style.js` 头部并在 PR 说明。
 - **裸 DOM**：不引入 JSX、React 组件库、Tailwind、CSS-in-JS；组件就是函数返回 `h(...)`。
 - **产物不手改**：`client/index.js` 是构建产物，只能由 `node scripts/build-client.mjs` 生成。
-- **i18n 不抢写**：新增文案放进各片段自己的 `Object.assign(PAGE_TEXT, {…})` 块，不要改 `06-i18n.js` 的共享表；
+- **i18n 不抢写**：新增文案放进各片段自己的 `Object.assign(PAGE_TEXT, {…})` 块，不要改 `i18n.js` 的共享表；
   `check-keys.mjs` 会拦住缺 key 的调用。
 - **信息架构不动**：这一轮的边界写在 prompt 里（改哪些文件、不动哪些页），否则 `impeccable` 会顺手重排导航。
 
@@ -81,7 +81,7 @@ node scripts/render-check.mjs             # jsdom 全页回归（依赖 /tmp/sa-
 ```text
 /impeccable 给 dsh-superagent-panel 的「执行」页做一次 polish。
 - 模式：Operate（app UI，scanability 优先，克制）
-- 目标：client/src/55-execution.js + client/src/05-style.js；不要动 06-i18n.js / client/index.js
+- 目标：client/src/execution.js + client/src/style.js；不要动 i18n.js / client/index.js
 - 上下文：先跑 impeccable context，以 DESIGN.md 的 token 与 Named Rules 为准；不新建刻度
 - 编辑前先读 reference/craft-floor.md；这是裸 DOM（h = React.createElement），不要引入 JSX/Tailwind
 - 硬约束：只用手上已有的 --sa-* 与 --dsw-alias-* token；不许新增颜色，不许改信息架构
@@ -92,7 +92,7 @@ node scripts/render-check.mjs             # jsdom 全页回归（依赖 /tmp/sa-
 审查轮：
 
 ```text
-/web-design-guidelines dsh-superagent-panel/client/src/55-execution.js dsh-superagent-panel/client/src/05-style.js
+/web-design-guidelines dsh-superagent-panel/client/src/execution.js dsh-superagent-panel/client/src/style.js
 只报问题不改文件；按 file:line 输出，P1/P2/P3 分级。
 注意：规则里的 React/Tailwind 条款要翻译成裸 DOM 等价物；行号必须 grep 核实。
 ```

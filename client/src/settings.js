@@ -1,13 +1,13 @@
-import { API, Icon, hhmmss } from "./00-util.js"
-import { errorText, translate, when } from "./06-i18n.js"
-import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./10-controls.js"
-import { same, stay, usePanel, usePanelData } from "./15-api.js"
-import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Skeleton, When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { ManualTicketForm, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./34-live-ui.js"
-import { gateOnFail } from "./58-ticket-detail.js"
-import { apply } from "./90-apply.js"
-import { React, h, useEffect, useRef, useState } from "./00-react.js"
+import { API, Icon, hhmmss } from "./util.js"
+import { errorText, translate, when } from "./i18n.js"
+import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
+import { same, stay, usePanel, usePanelData } from "./api.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Skeleton, When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { ManualTicketForm, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
+import { gateOnFail } from "./ticket-detail.js"
+import { apply } from "./apply.js"
+import { React, h, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
   'wf.title': ['分阶段执行', 'Staged execution'],
@@ -187,7 +187,7 @@ Object.assign(PAGE_TEXT, {
   // Reference groups (评估 / 提示词) are read-only: they sit below a divider in the rail and never show a save bar.
   'st.reference': ['参考', 'Reference'],
   // The run/worker/write groups split the old executor group; their labels live here as page-local overrides of the
-  // shared settingsGroup dictionary (06-i18n.js keeps source/eval/repos/prompts only).
+  // shared settingsGroup dictionary (i18n.js keeps source/eval/repos/prompts only).
   'settingsGroup.review': ['评估确认', 'Review'],
   'settingsGroup.run': ['运行', 'Runtime'],
   'settingsGroup.worker': ['Worker', 'Worker'],
@@ -503,7 +503,7 @@ export const emptyRepoForm = () => ({
   acceptance: 'deployed', baseUrl: '', project: '', targetBranch: 'dev', uatUrl: '', healthUrl: '', makeDefault: false,
 })
 
-/** Group order of the left column; labels come from the shared settingsGroup dictionary in 06-i18n.js, except the
+/** Group order of the left column; labels come from the shared settingsGroup dictionary in i18n.js, except the
     executor groups whose labels are page-local overrides (settingsGroup.run / settingsGroup.worker /
     settingsGroup.write above).
     `reference: true` marks a read-only group: the rail lists the groups that can be changed first, then a divider and
@@ -1217,7 +1217,7 @@ export function LiveSettingsPage({ route }) {
 
   // ---- group heading (O18) ----------------------------------------------------------------------------------
   // Each content group opens with a real H2 mirroring its left-nav label; `.sa-settings-title` owns the typography
-  // (05-style.js), so the element here carries no inline styles.
+  // (style.js), so the element here carries no inline styles.
   const activeGroup = SETTINGS_GROUPS.find(group => group.id === active) ?? SETTINGS_GROUPS[0]
   const settingsHeading = () => <h2 className="sa-settings-title">{pt(t, activeGroup.labelKey)}</h2>
 
@@ -1873,7 +1873,7 @@ export function LiveSettingsPage({ route }) {
         {fieldErrorMessage('run', 'repair')}
       </div>
       <KeyValues rows={rows} />
-      {/* The manual Ticket form is the same component the Execution page opens in its dialog (34-live-ui.js): one set
+      {/* The manual Ticket form is the same component the Execution page opens in its dialog (live-ui.js): one set
           of fields, one write path, one success/error treatment. The inline form resets itself after each creation. */}
       <ManualTicketForm onDone={() => { void reload() }} />
       {saveBarFor('run')}
@@ -2072,7 +2072,7 @@ export function LiveSettingsPage({ route }) {
   }
 
   // The rail promises what can be changed first: writable groups, then a divider + "参考" label + the read-only groups.
-  // `data-reference` is the hook 05-style.js de-emphasises them with; the button keeps its usual label and dirty dot.
+  // `data-reference` is the hook style.js de-emphasises them with; the button keeps its usual label and dirty dot.
   /** Selecting a group writes it into the panel route (so reload / deep links keep it) and starts the new group at its
       top; tall and short groups otherwise inherit the previous scroll position mid-page. */
   const selectGroup = id => {
