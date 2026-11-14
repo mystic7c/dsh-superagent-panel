@@ -33,6 +33,31 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
 客户端改动刷新页面即生效；Host 半改动要重载插件。**验收/截图类脚本可能在 `spec/`、`verification/` 写文件，
 这两个目录被 gitignore，不要把它们的产物提交。**
 
+## 本机两种安装态（必须分清）
+
+本机同一个插件有两种装法，用途不同、互斥：
+
+| profile | 形态 | 用途 |
+| --- | --- | --- |
+| `desktop` | **干净安装**：依赖写 `file:…/releases/dsh-superagent-panel-<version>.tgz`，`node_modules/@mystic7c/dsh-superagent-panel` 是**实体目录** | 日常使用、对外演示、截图；跑的一定是发布产物 |
+| `dev` | **软链到工作树**（`link:`） | 边改边看：`node scripts/build-client.mjs` 之后刷新页面就是新代码 |
+
+硬线：
+
+- **不要把本仓库目录 `add` 进 `desktop` profile**（`dsh plugin --profile desktop add <仓库路径>`）：那会把桌面端变成
+  指向工作树的软链，你看到的就不再是 Release 里的代码，截图、验证结论、用户反馈全部失真。桌面端只从 tarball 升级：
+  `node scripts/local-install.mjs`（默认只允许在 `main` 上打包）或 `dsh plugin --profile desktop add <tgz>`。
+- 每次升级前后都用 `node scripts/local-install.mjs --verify` 核对：它只读，会打印 dependency 是否为 `file:<tarball>`、
+  包目录是实体目录还是软链，并给出结论。
+- 边改边看：`npm run dev`（= `node scripts/dev.mjs`，内部就是 `dsh --profile dev --no-open --port 0`），
+  打开它打印的带 token 的 URL。客户端改动 = `node scripts/build-client.mjs` + 刷新页面；Host 半改动 = 重启这个实例。
+  `dev` profile 的 bundles 是 `dsh-base` + `dsh-web-app` + 本插件，依赖为 `link:` 指向本仓库。
+- 两个实例都不该同时对着同一份真实状态调试引擎：给 dev 实例加 `DSH_SUPERAGENT_STATE_DIR=<临时目录>`，
+  免得 dev 里的试跑写进 `~/.dsh/superagent/live.json`。另外全局 `~/.dsh/cordis.patch.yml` 里的 MCP 条目在 dev
+  实例也会加载，连不上时只打印一行 warning，与本插件无关。
+- 本机没有把 `dsh` 放进 PATH：命令写全路径
+  `"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh"`，或自己加个 alias。
+
 ## 每次改动的最低要求
 
 ```bash
