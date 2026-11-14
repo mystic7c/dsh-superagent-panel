@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.1] — 2026-11-14
+
+### 修复
+- **待运行工单的「交付证据」被渲染成读取失败**：`GET /superagent/api/engine/evidence/<ticketId>` 在没有证据记录时
+  统一返回 `404 没有这段交付证据`，客户端 `DeliveryEvidenceCard` 把 404 当成错误，显示「没有这段交付证据 +
+  可以先重试… + 原始错误」，而页面本来已经有「这段交付还没有持久化的证据（旧工单或尚未跑完）」这条空状态文案。
+  - Host：工单**存在**但没有证据时返回 `200 { ticketId, rounds: [] }`（走空状态）；工单不存在仍返回 404。
+    `evidence/:id/compare` 缺少可比较轮次时改为 `404 没有可比较的交付证据`，与「工单不存在」区分开。
+  - 新增路由测试：已存在但无证据的工单 → 200 空轮次；未知工单 → 404。
+- Host 测试 555 → 556。
+
+### 验证
+- `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass / 0 fail。
+- `node scripts/build-client.mjs --check`（产物未变，481,039 字节）；check-keys 958/513/1359。
+- `node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+
 ## [0.8.0] — 2026-11-14
 
 ### 变更
