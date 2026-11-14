@@ -410,8 +410,8 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, 'action 必须是 release / retry / stop')
           }
           const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
-          const result = await resumeTicket({ engine, ticketId: third, action, note,
-            log: line => ctx.logger?.info?.('superagent gate: %s', line) })
+          const result = /** @type {any} */ (await resumeTicket({ engine, ticketId: third, action, note,
+            log: line => ctx.logger?.info?.('superagent gate: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result?.invalid) throw new ActionError(409, result.invalid)
           send(res, 200, { run: result.run, ticket: result.ticket })
@@ -440,8 +440,8 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'answer') {
           const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, 4000) : ''
           if (!answer) throw new ActionError(400, 'answer 不能为空')
-          const result = await answerTicket({ engine, ticketId: third, answer,
-            log: line => ctx.logger?.info?.('superagent answer: %s', line) })
+          const result = /** @type {any} */ (await answerTicket({ engine, ticketId: third, answer,
+            log: line => ctx.logger?.info?.('superagent answer: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result?.invalid) throw new ActionError(409, result.invalid)
           send(res, 200, { run: result.run, ticket: result.ticket })

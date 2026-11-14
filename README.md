@@ -56,7 +56,7 @@ node --check index.js                  # Host 半语法
 node --test lib/live/*.test.js
 node scripts/check-keys.mjs            # 中英文 key 覆盖
 npm run types                          # types/dsh.d.ts 自身能否通过 tsc
-npm run check:js                       # checkJs 已清零的那一档（清单在 tsconfig.check.json）
+npm run check:js                       # checkJs 清单（Host 半全量）
 node scripts/render-check.mjs          # jsdom 渲染回归
 ```
 
