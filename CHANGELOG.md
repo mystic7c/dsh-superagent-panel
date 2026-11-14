@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.6] — 2026-11-14
+
+### 变更
+- 删除旧「管理层」：`lib/views.js`、`lib/actions.js`、`lib/store.js`、`lib/seed.js`、`lib/prompts.js`，以及它们挂的
+  25 条非引擎路由（`GET state|overview|search|sources|settings|threads|decisions|tickets|policy/history|models|prompts`、
+  `PUT settings|prompts|prompts/preview`、`POST threads/:id/unsubscribe|triggers/:id/requeue|decisions/:id/dismiss|
+  tickets/:id/retry|tickets/:id/stop|sources/:id/labels|policy-sync/:id|executor/pause|setup/check|demo/reset`）。
+  `index.js` 从 719 行降到 590 行，只剩引擎 API；`/superagent/api/<unknown>` 现在直接回 404。
+- `index.js` 不再构造那个给旧视图用的 `host`（`createHost`/`readModels`/`FALLBACK_MODELS`/`MACHINE_LIMITS` 一并删除），
+  `apply()` 只等引擎启动；`ActionError` 改为本文件内的 4 行类。
+- 测试脚本从 `node --test lib/store.test.js lib/live/*.test.js` 收敛成 `node --test lib/live/*.test.js`
+  （`store.test.js` 随 `store.js` 删除）；`tsconfig.check.json` 去掉已删除的 `lib/prompts.js`。
+- `AGENTS.md` 结构段、`index.js` 头注释、`docs/quickstart.md` 的「演示种子/`/demo/reset`」说明同步更新。
+
+### 为什么
+客户端从 0.4.x 起只调 `/superagent/api/engine/*`，旧管理层早已是死代码：它需要另一份 `state.json`、另一套 actions，
+却仍在 `apply()` 里被加载和注册，读代码的人会以为面板有两套数据源。删掉后 `/superagent/api` 只对应 `lib/live`。
+
+### 验证
+- `node --check index.js`；`node scripts/build-client.mjs --check` 23 modules / 481,052 bytes（未动客户端）。
+- `node scripts/check-keys.mjs` 958 / 513 / 1359；`npm run types` 与 `npm run check:js` 均通过。
+- Host 测试 554 pass / 0 fail（少了 `store.test.js` 的 2 条）。
+- `node scripts/render-check.mjs` 194 checks / 0 failed / 0 skipped；`node scripts/isolated-verify.mjs` PASS，console errors 0。
+
 ## [0.9.5] — 2026-11-14
 
 ### 变更
