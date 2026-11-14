@@ -406,12 +406,13 @@ window.fetch = global.fetch = async (input, init = {}) => {
 }
 
 // ---- load the real client modules ------------------------------------------------------------------------------
-const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = loadClient({
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANEL_CSS, settingsPatchOf } = loadClient({
   App: 'shell.js',
   translate: 'i18n.js',
   DICTS: 'i18n.js',
   PAGE_TEXT: 'localtext.js',
   MarkdownLite: 'widgets.js',
+  diffPlaceholderKey: 'ticket-detail.js',
   PANEL_CSS: 'style.js',
   settingsPatchOf: 'settings.js',
 }, { react: React })
@@ -1133,6 +1134,20 @@ check('the panel shows 正在停止 while the worker is still finishing the curr
   stoppedText.includes('正在停止'), stoppedText.slice(0, 500))
 check('the header stop entry leaves once the request is pending', ![...rootElement.querySelectorAll('.sa-page-head-actions button')]
   .some(button => (button.textContent ?? '').trim() === '停止工单'), 'stop still offered')
+
+// Regression: a diff read that settles without data (the Ticket is gone) must not stay on "reading the diff" forever.
+{
+  const expectations = [
+    ['a read in flight', {}, 'ticket.diffLoading'],
+    ['a settled read with no data', { path: 'src/a.js', gone: true }, 'ticket.diffTicketGone'],
+    ['a loaded diff', { path: 'src/a.js', data: { available: true } }, null],
+    ['a failed read', { error: new Error('boom') }, null],
+  ]
+  for (const [label, state, expected] of expectations) {
+    check(`diff dialog placeholder for ${label}`, diffPlaceholderKey(state) === expected,
+      `${String(diffPlaceholderKey(state))} ≠ ${String(expected)}`)
+  }
+}
 
 // Regression: a bare URL autolinks to itself, so the inline renderer must not re-parse that label forever.
 {

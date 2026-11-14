@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.13] — 2026-11-14
+
+### 修复
+- 「改动 diff」弹窗在工单已不存在时会永远停在「正在读取 diff…」。`engine.ticketDiff(...)` 对已删除/重置的工单返回
+  `undefined`（`lib/live/engine.js` 的 `ticketDiff`），而 `loadDiff` 会把 `{ path, data: undefined }` 存进对话框状态——
+  既不 `loading` 也不 `error`，于是 `DiffCard` 的 `if (!data) return <Hint>{ticket.diffLoading}</Hint>` 一直成立。
+- 修法：`loadDiff` 区分「读到了」与「读完了但没有数据」，后者记 `{ path, gone: true }`；新增纯函数
+  `diffPlaceholderKey(state)` 决定占位文案（`ticket.diffLoading` / 新增的 `ticket.diffTicketGone` / `null`），
+  `DiffCard` 按它渲染；正常路径（工单还在、只是没执行过）仍走原来的 `data.available !== true` 分支，行为不变。
+
+### 验证
+- `scripts/render-check.mjs` 新增 4 条断言（在飞行中 / 读完但数据为空 / 已加载 / 读取失败），总数 194 → **198 checks，
+  0 failed / 0 skipped**；其中「读完但数据为空」在没有修复时会渲染成「正在读取 diff…」，这条断言会失败。
+- `npm run check:js` 0、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360（新增一个 key）、
+  Host 554 pass / 0 fail、`isolated-verify` PASS（console errors 0）。
+
 ## [0.9.12] — 2026-11-14
 
 ### 变更

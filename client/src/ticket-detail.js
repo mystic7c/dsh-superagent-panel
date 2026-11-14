@@ -88,6 +88,8 @@ Object.assign(PAGE_TEXT, {
     'This Ticket has no readable worktree (it may be cleaned up or not run yet); the diff is only available while the worktree still exists.'],
   'ticket.diffNotGit': ['工作树不是 git 工作树，读不了 diff。', 'The worktree is not a git work tree, so its diff cannot be read.'],
   'ticket.diffFailed': ['读取 diff 失败（git 报错）。', 'Reading the diff failed (git error).'],
+  'ticket.diffTicketGone': ['这个工单已经不在引擎里（可能被删除或重置），这次执行的 diff 读不到了。',
+    'This Ticket is no longer in the engine (it may have been deleted or reset), so the diff of that run cannot be read.'],
   'ticket.diffEmpty': ['这次执行没有留下改动。', 'This run left no changes.'],
   'ticket.diffSummary': ['{files} 个文件 · +{additions} −{deletions}', '{files} files · +{additions} −{deletions}'],
   'ticket.diffRun': ['运行 {run}', 'Run {run}'],
@@ -954,6 +956,7 @@ export function DiffBody({ text }) {
  *   loading?: boolean,
  *   error?: any,
  *   path?: string,
+ *   gone?: boolean,
  *   data?: {
  *     available?: boolean,
  *     reason?: string,
@@ -975,6 +978,19 @@ export function DiffBody({ text }) {
  * }} DiffRequestState
  */
 /**
+ * The placeholder a settled-but-empty read shows. The host answers `undefined` when the Ticket itself is gone: without
+ * the `gone` branch the dialog would sit on "reading the diff" forever, because neither `loading` nor `error` is set
+ * again. Pure so the render regression can assert all three branches without mounting the dialog.
+ * @param {DiffRequestState} state
+ * @returns {'ticket.diffLoading' | 'ticket.diffTicketGone' | null}
+ */
+export function diffPlaceholderKey(state) {
+  const value = state ?? {}
+  if (value.loading || value.error || value.data) return null
+  return value.gone ? 'ticket.diffTicketGone' : 'ticket.diffLoading'
+}
+
+/**
  * Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place.
  * @param {{ state?: DiffRequestState, onRetry?: () => void }} props
  */
@@ -982,8 +998,9 @@ export function DiffCard({ state = {}, onRetry }) {
   const { t } = usePanel()
   if (state.loading) return <Skeleton rows={4} />
   if (state.error) return <ErrorState error={state.error} onRetry={onRetry} />
+  const placeholder = diffPlaceholderKey(state)
+  if (placeholder) return <Hint>{pt(t, placeholder)}</Hint>
   const data = state.data
-  if (!data) return <Hint>{pt(t, 'ticket.diffLoading')}</Hint>
   if (data.available !== true) {
     return <Hint>{data.reason === 'not-a-worktree' ? pt(t, 'ticket.diffNotGit')
       : data.reason === 'git-failed' ? pt(t, 'ticket.diffFailed')
@@ -1389,7 +1406,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const loadDiff = useCallback(async (path) => {
     if (!act?.ticketDiff) return
     setDiff({ loading: true, path })
-    try { setDiff({ path, data: await act.ticketDiff(id, { path }) }) }
+    try {
+      const data = await act.ticketDiff(id, { path })
+      setDiff(data === undefined ? { path, gone: true } : { path, data })
+    }
     catch (error) { setDiff({ error, path }) }
   }, [act, id])
   // One file at a time: the row the operator clicked is the only thing the dialog fetches and shows.
