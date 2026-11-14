@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.9] — 2026-11-14
+
+### 变更
+- `tsconfig.check.json` 的 tranche 2：`lib/live/repos.js`、`config.js`、`signals.js`、`inbox.js`、`live-json.js`、`worker.js`
+  进 `files`（tranche 1 → 2 共 23 个文件），`npm run check:js` 仍 0 错误。
+- `lib/live/worker.js` 补 JSDoc：`joinChildrenBeforeTurnEnd` 的 `{ subagents, payload, log }` 参数类型与返回形状；
+  `runWorker` 补 `readOnly`/`preset`/`signal` 三个漏掉的 `@param`；`ctx.agents` 与 `agentCtx.on` 用 `any` 兜住宿主未声明的服务；
+  `offs`/`stopChildren` 显式标类型（否则从 `ctx.on` 的返回值推成 `never`，`release?.()`/`stopChildren()` 都报 TS2349）。
+
+### 为什么
+`worker.js` 是唯一还有错误的叶子模块：其余五个（`repos`/`config`/`signals`/`inbox`/`live-json`）实测 0 错误，
+加进清单即可防回归。`engine`/`executor`/`shadow`/`index.js` 分别 257/161/267/275 错误，留作 tranche 3。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
+- `check-keys` 958 / 513 / 1359；Host 554 pass / 0 fail；render-check 194 / 0 failed。
+
 ## [0.9.8] — 2026-11-14
 
 ### 变更
