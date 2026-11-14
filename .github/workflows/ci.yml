@@ -14,6 +14,7 @@ on:
       - 'release/**'
       - 'hotfix/**'
       - 'chore/**'
+      - 'docs/**'
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
@@ -44,7 +45,9 @@ jobs:
         run: node scripts/check-keys.mjs
       - name: Hand-written declarations still type-check
         run: npm run types
+      - name: checkJs tranche (see tsconfig.check.json)
+        run: npm run check:js
       - name: Host tests
-        run: node --test lib/store.test.js lib/live/*.test.js
+        run: node --test lib/live/*.test.js
       - name: Client render regression (jsdom, fixture state)
         run: node scripts/render-check.mjs

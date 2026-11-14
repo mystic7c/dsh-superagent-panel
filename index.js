@@ -1,19 +1,13 @@
 /**
  * Host half of the Superagent management panel.
  *
- * Owns the durable state directory (~/.dsh/superagent by default, override with DSH_SUPERAGENT_STATE_DIR), serves
- * the live engine's status and actions over same-origin `/superagent/api` routes, and hosts the legacy management
- * endpoints kept for older callers. The live engine (lib/live) does the real work: Octo intake, rule evaluation,
- * Ticket state, DSH/Codex/Claude workers, GitLab MR/CI/UAT and human acceptance. `README.md` is the capability
- * contract; this file should not claim more than that.
+ * Owns the state directory (~/.dsh/superagent by default, override with DSH_SUPERAGENT_STATE_DIR) and serves the live
+ * engine's status and actions over same-origin `/superagent/api` routes. The live engine (lib/live) does the real work:
+ * Octo intake, rule evaluation, Ticket state, DSH/Codex/Claude workers, GitLab MR/CI/UAT and human acceptance.
+ * `README.md` is the capability contract; this file should not claim more than that.
  */
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { Store } from './lib/store.js'
-import { stateView, overviewView, searchView, sourcesView, settingsView, threadListView, threadDetailView,
-  decisionListView, ticketListView, ticketDetailView, historyView, promptsView, modelsView } from './lib/views.js'
-import { saveSettings, syncSource, setPaused, retryTicket, stopTicket, dismissDecision, requeueTrigger, unsubscribeThread,
-  savePrompts, previewPromptsFor, setupCheck, resetDemo, ActionError } from './lib/actions.js'
 import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
 import { DELIVERABLES, enabledBackends } from './lib/live/routing.js'
@@ -27,14 +21,6 @@ export const inject = ['webServer']
 const PREFIX = '/superagent/api'
 const MAX_BODY = 128 * 1024
 
-const FALLBACK_MODELS = {
-  groups: [{ id: 'deepseek', name: 'DeepSeek', models: [
-    { id: 'deepseek-chat', name: 'DeepSeek Chat', description: '通用对话与编码' },
-    { id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', description: '推理模型' },
-  ] }],
-  default: { provider: 'deepseek', model: 'deepseek-chat' },
-}
-
 /** Resolve the state directory from the row config, then the environment, then the user's ~/.dsh. */
 function stateDirOf(config) {
   if (typeof config?.stateDir === 'string' && config.stateDir.trim()) return config.stateDir.trim().replace(/^~(?=\/|$)/, homedir())
@@ -44,9 +30,13 @@ function stateDirOf(config) {
 }
 
 /** Versioned machine limits the panel shows and edits through the prompts/settings pages. */
-const MACHINE_LIMITS = { promptMaxChars: 100_000, admissionContextMaxPages: 10, admissionContextTimeoutMs: 15_000 }
-
 class BodyTooLarge extends Error {}
+
+/** A failed request the API answers with a status and message instead of a 500. */
+class ActionError extends Error {
+  /** @param {number} status @param {string} message @param {Record<string, any>} [extra] */
+  constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra }
+}
 
 function send(res, status, value) {
   const body = `${JSON.stringify(value)}\n`
@@ -75,71 +65,6 @@ async function readJson(req) {
   }
 }
 
-/** Build the host object every view and action reads. */
-function createHost({ ctx, store, stateDir }) {
-  const host = {
-    ctx,
-    store,
-    stateDir,
-    masterId: null,
-    environment: [],
-    llm: undefined,
-    modelDetail: '使用内置模型目录',
-    setup: undefined,
-    recheckSetup: undefined,
-  }
-  // Filled after the document is loaded: the environment block reads current settings and deployment facts.
-  host.environment = []
-  host.refreshEnvironment = () => {
-    const settings = store.settings ?? {}
-    host.environment = [
-      { name: 'SUPERAGENT_STATE_DIR', label: { zh: '状态目录', en: 'State directory' }, value: stateDir },
-      { name: 'SUPERAGENT_REPOSITORY', label: { zh: 'GitHub 仓库', en: 'GitHub repository' }, value: settings.sources?.github?.config?.repository ?? '' },
-      { name: 'SUPERAGENT_AGENT', label: { zh: 'CLI 身份', en: 'CLI identity' }, value: store.setupCache?.accounts?.agent ?? '' },
-      { name: 'SUPERAGENT_TICKET', label: { zh: '工单 id', en: 'Ticket id' }, value: '<ticket id>' },
-      { name: 'SUPERAGENT_THREAD', label: { zh: '线程 key', en: 'Thread key' }, value: '<thread key>' },
-      { name: 'SUPERAGENT_WORKER_MODEL', label: { zh: '执行器模型', en: 'Worker model' }, value: settings.executor?.workerModel?.model ?? '' },
-    ]
-  }
-  host.refreshSetup = () => {
-    const cache = store.state ? (store.setupCache ?? {}) : {}
-    host.setup = { machine: { stateDir, ...MACHINE_LIMITS }, problem: cache.problem ?? null, feishuProblem: cache.feishuProblem ?? null,
-      accounts: cache.accounts ?? null }
-  }
-  host.recheckSetup = async ({ soft = false } = {}) => {
-    try {
-      await setupCheck(host)
-    } catch (error) {
-      ctx.logger?.warn?.('superagent setup check failed: %s', error instanceof Error ? error.message : String(error))
-    }
-    host.refreshSetup()
-  }
-  host.refreshSetup()
-  return host
-}
-
-/** Publish the model catalog the host LLM service offers, mirroring the session model selector. */
-async function readModels(host) {
-  const llm = host.ctx.get?.('llm')
-  if (!llm || typeof llm.listProviders !== 'function') return FALLBACK_MODELS
-  const groups = []
-  try {
-    for (const provider of llm.listProviders()) {
-      const models = await llm.listModels(provider.id).catch(() => [])
-      groups.push({ id: provider.id, name: provider.name ?? provider.id, models: models.map(model => ({
-        id: model.id, name: model.name ?? model.id, ...model.description ? { description: model.description } : {} })) })
-    }
-  } catch {
-    return FALLBACK_MODELS
-  }
-  if (!groups.length) return FALLBACK_MODELS
-  host.modelDetail = `模型目录：${groups.map(group => `${group.name} (${group.models.length})`).join('、')}`
-  const configured = host.store.settings.executor?.workerModel
-  const fallback = groups[0]?.models?.[0]
-  const defaultModel = configured ?? (fallback ? { provider: groups[0].id, model: fallback.id } : null)
-  return { groups, default: defaultModel }
-}
-
 /** Parse `/superagent/api/<path>` into segments. */
 const segmentsOf = (url) => {
   const parts = url.split('?')[0].replace(PREFIX, '').split('/').filter(Boolean)
@@ -151,21 +76,6 @@ const segmentsOf = (url) => {
   }
 }
 
-const routes = {
-  'GET state': ({ host }) => stateView(host),
-  'GET overview': ({ host }) => overviewView(host),
-  'GET search': ({ host, query }) => searchView(host, query.get('q') ?? ''),
-  'GET sources': ({ host }) => sourcesView(host),
-  'GET settings': ({ host }) => settingsView(host),
-  'GET threads': ({ host, query }) => threadListView(host, query.get('filter') ?? 'subscribed', Number(query.get('offset') ?? 0), Number(query.get('limit') ?? 20)),
-  'GET decisions': ({ host, query }) => decisionListView(host, query.get('kind') ?? 'work', Number(query.get('offset') ?? 0),
-    Number(query.get('limit') ?? 20), query.get('window')),
-  'GET tickets': ({ host, query }) => ticketListView(host, query.get('state') ?? 'open', Number(query.get('offset') ?? 0), Number(query.get('limit') ?? 20)),
-  'GET policy/history': ({ host }) => historyView(host),
-  'GET models': async ({ host }) => modelsView(await readModels(host)),
-  'GET prompts': ({ host, query }) => promptsView(host, query.get('revision') === null ? undefined : Number(query.get('revision'))),
-}
-
 /** Host half: registers the `/superagent/api` routes and starts the live engine.
  *
  * @param {DSH.HostPluginContext} ctx
@@ -173,22 +83,16 @@ const routes = {
  */
 export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
-  const store = new Store(stateDir)
-  const host = createHost({ ctx, store, stateDir })
   // DeepSeek JSON Output for review turns (lib/live/review-json.js); a host without the extension registry still runs,
   // the reviewer just answers free-form JSON and the workflow parses that.
   if (!registerReviewJsonMode(ctx, line => ctx.logger?.warn?.(`superagent review json mode: ${line}`))) {
     ctx.logger?.debug?.('superagent review json mode: deepseekLlmApiExtensions is unavailable')
   }
 
-  // The live engine is optional: it only starts when live.json exists and enabled=true. Its document is separate
-  // from the demo state, so a trial run never destroys what the panel shows in demo mode.
+  // The live engine is the plugin: it only starts when live.json exists and enabled=true. Every route below it is
+  // the engine's own API; there is no second "demo" document behind it.
   let engine
-  const ready = store.load().then(async (result) => {
-    host.refreshEnvironment()
-    host.refreshSetup()
-    if (result.corrupt) ctx.logger?.warn?.('superagent state was unreadable; seeded a fresh document (backup: %s)', result.backup)
-    ctx.logger?.info?.('superagent management state: %s (demo: %s)', store.file, store.state.demo === true)
+  const ready = (async () => {
     try {
       engine = await createEngine({ stateDir, ctx, log: line => ctx.logger?.info?.('superagent engine: %s', line) })
       await engine.start()
@@ -197,10 +101,7 @@ export function apply(ctx, config = {}) {
     } catch (error) {
       ctx.logger?.warn?.('superagent live engine failed to start: %s', error instanceof Error ? error.message : String(error))
     }
-    return result
-  }).catch((error) => {
-    ctx.logger?.error?.('superagent state failed to load: %s', error instanceof Error ? error.message : String(error))
-  })
+  })()
 
   const handler = async (req, res) => {
     try {
@@ -220,8 +121,6 @@ export function apply(ctx, config = {}) {
       const segments = segmentsOf(url.pathname)
       const method = req.method ?? 'GET'
       const body = method === 'GET' ? undefined : await readJson(req)
-      const call = { host, req, res, query: url.searchParams, segments, body }
-
       // Entity routes with one id segment after a known collection.
       const [first, second, third] = segments
       // Live-engine control and observation surface (separate from the demo management API).
@@ -511,8 +410,8 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, 'action 必须是 release / retry / stop')
           }
           const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
-          const result = await resumeTicket({ engine, ticketId: third, action, note,
-            log: line => ctx.logger?.info?.('superagent gate: %s', line) })
+          const result = /** @type {any} */ (await resumeTicket({ engine, ticketId: third, action, note,
+            log: line => ctx.logger?.info?.('superagent gate: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result?.invalid) throw new ActionError(409, result.invalid)
           send(res, 200, { run: result.run, ticket: result.ticket })
@@ -541,8 +440,8 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'answer') {
           const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, 4000) : ''
           if (!answer) throw new ActionError(400, 'answer 不能为空')
-          const result = await answerTicket({ engine, ticketId: third, answer,
-            log: line => ctx.logger?.info?.('superagent answer: %s', line) })
+          const result = /** @type {any} */ (await answerTicket({ engine, ticketId: third, answer,
+            log: line => ctx.logger?.info?.('superagent answer: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result?.invalid) throw new ActionError(409, result.invalid)
           send(res, 200, { run: result.run, ticket: result.ticket })
@@ -670,36 +569,7 @@ export function apply(ctx, config = {}) {
         }
         throw new ActionError(404, `未知引擎接口：${method} ${segments.slice(1).join('/')}`)
       }
-      if (method === 'GET' && first === 'threads' && second) { const value = threadDetailView(host, second, url.searchParams.get('before') ?? undefined, Number(url.searchParams.get('limit') ?? 20))
-        if (!value) throw new ActionError(404, '线程不存在'); send(res, 200, value); return }
-      if (method === 'GET' && first === 'tickets' && second) { const value = ticketDetailView(host, second)
-        if (!value) throw new ActionError(404, '工单不存在'); send(res, 200, value); return }
-      if (method === 'POST' && first === 'threads' && third === 'unsubscribe') { send(res, 200, await unsubscribeThread(host, second)); return }
-      if (method === 'POST' && first === 'triggers' && third === 'requeue') { send(res, 200, await requeueTrigger(host, second)); return }
-      if (method === 'POST' && first === 'decisions' && third === 'dismiss') { send(res, 200, await dismissDecision(host, second)); return }
-      if (method === 'POST' && first === 'tickets' && third === 'retry') { send(res, 200, await retryTicket(host, second)); return }
-      if (method === 'POST' && first === 'tickets' && third === 'stop') { send(res, 200, await stopTicket(host, second)); return }
-      if (method === 'POST' && first === 'sources' && third === 'labels') { send(res, 200, await syncSource(host, second)); return }
-      if (method === 'POST' && first === 'policy-sync' && second) { send(res, 200, await syncSource(host, second)); return }
-      if (method === 'PUT' && first === 'settings' && second) {
-        const value = body ?? {}
-        send(res, 200, await saveSettings(host, second, value.value, value.revision))
-        return
-      }
-      if (method === 'PUT' && first === 'prompts') {
-        const value = body ?? {}
-        send(res, 200, await savePrompts(host, value.config, value.baseRevision, MACHINE_LIMITS.promptMaxChars))
-        return
-      }
-      if (method === 'POST' && first === 'prompts' && second === 'preview') { send(res, 200, previewPromptsFor(host, body?.config ?? body ?? {})); return }
-      if (method === 'POST' && first === 'executor' && second === 'pause') { send(res, 200, await setPaused(host, !!body?.paused)); return }
-      if (method === 'POST' && first === 'setup' && second === 'check') { send(res, 200, await setupCheck(host).then(() => host.refreshSetup())); return }
-      if (method === 'POST' && first === 'demo' && second === 'reset') { send(res, 200, await resetDemo(host)); return }
-
-      const key = `${method} ${segments.join('/')}`
-      const route = routes[key]
-      if (route) { send(res, 200, await route({ host, query: url.searchParams, body })); return }
-      send(res, 404, { error: `未知接口：${key}` })
+      send(res, 404, { error: `未知接口：${method} ${segments.join('/')}` })
     } catch (error) {
       if (error instanceof BodyTooLarge) { send(res, 413, { error: '请求体过大' }); return }
       if (error instanceof ActionError) { send(res, error.status, { error: error.message, ...error.extra }); return }

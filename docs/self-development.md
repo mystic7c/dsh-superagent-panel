@@ -18,7 +18,7 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
     { "name": "syntax", "command": "node --check index.js" },
     { "name": "client-build", "command": "node scripts/build-client.mjs --check" },
     { "name": "i18n", "command": "node scripts/check-keys.mjs" },
-    { "name": "host-tests", "command": "node --test lib/store.test.js lib/live/*.test.js" },
+    { "name": "host-tests", "command": "node --test lib/live/*.test.js" },
     { "name": "render", "command": "node scripts/render-check.mjs" },
     { "name": "isolated", "command": "node scripts/isolated-verify.mjs" }
   ],
@@ -64,7 +64,7 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 | `syntax` | `node --check index.js` | Host 半 `index.js` 语法 |
 | `client-build` | `node scripts/build-client.mjs --check` | `client/index.js` 与 `client/src/` 是否同步（改了源码没重建就失败） |
 | `i18n` | `node scripts/check-keys.mjs` | 客户端用到的文案 key 都存在，且中英文词典 key 一致 |
-| `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 556 个） |
+| `host-tests` | `node --test lib/live/*.test.js` | Host 全量单测（当前 556 个） |
 | `render` | `node scripts/render-check.mjs` | jsdom 渲染回归（jsdom/React 来自仓库 devDependencies） |
 | `isolated` | `node scripts/isolated-verify.mjs` | 起一个隔离 DSH（临时 `DSH_HOME`/state、随机端口）加载本工作树的面板代码，用 Chrome headless CDP 实机渲染并检查侧栏入口、页签与空状态、console 无错误；结束后清理 |
 

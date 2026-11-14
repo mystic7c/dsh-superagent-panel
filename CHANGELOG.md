@@ -1,5 +1,133 @@
 # Changelog
 
+## [0.9.11] — 2026-11-14
+
+> 发布说明：v0.9.11 是 0.9.5–0.9.11 的汇总发布（checkJs 分档、删除旧管理层、交付桥前缀、Host 半全量入档），
+> 只通过 GitHub Release 的 tarball 分发，`package.json` 仍是 `"private": true`。
+
+### 变更
+- `tsconfig.check.json` 的 tranche 4：`index.js` 入档，`npm run check:js` 现在覆盖**整个 Host 半**（含入口）。
+- `index.js` 只有 10 个错误，都是 `resumeTicket(...)` / `answerTicket(...)` 的联合返回（`{run, ticket}` vs
+  `{missing, invalid}`）在 `if (result?.missing)` 处收窄失败；修法是
+  `const result = /** @type {any} */ (await resumeTicket({ … }))`，`answerTicket` 同款。
+- `AGENTS.md` / `CONTRIBUTING.md` / `README.md` 的闸门说明改成「Host 半全量入档；客户端 `client/src/*.js` 尚未入档」。
+
+### 为什么
+`engine`/`executor` 在 0.9.10 清零后，`index.js` 的错误从 151 掉到 10——绝大多数是引擎返回类型没标注时的连锁报错。
+把入口也纳入清单，P4 的 checkJs 部分就只剩「客户端片段」这一档。
+
+### 验证
+- `npm run check:js` 0 错误（清单 26 个文件）；`npm run types` 通过；`node --check index.js`。
+- `--check` 23 modules / 481,052 bytes；`check-keys` 958 / 513 / 1359。
+- Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`。
+
+## [0.9.10] — 2026-11-14
+
+### 变更
+- `tsconfig.check.json` 的 tranche 3：`lib/live/engine.js`、`shadow.js` 进 `files`；`engine.js` 会拉进 `executor.js`，
+  所以三个文件一起清零（清单 23 → 25 个文件，`npm run check:js` 0 错误）。`index.js` 仍在清单外（会牵出整条引擎链，
+  留最后一档）。
+- 修法全是类型标注，没有行为改动：给「解构出一个 options 对象」的函数补 `@param {any} [options]`
+  （`engine.js` 的 `deriveInboxItems`/`routePreview`/`signalsView`/`operationsView`/`acceptTicket`/`dismissTicket` 等，
+  `executor.js` 的 `runCommand`/`gateCommandFor`/`workerBrief`/`createRunRecorder`/`markRunComplete`/`executeTicketInner` 等，
+  `shadow.js` 的 `collectShadowSamples`）；`error.code`/`error.status`、`records.ticket.routeSelection`、
+  `candidate.signalId`、`built.decision`、`check.onFail`、`worktreeDiff` 的返回联合等用 `/** @type {any} */` 收口；
+  `deps = {}` 统一改成 `deps = /** @type {any} */ ({})`，`log` 参数标成 `(line: string) => void`。
+- `lib/live/shadow.js` 的 `collectShadowSamples` 补了 `@param {any} [options]`。
+
+### 为什么
+`check:js` 分档的价值是「新代码在已清档的模块里必须类型干净」。`engine`/`executor`/`shadow` 互相 import，
+不一起清零就无法单独入档；它们是 Host 半最重的三个文件（放探针时 257/161/267 个错误），清零后
+`npm run check:js` 覆盖了除 `index.js` 之外的整个 Host 引擎。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`。
+- `--check` 23 modules / 481,052 bytes（未动客户端）；`check-keys` 958 / 513 / 1359。
+- Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`；`isolated-verify` PASS（console errors 0）。
+
+## [0.9.9] — 2026-11-14
+
+### 变更
+- `tsconfig.check.json` 的 tranche 2：`lib/live/repos.js`、`config.js`、`signals.js`、`inbox.js`、`live-json.js`、`worker.js`
+  进 `files`（tranche 1 → 2 共 23 个文件），`npm run check:js` 仍 0 错误。
+- `lib/live/worker.js` 补 JSDoc：`joinChildrenBeforeTurnEnd` 的 `{ subagents, payload, log }` 参数类型与返回形状；
+  `runWorker` 补 `readOnly`/`preset`/`signal` 三个漏掉的 `@param`；`ctx.agents` 与 `agentCtx.on` 用 `any` 兜住宿主未声明的服务；
+  `offs`/`stopChildren` 显式标类型（否则从 `ctx.on` 的返回值推成 `never`，`release?.()`/`stopChildren()` 都报 TS2349）。
+
+### 为什么
+`worker.js` 是唯一还有错误的叶子模块：其余五个（`repos`/`config`/`signals`/`inbox`/`live-json`）实测 0 错误，
+加进清单即可防回归。`engine`/`executor`/`shadow`/`index.js` 分别 257/161/267/275 错误，留作 tranche 3。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
+- `check-keys` 958 / 513 / 1359；Host 554 pass / 0 fail；render-check 194 / 0 failed。
+
+## [0.9.8] — 2026-11-14
+
+### 变更
+- `docs/delivery.md` 的分支前缀表补上 `fix/**`、`chore/**`、`docs/**`（与 0.9.7 的 `auto-pr.yml` 触发面一致）。
+- `ci.yml` 的 push 触发面补上 `docs/**`：此前 docs 分支只有 `auto-pr` 会跑，分支保护要求的 `test (22)`/`test (24)`
+  不出现，PR 反而合不了。这条 `docs/**` 分支本身就是验证：推送后 `auto-pr` 自动开了 PR，CI 也照常跑。
+
+## [0.9.7] — 2026-11-14
+
+### 变更
+- `.github/workflows/auto-pr.yml` 的触发前缀补上 `chore/**` 与 `docs/**`（此前只有 `feature/**`、`fix/**`、
+  `release/**`、`hotfix/**`）：这两类分支 push 后不会再只跑 CI、需要人手动 `gh pr create`。
+- `ci.yml` 的 push 触发早已含这两个前缀，现在两套工作流的触发面一致。
+
+## [0.9.6] — 2026-11-14
+
+### 变更
+- 删除旧「管理层」：`lib/views.js`、`lib/actions.js`、`lib/store.js`、`lib/seed.js`、`lib/prompts.js`，以及它们挂的
+  25 条非引擎路由（`GET state|overview|search|sources|settings|threads|decisions|tickets|policy/history|models|prompts`、
+  `PUT settings|prompts|prompts/preview`、`POST threads/:id/unsubscribe|triggers/:id/requeue|decisions/:id/dismiss|
+  tickets/:id/retry|tickets/:id/stop|sources/:id/labels|policy-sync/:id|executor/pause|setup/check|demo/reset`）。
+  `index.js` 从 719 行降到 590 行，只剩引擎 API；`/superagent/api/<unknown>` 现在直接回 404。
+- `index.js` 不再构造那个给旧视图用的 `host`（`createHost`/`readModels`/`FALLBACK_MODELS`/`MACHINE_LIMITS` 一并删除），
+  `apply()` 只等引擎启动；`ActionError` 改为本文件内的 4 行类。
+- 测试脚本从 `node --test lib/store.test.js lib/live/*.test.js` 收敛成 `node --test lib/live/*.test.js`
+  （`store.test.js` 随 `store.js` 删除）；`tsconfig.check.json` 去掉已删除的 `lib/prompts.js`。
+- `AGENTS.md` 结构段、`index.js` 头注释、`docs/quickstart.md` 的「演示种子/`/demo/reset`」说明同步更新。
+
+### 为什么
+客户端从 0.4.x 起只调 `/superagent/api/engine/*`，旧管理层早已是死代码：它需要另一份 `state.json`、另一套 actions，
+却仍在 `apply()` 里被加载和注册，读代码的人会以为面板有两套数据源。删掉后 `/superagent/api` 只对应 `lib/live`。
+
+### 验证
+- `node --check index.js`；`node scripts/build-client.mjs --check` 23 modules / 481,052 bytes（未动客户端）。
+- `node scripts/check-keys.mjs` 958 / 513 / 1359；`npm run types` 与 `npm run check:js` 均通过。
+- Host 测试 554 pass / 0 fail（少了 `store.test.js` 的 2 条）。
+- `node scripts/render-check.mjs` 194 checks / 0 failed / 0 skipped；`node scripts/isolated-verify.mjs` PASS，console errors 0。
+
+## [0.9.5] — 2026-11-14
+
+### 变更
+- 新增 `tsconfig.check.json` 与 `npm run check:js`：用 `checkJs` 真正类型检查 JS 源码，但只覆盖
+  「分档清单」里已经清零的文件。第一档是 Host 侧 21 个不依赖 `engine`/`executor` 的叶子模块
+  （`lib/util.js`、`lib/prompts.js`、`lib/live/{repo,worker-tools,workflow,workflow-worker,acceptance,evidence,
+  operations,worker-cli,review-json,diff,github,routing,eval,judge,octo,gitlab}.js`），0 错误。
+- `ci.yml` 增加同名步骤；`AGENTS.md`、`CONTRIBUTING.md`、`README.md`、`docs/ui-workflow.md` 的验收命令同步，
+  并写明规则：修好一个旧文件就把它加进 `files`，不要为了让绿灯把文件移出去。
+- 给第一档文件补齐 JSDoc：批量把 27 处 `{ … } = {}` 默认参数标成 `Record<string, any>`（TS 会把 `{}` 推成空对象类型，
+  属性访问全报 TS2339）；`acceptance.js` 的 `requirement`、`repo.js` 的 `prepareWorktree`、`worker-tools.js` 的
+  `registerWorkerTools` 补参数/返回类型；`eval.js` 的 `ignore` 闭包、`gitlab.js` 的 `createGitlabClient`、
+  `octo.js` 的 `firstDefined`/`toNumberOrRaw`、`review-json.js` 的 `log` 与扩展注册表补显式类型；
+  `prompts.js` 的 `defaultChanged` 拆出带类型的 `changedPart`，避免 `flatMap` 返回联合数组。
+
+### 为什么
+P4（类型契约）此前只做了一半：`types/dsh.d.ts` 只校验声明本身，源码里 700 多个 `checkJs` 错误完全没进闸门，
+类型注解写了也不验。一次性清零需要跨十几个模块补 JSDoc，一个 PR 不可审，所以改成只增不减的分档清单：
+CI 从第一天起就守住已清零的部分，剩下的按 `engine`/`executor`/客户端逐档推进。
+
+### 验证
+- `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js` 通过。
+- `node scripts/build-client.mjs --check` 23 modules / 481,052 bytes（只改 Host 半，客户端产物不变）。
+- `node scripts/check-keys.mjs` 958 / 513 / 1359。
+- Host 测试 556 pass / 0 fail。
+- `node scripts/render-check.mjs`（`DSH_SUPERAGENT_STATE_DIR=/tmp/rc-t1`）194 checks / 0 failed / 0 skipped。
+- `node scripts/isolated-verify.mjs` PASS，console errors 0。
+
 ## [0.9.4] — 2026-11-14
 
 ### 变更

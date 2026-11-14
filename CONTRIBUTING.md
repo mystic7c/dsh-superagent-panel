@@ -42,11 +42,15 @@ node scripts/build-client.mjs                      # 改了 client/src 就先重
 node scripts/build-client.mjs --check              # 产物是否最新（CI 强制）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                      # types/dsh.d.ts 自身能否通过 tsc
-node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
+npm run check:js                                   # checkJs 已清零的那一档（清单在 tsconfig.check.json）
+node --test lib/live/*.test.js   # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（194 条；无 live.json 时自动用 test/fixtures）
 ```
 
-CI 在干净 clone 上跑的就是这七条。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
+CI 在干净 clone 上跑的就是这八条。`npm run check:js` 用的是「分档清单」：`tsconfig.check.json` 的 `files`
+列出已经补完 JSDoc 的文件。从 0.9.11 起这一档**覆盖整个 Host 半（含 `index.js`）**；客户端 `client/src/*.js`
+是分批迁移的 JSX 片段，还不在清单里，需要单独一档。修好一个新文件就加进去，
+**不要为了让 CI 变绿把文件移出去**。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
 DSH + Chrome（CDP），只在发布前由维护者人工执行。
 
 ## 代码规则
