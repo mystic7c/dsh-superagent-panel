@@ -1,5 +1,87 @@
 # Changelog
 
+## [0.9.2] — 2026-11-14
+
+这是 v0.8.0 之后累计到 `main` 的发布：0.8.1 证据空态语义、0.8.2 CI 去人工 approve + README 带数据截图、
+0.9.0 P4 类型契约、0.9.1 文档状态标注，以及本节的 render-check 轮询修复。仍然 `"private": true`，只发 Release
+tarball，不进 npm。
+
+### 修复
+- `scripts/render-check.mjs` 挂载后不再固定 `await sleep(900)`，改为轮询等待「`.sa-page` 出现且没有骨架屏」，
+  超时 20 秒才报 `WAIT panel first data load timed out`。PR #50 的 Node 24 任务曾出现一次
+  `FAILED 53/194`：CI 上首次数据加载晚于 900 ms，收件箱还没到，后面所有经它进入的断言连锁失败
+  （`gh run rerun` 即通过，本地 Node 24 也通过——典型的固定等待 vs 机器速度）。轮询让这道闸门验行为，
+  不验机器快慢；真加载不出来时仍然会超时报错。
+
+### 验证
+- 本机 `node scripts/render-check.mjs`（Node 24.22.2）：194 checks / 0 failed / 0 skipped，exit 0。
+- `node --check index.js`、`--check`、`npm run types`、Host 556 pass 未变。
+
+## [0.9.1] — 2026-11-14
+
+### 变更
+- 两份 2026-11 的评审文档标注状态：`docs/product-review-2026-11.md` 改为「历史输入」（六项改进已在
+  0.4.19–0.4.38 落地），`docs/panel-improvements-2026-11.md` 明确为仍然有效的行为契约。仓库公开后这两份
+  最容易让人误判「这些是待办」，先写清楚。
+
+### 验证
+- 只改 Markdown 与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0。
+
+## [0.9.0] — 2026-11-14
+
+### 新增
+- **手写的宿主类型契约 `types/dsh.d.ts`**（P4）：只声明本插件真正用到的两面——Host 的
+  `apply(ctx, config)`（`logger`、`effect`、`webServer.register`、`get`）与 Client 的 `apply(ctx)`
+  （`slots.inject/register`、`locale.register`、`get('uiWorkspace')`），外加 `window.__ModuleLoader__` 的
+  `load({ id, factory })`。**刻意不引用 `@deepseek-ai/dsh-*`**：那会把插件钉死在某个 DSH 版本的内部类型上，
+  而这里要的是「宿主至少提供过什么」。
+- `tsconfig.json` + `npm run types`（`tsc -p tsconfig.json`，`typescript` 5.9.3 精确锁定），只做 `noEmit`
+  检查声明文件自身；CI 增加同名步骤，这样声明不会悄悄失效。
+- `index.js` 的 `apply` 与 `client/src/apply.js` 的 `apply` 加了 JSDoc（`@param {DSH.HostPluginContext}` /
+  `{DSH.ClientPluginContext}`），编辑器装了这个包就能顺着跳进类型定义。
+
+### 变更
+- `package.json` 的 `files` 增加 `types/**/*.d.ts`；`docs/self-development.md`、`docs/ui-workflow.md`
+  里「render-check 依赖 `/tmp/sa-harness`」的旧说法改成 devDependencies（那是 P0 之后就过期的描述），
+  闸门清单补上 `npm run types`。
+
+### 验证
+- `npm run types`（tsc 5.9.3）通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
+  check-keys 958/513/1359；Host 556 pass；render-check 194 checks / 0 failed。
+
+## [0.8.2] — 2026-11-14
+
+### 变更
+- **CI 在投递分支的 push 上直接跑**：`ci.yml` 的 `push` 触发从 `[develop, main]` 扩到 `feature/**`、`fix/**`、
+  `release/**`、`hotfix/**`、`chore/**`。push 运行不需要人工 approve，而分支保护读的是挂在 head commit 上的
+  check run，两者的效果一致——之前每个 PR 的 `pull_request` 运行都停在 `action_required`，要手工
+  `gh api -X POST …/actions/runs/<id>/approve`。
+- README 首图从空状态换成带数据的执行页（三条排队工单、执行器负载、视图筛选），
+  文件改为 `docs/images/panel-execution.png`。
+
+### 验证
+- `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass。
+- `node scripts/build-client.mjs --check`（产物未变）；check-keys 958/513/1359；render-check 194/0。
+- 截图来自隔离 DSH 实例（fixture 状态 + 通过 Host API 建的三条工单），console errors 0。
+
+## [0.8.1] — 2026-11-14
+
+### 修复
+- **待运行工单的「交付证据」被渲染成读取失败**：`GET /superagent/api/engine/evidence/<ticketId>` 在没有证据记录时
+  统一返回 `404 没有这段交付证据`，客户端 `DeliveryEvidenceCard` 把 404 当成错误，显示「没有这段交付证据 +
+  可以先重试… + 原始错误」，而页面本来已经有「这段交付还没有持久化的证据（旧工单或尚未跑完）」这条空状态文案。
+  - Host：工单**存在**但没有证据时返回 `200 { ticketId, rounds: [] }`（走空状态）；工单不存在仍返回 404。
+    `evidence/:id/compare` 缺少可比较轮次时改为 `404 没有可比较的交付证据`，与「工单不存在」区分开。
+  - 新增路由测试：已存在但无证据的工单 → 200 空轮次；未知工单 → 404。
+- Host 测试 555 → 556。
+- `.github/workflows/auto-pr.yml` 的触发分支补上 `fix/**`（此前只有 `feature/**`、`release/**`、`hotfix/**`，
+  `fix/` 分支要手工开 PR）。
+
+### 验证
+- `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass / 0 fail。
+- `node scripts/build-client.mjs --check`（产物未变，481,039 字节）；check-keys 958/513/1359。
+- `node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+
 ## [0.8.0] — 2026-11-14
 
 ### 变更

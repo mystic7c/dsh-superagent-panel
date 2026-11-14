@@ -4,7 +4,16 @@ name: ci
 # stay local: they need the DeepSeek Harness app, which CI does not have.
 on:
   push:
-    branches: [develop, main]
+    # Delivery branches are listed too: a push run is not held for approval the way a pull_request run opened by a
+    # bot is, and branch protection reads the check runs attached to the head commit either way.
+    branches:
+      - develop
+      - main
+      - 'feature/**'
+      - 'fix/**'
+      - 'release/**'
+      - 'hotfix/**'
+      - 'chore/**'
   pull_request:
     branches: [develop, main]
   workflow_dispatch:
@@ -33,6 +42,8 @@ jobs:
         run: node scripts/build-client.mjs --check
       - name: Locale keys cover both languages
         run: node scripts/check-keys.mjs
+      - name: Hand-written declarations still type-check
+        run: npm run types
       - name: Host tests
         run: node --test lib/store.test.js lib/live/*.test.js
       - name: Client render regression (jsdom, fixture state)
