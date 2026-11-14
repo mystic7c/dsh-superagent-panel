@@ -2,6 +2,9 @@
 
 ## [0.9.11] — 2026-11-14
 
+> 发布说明：v0.9.11 是 0.9.5–0.9.11 的汇总发布（checkJs 分档、删除旧管理层、交付桥前缀、Host 半全量入档），
+> 只通过 GitHub Release 的 tarball 分发，`package.json` 仍是 `"private": true`。
+
 ### 变更
 - `tsconfig.check.json` 的 tranche 4：`index.js` 入档，`npm run check:js` 现在覆盖**整个 Host 半**（含入口）。
 - `index.js` 只有 10 个错误，都是 `resumeTicket(...)` / `answerTicket(...)` 的联合返回（`{run, ticket}` vs
