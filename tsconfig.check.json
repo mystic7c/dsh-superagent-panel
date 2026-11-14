@@ -1,0 +1,44 @@
+{
+  "//": "checkJs tranche 1：Host 侧不依赖 engine/executor 的叶子模块。修好一个新文件就加进 files；不要为了让绿灯移除文件。",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "es2022",
+      "dom"
+    ],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "React.Fragment",
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "files": [
+    "types/dsh.d.ts",
+    "lib/util.js",
+    "lib/prompts.js",
+    "lib/live/repo.js",
+    "lib/live/worker-tools.js",
+    "lib/live/workflow.js",
+    "lib/live/workflow-worker.js",
+    "lib/live/acceptance.js",
+    "lib/live/evidence.js",
+    "lib/live/operations.js",
+    "lib/live/worker-cli.js",
+    "lib/live/review-json.js",
+    "lib/live/diff.js",
+    "lib/live/github.js",
+    "lib/live/routing.js",
+    "lib/live/eval.js",
+    "lib/live/judge.js",
+    "lib/live/octo.js",
+    "lib/live/gitlab.js"
+  ]
+}

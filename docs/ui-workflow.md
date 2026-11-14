@@ -51,6 +51,7 @@ node --check index.js
 node scripts/build-client.mjs --check     # 产物是否与 src 同步
 node scripts/check-keys.mjs               # i18n key 完整性
 npm run types                             # types/dsh.d.ts 自身能否通过 tsc
+npm run check:js                          # checkJs 已清零的那一档（tsconfig.check.json）
 node --test lib/store.test.js lib/live/*.test.js
 node scripts/render-check.mjs             # jsdom 全页回归（devDependencies 里的 jsdom + React）
 ```
