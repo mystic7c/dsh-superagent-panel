@@ -21,6 +21,8 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
+// The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
+// the host's own type packages, so reading and checking it does not tie the plugin to one DSH release.
 export const inject = ['webServer']
 const PREFIX = '/superagent/api'
 const MAX_BODY = 128 * 1024
@@ -164,6 +166,11 @@ const routes = {
   'GET prompts': ({ host, query }) => promptsView(host, query.get('revision') === null ? undefined : Number(query.get('revision'))),
 }
 
+/** Host half: registers the `/superagent/api` routes and starts the live engine.
+ *
+ * @param {DSH.HostPluginContext} ctx
+ * @param {DSH.PluginConfig} [config]
+ */
 export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
   const store = new Store(stateDir)
@@ -648,12 +655,18 @@ export function apply(ctx, config = {}) {
         }
         // AC-08/09: durable delivery evidence, independent of the operation-ledger window and the worktree.
         if (method === 'GET' && second === 'evidence' && third) {
-          const value = segments[3] === 'compare'
-            ? engine.evidenceCompare(third, url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined)
-            : engine.evidenceView(third)
-          if (!value) throw new ActionError(404, '没有这段交付证据')
-          send(res, 200, value)
-          return
+          if (segments[3] === 'compare') {
+            const compared = engine.evidenceCompare(third, url.searchParams.get('from') ?? undefined, url.searchParams.get('to') ?? undefined)
+            if (!compared) throw new ActionError(404, '没有可比较的交付证据')
+            send(res, 200, compared)
+            return
+          }
+          const value = engine.evidenceView(third)
+          if (value) { send(res, 200, value); return }
+          // A ticket that exists but never delivered anything is an empty result, not a read failure: the detail page
+          // renders `detail.evidenceEmpty` for it, while a real error would show the retry state instead.
+          if (engine.ticketView(third)) { send(res, 200, { ticketId: third, rounds: [] }); return }
+          throw new ActionError(404, '没有这段交付证据')
         }
         throw new ActionError(404, `未知引擎接口：${method} ${segments.slice(1).join('/')}`)
       }

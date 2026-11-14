@@ -50,11 +50,12 @@
 node --check index.js
 node scripts/build-client.mjs --check     # 产物是否与 src 同步
 node scripts/check-keys.mjs               # i18n key 完整性
+npm run types                             # types/dsh.d.ts 自身能否通过 tsc
 node --test lib/store.test.js lib/live/*.test.js
-node scripts/render-check.mjs             # jsdom 全页回归（依赖 /tmp/sa-harness）
+node scripts/render-check.mjs             # jsdom 全页回归（devDependencies 里的 jsdom + React）
 ```
 
-`render-check` 依赖 `/tmp/sa-harness` 里的 jsdom + React；缺失时先按 `scripts/render-check.mjs` 头部注释装依赖。
+`render-check` 依赖仓库 `devDependencies` 里的 jsdom + React：干净 clone 先 `npm ci`，缺依赖时脚本会报错并以 2 退出。
 它断言的是**用户可见行为**，所以 UI 语义变化（把假链接换成真 `<button>`、把通用「确定」换成动作级文案）通常需要同步更新
 `scripts/render-check.mjs` 的期望——那是测试对齐，不是回归。
 
