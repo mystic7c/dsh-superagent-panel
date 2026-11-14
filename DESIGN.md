@@ -112,6 +112,10 @@ components:
 面板不拥有自己的品牌色，它运行在 DSH 宿主主题里，颜色、字体、浮层背景全部来自 `--dsw-alias-*`。这套设计系统的职责不是
 定义颜色，而是**约束怎么用**：哪一层用哪一档、什么情况下才允许出现阴影、小字号文本必须抬到哪个对比度。
 
+实现形态：客户端是 ES 模块 + JSX（`jsxFactory: 'h'`，React 只从 `client/src/react.js` 引入），由 esbuild 从
+`client/src/index.js` bundle 成单一 `client/index.js`；样式是 `client/src/style.js` 里的一段模板字符串，没有 Tailwind、
+CSS Modules 或组件库。token 定义在 `.sa-page` / `.sa-main` / `.sa-toast` 上，靠继承生效。
+
 **Key Characteristics:**
 - 密度优先：正文 13px、行高 1.5，一屏能读完的东西不折行、不换页。
 - 平面为主：卡片、行、输入框一律无阴影，阴影只属于浮层。
@@ -169,7 +173,7 @@ components:
 **The Scale-Only Rule.** 只有 11 / 12 / 13 / 15 / 20 五档字号。介于两者之间的值属于控件高度或边框宽度，不属于文字。
 
 **The Tabular Rule.** 任何会纵向对齐的数字（计数、时长、百分比、时间线、diff 行号）加 `font-variant-numeric: tabular-nums`；
-正文段落（`.sa-md`）显式 opt out，避免正文被拉宽。
+正文段落（`.sa-md`）不继承这组规则，保持默认数字宽度。
 
 **The Two-Weight Rule.** 字重只用 400 / 500 / 600。600 表示"这是标题或当前项"，500 表示"这是可点的"，400 是其余。
 
@@ -209,6 +213,7 @@ components:
 - **Ghost:** 无底无边，hover 才出现 layer-2 底。
 - **Danger:** `state-error-primary` 底，只用于不可逆动作；默认仍走 `ConfirmButton` 二次确认并给动作级文案。
 - **Hover / Focus:** hover 只换底色/边框色；`:focus-visible` 一律 `outline: var(--sa-focus); outline-offset: 2px`。禁用态 `opacity: .4`。
+- 变体就是四个类：`.sa-btn-primary` / `.sa-btn-outline` / `.sa-btn-ghost` / `.sa-btn-danger`，没有 theme prop。
 
 ### Tabs（页签）
 - 36px 高，底部 2px 透明边；选中项文字升为 primary 并把下划线染成品牌色。页签用 `aria-selected` 而不是 CSS 类表达选中。
@@ -219,8 +224,10 @@ components:
 - **Error:** 边框不变色，改为在字段下方给 `--sa-danger-text` 的说明 + `aria-invalid` + `role=alert`。
 
 ### Rows（列表行）
-- 8px 底 + 8px 左内边距，行间用 0.5px 上边框（`border-top-left-radius: 0`），hover 整行染 layer-2。
-- 整行可点由**行内真按钮**（`.sa-row-open`）实现，鼠标靠 `::after` 铺满整行；行内不再嵌套可交互元素。
+- 内边距 `8px 0 10px`（上下不对称是为了让 0.5px 分隔线看起来居中），行间用 0.5px 上边框（`border-top-left-radius: 0`），
+  hover 整行染 layer-2。
+- 整行可点由**行内真按钮**（`.sa-row-open`）实现：它 `flex: 1 1 auto` 撑满剩余宽度，点击区域就是按钮本身，不叠
+  `::after` 伪元素；行内不再嵌套可交互元素。
 
 ### Cards
 - layer-1 底、8px 圆角、0.5px 描边、16px 内边距、内部 12px 间距。无阴影。

@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.2] — 2026-11-14
+
+### 文档
+- `docs/ui-workflow.md` 重写：原文还把面板描述成「裸 DOM、无 JSX，规范写在 `spec/panel-ui.md`」，与 0.8.0 之后的实现
+  （ES 模块 + JSX、`jsxFactory: 'h'`、esbuild bundle）和公共仓库的现实（`spec/` 不入库）都不符。新版补了模块地图、
+  「React 只从 `./react.js` 引入」的硬约束、`npm ci` 与 `check:js`/`render-check`/`isolated-verify` 的完整闸门，
+  真机点检改成 dev profile（`npm run dev`），模板 prompt 同步。
+- `DESIGN.md` 对齐代码：补「实现形态」段（ES 模块 + JSX、单一 CSS 模板字符串、token 定义在 `.sa-page`/`.sa-main`/`.sa-toast`）；
+  修正三条与 `client/src/style.js` 不一致的说法——`.sa-md` 不再声称显式 opt out `tabular-nums`、列表行点击区
+  是 `.sa-row-open` 自身撑满（没有 `::after` 覆盖层）、按钮变体就是四个 CSS 类。
+
 ## [1.0.1] — 2026-11-14
 
 ### 文档
