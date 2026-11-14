@@ -2,7 +2,11 @@
    object. The panel follows the Harness locale service (`locale.getSnapshot().active`) and falls back to the browser
    language when the service is absent, so it never needs the host's dictionary registry to render. */
 
-const TEXT = {
+import { Input } from "./10-controls.js"
+import { same, stay } from "./15-api.js"
+import { apply } from "./90-apply.js"
+import { React, h, useEffect, useMemo, useState } from "./00-react.js"
+export const TEXT = {
   title: ['超级智能体', 'Superagent'],
   close: ['关闭', 'Close'],
   cancel: ['取消', 'Cancel'],
@@ -444,11 +448,11 @@ const TEXT = {
 }
 
 /** Bilingual lookup helpers used by the views to render enum values and glossary rows. */
-const GLOSSARY = { roles: ['agent', 'mainSession', 'executorSession'], source: ['source', 'channel'],
+export const GLOSSARY = { roles: ['agent', 'mainSession', 'executorSession'], source: ['source', 'channel'],
   trigger: ['trigger', 'thread', 'correlation', 'subscription', 'fanout', 'disposition'],
   eval: ['policy', 'policyVersion', 'eval', 'gate', 'assessment', 'decision', 'mandate', 'scope', 'strength'],
   execution: ['executor', 'environment', 'ticket', 'assignment', 'input', 'report', 'attention'] }
-const GLOSSARY_VALUES = {
+export const GLOSSARY_VALUES = {
   decision: ['decision.accept', 'decision.reopen', 'decision.stop', 'decision.ignore', 'decision.unavailable', 'decision.wouldAccept'],
   strength: ['strength.explicit', 'strength.inferred'],
   ticket: ['stage.answer', 'stage.review', 'stage.blocked', 'stage.failed', 'stage.delivery', 'stage.queued', 'stage.working', 'stage.idle', 'ticket.ended'],
@@ -456,7 +460,7 @@ const GLOSSARY_VALUES = {
   report: ['report.progress', 'report.waiting', 'report.ready', 'report.blocked', 'report.failed', 'report.dropped'],
 }
 
-const DICTS = {}
+export const DICTS = {}
 for (const lang of ['zh', 'en']) {
   const index = lang === 'zh' ? 0 : 1
   DICTS[lang] = Object.fromEntries(Object.entries(TEXT).map(([key, value]) => {
@@ -469,7 +473,7 @@ for (const lang of ['zh', 'en']) {
 }
 
 /** Translate one key with `{name}` interpolation; unknown keys render as the key so a missing entry is visible. */
-function translate(lang, key, values) {
+export function translate(lang, key, values) {
   const dict = DICTS[lang] ?? DICTS.zh
   const template = dict[key] ?? DICTS.zh[key] ?? key
   if (values === undefined) return template
@@ -477,7 +481,7 @@ function translate(lang, key, values) {
 }
 
 /** Subscribe to the Harness locale and expose a translator bound to the active language, with a browser fallback. */
-function useTranslator(ctx) {
+export function useTranslator(ctx) {
   const [lang, setLang] = useState(() => detectLang(ctx))
   useEffect(() => {
     const locale = ctx.get?.('locale')
@@ -491,7 +495,7 @@ function useTranslator(ctx) {
     return t
   }, [lang])
 }
-function detectLang(ctx) {
+export function detectLang(ctx) {
   try {
     const locale = ctx.get?.('locale')
     const active = locale?.getSnapshot?.().active ?? locale?.getLocale?.().active
@@ -500,16 +504,16 @@ function detectLang(ctx) {
   const browser = typeof navigator !== 'undefined' ? navigator.language : 'en'
   return String(browser).startsWith('zh') ? 'zh' : 'en'
 }
-const errorText = failure => failure instanceof Error ? failure.message : String(failure)
-const localized = (t, value) => typeof value === 'string' ? value : value ? value[t.lang === 'en' ? 'en' : 'zh'] : ''
-const actorName = (t, actor) => actor?.name ? localized(t, actor.name) : t('unknown')
-const valueLabel = (t, group, key) => {
+export const errorText = failure => failure instanceof Error ? failure.message : String(failure)
+export const localized = (t, value) => typeof value === 'string' ? value : value ? value[t.lang === 'en' ? 'en' : 'zh'] : ''
+export const actorName = (t, actor) => actor?.name ? localized(t, actor.name) : t('unknown')
+export const valueLabel = (t, group, key) => {
   if (!key) return ''
   const text = t(`${group}.${key}`)
   return text === `${group}.${key}` ? key : text
 }
 /** Render one or more structured reasons in the active language; unknown codes fall back to their code. */
-function reasonLabel(t, reason) {
+export function reasonLabel(t, reason) {
   const list = reason === undefined ? [] : Array.isArray(reason) ? reason : [reason]
   return list.map(item => {
     if (typeof item === 'string') return item
@@ -521,18 +525,18 @@ function reasonLabel(t, reason) {
     return shared === item.code ? item.code : shared
   }).filter(Boolean).join('；')
 }
-const setupText = (t, problem) => problem ? t(`setup.${problem.code}`, problem.values ?? {}) : ''
+export const setupText = (t, problem) => problem ? t(`setup.${problem.code}`, problem.values ?? {}) : ''
 /** Replace source content placeholders with localized labels. */
-const readableMarkers = (t, value) => String(value ?? '')
+export const readableMarkers = (t, value) => String(value ?? '')
   .replace(/!\[[^\]]*\]\([^)]*\)|\[Image: [^\]]*\]|\[image\]/g, '［图片］')
   .replace(/\[Chat card: [^\]]*\]/g, '［卡片］')
   .replace(/\[Media: [^\]]*\]/g, '［媒体］')
   .replace(/\[Merged forward\]/g, '［合并转发］')
   .replace(/@_user_\d+/g, '［未知提及］')
 
-const timeLocale = lang => lang === 'en' ? 'en' : 'zh-CN'
+export const timeLocale = lang => lang === 'en' ? 'en' : 'zh-CN'
 /** Relative time for recent values and an absolute time for older ones. */
-function when(value, lang) {
+export function when(value, lang) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -546,7 +550,7 @@ function when(value, lang) {
   const sameYear = date.getFullYear() === new Date().getFullYear()
   return date.toLocaleString(timeLocale(lang), { ...sameYear ? {} : { year: 'numeric' }, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
-const fullTime = (value, lang) => {
+export const fullTime = (value, lang) => {
   const date = new Date(value ?? '')
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(timeLocale(lang))
 }

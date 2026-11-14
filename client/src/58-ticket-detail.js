@@ -1,3 +1,15 @@
+import { Icon, safeHttpUrl, shortId } from "./00-util.js"
+import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./06-i18n.js"
+import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, StatusIcon, StatusText, Switch, Tag } from "./10-controls.js"
+import { same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { routeLabel } from "./25-router.js"
+import { useLiveResource } from "./32-live-model.js"
+import { GateSummary, MergeRequestCard, StageRail, TicketRow, TicketStatusTag, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./34-live-ui.js"
+import { ThreadRuleRows } from "./48-thread-detail.js"
+import { React, h, useCallback, useEffect, useRef, useState } from "./00-react.js"
+
 Object.assign(PAGE_TEXT, {
   'wf.progress': ['执行流程', 'Execution workflow'],
   'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
@@ -321,7 +333,7 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** Run step name → PAGE_TEXT key suffix; gate steps are labelled with their gate name. */
-const TICKET_STEP_KEYS = {
+export const TICKET_STEP_KEYS = {
   'prepare-worktree': 'prepareWorktree',
   'prepare-repo': 'prepareRepo',
   'export-repo': 'exportRepo',
@@ -336,7 +348,7 @@ const TICKET_STEP_KEYS = {
   publish: 'publish',
 }
 
-function ticketStepLabel(t, name) {
+export function ticketStepLabel(t, name) {
   const text = String(name ?? '')
   if (text.startsWith('gate:')) return `${pt(t, 'ticket.step.gate')}：${pt(t, `gate.${text.slice(5)}`)}`
   const key = TICKET_STEP_KEYS[text]
@@ -344,17 +356,17 @@ function ticketStepLabel(t, name) {
 }
 
 /** Gate names with a translated label (standards/backend/frontend); an unknown gate keeps its raw name. */
-const TICKET_GATE_NAMES = ['standards', 'backend', 'frontend']
-function ticketGateLabel(t, name) {
+export const TICKET_GATE_NAMES = ['standards', 'backend', 'frontend']
+export function ticketGateLabel(t, name) {
   const text = String(name ?? '')
   return TICKET_GATE_NAMES.includes(text) ? pt(t, `gate.${text}`) : (text || '—')
 }
 
 /** run step state → status shape. */
-const STEP_STATE = { ok: 'done', running: 'ongoing', failed: 'error', pending: 'idle' }
+export const STEP_STATE = { ok: 'done', running: 'ongoing', failed: 'error', pending: 'idle' }
 
 /** Absolute short stamp for the detail timeline and the acceptance line; the full time goes in title. */
-function ticketStamp(value, lang) {
+export function ticketStamp(value, lang) {
   const date = new Date(value ?? '')
   if (Number.isNaN(date.getTime())) return typeof value === 'string' ? value : ''
   // Intl keeps the stamp consistent with when/fullTime and follows the active language (it used to be a hand-rolled
@@ -363,13 +375,13 @@ function ticketStamp(value, lang) {
 }
 
 /** Scrolls stay instant for reduced-motion users; the shared util helper is owned by another file, so this one is local. */
-function ticketReduceMotion() {
+export function ticketReduceMotion() {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 /** Timeline timestamps are read as absolute times first (critique #11): no "20 小时前" at the start of a row. */
-function TicketStamp({ at }) {
+export function TicketStamp({ at }) {
   const { t } = usePanel()
   return <time dateTime={at} title={fullTime(at, t.lang)}>{ticketStamp(at, t.lang)}</time>
 }
@@ -381,7 +393,7 @@ function TicketStamp({ at }) {
  * every step as a spinner-looking "turn" followed by a duplicate check. Only the last state per step per run is a
  * fact worth showing; transient `running`/`pending` rows and the duplicated dry-run start are dropped here.
  */
-function ticketEvents(t, ticket, runs) {
+export function ticketEvents(t, ticket, runs) {
   const events = []
   const seen = new Set()
   const add = event => {
@@ -431,12 +443,12 @@ function ticketEvents(t, ticket, runs) {
   return events.sort((left, right) => String(left.at ?? '').localeCompare(String(right.at ?? '')))
 }
 
-const TIMELINE_RECENT = 8
+export const TIMELINE_RECENT = 8
 // A wide changes rail can hold dozens of paths; the list shows this many before the "show more" control.
-const CHANGES_FILES_RECENT = 5
+export const CHANGES_FILES_RECENT = 5
 
 /** Timeline with a vertical axis, shape-coded dots and a timestamp per event; long histories collapse to the latest. */
-function TicketTimeline({ ticket, runs }) {
+export function TicketTimeline({ ticket, runs }) {
   const { t } = usePanel()
   const [expanded, setExpanded] = useState(false)
   const events = ticketEvents(t, ticket, runs)
@@ -473,20 +485,20 @@ function TicketTimeline({ ticket, runs }) {
 }
 
 /** worker event type (P0 §1.1 trace) → icon, label and the shape its row gets. */
-const TRACE_KINDS = {
+export const TRACE_KINDS = {
   assistant: { icon: 'message', state: 'ongoing', labelKey: 'ticket.traceAssistant' },
   tool_call: { icon: 'settings', state: 'ongoing', labelKey: 'ticket.traceToolCall' },
   tool_result: { icon: 'check', state: 'done', labelKey: 'ticket.traceToolResult' },
   turn_end: { icon: 'circle-check', state: 'done', labelKey: 'ticket.traceTurnEnd' },
   error: { icon: 'alert-triangle', state: 'error', labelKey: 'ticket.traceError' },
 }
-const TRACE_LIMIT = 80
+export const TRACE_LIMIT = 80
 
 /**
  * Folded renders its children even while closed; a trace of up to 80 rows should build its DOM only once opened
  * (audit P3). Markup and classes mirror the shared Folded, which stays untouched for the other pages.
  */
-function TicketLazyFolded({ summary, children }) {
+export function TicketLazyFolded({ summary, children }) {
   const [open, setOpen] = useState(false)
   return <details className="sa-folded" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary className="sa-folded-summary"><Icon name="chevron-right" size={14} /><span>{summary}</span></summary>
@@ -495,7 +507,7 @@ function TicketLazyFolded({ summary, children }) {
 }
 
 /** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
-function RunTrace({ run }) {
+export function RunTrace({ run }) {
   const { t } = usePanel()
   const trace = Array.isArray(run?.trace) ? run.trace.filter(event => event && typeof event === 'object') : []
   if (!trace.length) return null
@@ -525,7 +537,7 @@ function RunTrace({ run }) {
 }
 
 /** P1-2: the handoff an executor leaves behind (what is done, what comes next), folded under its run. */
-function RunHandoff({ run }) {
+export function RunHandoff({ run }) {
   const { t } = usePanel()
   const handoff = run?.handoff
   const summary = typeof handoff?.summary === 'string' ? handoff.summary.trim() : ''
@@ -540,7 +552,7 @@ function RunHandoff({ run }) {
 }
 
 /** P1-4: the worker's own report (progress / artifacts / verify). A parked question is handled by the answer banner. */
-function RunReport({ run }) {
+export function RunReport({ run }) {
   const { t } = usePanel()
   const report = run?.report
   if (!report || typeof report !== 'object') return null
@@ -591,10 +603,10 @@ function RunReport({ run }) {
 }
 
 /** P2-2: gate failure policy labels (contract §1.1); a missing field always means `manual`. */
-const GATE_ONFAIL_KEYS = { auto_repair: 'gate.onFailAutoRepair', manual: 'gate.onFailManual' }
-const gateOnFail = value => (value === 'auto_repair' ? 'auto_repair' : 'manual')
+export const GATE_ONFAIL_KEYS = { auto_repair: 'gate.onFailAutoRepair', manual: 'gate.onFailManual' }
+export const gateOnFail = value => (value === 'auto_repair' ? 'auto_repair' : 'manual')
 /** The acceptance record already carries each gate's policy on its plan/checks; the run gate entry may too. */
-function gateOnFailOf(gate, record) {
+export function gateOnFailOf(gate, record) {
   const direct = gate?.onFail
   if (direct === 'auto_repair' || direct === 'manual') return direct
   const round = latestAcceptanceRound(record)
@@ -603,9 +615,9 @@ function gateOnFailOf(gate, record) {
   return gateOnFail(entry?.onFail)
 }
 /** Repair status → label key/tone (run.repair and round.repair share the vocabulary). */
-const REPAIR_STATUS_KEYS = { succeeded: 'detail.repairSucceeded', failed: 'detail.repairFailed', exhausted: 'detail.repairExhausted' }
-const REPAIR_STATUS_TONE = { succeeded: 'success', failed: 'danger', exhausted: 'warning' }
-const repairLabel = (t, repair) => {
+export const REPAIR_STATUS_KEYS = { succeeded: 'detail.repairSucceeded', failed: 'detail.repairFailed', exhausted: 'detail.repairExhausted' }
+export const REPAIR_STATUS_TONE = { succeeded: 'success', failed: 'danger', exhausted: 'warning' }
+export const repairLabel = (t, repair) => {
   const status = String(repair?.status ?? '')
   const key = REPAIR_STATUS_KEYS[status]
   return key ? pt(t, key) : String(status || '')
@@ -615,7 +627,7 @@ const repairLabel = (t, repair) => {
  * P2-2 gate results: the same three gates as the shared GateSummary, plus each gate's failure policy. The policy comes
  * from the run gate entry, the acceptance plan/checks, or (older payloads) defaults to manual — never throws.
  */
-function TicketGateResults({ ticket, record }) {
+export function TicketGateResults({ ticket, record }) {
   const { t } = usePanel()
   const { run, gates } = latestGatesOf(ticket)
   // The parked gate is not in run.gates yet (only finished gates are recorded there), so without this the section
@@ -669,29 +681,29 @@ function TicketGateResults({ ticket, record }) {
 }
 
 /** Acceptance record status → label key (P1-3). Unknown values stay visible instead of being hidden. */
-const ACCEPTANCE_STATUS_KEYS = { unverified: 'detail.acceptStatus.unverified', verifying: 'detail.acceptStatus.verifying',
+export const ACCEPTANCE_STATUS_KEYS = { unverified: 'detail.acceptStatus.unverified', verifying: 'detail.acceptStatus.verifying',
   delivered: 'detail.acceptStatus.delivered', accepted: 'detail.acceptStatus.accepted',
   rejected: 'detail.acceptStatus.rejected', closed: 'detail.acceptStatus.closed', errored: 'detail.acceptStatus.errored' }
-const ACCEPTANCE_TONE = { unverified: 'outline', verifying: 'info', delivered: 'success', accepted: 'success',
+export const ACCEPTANCE_TONE = { unverified: 'outline', verifying: 'info', delivered: 'success', accepted: 'success',
   rejected: 'danger', closed: 'neutral', errored: 'danger' }
-const ACCEPTANCE_CHECK_KEYS = { pending: 'detail.acceptCheck.pending', passed: 'detail.acceptCheck.passed',
+export const ACCEPTANCE_CHECK_KEYS = { pending: 'detail.acceptCheck.pending', passed: 'detail.acceptCheck.passed',
   failed: 'detail.acceptCheck.failed', errored: 'detail.acceptCheck.errored', skipped: 'detail.acceptCheck.skipped' }
-const ACCEPTANCE_CHECK_TONE = { pending: 'outline', passed: 'success', failed: 'danger', errored: 'danger', skipped: 'neutral' }
-const ACCEPTANCE_CHECK_STATE = { pending: 'ongoing', passed: 'done', failed: 'error', errored: 'error', skipped: 'idle' }
-const ACCEPTANCE_INTENTS = ['unmet', 'new-idea', 'no-evidence']
-const ACCEPTANCE_INTENT_KEYS = { unmet: 'detail.intentUnmet', 'new-idea': 'detail.intentNewIdea', 'no-evidence': 'detail.intentNoEvidence' }
-const acceptanceStatusLabel = (t, status) => {
+export const ACCEPTANCE_CHECK_TONE = { pending: 'outline', passed: 'success', failed: 'danger', errored: 'danger', skipped: 'neutral' }
+export const ACCEPTANCE_CHECK_STATE = { pending: 'ongoing', passed: 'done', failed: 'error', errored: 'error', skipped: 'idle' }
+export const ACCEPTANCE_INTENTS = ['unmet', 'new-idea', 'no-evidence']
+export const ACCEPTANCE_INTENT_KEYS = { unmet: 'detail.intentUnmet', 'new-idea': 'detail.intentNewIdea', 'no-evidence': 'detail.intentNoEvidence' }
+export const acceptanceStatusLabel = (t, status) => {
   const key = ACCEPTANCE_STATUS_KEYS[String(status ?? '')]
   return key ? pt(t, key) : String(status ?? '—')
 }
 /** The latest round of an acceptance record; a record without rounds is still shown (status + requirement). */
-function latestAcceptanceRound(record) {
+export function latestAcceptanceRound(record) {
   const rounds = Array.isArray(record?.rounds) ? record.rounds.filter(round => round && typeof round === 'object') : []
   return rounds.length ? rounds[rounds.length - 1] : null
 }
 
 /** P1-3: one acceptance record — status, newest round, its checks and the person's last decision. */
-function AcceptanceRecordCard({ record }) {
+export function AcceptanceRecordCard({ record }) {
   const { t } = usePanel()
   if (!record || typeof record !== 'object') return null
   const status = String(record.status ?? '')
@@ -773,13 +785,13 @@ function AcceptanceRecordCard({ record }) {
 }
 
 /** P1-7 activity row labels; an unknown kind stays raw so a new host event is never swallowed. */
-const ACTIVITY_KIND_KEYS = { created: 'activity.created', status: 'activity.status', trigger: 'activity.trigger',
+export const ACTIVITY_KIND_KEYS = { created: 'activity.created', status: 'activity.status', trigger: 'activity.trigger',
   run: 'activity.run', gate: 'activity.gate', acceptance: 'activity.acceptance', reply: 'activity.reply',
   dismiss: 'activity.dismiss', comment: 'activity.comment', resume: 'activity.resume', revision: 'activity.revision' }
-const ACTIVITY_ICON = { agent: 'robot', system: 'shield', user: 'user' }
+export const ACTIVITY_ICON = { agent: 'robot', system: 'shield', user: 'user' }
 
 /** P1-7: the ticket's own activity stream, newest first; the page shows the latest 20 and says how many remain. */
-function TicketActivities({ activities }) {
+export function TicketActivities({ activities }) {
   const { t } = usePanel()
   const list = Array.isArray(activities) ? activities.filter(entry => entry && typeof entry === 'object') : []
   const shown = list.slice(0, 20)
@@ -803,7 +815,7 @@ function TicketActivities({ activities }) {
 }
 
 /** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
-function runRouteTag(t, run) {
+export function runRouteTag(t, run) {
   const route = run?.route
   if (!route || typeof route !== 'object') return null
   const workType = pt(t, `detail.workType.${route.workType}`)
@@ -817,7 +829,7 @@ function runRouteTag(t, run) {
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
-function TicketRunRows({ runs }) {
+export function TicketRunRows({ runs }) {
   const { t } = usePanel()
   return <ul className="sa-list">{runs.map(run => {
     const view = runView(t, run)
@@ -863,9 +875,9 @@ function TicketRunRows({ runs }) {
  * results in their own section, so that block is removed from the change summary; the leading "## 改动内容" heading
  * is dropped too because the section already says it.
  */
-const WORKER_GATE_HEADING = /^#{1,6}\s*(闸门结果|闸门|质量闸门|测试与闸门|gates?)\b/i
-const WORKER_CHANGES_HEADING = /^(改动内容|改动文件|变更内容|变更文件)/i
-function cleanWorkerSummary(text) {
+export const WORKER_GATE_HEADING = /^#{1,6}\s*(闸门结果|闸门|质量闸门|测试与闸门|gates?)\b/i
+export const WORKER_CHANGES_HEADING = /^(改动内容|改动文件|变更内容|变更文件)/i
+export function cleanWorkerSummary(text) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   const out = []
   let skipping = false
@@ -898,7 +910,7 @@ function cleanWorkerSummary(text) {
  * current worktree, so a revision rerun must replace it — taking the last run in the newest-first list (the old
  * behaviour) kept showing the first round's summary after a rerun.
  */
-function changesOf(runs) {
+export function changesOf(runs) {
   const files = []
   const seen = new Set()
   let worker
@@ -915,7 +927,7 @@ function changesOf(runs) {
 }
 
 /** One unified-diff line's role; the first character of the line is the whole classification. */
-function diffLineClass(line) {
+export function diffLineClass(line) {
   if (line.startsWith('diff --git ')) return 'sa-diff-file'
   if (line.startsWith('@@')) return 'sa-diff-hunk'
   if (line.startsWith('+++ ') || line.startsWith('--- ') || line.startsWith('index ')
@@ -927,7 +939,7 @@ function diffLineClass(line) {
 }
 
 /** The patch itself: one row per line, monospace and horizontally scrollable so indentation keeps meaning. */
-function DiffBody({ text }) {
+export function DiffBody({ text }) {
   const lines = String(text ?? '').replace(/\r\n/g, '\n').split('\n')
   if (lines.length && lines.at(-1) === '') lines.pop()
   return <div className="sa-diff">
@@ -937,7 +949,7 @@ function DiffBody({ text }) {
 }
 
 /** Body of the "view diff" dialog: loading, unavailable, empty and truncated states all answer in place. */
-function DiffCard({ state = {}, onRetry }) {
+export function DiffCard({ state = {}, onRetry }) {
   const { t } = usePanel()
   if (state.loading) return <Skeleton rows={4} />
   if (state.error) return <ErrorState error={state.error} onRetry={onRetry} />
@@ -970,7 +982,7 @@ function DiffCard({ state = {}, onRetry }) {
 }
 
 /** One sentence explaining what a failed run means and how to recover. */
-function failureHint(t, error, steps) {
+export function failureHint(t, error, steps) {
   const text = String(error ?? '')
   if (/no changes/i.test(text)) return pt(t, 'detail.failedNoChanges')
   if (/Cannot read propert|reading 'get'|host context/i.test(text)) return pt(t, 'detail.failedInternal')
@@ -981,25 +993,25 @@ function failureHint(t, error, steps) {
 }
 
 /** Host workflow state → localized text; an unknown value stays visible instead of leaking a backend enum (audit P2). */
-const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
+export const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
   plan: 'wf.statePlan', implement: 'wf.stateImplement', gates: 'wf.stateGates', review: 'wf.stateReview',
   blocked: 'wf.stateBlocked', ready: 'wf.stateReady' }
-const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
+export const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
   failed: 'wf.stageFailed', blocked: 'wf.stageBlocked' }
-function ticketWorkflowStateLabel(t, status) {
+export function ticketWorkflowStateLabel(t, status) {
   const key = WORKFLOW_STATE_KEYS[String(status ?? '')]
   return key ? pt(t, key) : String(status ?? '—')
 }
-function ticketWorkflowStageLabel(t, status) {
+export function ticketWorkflowStageLabel(t, status) {
   const key = WORKFLOW_STAGE_KEYS[String(status ?? '')]
   return key ? pt(t, key) : String(status ?? '—')
 }
 
 /** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
-const AUTOMATION_MODES = ['off', 'heartbeat', 'schedule']
+export const AUTOMATION_MODES = ['off', 'heartbeat', 'schedule']
 
 /** Form snapshot of one stored automation: numbers stay strings until save so a half-typed field is never coerced. */
-function automationFormOf(automation) {
+export function automationFormOf(automation) {
   const value = automation && typeof automation === 'object' ? automation : {}
   const mode = AUTOMATION_MODES.includes(value.mode) ? value.mode : 'off'
   const interval = Number(value.intervalMinutes)
@@ -1016,7 +1028,7 @@ function automationFormOf(automation) {
  * P2-1 automation card: the operator sets how a Ticket runs itself. The block only exists for a Ticket that already
  * carries an automation config (an older host, or a Ticket that never opted in, renders nothing).
  */
-function AutomationCard({ ticket, onSaved }) {
+export function AutomationCard({ ticket, onSaved }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const act = model?.actions
@@ -1181,7 +1193,7 @@ function AutomationCard({ ticket, onSaved }) {
  */
 // One list drives both the jump row and the scroll observer, so a section can never be navigable from one and
 // invisible to the other (the automation block used to be missing from both).
-const DETAIL_JUMPS = [
+export const DETAIL_JUMPS = [
   { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
   { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
   { id: 'sa-automation', labelKey: 'auto.section' },
@@ -1192,7 +1204,7 @@ const DETAIL_JUMPS = [
 ]
 
 /** A jump must land on a section this Ticket really renders: dismissed/closed hides automation, no gate result hides gates. */
-function ticketVisibleJumps(ticket, hasGateResults) {
+export function ticketVisibleJumps(ticket, hasGateResults) {
   const status = typeof ticket?.status === 'string' ? ticket.status : ''
   return DETAIL_JUMPS.filter(jump => {
     if (jump.id === 'sa-automation') return !['dismissed', 'closed'].includes(status)
@@ -1202,7 +1214,7 @@ function ticketVisibleJumps(ticket, hasGateResults) {
 }
 
 /** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
-function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
+export function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
   const { t } = usePanel()
   const rounds = Array.isArray(data?.rounds) ? data.rounds : []
   // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
@@ -1284,7 +1296,7 @@ function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
   </div>
 }
 
-function TicketDetail({ id, page = 'execution', focusRun }) {
+export function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
   const { data, error, loading, reload } = useLiveResource('engine/ticket/:id', { id }, 10000)

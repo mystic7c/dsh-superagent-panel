@@ -8,37 +8,15 @@ import { createRequire } from 'node:module'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const src = join(root, 'client', 'src')
 
-// Fragments may contain JSX, so they are compiled exactly like the bundle does before evaluation.
-const require = createRequire(import.meta.url)
-let esbuild
-try {
-  esbuild = require('esbuild')
-} catch (error) {
-  console.error('check-keys needs esbuild: run `npm ci` in the repo root first.')
-  console.error(error instanceof Error ? error.message : String(error))
-  process.exit(2)
-}
+import { loadClient } from './client-exports.mjs'
 
-// The bundle prelude provides React and these hooks; the checker repeats it so fragments can be evaluated.
-const PRELUDE = `
-const React = { createElement: () => null, useState: () => [], useEffect: () => {}, useRef: () => ({}), useMemo: () => ({}), Component: class {},
-  useCallback: () => {}, useLayoutEffect: () => {}, useContext: () => undefined, createContext: () => ({}), Fragment: {} }
-const { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, useContext, createContext, Fragment } = React
-const h = React.createElement
-`
-const load = (names) => {
-  const text = names.map(name => readFileSync(join(src, name), 'utf8')).join('\n')
-  const { code } = esbuild.transformSync(`${PRELUDE}${text}`, {
-    loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'React.Fragment', target: 'es2022',
-  })
-  const factory = new Function(`${code}\nreturn { DICTS, TEXT, PAGE_TEXT }`)
-  return factory()
-}
-// Load every fragment in build order so `Object.assign(PAGE_TEXT, ...)` contributions are visible.
+// The client modules are ESM now, so they are loaded through the same bundling path as the shipped artifact.
+const stubReact = { Component: class {}, Fragment: {}, createContext: () => ({}), createElement: () => null,
+  useCallback: () => {}, useContext: () => undefined, useEffect: () => {}, useLayoutEffect: () => {},
+  useMemo: () => ({}), useRef: () => ({}), useState: () => [] }
+const { DICTS, PAGE_TEXT } = loadClient({ DICTS: '06-i18n.js', PAGE_TEXT: '21-localtext.js' }, { react: stubReact })
 const order = readdirSync(src).filter(name => name.endsWith('.js')).sort()
-const { DICTS, PAGE_TEXT } = load(order)
-
-const fragments = order.filter(name => name !== '06-i18n.js' && name !== '21-localtext.js')
+const fragments = order.filter(name => !['06-i18n.js', '21-localtext.js', '00-react.js', 'index.js'].includes(name))
 const used = new Map()
 const definitions = new Map()
 const duplicateKeys = []

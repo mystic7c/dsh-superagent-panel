@@ -4,6 +4,15 @@
    outcome is no longer printed a third time. Data: GET engine/thread/:key (host increments, contract §4); the page
    decides which thread is selected. */
 
+import { Icon, shortId } from "./00-util.js"
+import { actorName, readableMarkers, reasonLabel, translate, when } from "./06-i18n.js"
+import { Button, CopyButton, InfoTip, StatusIcon, Tag } from "./10-controls.js"
+import { same, stay, usePanel, usePanelData } from "./15-api.js"
+import { EmptyState, ErrorState, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { useLiveResource } from "./32-live-model.js"
+import { TicketStatusTag, decisionKindView, dispositionView } from "./34-live-ui.js"
+import { Fragment, React, h, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'thread.octoConversation': ['Octo 会话', 'Octo conversation'],
   'thread.copyKey': ['复制线程 key', 'Copy thread key'],
@@ -24,14 +33,14 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** Raw thread keys look like `octo:<hex>`; they are identifiers, never a human title (G2). */
-const RAW_THREAD_KEY = /^[a-z][a-z0-9]*:[0-9a-f]{6,}$/i
-const threadChatIdOf = value => { const parts = String(value ?? '').split(':'); return parts.length > 1 ? parts.slice(1).join(':') : '' }
+export const RAW_THREAD_KEY = /^[a-z][a-z0-9]*:[0-9a-f]{6,}$/i
+export const threadChatIdOf = value => { const parts = String(value ?? '').split(':'); return parts.length > 1 ? parts.slice(1).join(':') : '' }
 
 /**
  * Human title for a thread: the stored title when it is a real title, otherwise the watched chat's configured name,
  * otherwise a generic "Octo conversation". The full key is never used here — it only appears in the raw-value fold.
  */
-function threadDisplayTitle(t, thread, threadKey, chatTitles) {
+export function threadDisplayTitle(t, thread, threadKey, chatTitles) {
   const raw = typeof thread?.title === 'string' ? thread.title.trim() : ''
   const looksRaw = !raw || raw === threadKey || RAW_THREAD_KEY.test(raw)
   if (!looksRaw) return raw
@@ -41,7 +50,7 @@ function threadDisplayTitle(t, thread, threadKey, chatTitles) {
 }
 
 /** Tone for a disposition label; the shape comes from `dispositionView`. */
-function dispositionTone(state) {
+export function dispositionTone(state) {
   if (state === 'done') return 'success'
   if (state === 'ongoing') return 'info'
   if (state === 'warning') return 'warning'
@@ -50,7 +59,7 @@ function dispositionTone(state) {
 }
 
 /** One rule row inside the folded evaluation detail. */
-function ThreadRuleRows({ rules }) {
+export function ThreadRuleRows({ rules }) {
   const { t } = usePanel()
   return h('ul', { className: 'sa-rules' },
     (rules ?? []).map((rule, index) => h('li', { key: rule.id ?? index, className: 'sa-rule' },
@@ -61,20 +70,20 @@ function ThreadRuleRows({ rules }) {
 }
 
 /** `decision.reason` is a Reason[] but old state can hold one Reason or a bare string; normalise before reading it. */
-function threadReasons(decision) {
+export function threadReasons(decision) {
   const reason = decision?.reason
   return reason === undefined || reason === null ? [] : Array.isArray(reason) ? reason : [reason]
 }
 
 /** The first reason code of a decision — the key a run of identical decisions shares. */
-function threadFirstReasonCode(decision) {
+export function threadFirstReasonCode(decision) {
   const [first] = threadReasons(decision)
   if (first === undefined || first === null) return ''
   return typeof first === 'string' ? first : String(first.code ?? '')
 }
 
 /** Strength tag shared by both row shapes; an unknown strength stays readable as its raw value. */
-function threadStrengthTag(t, strength) {
+export function threadStrengthTag(t, strength) {
   if (!strength) return null
   const key = `strength.${strength}`
   const label = pt(t, key)
@@ -86,7 +95,7 @@ function threadStrengthTag(t, strength) {
  * re-evaluates the same message several times and used to print one full row per pass (C4). A run of one keeps the
  * original single-decision row.
  */
-function threadDecisionGroups(decisions) {
+export function threadDecisionGroups(decisions) {
   const groups = []
   for (const decision of decisions) {
     // `decisionKindView` resolves `outcome` when an old record has no `kind`, so grouping and the row tag agree.
@@ -101,7 +110,7 @@ function threadDecisionGroups(decisions) {
 
 /** The original single-decision row: result, strength, time, reason, rule count and the rule-by-rule fold. The first
     row also carries the latest decision's Ticket jump (the removed 决定 section used to own it). */
-function ThreadDecisionRow({ decision, latestTicket, openTicket }) {
+export function ThreadDecisionRow({ decision, latestTicket, openTicket }) {
   const { t } = usePanel()
   const view = decisionKindView(decision)
   const rules = Array.isArray(decision.rules) ? decision.rules : []
@@ -122,7 +131,7 @@ function ThreadDecisionRow({ decision, latestTicket, openTicket }) {
 
 /** One run of identical decisions: result tag, ×N, the newest time and the shared reason on one line; the fold lists
     every decision in the run with its own time and rule detail, so no rule hit is lost. */
-function ThreadDecisionRunRow({ group, latestTicket, openTicket }) {
+export function ThreadDecisionRunRow({ group, latestTicket, openTicket }) {
   const { t } = usePanel()
   const latest = group.decisions[0]
   const view = decisionKindView(latest)
@@ -153,9 +162,9 @@ function ThreadDecisionRunRow({ group, latestTicket, openTicket }) {
 /** Decisions of this thread, newest first, folded into runs. Only the newest three runs render until 展开全部 is
     pressed (a native button, so the disclosure is keyboard reachable). Tickets that are not the latest decision's own
     stay reachable through a fold, so removing the 决定 section loses no Ticket jump. */
-const THREAD_EVAL_RECENT = 3
+export const THREAD_EVAL_RECENT = 3
 
-function ThreadEvaluations({ decisions, tickets }) {
+export function ThreadEvaluations({ decisions, tickets }) {
   const { t, navigate } = usePanel()
   const [expanded, setExpanded] = useState(false)
   if (!decisions.length) return h(Hint, null, pt(t, 'thread.noEval'))
@@ -192,17 +201,17 @@ function ThreadEvaluations({ decisions, tickets }) {
 /** Message timeline: vertical axis, shape-coded dots, and one disposition tag per message — the decision outcome lives
     in 评估过程, so it is not repeated here (C4). Only the newest three messages render until 展开全部 is pressed; the
     disclosure is a native button, so it is keyboard reachable, and every message keeps its full text/expand control. */
-const THREAD_TIMELINE_RECENT = 3
+export const THREAD_TIMELINE_RECENT = 3
 
 /** A raw 32-hex member id is an id, not a name: show a short, readable label and keep the full value in the title. */
-function actorDisplay(t, actor) {
+export function actorDisplay(t, actor) {
   const name = actorName(t, actor)
   const raw = String(name ?? '')
   if (/^[0-9a-f]{16,}$/i.test(raw)) return { text: shortId(raw, 8), title: raw }
   return { text: name, title: actor?.id && actor.id !== name ? String(actor.id) : undefined }
 }
 
-function ThreadTimeline({ triggers, decisions }) {
+export function ThreadTimeline({ triggers, decisions }) {
   const { t } = usePanel()
   const [expanded, setExpanded] = useState(false)
   if (!triggers.length) return h(Hint, null, pt(t, 'thread.noMessages'))
@@ -248,7 +257,7 @@ function ThreadTimeline({ triggers, decisions }) {
  * `key`: React reserves `key` on elements and would swallow it before the component sees it.
  * Renders PageHead + 事实 → 评估过程（含最近决定与工单跳转）→ 消息时间线; errors keep the last data and offer a retry.
  */
-function ThreadDetail(props) {
+export function ThreadDetail(props) {
   const { t } = usePanel()
   const model = usePanelData()
   const threadKey = props?.threadKey ?? props?.id

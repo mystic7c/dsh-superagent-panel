@@ -1,0 +1,26 @@
+/* Entry module: importing the fragments in numeric order runs their top-level definitions in that order
+   and re-exports the plugin hooks the host loader calls. */
+
+import './00-util.js'
+import './05-style.js'
+import './06-i18n.js'
+import './07-md.js'
+import './10-controls.js'
+import './15-api.js'
+import './20-widgets.js'
+import './21-localtext.js'
+import './25-router.js'
+import './30-shell.js'
+import './32-live-model.js'
+import './33-setup.js'
+import './34-live-ui.js'
+import './35-overview.js'
+import './40-source.js'
+import './45-trigger.js'
+import './48-thread-detail.js'
+import './50-eval.js'
+import './55-execution.js'
+import './58-ticket-detail.js'
+import './60-settings.js'
+
+export { inject, apply } from './90-apply.js'
