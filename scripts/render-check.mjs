@@ -10,7 +10,8 @@
 // It needs no desktop app, no CDP and no operator state: when DSH_SUPERAGENT_STATE_DIR is unset or empty the
 // script builds its own fixture state under a temp dir, so a clean clone can run the same 170+ checks.
 
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { loadClient } from './client-exports.mjs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -404,23 +405,16 @@ window.fetch = global.fetch = async (input, init = {}) => {
   return json({})
 }
 
-// ---- load the real client fragments ----------------------------------------------------------------------------
-const prelude = `
-const React = require('react')
-const { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, useContext, createContext, Fragment } = React
-const h = React.createElement
-`
-const files = readdirSync(join(root, 'client', 'src')).filter(name => name.endsWith('.js') && name !== '90-apply.js').sort()
-const source = files.map(name => readFileSync(join(root, 'client', 'src', name), 'utf8')).join('\n')
-// Fragments may contain JSX; compile them the way the bundle does (JSX -> the same `h` binding).
-const compiled = esbuild.transformSync(prelude + source, {
-  loader: 'jsx', jsx: 'transform', jsxFactory: 'h', jsxFragment: 'React.Fragment', target: 'es2022',
-}).code
-const factory = new Function('require', compiled + '\nreturn { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf }')
-const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = factory(id => {
-  if (id === 'react') return React
-  throw new Error(`unexpected require(${id})`)
-})
+// ---- load the real client modules ------------------------------------------------------------------------------
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, PANEL_CSS, settingsPatchOf } = loadClient({
+  App: '30-shell.js',
+  translate: '06-i18n.js',
+  DICTS: '06-i18n.js',
+  PAGE_TEXT: '21-localtext.js',
+  MarkdownLite: '20-widgets.js',
+  PANEL_CSS: '05-style.js',
+  settingsPatchOf: '60-settings.js',
+}, { react: React })
 
 const t = (key, values) => {
   const pair = PAGE_TEXT[key]

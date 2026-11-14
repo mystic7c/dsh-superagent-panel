@@ -1,13 +1,17 @@
 /* Client entry: registers the sidebar icon and the main management panel. Everything is guarded so a registration
    problem can never blank the Web boot; the panel then reports the host as unreachable instead. */
 
-const inject = ['slots', 'locale']
+import { LOCALE_NS, PANEL_ID, SuperagentIcon } from "./00-util.js"
+import { DICTS, detectLang, translate, useTranslator } from "./06-i18n.js"
+import { App, PanelBoundary } from "./30-shell.js"
+import { React, h, useCallback } from "./00-react.js"
+export const inject = ['slots', 'locale']
 
-function SidebarIcon({ size }) {
+export function SidebarIcon({ size }) {
   return h(SuperagentIcon, { size })
 }
 
-function Mounted({ ctx }) {
+export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(async (sessionId) => {
     const workspace = ctx.get?.('uiWorkspace')
@@ -17,7 +21,7 @@ function Mounted({ ctx }) {
   return h(App, { openSession, t })
 }
 
-function apply(ctx) {
+export function apply(ctx) {
   // Dictionaries are optional: the panel has its own translator, but registering them lets the host's locale service
   // resolve our namespace for titles and any future surface that reads it.
   try {

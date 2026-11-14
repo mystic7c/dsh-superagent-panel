@@ -2,8 +2,12 @@
    action set. Pages must never poll `engine/status` themselves — App owns exactly one model (30-shell) and hands
    it down through PanelState, so a 30s tick updates the header and every page together. */
 
+import { when } from "./06-i18n.js"
+import { Panel, PanelState, same, usePanel, usePoll } from "./15-api.js"
+import { App, Pages } from "./30-shell.js"
+import { React, h, useCallback, useMemo } from "./00-react.js"
 /** Actions over the live engine. Every page calls these instead of building its own fetch calls. */
-function useEngineActions(call) {
+export function useEngineActions(call) {
   return useMemo(() => ({
     poll: ({ dryRun = true } = {}) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
@@ -80,7 +84,7 @@ function useEngineActions(call) {
  * → { data, error, reload, updatedAt, actions }; `updatedAt` is the last successful read, even when the payload
  * did not change (the envelope stamps every poll so a heartbeat is visible in the header).
  */
-function usePanelModel(intervalMs = 30000) {
+export function usePanelModel(intervalMs = 30000) {
   const { call } = usePanel()
   const actions = useEngineActions(call)
   const load = useCallback(() => call('GET engine/status').then(status => ({ status, at: new Date().toISOString() })), [call])
@@ -97,7 +101,7 @@ function usePanelModel(intervalMs = 30000) {
  * resource resolves `undefined` without a request, so an older host without `engine/inbox` is never 404-polled.
  * → { data, error, loading, reload }; a failed refresh keeps the last good data so the view does not flash.
  */
-function useLiveResource(route, params, intervalMs = 30000, options = {}) {
+export function useLiveResource(route, params, intervalMs = 30000, options = {}) {
   const { call } = usePanel()
   const enabled = options.enabled !== false
   const request = params ?? {}

@@ -1,3 +1,14 @@
+import { API, Icon, hhmmss } from "./00-util.js"
+import { errorText, translate, when } from "./06-i18n.js"
+import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./10-controls.js"
+import { same, stay, usePanel, usePanelData } from "./15-api.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { ManualTicketForm, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./34-live-ui.js"
+import { gateOnFail } from "./58-ticket-detail.js"
+import { apply } from "./90-apply.js"
+import { React, h, useEffect, useRef, useState } from "./00-react.js"
+
 Object.assign(PAGE_TEXT, {
   'wf.title': ['分阶段执行', 'Staged execution'],
   'wf.off': ['关闭（沿用单 worker）', 'Off (single worker)'],
@@ -469,7 +480,7 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** A copyable, secret-free example of the file-only repository block. */
-const REPO_CONFIG_SAMPLE = `{
+export const REPO_CONFIG_SAMPLE = `{
   "repos": [
     {
       "id": "my-repo",
@@ -487,7 +498,7 @@ const REPO_CONFIG_SAMPLE = `{
 }
 `
 /** Blank repository form; values map to the fields accepted by POST engine/repos. */
-const emptyRepoForm = () => ({
+export const emptyRepoForm = () => ({
   id: '', name: '', kind: 'web', path: '', baseBranch: 'dev', featurePrefix: 'feature/', verifyMode: 'web-uat',
   acceptance: 'deployed', baseUrl: '', project: '', targetBranch: 'dev', uatUrl: '', healthUrl: '', makeDefault: false,
 })
@@ -497,7 +508,7 @@ const emptyRepoForm = () => ({
     settingsGroup.write above).
     `reference: true` marks a read-only group: the rail lists the groups that can be changed first, then a divider and
     the "参考" label, then these. The content column and the save-bar logic are unchanged — only the rail groups them. */
-const SETTINGS_GROUPS = [
+export const SETTINGS_GROUPS = [
   { id: 'source', labelKey: 'settingsGroup.source', icon: 'inbox' },
   { id: 'review', labelKey: 'settingsGroup.review', icon: 'decision' },
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
@@ -510,16 +521,16 @@ const SETTINGS_GROUPS = [
 
 /** Only these groups own writable fields, so only they may ever render a save bar. `run`, `worker` and `write` keep
     separate drafts and separate save bars even though all three patch `executor.*`. */
-const SETTINGS_SAVEABLE = ['source', 'review', 'run', 'worker', 'write']
+export const SETTINGS_SAVEABLE = ['source', 'review', 'run', 'worker', 'write']
 
 /** Draft mirror for the current tab: a reload or an accidental page switch must not silently drop unsaved edits. */
-const SETTINGS_DRAFT_CACHE = 'superagent-panel/settings-drafts'
+export const SETTINGS_DRAFT_CACHE = 'superagent-panel/settings-drafts'
 
-function draftHasKeys(draft) {
+export function draftHasKeys(draft) {
   return Boolean(draft && typeof draft === 'object' && Object.keys(draft).length)
 }
 
-function readDraftCache() {
+export function readDraftCache() {
   try {
     const raw = window.sessionStorage.getItem(SETTINGS_DRAFT_CACHE)
     if (!raw) return {}
@@ -533,27 +544,27 @@ function readDraftCache() {
   } catch { return {} }
 }
 
-function writeDraftCache(drafts) {
+export function writeDraftCache(drafts) {
   try {
     if (draftHasKeys(drafts)) window.sessionStorage.setItem(SETTINGS_DRAFT_CACHE, JSON.stringify(drafts))
     else window.sessionStorage.removeItem(SETTINGS_DRAFT_CACHE)
   } catch { /* storage can be unavailable (private mode); drafts then stay in memory only */ }
 }
 
-const settingsOmit = (object, key) => {
+export const settingsOmit = (object, key) => {
   const next = { ...(object ?? {}) }
   delete next[key]
   return next
 }
 
 /** Scroll a node into view where the DOM supports it; test DOMs may not implement scrollIntoView. */
-const revealNode = node => {
+export const revealNode = node => {
   if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
 }
 
 /** Draft comparison: booleans by value, numbers/strings by their text form (the number input holds a string). */
 /** Draft comparison: booleans by value, objects by JSON, numbers/strings by their text form. */
-function settingsSame(left, right) {
+export function settingsSame(left, right) {
   if (typeof left === 'boolean' || typeof right === 'boolean') return Boolean(left) === Boolean(right)
   if ((left && typeof left === 'object') || (right && typeof right === 'object')) {
     return JSON.stringify(left ?? null) === JSON.stringify(right ?? null)
@@ -562,7 +573,7 @@ function settingsSame(left, right) {
 }
 
 /** Draft (UI values) → the patch the host accepts. Only live-json allow-listed keys are ever sent. */
-function settingsPatchOf(group, draft) {
+export function settingsPatchOf(group, draft) {
   const patch = {}
   if (!draft) return patch
   if (group === 'review') {
@@ -609,7 +620,7 @@ function settingsPatchOf(group, draft) {
 }
 
 /** Human text for the host error codes the poll endpoint reports; unknown codes stay raw in the folded detail. */
-function settingsHostError(t, code) {
+export function settingsHostError(t, code) {
   const text = String(code ?? '')
   if (!text) return undefined
   if (/paused/i.test(text)) return pt(t, 'st.errPaused')
@@ -621,7 +632,7 @@ function settingsHostError(t, code) {
 }
 
 /** Save failures: 409 conflicts and lost connections get a human reason; everything else keeps the host message. */
-function settingsSaveFailure(t, failure) {
+export function settingsSaveFailure(t, failure) {
   const status = failure?.status
   if (status === 409) return { error: new Error(t('settingsConflict')), raw: errorText(failure) }
   if (status === 0) return { error: new Error(t('offline')), raw: errorText(failure) }
@@ -629,7 +640,7 @@ function settingsSaveFailure(t, failure) {
 }
 
 /** Poll (dry run) result → one status line. */
-function settingsProbeView(t, result) {
+export function settingsProbeView(t, result) {
   if (!result) return undefined
   if (result.skipped === 'busy') return { state: 'warning', text: pt(t, 'st.errBusy') }
   if (result.error) {
@@ -643,7 +654,7 @@ function settingsProbeView(t, result) {
 }
 
 /** UAT check result → one status line. */
-function settingsUatView(t, uat) {
+export function settingsUatView(t, uat) {
   if (!uat) return undefined
   if (uat.ok) return { state: 'done', text: `${pt(t, 'st.uatOk')} · ${pt(t, 'st.httpStatus', { status: uat.status })}` }
   if (/uatUrl is not configured/i.test(String(uat.error ?? ''))) return { state: 'warning', text: pt(t, 'st.uatUnset') }
@@ -654,8 +665,8 @@ function settingsUatView(t, uat) {
 /** One switch row of a group form: label (+ optional badge and info tip) and explanatory hint on the left, the switch
     on the right. `badge`/`tip` are optional, so the plain rows keep the original single-line label. The hint is tied to
     the switch with aria-describedby, so it is announced with the switch instead of only sitting next to it. */
-let settingsSwitchHintSeq = 0
-function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled, onChange }) {
+export let settingsSwitchHintSeq = 0
+export function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled, onChange }) {
   const inputRef = useRef(null)
   const seqRef = useRef(null)
   if (seqRef.current === null) { settingsSwitchHintSeq += 1; seqRef.current = settingsSwitchHintSeq }
@@ -682,7 +693,7 @@ function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, disabled
 
 /** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
     check/reload/test result is announced when it appears, and aria-busy marks the trigger while work runs. */
-function SettingsStatusLine({ view, note, busy }) {
+export function SettingsStatusLine({ view, note, busy }) {
   const { t } = usePanel()
   if (!view) return null
   return <div className="sa-actions" role="status" aria-live="polite" aria-atomic="true"
@@ -695,14 +706,14 @@ function SettingsStatusLine({ view, note, busy }) {
 }
 
 /** Gate codes render through the shared gate labels when they are known, and stay raw when they are not. */
-function settingsGateLabel(t, gate) {
+export function settingsGateLabel(t, gate) {
   const key = `gate.${gate}`
   const label = pt(t, key)
   return label === key ? String(gate) : label
 }
 
 /** Gate names use the shared gate dictionary when known; unknown gates stay raw so operators can see them. */
-function repoGateLabel(t, gate) {
+export function repoGateLabel(t, gate) {
   const name = typeof gate === 'string' ? gate : gate?.name
   const key = `gate.${name}`
   const label = pt(t, key)
@@ -713,7 +724,7 @@ function repoGateLabel(t, gate) {
     clearing one stops what the executor can observe for this repository, so it goes through a confirmation that names
     the consequence (C6) — a plain button here used to clear on a single click. */
 /** P2-5 capability table: static data describing what each backend actually does today (contract §2). */
-const WORKER_CAP_COLUMNS = [
+export const WORKER_CAP_COLUMNS = [
   { key: 'stream', labelKey: 'st.capStream' },
   { key: 'approval', labelKey: 'st.capApproval' },
   { key: 'resume', labelKey: 'st.capResume' },
@@ -721,7 +732,7 @@ const WORKER_CAP_COLUMNS = [
   { key: 'report', labelKey: 'st.capReport' },
 ]
 /** P1 routing controls: the same enums the host validates (routing.js). Labels are page-local i18n keys. */
-const ROUTE_BACKENDS = [
+export const ROUTE_BACKENDS = [
   { value: 'dsh', labelKey: 'st.workerDsh', hintKey: 'st.workerDshHint' },
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
@@ -729,9 +740,9 @@ const ROUTE_BACKENDS = [
 /** Staged-flow backends, mirroring lib/live/config.js: the implementer is the in-process DSH worker or Claude,
     the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
     enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
-const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
-const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
-const ROUTE_WORK_TYPES = [
+export const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
+export const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
+export const ROUTE_WORK_TYPES = [
   { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
   { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
   { key: 'test', labelKey: 'st.workTypeTest', hintKey: 'st.routeWrite' },
@@ -741,13 +752,13 @@ const ROUTE_WORK_TYPES = [
   { key: 'interactive', labelKey: 'st.workTypeInteractive', hintKey: 'st.routeReadOnly' },
 ]
 /** Built-in preference table mirroring lib/live/routing.js: capability first, then the operator's intent. */
-const ROUTE_DEFAULT_PREFERENCES = [
+export const ROUTE_DEFAULT_PREFERENCES = [
   { workTypes: ['research', 'interactive'], backend: 'dsh' },
   { workTypes: ['analysis', 'review', 'test'], backend: 'codex' },
   { workTypes: ['dev', 'docs'], backend: 'claude' },
 ]
 
-const WORKER_CAPABILITIES = [
+export const WORKER_CAPABILITIES = [
   { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
     stream: { yes: true },
     approval: { yes: false, noteKey: 'st.capDshApproval' },
@@ -772,7 +783,7 @@ const WORKER_CAPABILITIES = [
 ]
 
 /** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
-function WorkerCapabilityCard({ currentBackend }) {
+export function WorkerCapabilityCard({ currentBackend }) {
   const { t } = usePanel()
   const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
   return <div className="sa-field">
@@ -806,10 +817,10 @@ function WorkerCapabilityCard({ currentBackend }) {
   </div>
 }
 
-const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
+export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
   token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
 
-function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
+export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
   const { t, actions } = usePanel()
   const [token, setToken] = useState('')
   const [test, setTest] = useState({ busy: false })
@@ -898,7 +909,7 @@ function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }
   </div>
 }
 
-function LiveSettingsPage({ route }) {
+export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
   const { data, error, reload, actions } = usePanelData()
   const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'

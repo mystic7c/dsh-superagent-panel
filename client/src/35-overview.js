@@ -6,6 +6,18 @@
    stay shared with the other pages (34-live-ui). Contract: spec/impl-contract-2026-11.md §6.1; round-2 critique:
    spec/…/.impeccable/critique/2026-11-05T10-56-46Z__superagent-panel.md (O1–O7). */
 
+import { Icon, hhmm } from "./00-util.js"
+import { when } from "./06-i18n.js"
+import { Button, DisclosureRow, StatusIcon, StatusText, Tag } from "./10-controls.js"
+import { same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
+import { ClampText, ErrorState, Folded, Hint, KeyValues, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { PANEL_LANG, globalHealth } from "./30-shell.js"
+import { useLiveResource } from "./32-live-model.js"
+import { SetupBanner, SetupChecklist, setupStateOf } from "./33-setup.js"
+import { AutomationBar, FunnelBar, TicketList, TicketRow, localizedText, needsHuman, needsYouCount, problemsOf, ticketStatus } from "./34-live-ui.js"
+import { TicketDetail, ticketStepLabel } from "./58-ticket-detail.js"
+import { Fragment, React, h, useEffect, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'ov.needsYou': ['需要你处理', 'Needs you'],
   'ov.inboxError': ['待办列表加载失败，概览计数可能滞后；可重试。', 'The inbox failed to load; the desk count may be stale. Retry.'],
@@ -104,22 +116,22 @@ Object.assign(PAGE_TEXT, {
   'ov.summaryAlt': ['轮询间隔未知 · 更新于 {time}', 'Poll interval unknown · updated {time}'],
 })
 
-const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
-const OV_DAY_MS = 86_400_000
+export const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
+export const OV_DAY_MS = 86_400_000
 
 /** The previous visit's wall clock, kept local to this profile; a private-mode failure just hides the line. */
-function ovReadLastSeen() {
+export function ovReadLastSeen() {
   try {
     const value = Number(JSON.parse(localStorage.getItem(OV_LAST_SEEN_KEY) ?? 'null'))
     return Number.isFinite(value) && value > 0 ? value : undefined
   } catch { return undefined }
 }
-function ovSaveLastSeen(value) {
+export function ovSaveLastSeen(value) {
   try { localStorage.setItem(OV_LAST_SEEN_KEY, JSON.stringify(value)) } catch { /* route memory already degrades the same way */ }
 }
 
 /** One clock tick per second, only for the overview: the next-poll countdown is the panel's heartbeat. */
-function useOverviewNow(intervalMs = 1000) {
+export function useOverviewNow(intervalMs = 1000) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), intervalMs)
@@ -129,32 +141,32 @@ function useOverviewNow(intervalMs = 1000) {
 }
 
 // The hand-built `MM-DD HH:mm` was the same string in both languages and bypassed the locale's digit/order rules.
-const ovStampFormatter = lang => new Intl.DateTimeFormat(lang === 'en' ? 'en' : 'zh-CN',
+export const ovStampFormatter = lang => new Intl.DateTimeFormat(lang === 'en' ? 'en' : 'zh-CN',
   { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
-function ovStamp(value) {
+export function ovStamp(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return ovStampFormatter(PANEL_LANG).format(date)
 }
-const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en' ? 'en' : 'zh-CN')
-const ovClip = (value, limit = 64) => {
+export const ovCount = (value, lang) => Number(value ?? 0).toLocaleString(lang === 'en' ? 'en' : 'zh-CN')
+export const ovClip = (value, limit = 64) => {
   const text = String(value ?? '').replace(/\s+/g, ' ').trim()
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
 }
 
 /** Inbox kind → the row's shape icon (the same icon family the other list rows use). Unknown kinds fall back to inbox. */
-const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', publish: 'play', failure: 'alert-triangle', source: 'inbox',
+export const OV_INBOX_ICON = { gate: 'blocked', accept: 'decision', publish: 'play', failure: 'alert-triangle', source: 'inbox',
   engine: 'shield' }
-const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
+export const ovInboxIcon = item => OV_INBOX_ICON[item?.kind] ?? 'inbox'
 /** Where one inbox item lives: its Ticket when it names one, else its Source, else the execution queue. */
-function ovInboxTarget(item) {
+export function ovInboxTarget(item) {
   const refs = item?.refs ?? {}
   if (refs.ticketId) return { page: 'execution', id: refs.ticketId }
   if (refs.sourceId) return { page: 'source' }
   return { page: 'execution' }
 }
 /** The row's one button says where it goes; a gate/accept item always names its Ticket. */
-function ovInboxActionKey(item) {
+export function ovInboxActionKey(item) {
   const refs = item?.refs ?? {}
   if (refs.ticketId) return 'ov.inboxGoTicket'
   if (refs.sourceId) return 'ov.inboxGoSource'
@@ -163,7 +175,7 @@ function ovInboxActionKey(item) {
 
 /** Policy ledger fallback for payloads without `rules24h`: per rule, how often it blocked vs passed in the last 24h.
     → { rows: [{ name, hits, blocked }], total } — the host computes the same shape over the full decision store. */
-function ovRuleHits(decisions, now) {
+export function ovRuleHits(decisions, now) {
   const counts = new Map()
   let total = 0
   for (const decision of Array.isArray(decisions) ? decisions : []) {
@@ -184,7 +196,7 @@ function ovRuleHits(decisions, now) {
 }
 
 /** Known executor failures are shown in the operator's language; an unknown error stays clipped and raw. */
-function ovErrorLabel(t, error) {
+export function ovErrorLabel(t, error) {
   const text = String(error ?? '')
   if (/interrupted by a plugin reload|host restart/i.test(text)) return pt(t, 'ov.errorInterrupted')
   if (/Cannot read propert|reading 'get'/i.test(text)) return pt(t, 'ov.errorInternal')
@@ -196,7 +208,7 @@ function ovErrorLabel(t, error) {
  * P2-9 run quality view model from `GET engine/metrics`: every field degrades to 0/[] so an older or partially filled
  * payload cannot break the page. Returns undefined when the payload has no runs block at all (older hosts).
  */
-function ovQualityOf(t, metrics) {
+export function ovQualityOf(t, metrics) {
   if (!metrics || typeof metrics !== 'object') return undefined
   const runs = metrics.runs && typeof metrics.runs === 'object' ? metrics.runs : undefined
   if (!runs) return undefined
@@ -228,7 +240,7 @@ function ovQualityOf(t, metrics) {
 }
 
 /** Drift the calm page owes the operator: failed runs, tickets dismissed after a failure, a failing Source, a stale poll. */
-function ovWatchItems(t, data, now, options = {}) {
+export function ovWatchItems(t, data, now, options = {}) {
   const out = []
   const runs = Array.isArray(data.runs) ? data.runs : []
   const failed = runs.filter(run => run.status === 'failed' && Date.parse(run.startedAt ?? '') >= now - OV_DAY_MS)
@@ -273,7 +285,7 @@ function ovWatchItems(t, data, now, options = {}) {
 }
 
 /** What happened while the operator was away, counted from the records the status document already carries. */
-function ovSince(t, data, lastSeen) {
+export function ovSince(t, data, lastSeen) {
   const decisions = (Array.isArray(data.decisions) ? data.decisions : []).filter(item => Date.parse(item.at ?? '') > lastSeen).length
   const tickets = (Array.isArray(data.tickets) ? data.tickets : []).filter(item => Date.parse(item.createdAt ?? '') > lastSeen).length
   const failures = (Array.isArray(data.runs) ? data.runs : []).filter(run => run.status === 'failed'
@@ -286,7 +298,7 @@ function ovSince(t, data, lastSeen) {
   }
 }
 
-function LiveOverviewPage({ route }) {
+export function LiveOverviewPage({ route }) {
   const { t, navigate, notify } = usePanel()
   const { data, error, reload, updatedAt, actions } = usePanelData()
   const poll = useAction(async () => {
