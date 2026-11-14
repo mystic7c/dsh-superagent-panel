@@ -15,17 +15,24 @@
 | Host | `index.js`（`/superagent/api` 路由与动作分发）、`lib/` | 在 DSH 里禁用→启用插件（或重启 DSH）才生效 |
 | Client | `client/src/*.js` → 构建出 `client/index.js` | 刷新页面即生效 |
 
-`client/src` 按文件名的数字前缀排序后拼接进同一个工厂作用域，所以**文件名前缀是隐式的加载顺序契约**，
-新增文件请沿用现有段位（`05-`、`10-`、`15-`、`20-`…）。`client/index.js` 是构建产物且**必须提交**——
-CI 用 `node scripts/build-client.mjs --check` 逐字节校验（`client/index.js` 与 `client/index.js.map` 两个文件）。
+`client/src` 是一组真正的 ES 模块，入口是 `client/src/index.js`：它按数字顺序 `import` 每一条模块，
+把 `{ inject, apply }` 从 `90-apply.js` 再导出。模块之间用显式的 `import { … } from './xx-name.js'` 互相引用，
+不再依赖"所有声明共享一个工厂作用域"——**新增文件请同时加到 `index.js` 的 import 列表里**。
 
-产物由 esbuild 压缩（`transform`，不是 `bundle`）：`require('react')` 保持为 loader 调用，不打包进产物。
+React 与 `h` 不来自全局：`client/src/00-react.js` 把宿主提供的 `react` 收敛成一张导出表
+（`React`、`h` 与常用 hooks），每个模块从它 `import` 自己需要的名字。JSX 通过 `jsxFactory: 'h'` 编译，
+所以 JSX 和手写 `h(...)` 都指向同一个 `h` 绑定。
+
+`client/index.js` 是构建产物且**必须提交**——CI 用 `node scripts/build-client.mjs --check` 逐字节校验
+（`client/index.js` 与 `client/index.js.map` 两个文件）。构建是 esbuild **bundle**（`format: 'cjs'`，
+`react` 保持 external，`require('react')` 仍是 loader 调用），外面包一层
+`window.__ModuleLoader__.load({ id, factory(require) { … } })` 的工厂，契约与 P3 之前完全一致。
+
 esbuild 版本在 `devDependencies` 里**精确锁定**——换版本会改变压缩后的字节，属于一次需要重新生成产物的显式改动，
 请在同一个提交里说明并重跑 `--check`。
 
-片段可以写 JSX，也可以继续写 `h(...)`：构建把整段按 `loader: 'jsx'` 编译、`jsxFactory` 指向 prelude 里的
-`h`，两种写法编译成同一个运行时调用，所以**按文件逐个迁移**是安全的（迁移一个文件只改一个文件的 diff）。
-`scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 用同一套 esbuild 参数编译片段，`h` 与 JSX 都能跑。
+`scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 通过 `scripts/client-exports.mjs` 用同一套 esbuild 参数
+打包一份虚拟入口，再取出 `App`、`DICTS`、`PANEL_CSS` 之类的内部名字来验证；改了模块导出名要同步这两个脚本。
 
 ## 改动前必跑的四道门
 

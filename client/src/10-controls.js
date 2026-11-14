@@ -4,16 +4,20 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines), so files can migrate one at a time. */
 
+import { Icon, cx } from "./00-util.js"
+import { when } from "./06-i18n.js"
+import { caller, same, stay, usePanel } from "./15-api.js"
+import { React, h, useEffect, useLayoutEffect, useRef, useState } from "./00-react.js"
 /** Six shape-coded states (contract §3.4). Color never carries the state alone: every state also has a shape. */
-const STATUS_STATES = ['done', 'ongoing', 'warning', 'error', 'idle', 'queued']
+export const STATUS_STATES = ['done', 'ongoing', 'warning', 'error', 'idle', 'queued']
 
-function controlIcon(icon, size = 16) {
+export function controlIcon(icon, size = 16) {
   if (icon === undefined || icon === null) return null
   return typeof icon === 'string' ? <Icon name={icon} size={size} /> : icon
 }
 
 /** Shape-coded state icon. `ongoing` spins by default; `spin` forces/forbids the rotation. */
-function StatusIcon({ state = 'idle', size = 16, spin, className }) {
+export function StatusIcon({ state = 'idle', size = 16, spin, className }) {
   const key = STATUS_STATES.includes(state) ? state : 'idle'
   const spinning = spin === undefined ? key === 'ongoing' : spin
   const shape = key === 'done'
@@ -33,31 +37,31 @@ function StatusIcon({ state = 'idle', size = 16, spin, className }) {
 }
 
 /** Shape + text; the only allowed way to show a state, so WCAG 1.4.1 holds. */
-function StatusText({ state = 'idle', children }) {
+export function StatusText({ state = 'idle', children }) {
   return <span className="sa-status-text" data-state={STATUS_STATES.includes(state) ? state : 'idle'}>
     <StatusIcon state={state} size={14} />
     <span className="sa-status-label">{children}</span>
   </span>
 }
 
-function Button({ variant = 'ghost', size = 'md', icon, className, children, type = 'button', ...rest }) {
+export function Button({ variant = 'ghost', size = 'md', icon, className, children, type = 'button', ...rest }) {
   return <button type={type} className={cx('sa-btn', `sa-btn-${variant}`, `sa-btn-${size}`, className)} {...rest}>
     {icon !== undefined && icon !== null ? <span className="sa-btn-icon">{controlIcon(icon, size === 'sm' ? 14 : 16)}</span> : null}
     {children !== undefined && children !== null ? children : null}
   </button>
 }
 
-function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
+export function IconButton({ icon, label, onClick, disabled, title, variant = 'ghost', ...rest }) {
   return <button type="button" className="sa-icon-btn" data-variant={variant}
     aria-label={label ?? title} title={title ?? label} disabled={disabled} onClick={onClick} {...rest}>{controlIcon(icon, 16)}</button>
 }
 
-function Tag({ tone = 'outline', title, children }) {
+export function Tag({ tone = 'outline', title, children }) {
   return <span className="sa-tag" data-tone={tone} title={title}>{children}</span>
 }
 
 /** Page-level tab bar; clicking the active tab again re-emits it so callers can reset to the tab root. */
-function SegmentedTabs({ items, value, onChange, label, className }) {
+export function SegmentedTabs({ items, value, onChange, label, className }) {
   const list = useRef(null)
   const walk = (event) => {
     const index = items.findIndex(item => item.value === value)
@@ -81,7 +85,7 @@ function SegmentedTabs({ items, value, onChange, label, className }) {
 }
 
 /** Secondary filter pills (contract §5.2): one radio group, arrow keys move and select, roving tabindex. */
-function SegmentedControl({ options = [], value, onChange, label, disabled, className }) {
+export function SegmentedControl({ options = [], value, onChange, label, disabled, className }) {
   const list = useRef(null)
   const selectable = options.filter(option => !option.disabled && !disabled)
   const focusAt = (position) => {
@@ -110,14 +114,14 @@ function SegmentedControl({ options = [], value, onChange, label, disabled, clas
 
 /** Text input. `label` is turned into the accessible name instead of being spread onto the DOM as a stray attribute;
     identifier fields (repo, branch, ref, path) default to spellCheck=false so the browser stops underlining them. */
-function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
+export function Input({ icon, className, inputRef, label, spellCheck, ...rest }) {
   return <span className={cx('sa-input', className)}>
     {icon !== undefined ? <span className="sa-input-icon">{controlIcon(icon, 14)}</span> : null}
     <input ref={inputRef} spellCheck={spellCheck ?? false} {...rest} aria-label={rest['aria-label'] ?? label} />
   </span>
 }
 
-function Select({ options = [], value, onChange, label, className, disabled }) {
+export function Select({ options = [], value, onChange, label, className, disabled }) {
   return <select className={cx('sa-select', className)} value={value ?? ''} aria-label={label} disabled={disabled}
     onChange={event => onChange(event.target.value)}>
     {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
@@ -127,7 +131,7 @@ function Select({ options = [], value, onChange, label, className, disabled }) {
 /** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
     hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
     visible text lives outside the label (it may be omitted when the text is inside). */
-function Switch({ checked, onChange, label, className, disabled, inputRef }) {
+export function Switch({ checked, onChange, label, className, disabled, inputRef }) {
   return <span className={cx('sa-switch', className)}>
     <input ref={inputRef} type="checkbox" role="switch" className="sa-switch-input"
       checked={Boolean(checked)} disabled={disabled} aria-label={typeof label === 'string' ? label : undefined}
@@ -137,7 +141,7 @@ function Switch({ checked, onChange, label, className, disabled, inputRef }) {
 }
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
-function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
+export function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
   const dialog = useRef(null)
   const close = useRef(onClose)
   close.current = onClose
@@ -187,7 +191,7 @@ function Modal({ open, onClose, title, closeLabel, description, footer, classNam
 }
 
 /** Tooltip trigger for hover, keyboard focus and touch; positioned with fixed coordinates so it escapes scroll clips. */
-function InfoTip({ text, icon = 'question', warn }) {
+export function InfoTip({ text, icon = 'question', warn }) {
   const anchor = useRef(null)
   const bubble = useRef(null)
   const [open, setOpen] = useState(false)
@@ -221,7 +225,7 @@ function InfoTip({ text, icon = 'question', warn }) {
  * row (critique 2026-11-05 #22). The icon prop is kept for callers that need a leading glyph, but the overview no
  * longer passes a gear. `sa-disclosure-*` class hooks stay in place so the stylesheet owns the look.
  */
-function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
+export function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children }) {
   return <div className="sa-disclosure" data-open={open || undefined}>
     <button type="button" className="sa-disclosure-row" aria-expanded={open} onClick={onToggle}>
       {icon ? <span className="sa-disclosure-icon">{controlIcon(icon, 14)}</span> : null}
@@ -239,7 +243,7 @@ function DisclosureRow({ icon, title, open, onToggle, collapsedContent, children
 }
 
 /** Nearest ancestor whose horizontal overflow clips its children (the panel's `.sa-scroll`); the document otherwise. */
-function menuClipBounds(node) {
+export function menuClipBounds(node) {
   const view = node?.ownerDocument?.defaultView
   const computed = (element) => (view?.getComputedStyle ? view.getComputedStyle(element) : undefined)
   let parent = node?.parentElement
@@ -252,12 +256,12 @@ function menuClipBounds(node) {
   return (doc.scrollingElement ?? doc.documentElement).getBoundingClientRect()
 }
 
-const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
+export const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemradio"]'
 
 /** Overflow menu. A label + current value makes it a view picker (`text`); the default trigger is the ⋯ icon.
     Click outside / Escape close, ↑↓/Home/End move, Enter/Space select; `item.checked` turns the item into a radio
     choice (menuitemradio) and marks the current one. */
-function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
+export function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
   const { t } = usePanel()
   const [open, setOpen] = useState(false)
   const [side, setSide] = useState(align === 'start' ? 'start' : 'end')
@@ -356,7 +360,7 @@ function Menu({ label, items = [], iconName = 'more', align = 'end', text }) {
 }
 
 /** Copy a value, then confirm with a short live "copied" state (no modal, no toast). */
-function CopyButton({ value, label }) {
+export function CopyButton({ value, label }) {
   const { t } = usePanel()
   const [copied, setCopied] = useState(false)
   const timer = useRef()

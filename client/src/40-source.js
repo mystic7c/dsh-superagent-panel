@@ -4,6 +4,16 @@
    keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
    no request of its own. */
 
+import { API, Icon, hhmm, shortId } from "./00-util.js"
+import { errorText, localized, translate, when } from "./06-i18n.js"
+import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./10-controls.js"
+import { same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
+import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, Section, Skeleton, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { useLiveResource } from "./32-live-model.js"
+import { setupStateOf } from "./33-setup.js"
+import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./34-live-ui.js"
+import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'src.summary': ['已启用 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
   'src.summaryNoSync': ['已启用 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
@@ -90,20 +100,20 @@ Object.assign(PAGE_TEXT, {
 
 /** Source health → the shared shape vocabulary: a healthy source reads as done (✓), a broken one as error (×), and
     an idle or switched-off one as the hollow idle circle. The label always comes from these PAGE_TEXT keys. */
-const SOURCE_SHAPE = { ready: 'done', error: 'error', idle: 'idle', off: 'idle' }
+export const SOURCE_SHAPE = { ready: 'done', error: 'error', idle: 'idle', off: 'idle' }
 // Octo is one Source; every repository gets its own `kind: 'execution'` card (`id: 'gitlab:<repoId>'`, contract §12).
-const SOURCE_ICON = { source: 'message', octo: 'message', execution: 'pull', gitlab: 'pull' }
-const sourceIconName = source => SOURCE_ICON[source?.kind] ?? SOURCE_ICON[source?.id] ?? 'inbox'
-const isOctoSource = source => source?.id === 'octo' || source?.kind === 'source'
-const isExecutionSource = source => source?.kind === 'execution' || String(source?.id ?? '').startsWith('gitlab')
+export const SOURCE_ICON = { source: 'message', octo: 'message', execution: 'pull', gitlab: 'pull' }
+export const sourceIconName = source => SOURCE_ICON[source?.kind] ?? SOURCE_ICON[source?.id] ?? 'inbox'
+export const isOctoSource = source => source?.id === 'octo' || source?.kind === 'source'
+export const isExecutionSource = source => source?.kind === 'execution' || String(source?.id ?? '').startsWith('gitlab')
 
-function sourceStateView(source) {
+export function sourceStateView(source) {
   const key = Object.hasOwn(SOURCE_SHAPE, source?.state) ? source.state : 'idle'
   return { state: SOURCE_SHAPE[key], labelKey: `src.state.${key}` }
 }
 
 /** The three numbers per source kind (contract §4/§12 `sources[].stats`); a repository with failures shows a fourth. */
-function sourceStatRows(source) {
+export function sourceStatRows(source) {
   const stats = source?.stats ?? {}
   if (isOctoSource(source)) {
     return [['src.stat.received', stats.received], ['src.stat.filtered', stats.filtered], ['src.stat.accepted', stats.accepted]]
@@ -117,7 +127,7 @@ function sourceStatRows(source) {
 }
 
 /** The execution card's GitLab and repository facts (`source.config` plus the matching `config.repos` entry). */
-function sourceRepoRows(t, source, repo) {
+export function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
   if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
@@ -132,21 +142,21 @@ function sourceRepoRows(t, source, repo) {
 }
 
 /** Verify/acceptance mode of one repository in one small line (`人工验收 · 合并后验收`). */
-function sourceRepoModeHint(t, repo) {
+export function sourceRepoModeHint(t, repo) {
   if (!repo) return ''
   return `${pt(t, 'repo.verifyMode')}：${repoVerifyModeText(t, repo.verifyMode)}`
     + ` · ${pt(t, 'repo.acceptance')}：${repoAcceptanceText(t, repo.acceptance)}`
 }
 
 /** One filter reason in the active language; an unknown code falls back to the host's own human text. */
-function filteredReason(t, item) {
+export function filteredReason(t, item) {
   const key = `src.reason.${item?.reasonCode ?? ''}`
   const text = pt(t, key)
   return text === key ? String(item?.reason ?? item?.reasonCode ?? '') : text
 }
 
 /** Thread label for a filtered message: the watched chat title when known, otherwise a short channel id. */
-function filteredThread(source, item) {
+export function filteredThread(source, item) {
   const key = String(item?.threadKey ?? '')
   const channelId = key.includes(':') ? key.slice(key.indexOf(':') + 1) : key
   const title = channelId ? source?.config?.chatTitles?.[channelId] : undefined
@@ -154,7 +164,7 @@ function filteredThread(source, item) {
 }
 
 /** Three equal-width statistics (`--sa-stats` scale in 05-style): label 12/tertiary over a 20/600 value. */
-function SourceStats({ rows }) {
+export function SourceStats({ rows }) {
   const { t } = usePanel()
   return h('div', { className: 'sa-stats' }, rows.map(([labelKey, value]) =>
     h('div', { key: labelKey, className: 'sa-stat' },
@@ -163,7 +173,7 @@ function SourceStats({ rows }) {
 }
 
 /** Messages the Octo Source filtered out: thread, reason in plain words, and the raw text folded away. */
-function FilteredMessages({ source, items }) {
+export function FilteredMessages({ source, items }) {
   const { t } = usePanel()
   return h('ul', { className: 'sa-list' }, items.map(item => h('li', { key: item.id, className: 'sa-row' },
     h('div', { className: 'sa-row-main' },
@@ -179,31 +189,31 @@ function FilteredMessages({ source, items }) {
 }
 
 /** Signal status → the shared shape vocabulary; the label always comes from `src.signalStatus.*`. */
-const SIGNAL_SHAPE = { pending: 'ongoing', processed: 'done', ignored: 'idle', skipped: 'warning', failed: 'error' }
-const SIGNAL_TONE = { pending: 'info', processed: 'success', ignored: 'neutral', skipped: 'warning', failed: 'danger' }
+export const SIGNAL_SHAPE = { pending: 'ongoing', processed: 'done', ignored: 'idle', skipped: 'warning', failed: 'error' }
+export const SIGNAL_TONE = { pending: 'info', processed: 'success', ignored: 'neutral', skipped: 'warning', failed: 'danger' }
 /** Host skip codes → the same human reasons the filtered-message list already uses; an unknown code stays raw. */
-const SIGNAL_REASON_KEYS = { 'chat-not-watched': 'src.reason.sourceNotWatched', sender: 'src.reason.senderNotAllowed',
+export const SIGNAL_REASON_KEYS = { 'chat-not-watched': 'src.reason.sourceNotWatched', sender: 'src.reason.senderNotAllowed',
   'sender-not-allowed': 'src.reason.senderNotAllowed', 'not-text': 'src.reason.notText', 'high-risk': 'src.reason.highRisk' }
-function signalReasonText(t, item) {
+export function signalReasonText(t, item) {
   const code = item?.skipReason
   if (!code) return ''
   const key = SIGNAL_REASON_KEYS[String(code)]
   return key ? pt(t, key) : String(code)
 }
 /** A replayable signal is one the rules did not deliver (P1 §2.2): skipped, ignored or failed. */
-const signalReplayable = item => ['skipped', 'ignored', 'failed'].includes(item?.status)
+export const signalReplayable = item => ['skipped', 'ignored', 'failed'].includes(item?.status)
 /** P2-8 label vocabulary: tone for the tag, label key for the text; unknown labels stay raw. */
-const SIGNAL_LABEL_TONE = { correct: 'success', false_wake: 'warning', missed_wake: 'danger', cleared: 'neutral' }
-const SIGNAL_LABEL_KEYS = { correct: 'signalLabel.correct', false_wake: 'signalLabel.false_wake',
+export const SIGNAL_LABEL_TONE = { correct: 'success', false_wake: 'warning', missed_wake: 'danger', cleared: 'neutral' }
+export const SIGNAL_LABEL_KEYS = { correct: 'signalLabel.correct', false_wake: 'signalLabel.false_wake',
   missed_wake: 'signalLabel.missed_wake', cleared: 'signalLabel.cleared' }
-const SIGNAL_LABEL_ORDER = ['correct', 'false_wake', 'missed_wake', 'cleared']
-const signalLabelText = (t, label) => {
+export const SIGNAL_LABEL_ORDER = ['correct', 'false_wake', 'missed_wake', 'cleared']
+export const signalLabelText = (t, label) => {
   const key = SIGNAL_LABEL_KEYS[String(label ?? '')]
   return key ? pt(t, key) : String(label ?? '')
 }
 
 /** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
-function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
+export function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
   const { t, navigate } = usePanel()
   return h('ul', { className: 'sa-list' }, items.map(item => {
     const status = String(item?.status ?? '')
@@ -247,27 +257,27 @@ function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onO
 }
 
 /** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
-function srcDayBound(value, end = false) {
+export function srcDayBound(value, end = false) {
   if (!value) return ''
   const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00'}`)
   return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
-const SRC_SCROLL_KEY = 'superagent-panel/source-scroll'
+export const SRC_SCROLL_KEY = 'superagent-panel/source-scroll'
 
 /** The panel scrolls inside `.sa-scroll`, not the window; saving window.scrollY always restored 0 (review P1 AC-07). */
-function sourceScrollTop() {
+export function sourceScrollTop() {
   try {
     const scroller = document.querySelector('.sa-scroll')
     const y = scroller ? scroller.scrollTop : window.scrollY
     return Number.isFinite(y) && y > 0 ? y : 0
   } catch { return 0 }
 }
-function rememberSourceScroll() {
+export function rememberSourceScroll() {
   const y = sourceScrollTop()
   if (y > 0) try { sessionStorage.setItem(SRC_SCROLL_KEY, String(y)) } catch { /* private mode */ }
 }
-function restoreSourceScroll() {
+export function restoreSourceScroll() {
   try {
     const y = Number(sessionStorage.getItem(SRC_SCROLL_KEY) ?? 0)
     if (!(y > 0)) return
@@ -279,7 +289,7 @@ function restoreSourceScroll() {
 
 /** P1 AC-07: the Eval log links here with a signal id. The raw row may be filtered out of the current page or already
     cleaned up, so the link answers with a located-signal card (or an explicit cleaned-up notice) instead of nothing. */
-function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenThread }) {
+export function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenThread }) {
   const { t } = usePanel()
   const signal = view?.signal ?? {}
   const status = String(signal.status ?? '')
@@ -319,7 +329,7 @@ function LocatedSignal({ view, missing, offPage, onClear, onOpenTicket, onOpenTh
       h(Button, { variant: 'ghost', size: 'sm', onClick: onClear }, pt(t, 'src.focusClear'))))
 }
 
-function LiveSourcePage({ route }) {
+export function LiveSourcePage({ route }) {
   const { t, navigate, notify } = usePanel()
   const focusId = typeof route?.id === 'string' && route.id.trim() ? route.id.trim() : ''
   const { data, error, reload, actions } = usePanelData()
