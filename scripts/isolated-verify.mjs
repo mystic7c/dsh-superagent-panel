@@ -2,7 +2,7 @@
 /**
  * Isolated DSH + Chrome headless CDP verification for the Superagent panel.
  *
- * Why: the `render` gate renders the client in jsdom with a shared /tmp/sa-harness fixture, so it cannot prove
+ * Why: the `render` gate renders the client in jsdom against a fixture state, so it cannot prove
  * that the panel actually mounts inside a real DSH web UI with a real Host half. This script boots a throw-away
  * DSH instance instead:
  *

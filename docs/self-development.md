@@ -64,8 +64,8 @@ GitHub Actions 自动开 PR → 人工评审合并 → 面板巡检到合入后�
 | `syntax` | `node --check index.js` | Host 半 `index.js` 语法 |
 | `client-build` | `node scripts/build-client.mjs --check` | `client/index.js` 与 `client/src/` 是否同步（改了源码没重建就失败） |
 | `i18n` | `node scripts/check-keys.mjs` | 客户端用到的文案 key 都存在，且中英文词典 key 一致 |
-| `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 541 个） |
-| `render` | `node scripts/render-check.mjs` | jsdom 渲染回归（jsdom/React 来自 `/tmp/sa-harness`） |
+| `host-tests` | `node --test lib/store.test.js lib/live/*.test.js` | Host 全量单测（当前 556 个） |
+| `render` | `node scripts/render-check.mjs` | jsdom 渲染回归（jsdom/React 来自仓库 devDependencies） |
 | `isolated` | `node scripts/isolated-verify.mjs` | 起一个隔离 DSH（临时 `DSH_HOME`/state、随机端口）加载本工作树的面板代码，用 Chrome headless CDP 实机渲染并检查侧栏入口、页签与空状态、console 无错误；结束后清理 |
 
 执行器的闸门清单来自 `live.json` 的 `repo.gates`（上面只是仓库配置里的一份快照，增删闸门要改 `live.json`）。
@@ -169,7 +169,7 @@ node scripts/local-install.mjs --verify     # 只读核对当前安装态
 
 ## 隔离实例验证（`scripts/isolated-verify.mjs`）
 
-`render` 闸门用 jsdom 在共享 `/tmp/sa-harness` 里跑，依赖真实状态目录时会抖动；`isolated` 闸门改为起一个一次性的
+`render` 闸门用 jsdom 在 fixture 状态上跑，证明不了真实浏览器里的挂载；`isolated` 闸门改为起一个一次性的
 DSH：临时 `DSH_HOME`（其中的一次性 profile 以 `link:` 装入本工作树的面板代码，**只用于该闸门，不是本机安装态**）
 + 临时 `DSH_SUPERAGENT_STATE_DIR` + 随机端口，用 Chrome headless 通过 CDP 打开 UI，断言侧栏「超级智能体」入口、
 面板页签与空状态，并检查 console 无错误；截图写到 `verification/`（gitignore）。可单独运行：

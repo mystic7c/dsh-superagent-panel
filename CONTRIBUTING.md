@@ -34,18 +34,19 @@ esbuild 版本在 `devDependencies` 里**精确锁定**——换版本会改变�
 `scripts/check-keys.mjs` 与 `scripts/render-check.mjs` 通过 `scripts/client-exports.mjs` 用同一套 esbuild 参数
 打包一份虚拟入口，再取出 `App`、`DICTS`、`PANEL_CSS` 之类的内部名字来验证；改了模块导出名要同步这两个脚本。
 
-## 改动前必跑的四道门
+## 改动前必跑的闸门
 
 ```bash
 node --check index.js                              # Host 语法
 node scripts/build-client.mjs                      # 改了 client/src 就先重建产物
 node scripts/build-client.mjs --check              # 产物是否最新（CI 强制）
 node scripts/check-keys.mjs                        # 中英文 key 覆盖
+npm run types                                      # types/dsh.d.ts 自身能否通过 tsc
 node --test lib/store.test.js lib/live/*.test.js   # Host 测试（全量）
 node scripts/render-check.mjs                      # jsdom 渲染回归（194 条；无 live.json 时自动用 test/fixtures）
 ```
 
-CI 在干净 clone 上跑的就是这六条。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
+CI 在干净 clone 上跑的就是这七条。`scripts/isolated-verify.mjs` 与 `scripts/verify-panel.mjs` 需要本机桌面
 DSH + Chrome（CDP），只在发布前由维护者人工执行。
 
 ## 代码规则

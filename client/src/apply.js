@@ -21,6 +21,10 @@ export function Mounted({ ctx }) {
   return h(App, { openSession, t })
 }
 
+/** Client half: the sidebar icon plus the panel in the `main` slot.
+ *
+ * @param {DSH.ClientPluginContext} ctx
+ */
 export function apply(ctx) {
   // Dictionaries are optional: the panel has its own translator, but registering them lets the host's locale service
   // resolve our namespace for titles and any future surface that reads it.
