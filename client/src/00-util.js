@@ -1,17 +1,21 @@
 /* Small utilities shared by the Superagent panel: class names, icons, time/format helpers, and a safe Markdown subset.
    Plain script text inside the bundle factory; see scripts/build-client.mjs. */
 
-const PANEL_ID = 'superagent'
-const LOCALE_NS = 'superagent'
-const API = '/superagent/api'
-const PAGE_SIZE = 20
+import { timeLocale, when } from "./06-i18n.js"
+import { StatusIcon } from "./10-controls.js"
+import { RawValue } from "./20-widgets.js"
+import { React, h } from "./00-react.js"
+export const PANEL_ID = 'superagent'
+export const LOCALE_NS = 'superagent'
+export const API = '/superagent/api'
+export const PAGE_SIZE = 20
 
-const cx = (...names) => names.filter(Boolean).join(' ')
+export const cx = (...names) => names.filter(Boolean).join(' ')
 
 /* Icon set copied in behavior from the host's own controls but drawn here: the plugin must not import the host's
    component packages, and `currentColor` keeps icons consistent with the active theme. Icons are stroke paths on a
    24×24 grid; the shape itself carries meaning where color is only supplementary (see StatusIcon). */
-const ICON_PATHS = {
+export const ICON_PATHS = {
   'chevron-left': 'M15 5l-7 7 7 7',
   'chevron-right': 'M9 5l7 7-7 7',
   'chevron-down': 'M5 9l7 7 7-7',
@@ -56,13 +60,13 @@ const ICON_PATHS = {
   more: 'M5.2 12h1.2M11.4 12h1.2M17.6 12h1.2',
 }
 
-function Icon({ name, size = 16 }) {
+export function Icon({ name, size = 16 }) {
   return h('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8,
     strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }, h('path', { d: ICON_PATHS[name] ?? ICON_PATHS.alert }))
 }
 
 /** The sidebar entry's icon: a small agent head with a tool, colored with the current sidebar state. */
-function SuperagentIcon({ size }) {
+export function SuperagentIcon({ size }) {
   return h('svg', { width: size, height: size, viewBox: '0 0 64 64', fill: 'none', 'aria-hidden': 'true', style: { display: 'block' } },
     h('rect', { x: 8, y: 20, width: 34, height: 26, rx: 8, fill: 'currentColor', opacity: 0.9 }),
     h('rect', { x: 14, y: 26, width: 22, height: 13, rx: 5, fill: 'var(--dsw-alias-bg-base, transparent)' }),
@@ -77,14 +81,14 @@ function SuperagentIcon({ size }) {
 /* ---------- shared formatting helpers (contract §3.3; pages and shell-data use these instead of local copies) ---------- */
 
 /** First `len` characters of an opaque id (`tkt_1b6f9c…`) for inline labels; long ids alone belong in RawValue. */
-function shortId(value, len = 6) {
+export function shortId(value, len = 6) {
   const text = String(value ?? '')
   if (!text) return ''
   return text.length <= len ? text : `${text.slice(0, len)}…`
 }
 
 /** Absolute wall-clock time (hh:mm:ss) for "更新于/已保存于" lines; invalid or empty input renders as ''. */
-function hhmmss(value, lang) {
+export function hhmmss(value, lang) {
   if (value === undefined || value === null || value === '') return ''
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return ''
@@ -92,12 +96,12 @@ function hhmmss(value, lang) {
 }
 
 /** Wall-clock time (hh:mm) for the 30-second status surfaces: seconds imply a precision the poll does not have. */
-function hhmm(value, lang) {
+export function hhmm(value, lang) {
   return hhmmss(value, lang).slice(0, 5)
 }
 
 /** True when a link leaves this origin; such links open in a new tab with rel=noopener. */
-function isExternal(url) {
+export function isExternal(url) {
   if (typeof url !== 'string' || url === '') return false
   try {
     const base = typeof location === 'undefined' ? 'http://localhost' : location.origin
@@ -109,7 +113,7 @@ function isExternal(url) {
 
 /** Only an absolute http(s) URL may be written into an href. Everything else (javascript:, data:, relative paths)
     is rendered as inert text: URLs shown here come from live.json, GitLab and Octo payloads. */
-function safeHttpUrl(url) {
+export function safeHttpUrl(url) {
   return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
 }
 
@@ -119,15 +123,15 @@ function safeHttpUrl(url) {
    throw on history, and a host is free to rewrite the URL at any moment, which must never break the panel. */
 
 /** Longest fragment this panel agrees to decode: a route is a few hundred characters, so anything bigger is not ours. */
-const HASH_STATE_MAX = 4096
+export const HASH_STATE_MAX = 4096
 
 /** Build the fragment for `value`; the exact string is also what `writeHashState` compares against and returns. */
-function hashStateFragment(prefix, value) {
+export function hashStateFragment(prefix, value) {
   return `#${prefix}=${encodeURIComponent(JSON.stringify(value))}`
 }
 
 /** Decode the JSON object stored by this panel under `#<prefix>=`; `undefined` for a foreign, absent or corrupt one. */
-function readHashState(prefix) {
+export function readHashState(prefix) {
   try {
     if (typeof location === 'undefined') return undefined
     const hash = String(location.hash ?? '')
@@ -141,7 +145,7 @@ function readHashState(prefix) {
 /** Rewrite the panel's fragment in place and return it, or `undefined` when the URL was left alone. `replaceState`
     (never hash assignment) keeps the host's back/forward entries untouched; a non-empty fragment that is not ours is
     the host's own state and is preserved rather than overwritten. */
-function writeHashState(prefix, value) {
+export function writeHashState(prefix, value) {
   try {
     if (typeof location === 'undefined' || typeof history === 'undefined' || typeof history.replaceState !== 'function') return undefined
     const marker = `#${prefix}=`

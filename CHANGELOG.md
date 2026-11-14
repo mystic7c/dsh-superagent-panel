@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.0] — 2026-11-14
+
+### 变更
+- **P3：客户端从"按文件名拼接的片段"变成真正的 ESM 模块**（issue #35）。
+  - 新增 `client/src/index.js` 作为入口：按数字顺序 `import` 其余模块，并从 `90-apply.js` 再导出 `{ inject, apply }`；
+    数字前缀不再承载加载顺序（顺序由 import 列表显式表达），`22 片段` 的隐式契约消失。
+  - 新增 `client/src/00-react.js`：把宿主提供的 `react` 收敛成一张导出表（`React`、`h`、常用 hooks），
+    每个模块显式 `import` 需要的名字；`h` 不再来自工厂作用域的 prelude。
+  - 22 个模块的顶层声明全部 `export`，跨模块引用改为显式 `import { … } from './xx-name.js'`；
+    419 个顶层名字此前共用一个工厂作用域，现在各自归属到定义它的模块。
+  - `scripts/build-client.mjs` 从 esbuild `transform` 改为 `bundle`：`format: 'cjs'`、`platform: 'browser'`、
+    `external: ['react', 'react-dom', 'react/jsx-runtime']`，banner/footer 提供 `module`/`exports` 并包回
+    `window.__ModuleLoader__.load({ id, factory(require) { … } })`——对外契约与之前完全一致。
+  - 新增 `scripts/client-exports.mjs`：`check-keys.mjs` 与 `render-check.mjs` 通过它按同一套 esbuild 参数打包
+    一个虚拟入口，取出 `App`/`DICTS`/`PANEL_CSS` 等内部名字，替代原来的"拼接文本 + `new Function`"。
+- 产物 484,636 → 481,039 字节（−3,597）；`client/index.js.map` 同步重生成。
+
+### 验证
+- `node --check client/index.js`；`node scripts/build-client.mjs --check`（23 模块，逐字节）。
+- `node scripts/check-keys.mjs`：958 literal keys / 513 shared / 1359 page-local，OK。
+- Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
+- `node scripts/isolated-verify.mjs`：PASS，console errors 0，六个页签齐全。
+
 ## [0.6.0] — 2026-11-14
 
 ### 变更

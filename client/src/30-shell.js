@@ -3,6 +3,23 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
+import { Icon, hhmm } from "./00-util.js"
+import { errorText, fullTime, when } from "./06-i18n.js"
+import { Button, IconButton, Input, Menu, Modal, SegmentedTabs, StatusIcon, Tag } from "./10-controls.js"
+import { Panel, PanelProvider, PanelState, same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
+import { GlossaryModal, Hint, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { HOME, TABS, initialLocation, releaseLinkedRoute, remember, routeEquivalent, routeFromHash, routeLabel } from "./25-router.js"
+import { usePanelModel } from "./32-live-model.js"
+import { setupStateOf } from "./33-setup.js"
+import { needsYouCount, ticketStatus } from "./34-live-ui.js"
+import { LiveOverviewPage } from "./35-overview.js"
+import { LiveSourcePage } from "./40-source.js"
+import { LiveTriggerPage } from "./45-trigger.js"
+import { LiveEvalPage } from "./50-eval.js"
+import { LiveExecutionPage } from "./55-execution.js"
+import { LiveSettingsPage } from "./60-settings.js"
+import { React, h, useCallback, useEffect, useLayoutEffect, useRef, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'search.title': ['搜索', 'Search'],
   'search.placeholder': ['搜索工单、线程或消息…', 'Search Tickets, Threads or messages…'],
@@ -21,11 +38,11 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
-let PANEL_LANG = 'zh'
-const shellText = (zh, en) => PANEL_LANG === 'en' ? en : zh
+export let PANEL_LANG = 'zh'
+export const shellText = (zh, en) => PANEL_LANG === 'en' ? en : zh
 
 /** Engine phase + paused flag → the one-line health the header shows. */
-function globalHealth(data) {
+export function globalHealth(data) {
   const engine = data?.engine ?? {}
   const paused = data?.paused === true || data?.config?.paused === true || engine.paused === true
   if (engine.phase === 'error') return { state: 'error', labelKey: 'shell.error' }
@@ -36,7 +53,7 @@ function globalHealth(data) {
 }
 
 /** `运行中 · 需要你处理 2 件 · 数据更新于 12:31`; the only "data updated" line in the panel (title = full time). */
-function GlobalStatus() {
+export function GlobalStatus() {
   const { t, navigate } = usePanel()
   const { data, error, reload, updatedAt } = usePanelData()
   if (!data) {
@@ -92,7 +109,7 @@ function GlobalStatus() {
 }
 
 /** Cross-record search palette: tickets, threads and message text in one query, opened with Ctrl/Cmd+K or `/`. */
-function GlobalSearch({ open, onClose }) {
+export function GlobalSearch({ open, onClose }) {
   const { t, navigate, call } = usePanel()
   const [query, setQuery] = useState('')
   const [result, setResult] = useState(undefined)
@@ -208,7 +225,7 @@ function GlobalSearch({ open, onClose }) {
 }
 
 /** Page header: title, the one global status line, the two fixed status actions (check / refresh), then the glossary. */
-function Header({ onOpenSearch }) {
+export function Header({ onOpenSearch }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [glossaryOpen, setGlossaryOpen] = useState(false)
@@ -248,7 +265,7 @@ function Header({ onOpenSearch }) {
 }
 
 /** Route → the page component for that tab. Pages receive the route as a prop (detail id included). */
-function pageView(page) {
+export function pageView(page) {
   switch (page) {
     case 'source': return LiveSourcePage
     case 'trigger': return LiveTriggerPage
@@ -259,7 +276,7 @@ function pageView(page) {
   }
 }
 
-function Pages({ route }) {
+export function Pages({ route }) {
   useEffect(() => { document.getElementById(`sa-tab-${route.page}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [route.page])
   const Page = pageView(route.page)
   return <div className="sa-main" id="sa-page" role="tabpanel" aria-labelledby={`sa-tab-${route.page}`}>
@@ -268,7 +285,7 @@ function Pages({ route }) {
 }
 
 /** Keep one page crash from blanking the whole panel: show the error text and a reload button instead. */
-class PanelBoundary extends React.Component {
+export class PanelBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
   componentDidCatch(error, info) { console.error('superagent panel crashed', error, info) }
@@ -286,7 +303,7 @@ class PanelBoundary extends React.Component {
 }
 
 /** Inside the provider: the one status poll, then the page frame that every tab shares. */
-function PanelShell({ location, openTab }) {
+export function PanelShell({ location, openTab }) {
   const { t } = usePanel()
   PANEL_LANG = t.lang
   const model = usePanelModel(30000)
@@ -351,7 +368,7 @@ function PanelShell({ location, openTab }) {
 }
 
 /** Root panel component: route history above the single status poll and the provider that shares it. */
-function App({ openSession, t }) {
+export function App({ openSession, t }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
   // The page-load fragment only seeds this first mount. A later remount inside the host SPA reads the remembered route

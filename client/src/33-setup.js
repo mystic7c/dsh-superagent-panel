@@ -2,6 +2,12 @@
    It is deliberately a client-only projection: the host does not need a new "onboarding" endpoint, and the card
    disappears as soon as the four prerequisites are true. The copy names the operator's next action, not a file. */
 
+import { when } from "./06-i18n.js"
+import { Button, StatusIcon, Tag } from "./10-controls.js"
+import { usePanel } from "./15-api.js"
+import { When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { React, h } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   'setup.title': ['开始使用', 'Get started'],
   'setup.lead': ['完成下面几步，群里的一条请求就会变成可执行的工单。', 'A few steps turn a group message into a runnable Ticket.'],
@@ -27,7 +33,7 @@ Object.assign(PAGE_TEXT, {
 })
 
 /** The four prerequisites, in the order a first-time installer should satisfy them. */
-const SETUP_STEPS = [
+export const SETUP_STEPS = [
   { key: 'token', group: 'source', focus: 'octo-token' },
   { key: 'groups', group: 'source', focus: 'bindings' },
   { key: 'repo', group: 'repos' },
@@ -35,7 +41,7 @@ const SETUP_STEPS = [
 ]
 
 /** Pure projection of the status document; missing fields count as not done. */
-function setupStateOf(data) {
+export function setupStateOf(data) {
   const config = data?.config ?? {}
   const octo = config.octo ?? {}
   const repos = Array.isArray(config.repos) ? config.repos : []
@@ -59,7 +65,7 @@ function setupStateOf(data) {
 }
 
 /** Full card: shown when the desk is quiet (the first-run case), so it replaces empty space with the next action. */
-function SetupChecklist({ setup, onNavigate }) {
+export function SetupChecklist({ setup, onNavigate }) {
   const { t } = usePanel()
   if (!setup || setup.complete) return null
   return h('section', { className: 'sa-setup', 'aria-labelledby': 'sa-setup-title' },
@@ -84,7 +90,7 @@ function SetupChecklist({ setup, onNavigate }) {
 }
 
 /** One-line banner: shown when there is live work, so setup never pushes urgent Tickets down the page. */
-function SetupBanner({ setup, onNavigate }) {
+export function SetupBanner({ setup, onNavigate }) {
   const { t } = usePanel()
   if (!setup || setup.complete) return null
   return h('div', { className: 'sa-setup-banner' },
