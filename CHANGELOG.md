@@ -7,10 +7,17 @@
   `npm publish --access public`（先 `--dry-run` 看文件清单）→ `chore/backmerge-X.Y.Z` 回合并。
 - 起因：1.0.0 发布时 npm 发布这一步只有口头惯例，没有写在仓库里。
 
+## [1.0.1] — 2026-11-14
+
+### 文档
+- 分发渠道修正：1.0.0 **只**通过 GitHub Release 的 tarball 分发，npm 暂不发。README 的「安装」回到 tarball 优先、
+  去掉 npm 安装示例；`docs/delivery.md` 的 npm 步骤标注为「暂未启用」并保留操作说明，等启用时照做即可。
+- `package.json` 保留 `publishConfig.access: public`、保持非 private：启用 npm 时不需要再改元数据。
+
 ## [1.0.0] — 2026-11-14
 
-第一个公开发布版本。仓库转为 public，npm 上以 `@mystic7c/dsh-superagent-panel` 发布（`publishConfig.access: public`，
-`private` 已移除）。
+第一个公开发布版本。仓库转为 public，通过 GitHub Release 的 tarball 分发（`package.json` 已去掉 `"private": true`
+并写好 `publishConfig.access: public`，npm 发布暂未启用）。
 
 ### 自 0.9.13 起
 - 无功能变化；只改分发元数据与安装文档：`package.json` 去掉 `"private": true`、加 `publishConfig`，版本 1.0.0；

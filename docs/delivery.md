@@ -39,11 +39,11 @@
    npm pack                      # 产物落在仓库根，注意 mv 走，别提交
    gh release create vX.Y.Z --title "vX.Y.Z — …" --notes-file notes.md ../releases/dsh-superagent-panel-X.Y.Z.tgz
    ```
-3. npm 发布（1.0.0 起）：
+3. npm 发布（**暂未启用**，目前只走 GitHub Release 的 tarball）：启用时执行
    ```bash
-   npm publish --access public   # 需要 npm 登录；package.json 里 publishConfig.access 已是 public
+   npm publish --dry-run          # 先看文件清单；files 白名单在 package.json，private 必须已删除
+   npm publish --access public    # 需要 npm 登录；package.json 的 publishConfig.access 已是 public
    ```
-   发布前 `npm publish --dry-run` 先看文件清单；`files` 白名单在 `package.json`，`private` 必须已删除。
 4. 回合并：`chore/backmerge-X.Y.Z` 从 `main` 开 PR 回 `develop`（交付桥覆盖 `chore/**`，会自动开 PR）。
 
 本机桌面 profile 只认 `main` 的打包产物：`scripts/local-install.mjs` 显式安装新 tarball 后在面板里重载插件。
