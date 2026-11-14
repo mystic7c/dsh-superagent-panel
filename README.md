@@ -96,9 +96,9 @@ lib/
                     GitLab/Octo 客户端、待办箱（inbox.js）、原始信号（signals.js）、
                     运行台账（operations.js）、验收轮次（acceptance.js）、
                     worker 报告工具（worker-tools.js）、活动流（activities.js）、工单调度（schedule.js）
-client/src/*.js     客户端源码（有序片段，按文件名拼接；JSX 或 h() 均可）
+client/src/*.js     客户端源码（ES 模块，入口 index.js；JSX 或 h() 均可）
 client/index.js     构建产物（单文件 ModuleLoader bundle，esbuild 压缩）
-client/index.js.map 构建产物的 sourcemap（映射回 client/src 片段）
+client/index.js.map 构建产物的 sourcemap（映射回 client/src 模块）
 scripts/            构建与验收脚本（build-client / verify-panel / render-check …）
 locale/             插件清单文案（中/英）
 cordis.patch.yml    插件注册（insert 行）

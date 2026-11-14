@@ -3,21 +3,26 @@
    fragment is the shareable copy (`#sa={"page":...,"id":...}`), sessionStorage is the fallback for hosts that rewrite
    or strip the fragment. */
 
-const TABS = ['overview', 'source', 'trigger', 'eval', 'execution', 'settings']
-const HOME = { page: 'overview' }
-const ROUTE_ID_MAX = 200
-const ROUTE_KEY = 'superagent-panel/route'
+import { readHashState, writeHashState } from "./00-util.js"
+import { when } from "./06-i18n.js"
+import { Panel, same } from "./15-api.js"
+import { App, Header } from "./30-shell.js"
+import { React, h } from "./00-react.js"
+export const TABS = ['overview', 'source', 'trigger', 'eval', 'execution', 'settings']
+export const HOME = { page: 'overview' }
+export const ROUTE_ID_MAX = 200
+export const ROUTE_KEY = 'superagent-panel/route'
 /** This panel's fragment prefix. Any other fragment belongs to the host SPA and is neither read nor overwritten. */
-const ROUTE_HASH = 'sa'
+export const ROUTE_HASH = 'sa'
 /** Optional in-view route fields (execution `stage`, settings `group`/`focus`) are bounded strings, so a pasted link
     restores the same view and a crafted fragment cannot grow the route without limit. */
-const ROUTE_FIELD_MAX = 120
-const ROUTE_FIELDS_MAX = 8
-const CORE_ROUTE_KEYS = new Set(['page', 'id', 'run'])
-const ROUTE_FIELD_KEY = /^[a-zA-Z][\w.-]{0,23}$/
+export const ROUTE_FIELD_MAX = 120
+export const ROUTE_FIELDS_MAX = 8
+export const CORE_ROUTE_KEYS = new Set(['page', 'id', 'run'])
+export const ROUTE_FIELD_KEY = /^[a-zA-Z][\w.-]{0,23}$/
 
 /** Keep the non-core keys a page put on the route (in-view filters/sections) without accepting arbitrary values. */
-function routeFields(value) {
+export function routeFields(value) {
   const fields = {}
   if (!value || typeof value !== 'object') return fields
   let kept = 0
@@ -31,7 +36,7 @@ function routeFields(value) {
 }
 
 /** Keep a stored/linked route only when the page is one of ours; a record id is kept as a bounded string. */
-function parseRoute(value) {
+export function parseRoute(value) {
   const page = value?.page
   if (!TABS.includes(page)) return undefined
   const raw = value?.id
@@ -45,11 +50,11 @@ function parseRoute(value) {
 }
 
 /** Same screen: page, record id and pinned run all match (decides whether a stored back stack belongs to a link). */
-const sameRoute = (a, b) => Boolean(a && b) && a.page === b.page
+export const sameRoute = (a, b) => Boolean(a && b) && a.page === b.page
   && (a.id ?? '') === (b.id ?? '') && (a.run ?? '') === (b.run ?? '')
 
 /** Same route value including the in-view fields: used to ignore a `hashchange` that does not move the panel. */
-function routeEquivalent(a, b) {
+export function routeEquivalent(a, b) {
   const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})])
   for (const key of keys) {
     if (String(a?.[key] ?? '') !== String(b?.[key] ?? '')) return false
@@ -58,18 +63,18 @@ function routeEquivalent(a, b) {
 }
 
 /** The route in the address bar, when the fragment is this panel's; `undefined` for the host's own fragments. */
-const routeFromHash = () => parseRoute(readHashState(ROUTE_HASH))
+export const routeFromHash = () => parseRoute(readHashState(ROUTE_HASH))
 
 /* Captured once, when the bundle is evaluated (i.e. on a real page load), so the initial hash is read before the host's
    router has a chance to rewrite it. The panel can remount inside the host SPA later; by then the tab's sessionStorage
    copy is newer (the host may have stripped our fragment), so the link is released after the first mount and every later
    mount falls back to the remembered route. */
-const LINKED_ROUTE = routeFromHash()
-let linkedRoutePending = Boolean(LINKED_ROUTE)
+export const LINKED_ROUTE = routeFromHash()
+export let linkedRoutePending = Boolean(LINKED_ROUTE)
 /** Set once App has mounted: subsequent mounts prefer the in-tab route memory over the page-load fragment. */
-function releaseLinkedRoute() { linkedRoutePending = false }
+export function releaseLinkedRoute() { linkedRoutePending = false }
 
-function initialLocation() {
+export function initialLocation() {
   let stored
   try { stored = JSON.parse(sessionStorage.getItem(ROUTE_KEY) ?? 'null') } catch { stored = undefined }
   const route = parseRoute(stored?.route)
@@ -78,12 +83,12 @@ function initialLocation() {
   if (linkedRoutePending && LINKED_ROUTE) return { route: LINKED_ROUTE, stack: route && sameRoute(route, LINKED_ROUTE) ? stack : [] }
   return route ? { route, stack } : { route: HOME, stack: [] }
 }
-function remember(location) {
+export function remember(location) {
   try { sessionStorage.setItem(ROUTE_KEY, JSON.stringify(location)) } catch { /* private mode: ignore */ }
   // Mirror the route into the panel's own fragment so a reload or a pasted URL lands on the same screen. replaceState
   // keeps the host's history untouched; if the host strips the fragment, sessionStorage above still carries the route.
   writeHashState(ROUTE_HASH, location.route)
 }
 /** Header back-button label: a record id reads as its noun, otherwise the destination tab. */
-const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
-const detailOf = (route, page) => route.page === page && route.id ? route.id : undefined
+export const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
+export const detailOf = (route, page) => route.page === page && route.id ? route.id : undefined

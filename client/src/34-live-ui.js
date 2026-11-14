@@ -3,6 +3,18 @@
    Pages must never translate a raw engine status themselves — they call ticketStatus/decisionKindView/dispositionView
    and render the returned label key through `pt`. */
 
+import { Icon, hhmmss, safeHttpUrl, shortId } from "./00-util.js"
+import { errorText, fullTime, translate, when } from "./06-i18n.js"
+import { Button, InfoTip, Input, Menu, Modal, Select, StatusIcon, StatusText, Tag } from "./10-controls.js"
+import { caller, same, stay, useAction, usePanel, usePanelData } from "./15-api.js"
+import { ClampText, ConfirmButton, ExternalLink, Folded, Hint, KeyValues, Section, When } from "./20-widgets.js"
+import { PAGE_TEXT, pt } from "./21-localtext.js"
+import { App, PANEL_LANG, Pages, globalHealth } from "./30-shell.js"
+import { ovCount } from "./35-overview.js"
+import { EXEC_STAGES } from "./55-execution.js"
+import { TicketStamp, ticketGateLabel } from "./58-ticket-detail.js"
+import { ROUTE_BACKENDS } from "./60-settings.js"
+import { Fragment, React, h, useCallback, useEffect, useState } from "./00-react.js"
 Object.assign(PAGE_TEXT, {
   // ---- legacy dictionaries kept for `PilotStatusTag` compatibility (labels are Chinese; keys are unchanged) ----
   pilotPhase: { disabled: ['未启用', 'Disabled'], starting: ['启动中', 'Starting'], idle: ['空闲', 'Idle'],
@@ -286,7 +298,7 @@ Object.assign(PAGE_TEXT, {
   'run.rawError': ['原始错误', 'Raw error'],
 })
 
-const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
+export const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
   'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
   'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
   'runTrigger', 'runStop', 'runState', 'automation']
@@ -298,17 +310,17 @@ for (const group of TEXT_GROUPS) {
 }
 
 /** Language for pure helpers and class components that cannot call `usePanel`; App sets it from `t.lang`. */
-const liveText = (zh, en) => PANEL_LANG === 'en' ? en : zh
-const localizedText = value => typeof value === 'string' ? value : value ? (value[PANEL_LANG] ?? value.zh ?? '') : ''
+export const liveText = (zh, en) => PANEL_LANG === 'en' ? en : zh
+export const localizedText = value => typeof value === 'string' ? value : value ? (value[PANEL_LANG] ?? value.zh ?? '') : ''
 /** `hh:mm:ss` for the header; prefers the shared helper and degrades to the locale clock. */
-function liveClock(value) {
+export function liveClock(value) {
   if (!value) return '—'
   if (typeof hhmmss === 'function') return hhmmss(value, PANEL_LANG)
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString(PANEL_LANG === 'en' ? 'en' : 'zh-CN', { hour12: false })
 }
 /** Short record id (never used for the row title itself, only in detail/raw places). */
-function liveShortId(value, length = 6) {
+export function liveShortId(value, length = 6) {
   if (typeof shortId === 'function') return shortId(value, length)
   const text = String(value ?? '')
   return text.length > length + 1 ? `${text.slice(0, length)}…` : text
@@ -317,42 +329,42 @@ function liveShortId(value, length = 6) {
 // ---- repositories (contract §12: several repositories behind one panel) -----------------------------------------
 
 /** Repository summaries for the panel: `config.repos` when the host exposes it, else the status-level `repos`. */
-function panelRepos(data) {
+export function panelRepos(data) {
   const configRepos = data?.config?.repos
   if (Array.isArray(configRepos) && configRepos.length) return configRepos
   return Array.isArray(data?.repos) ? data.repos : []
 }
 
 /** Default repository id: the config default, the status fallback, then the first repository. */
-function panelDefaultRepo(data) {
+export function panelDefaultRepo(data) {
   return data?.config?.defaultRepo ?? data?.defaultRepo ?? panelRepos(data)[0]?.id
 }
 
 /** One repository summary by id; a Ticket must show its own repository, never another one's name. */
-function panelRepoOf(data, repoId) {
+export function panelRepoOf(data, repoId) {
   if (!repoId) return undefined
   return panelRepos(data).find(repo => repo && repo.id === repoId)
 }
 
-const REPO_VERIFY_MODE_KEYS = { 'web-uat': 'repo.verifyModeWebUat', manual: 'repo.verifyModeManual' }
-const REPO_ACCEPTANCE_KEYS = { deployed: 'repo.acceptanceDeployed', merged: 'repo.acceptanceMerged' }
+export const REPO_VERIFY_MODE_KEYS = { 'web-uat': 'repo.verifyModeWebUat', manual: 'repo.verifyModeManual' }
+export const REPO_ACCEPTANCE_KEYS = { deployed: 'repo.acceptanceDeployed', merged: 'repo.acceptanceMerged' }
 
 /** Repository verify mode → Chinese label; an unknown value stays visible instead of pretending to be known. */
-function repoVerifyModeText(t, mode) {
+export function repoVerifyModeText(t, mode) {
   if (!mode) return pt(t, 'repo.unknownMode', { mode: '—' })
   const key = REPO_VERIFY_MODE_KEYS[mode]
   return key ? pt(t, key) : pt(t, 'repo.unknownMode', { mode })
 }
 
 /** Repository acceptance mode → Chinese label (`deployed` / `merged`). */
-function repoAcceptanceText(t, acceptance) {
+export function repoAcceptanceText(t, acceptance) {
   if (!acceptance) return pt(t, 'repo.unknownMode', { mode: '—' })
   const key = REPO_ACCEPTANCE_KEYS[acceptance]
   return key ? pt(t, key) : pt(t, 'repo.unknownMode', { mode: acceptance })
 }
 
 /** Automation summary in the operator's language: mirrors lib/live/schedule.js `describeAutomation` on the client. */
-function automationSummaryText(t, automation) {
+export function automationSummaryText(t, automation) {
   if (!automation || automation.enabled !== true || automation.mode === 'off') return ''
   if (automation.mode === 'heartbeat') {
     const raw = Number(automation.intervalMinutes)
@@ -365,7 +377,7 @@ function automationSummaryText(t, automation) {
 }
 
 /** The row chip for a self-running Ticket; the tooltip carries the next run when the host computed one. */
-function automationChip(t, ticket) {
+export function automationChip(t, ticket) {
   const automation = ticket?.automation
   if (!automation || automation.enabled !== true || automation.mode === 'off') return null
   const label = automationSummaryText(t, automation)
@@ -381,11 +393,11 @@ function automationChip(t, ticket) {
 }
 
 /** Engine skip reason → the operator's label; an unknown code stays visible (contract §1.1 SKIP_REASONS). */
-const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
+export const AUTO_SKIP_KEYS = { paused: 'auto.skip.paused', 'dispatch-paused': 'auto.skip.dispatchPaused',
   'executor-disabled': 'auto.skip.executorDisabled',
   working: 'auto.skip.working', parked: 'auto.skip.parked', 'max-executions': 'auto.skip.maxExecutions',
   'repo-disabled': 'auto.skip.repoDisabled', 'no-repo': 'auto.skip.noRepo', due: 'auto.skip.due' }
-function autoSkipReasonText(t, reason) {
+export function autoSkipReasonText(t, reason) {
   const key = AUTO_SKIP_KEYS[String(reason ?? '')]
   return key ? pt(t, key) : String(reason ?? '')
 }
@@ -393,7 +405,7 @@ function autoSkipReasonText(t, reason) {
 // ---- status model ---------------------------------------------------------------------------------------------
 
 /** Engine ticket status → shape, tag tone, group, whether a person has to act, and the one row action. */
-const TICKET_VIEW = {
+export const TICKET_VIEW = {
   queued: { state: 'idle', tone: 'outline', group: 'queued', needsHuman: false, primary: 'progress' },
   ready: { state: 'idle', tone: 'outline', group: 'queued', needsHuman: false, primary: 'progress' },
   working: { state: 'ongoing', tone: 'info', group: 'working', needsHuman: false, primary: 'none' },
@@ -426,7 +438,7 @@ const TICKET_VIEW = {
  * A Ticket's raw engine status → the phase view, before the human sign-off is applied.
  * Repositories accepted after the merge (no CI/UAT, contract §12) keep `merged` waiting for a person.
  */
-function ticketBaseView(ticket) {
+export function ticketBaseView(ticket) {
   const key = ticket?.status ?? ticket?.stage
   if (ticket?.repoAcceptance === 'merged' && ticket?.status === 'merged') {
     return { key: 'merged', state: 'idle', tone: 'success', group: 'waiting', needsHuman: true, primary: 'accept',
@@ -443,7 +455,7 @@ function ticketBaseView(ticket) {
  * A Ticket only has a *pending* sign-off while its phase view waits for a person with accept/merge as the one action;
  * every other status owns no acceptance duty.
  */
-function ticketAcceptanceOf(ticket) {
+export function ticketAcceptanceOf(ticket) {
   const acceptance = ticket?.links?.acceptance
   if (acceptance?.ok === true) return { state: 'accepted', at: acceptance.at, note: acceptance.note }
   if (acceptance?.ok === false) return { state: 'rejected', at: acceptance.at, note: acceptance.note }
@@ -458,7 +470,7 @@ function ticketAcceptanceOf(ticket) {
  * The sign-off is a property of the Ticket, not of the engine status: an accepted Ticket keeps its phase key/state/tone
  * (the row still says “已部署 UAT”) but leaves the attention groups and owns no primary action.
  */
-function ticketStatus(ticket) {
+export function ticketStatus(ticket) {
   const view = ticketBaseView(ticket)
   const acceptance = ticketAcceptanceOf(ticket)
   if (acceptance.state === 'accepted') {
@@ -476,7 +488,7 @@ function ticketStatus(ticket) {
  * The middle row chip for a Ticket with an acceptance duty: the sign-off fact, or the wait the person owns. A pending
  * sign-off borrows the shared wait wording (验收 vs 合并) so the same fact is never printed twice on one row.
  */
-function rowAcceptanceChip(t, view) {
+export function rowAcceptanceChip(t, view) {
   const acceptance = view?.acceptance
   if (!acceptance || acceptance.state === 'none') return null
   if (acceptance.state === 'accepted') return <Tag key="acceptance" tone="success">{pt(t, 'row.acceptanceAccepted')}</Tag>
@@ -485,21 +497,21 @@ function rowAcceptanceChip(t, view) {
 }
 
 /** Latest run of one Ticket: the detail payload carries `ticket.runs`; list rows rely on the status document's index. */
-function latestRunFor(ticket, runs) {
+export function latestRunFor(ticket, runs) {
   const inline = Array.isArray(ticket?.runs) ? ticket.runs.filter(Boolean) : []
   const pool = inline.length ? inline : (Array.isArray(runs) ? runs.filter(run => run && run.ticketId === ticket?.id) : [])
   return [...pool].sort((left, right) => String(right?.startedAt ?? '').localeCompare(String(left?.startedAt ?? '')))[0]
 }
 
 /** True when the newest run of the Ticket was interrupted by a plugin reload / host restart (P1-5). */
-function ticketRunInterrupted(ticket, runs) {
+export function ticketRunInterrupted(ticket, runs) {
   return latestRunFor(ticket, runs)?.status === 'interrupted'
 }
 
 /** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
-const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
+export const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
   revise: 'runTrigger.revise', publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
-function runTriggerLabel(t, run) {
+export function runTriggerLabel(t, run) {
   const trigger = run?.trigger
   if (!trigger) return null
   const key = RUN_TRIGGER_KEYS[String(trigger)]
@@ -507,15 +519,15 @@ function runTriggerLabel(t, run) {
 }
 
 /** Why a run stopped (P0 `run.stopReason`/`errorCode`) → label + tone; an unknown reason stays visible. */
-const RUN_STOP_REASON_KEYS = { done: 'runStop.done', error: 'runStop.error', timeout: 'runStop.timeout',
+export const RUN_STOP_REASON_KEYS = { done: 'runStop.done', error: 'runStop.error', timeout: 'runStop.timeout',
   worker_failed: 'runStop.worker_failed', no_changes: 'runStop.no_changes', gate_failed: 'runStop.gate_failed',
   prepare_failed: 'runStop.prepare_failed', bootstrap_failed: 'runStop.bootstrap_failed', guard_failed: 'runStop.guard_failed',
   commit_failed: 'runStop.commit_failed', push_failed: 'runStop.push_failed', mr_failed: 'runStop.mr_failed',
   interrupted: 'runStop.interrupted', stopped: 'runStop.stopped' }
-const RUN_STOP_TONE = { done: 'success', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
+export const RUN_STOP_TONE = { done: 'success', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
   interrupted: 'warning', stopped: 'neutral', error: 'danger', timeout: 'danger', worker_failed: 'danger',
   prepare_failed: 'danger', bootstrap_failed: 'danger', guard_failed: 'danger', commit_failed: 'danger', push_failed: 'danger' }
-function runStopLabel(t, run) {
+export function runStopLabel(t, run) {
   const reason = run?.stopReason ?? run?.errorCode
   if (!reason) return null
   const key = RUN_STOP_REASON_KEYS[String(reason)]
@@ -528,10 +540,10 @@ function runStopLabel(t, run) {
  * Ticket went on — not what the run is doing. `run.status` is written once at hand-off and never updated afterwards
  * (`ci-pending` stays `ci-pending` after CI passed, the MR merged, the deploy succeeded and the Ticket was accepted).
  */
-const RUN_HANDOFF_STATUSES = new Set(['ci-pending', 'ci-passed', 'mr-open', 'pushed', 'merged', 'deploy-pending',
+export const RUN_HANDOFF_STATUSES = new Set(['ci-pending', 'ci-passed', 'mr-open', 'pushed', 'merged', 'deploy-pending',
   'gates-passed', 'ready'])
 /** A settled run's shape comes from how it ended (`stopReason`); an unknown reason keeps the phase's own shape. */
-const RUN_STOP_STATE = { done: 'done', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
+export const RUN_STOP_STATE = { done: 'done', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
   interrupted: 'warning', stopped: 'idle', error: 'error', timeout: 'error', worker_failed: 'error',
   prepare_failed: 'error', bootstrap_failed: 'error', guard_failed: 'error', commit_failed: 'error', push_failed: 'error' }
 
@@ -540,7 +552,7 @@ const RUN_STOP_STATE = { done: 'done', no_changes: 'warning', gate_failed: 'warn
  * shape: `ci-pending` used to keep a spinner turning on an accepted Ticket (the run had finished hours earlier).
  * → { state, label } — the phase stays readable as "交付时：…", with `runStopLabel` carrying the outcome tag.
  */
-function runView(t, run) {
+export function runView(t, run) {
   const base = ticketStatus({ status: run?.status })
   const reason = String(run?.stopReason ?? run?.errorCode ?? '')
   const settled = Boolean(reason) && run?.status !== 'running' && run?.status !== 'waiting_for_human'
@@ -549,7 +561,7 @@ function runView(t, run) {
 }
 
 /** Old public seam: status string → tag tone. Kept because pages may still import it. */
-function pilotTone(status) {
+export function pilotTone(status) {
   if (['deployed', 'merged', 'ci-passed', 'ok', 'idle', 'done'].includes(status)) return 'success'
   if (['deploy-pending', 'ci-pending', 'mr-open', 'working', 'queued', 'ready', 'pushed', 'gates-passed', 'warning'].includes(status)) return 'warning'
   if (['deploy-failed', 'ci-failed', 'failed', 'error', 'blocked'].includes(status)) return 'danger'
@@ -557,7 +569,7 @@ function pilotTone(status) {
 }
 
 /** Legacy signature: render one status tag from a `pilot*` dictionary; new code uses TicketStatusTag/TicketRow. */
-function PilotStatusTag({ status, group = 'pilotTicketStatus' }) {
+export function PilotStatusTag({ status, group = 'pilotTicketStatus' }) {
   const { t } = usePanel()
   const key = `${group}.${status}`
   const label = pt(t, key)
@@ -565,7 +577,7 @@ function PilotStatusTag({ status, group = 'pilotTicketStatus' }) {
 }
 
 /** Status tag for a raw ticket; the Chinese label always comes from `ticketStatus`. */
-function TicketStatusTag({ ticket }) {
+export function TicketStatusTag({ ticket }) {
   const { t } = usePanel()
   const view = ticketStatus(ticket)
   const unknown = view.key === 'unknown' && ticket?.status ? `（${ticket.status}）` : ''
@@ -577,7 +589,7 @@ function TicketStatusTag({ ticket }) {
  * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
  * instead of repeating the same warning in four places.
  */
-function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false, compact = false, progress }) {
+export function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false, compact = false, progress }) {
   const { t } = usePanel()
   const onlyPaused = paused && engineEnabled && executorEnabled
   const facts = []
@@ -615,7 +627,7 @@ function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onChec
 }
 
 /** The one result worth a second tag in a row. */
-function keyResultOf(ticket) {
+export function keyResultOf(ticket) {
   switch (ticket?.status) {
     case 'deployed': return { tone: 'success', labelKey: 'result.uatOk' }
     case 'ci-failed': case 'deploy-failed': case 'failed': return { tone: 'danger', labelKey: 'result.failed' }
@@ -631,7 +643,7 @@ function keyResultOf(ticket) {
 }
 
 /** Decision kind → shape/tone/label; the label key is a shared `decision.*` entry. */
-function decisionKindView(decision) {
+export function decisionKindView(decision) {
   const kind = decision?.kind ?? decision?.outcome ?? 'unavailable'
   const map = {
     accept: { state: 'done', tone: 'success' }, reopen: { state: 'ongoing', tone: 'info' },
@@ -643,7 +655,7 @@ function decisionKindView(decision) {
 }
 
 /** Where one trigger went: queued/evaluating/delivered/fanout/filtered, with a shape and a label key. */
-function dispositionView(trigger, decision) {
+export function dispositionView(trigger, decision) {
   const disposition = trigger?.disposition ?? {}
   const fanout = Array.isArray(disposition.fanout) ? disposition.fanout : []
   if (!trigger || !disposition.decisionId) return { state: 'idle', labelKey: 'disposition.queued' }
@@ -656,8 +668,8 @@ function dispositionView(trigger, decision) {
 }
 
 /** Tickets that wait for a person, worst first (error > warning > waiting), derived from `status.tickets`. */
-const SEVERITY_RANK = { error: 0, warning: 1, idle: 2, ongoing: 3, done: 4 }
-function needsHuman(data) {
+export const SEVERITY_RANK = { error: 0, warning: 1, idle: 2, ongoing: 3, done: 4 }
+export function needsHuman(data) {
   const tickets = Array.isArray(data?.tickets) ? data.tickets : []
   return tickets.filter(ticket => ticketStatus(ticket).needsHuman)
     .sort((left, right) => {
@@ -668,7 +680,7 @@ function needsHuman(data) {
 }
 
 /** The number every "needs you" surface shows: the host count (covers records beyond the 20-ticket window). */
-function needsYouCount(data) {
+export function needsYouCount(data) {
   const host = data?.counts?.needsHuman
   if (Number.isFinite(host)) return host
   return needsHuman(data).length
@@ -679,7 +691,7 @@ function needsYouCount(data) {
  * Each entry: { key, severity: 'error'|'warning', title, detail, action: { labelKey, kind, payload } }.
  * `kind` tells the page how to wire the action: 'poll' | 'reloadConfig' | 'navigate'.
  */
-function problemsOf(data) {
+export function problemsOf(data) {
   const out = []
   if (!data) return out
   const engine = data.engine ?? {}
@@ -731,7 +743,7 @@ function problemsOf(data) {
 }
 
 /** Interpolate one PAGE_TEXT pair outside a component (pure helpers such as problemsOf). */
-function ptValues(key, values) {
+export function ptValues(key, values) {
   const pair = PAGE_TEXT[key]
   const template = pair ? pair[PANEL_LANG === 'en' ? 1 : 0] : key
   return String(template).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match)
@@ -740,7 +752,7 @@ function ptValues(key, values) {
 // ---- list building blocks -------------------------------------------------------------------------------------
 
 /** Primary row action for a view: the label key plus how TicketRow executes it. */
-function primaryActionOf(ticket, view) {
+export function primaryActionOf(ticket, view) {
   const mergeRequest = ticket.links?.mergeRequest ?? {}
   const external = mergeRequest.webUrl
   switch (view.primary) {
@@ -764,7 +776,7 @@ function primaryActionOf(ticket, view) {
 
 /** Known failure text → one short cause sentence; anything unrecognised falls back to the (clipped) original text, so a
     new error kind is never swallowed. The full original always stays reachable (fold in the banner, hover on a run row). */
-const FAILURE_LABELS = [
+export const FAILURE_LABELS = [
   { pattern: /interrupted by a plugin reload|plugin reload|host restart/i, key: 'detail.errorInterrupted' },
   { pattern: /Cannot read propert|reading 'get'|host context|agents service is not available/i, key: 'detail.errorInternal' },
   { pattern: /no changes/i, key: 'detail.errorNoChanges' },
@@ -772,10 +784,10 @@ const FAILURE_LABELS = [
   { pattern: /timed out|timeout/i, key: 'detail.errorTimeout' },
   { pattern: /gate failed|gates? (did not pass|failed)/i, key: 'detail.errorGate' },
 ]
-const FAILURE_RAW_LIMIT = 120
+export const FAILURE_RAW_LIMIT = 120
 /** True when the text is one of the known failure causes (used to map step messages too, not only run.error). */
-const failureKnown = text => FAILURE_LABELS.some(item => item.pattern.test(String(text ?? '')))
-function failureLabel(t, error) {
+export const failureKnown = text => FAILURE_LABELS.some(item => item.pattern.test(String(text ?? '')))
+export function failureLabel(t, error) {
   const text = String(error ?? '').trim()
   if (!text) return ''
   const known = FAILURE_LABELS.find(item => item.pattern.test(text))
@@ -788,7 +800,7 @@ function failureLabel(t, error) {
  * shipped it, the Chinese cause of a failed run, or the current run's age — exactly one of those, never a status or a
  * result a chip already states (P0 §3.6.4: state + acceptance/result + time are the row's whole information budget).
  */
-function ticketEvidence(t, ticket, view, now = Date.now()) {
+export function ticketEvidence(t, ticket, view, now = Date.now()) {
   const links = ticket?.links ?? {}
   const assignments = Array.isArray(ticket?.assignments) ? ticket.assignments : []
   // A parked gate: the gate's name is the evidence a person needs; the state and the wait are on the chips.
@@ -845,7 +857,7 @@ function ticketEvidence(t, ticket, view, now = Date.now()) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
-function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
+export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
   const { t, navigate, notify } = usePanel()
   const model = usePanelData()
   const act = actions ?? model?.actions
@@ -1009,7 +1021,7 @@ function TicketRow({ ticket, page = 'execution', actions, reload, compact = fals
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
-function TicketList({ tickets, page = 'execution', actions, reload, now }) {
+export function TicketList({ tickets, page = 'execution', actions, reload, now }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
   // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
@@ -1027,12 +1039,12 @@ function TicketList({ tickets, page = 'execution', actions, reload, now }) {
 
 // Attention order (P0 §3.6.3): what waits for a person first, then what failed, then what moves, then the queue, then
 // the settled history. The same order drives the execution stage filter (55-execution EXEC_STAGES).
-const TICKET_GROUP_ORDER = ['waiting', 'failed', 'working', 'queued', 'done']
+export const TICKET_GROUP_ORDER = ['waiting', 'failed', 'working', 'queued', 'done']
 
 /** Execution tab: one Section per non-empty stage group, stage order fixed. `groupNotes` adds a one-line summary
     (e.g. the done group's accepted/dismissed/retried split) as the section badge; `className` wraps the groups so a
     page can switch the row layout without changing every TicketRow consumer. */
-function TicketGroups({ tickets, page = 'execution', actions, reload, className, groupNotes, groupCounts, header }) {
+export function TicketGroups({ tickets, page = 'execution', actions, reload, className, groupNotes, groupCounts, header }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
   if (!list.length) return null
@@ -1059,9 +1071,9 @@ function TicketGroups({ tickets, page = 'execution', actions, reload, className,
  * Manual Ticket form (test/backfill entry). Shared by Settings → Runtime and the Execution page's modal so the same
  * fields, repo picker and write semantics exist in both places; `onDone` lets a modal close itself after a success.
  */
-const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
+export const ROUTE_CAP_KEYS = { edit: 'st.routeCapEdit', exec: 'st.routeCapExec', web: 'st.routeCapWeb', report: 'st.routeCapReport' }
 
-function ManualTicketForm({ onDone, onCancel, heading = true }) {
+export function ManualTicketForm({ onDone, onCancel, heading = true }) {
   const { t, notify } = usePanel()
   const model = usePanelData()
   const [title, setTitle] = useState('')
@@ -1192,7 +1204,7 @@ function ManualTicketForm({ onDone, onCancel, heading = true }) {
 
 /** 24h flow: 到达 → 评估 → 接单. 过滤 is a branch of arrival (context-only messages), not a stage, and `dropped`
     counts outbound replies that failed to send — both are annotations, never a step that "loses" a number. */
-function FunnelBar({ flow }) {
+export function FunnelBar({ flow }) {
   const { t } = usePanel()
   if (!flow) return null
   const received = Number(flow.received ?? 0)
@@ -1221,7 +1233,7 @@ function FunnelBar({ flow }) {
 }
 
 /** Executor load: composition of running/queued/waiting/failed. No fake denominator without maxWorkers. */
-function ExecutorLoad({ load, labels = true }) {
+export function ExecutorLoad({ load, labels = true }) {
   const { t } = usePanel()
   if (!load) return null
   const counts = [
@@ -1255,19 +1267,19 @@ function ExecutorLoad({ load, labels = true }) {
 // ---- detail building blocks -----------------------------------------------------------------------------------
 
 /** GitLab states → the same Chinese vocabulary as the rest of the panel; an unknown value is shown as-is. */
-const MR_STATE_KEYS = { opened: 'ticket.mrOpened', merged: 'ticket.mrMerged', closed: 'ticket.mrClosed', locked: 'ticket.mrLocked' }
-const PIPELINE_STATE_KEYS = { success: 'ticket.pipelineSuccess', failed: 'ticket.pipelineFailed', running: 'ticket.pipelineRunning',
+export const MR_STATE_KEYS = { opened: 'ticket.mrOpened', merged: 'ticket.mrMerged', closed: 'ticket.mrClosed', locked: 'ticket.mrLocked' }
+export const PIPELINE_STATE_KEYS = { success: 'ticket.pipelineSuccess', failed: 'ticket.pipelineFailed', running: 'ticket.pipelineRunning',
   pending: 'ticket.pipelinePending', created: 'ticket.pipelineCreated', canceled: 'ticket.pipelineCanceled',
   skipped: 'ticket.pipelineSkipped', manual: 'ticket.pipelineManual' }
-const AUTO_MERGE_KEYS = { merged: 'ticket.autoMerged', requested: 'ticket.autoRequested', failed: 'ticket.autoFailed' }
-function providerStateText(t, map, value) {
+export const AUTO_MERGE_KEYS = { merged: 'ticket.autoMerged', requested: 'ticket.autoRequested', failed: 'ticket.autoFailed' }
+export function providerStateText(t, map, value) {
   if (value === undefined || value === null || value === '') return ''
   const key = map[String(value)]
   return key ? pt(t, key) : String(value)
 }
 
 /** The latest run that carries gate results, plus the gates themselves. */
-function latestGatesOf(ticket) {
+export function latestGatesOf(ticket) {
   const runs = Array.isArray(ticket?.runs) ? ticket.runs : []
   const run = runs.find(entry => Array.isArray(entry.gates) && entry.gates.length) ?? runs[0]
   return { run, gates: Array.isArray(run?.gates) ? run.gates : [] }
@@ -1275,7 +1287,7 @@ function latestGatesOf(ticket) {
 
 /** Every gate this run recorded, as paired shape+text. Unknown names keep their configured name (a repository may
     configure its own gates), and a failed gate carries its exit code instead of a bare red mark. */
-function GateSummary({ ticket }) {
+export function GateSummary({ ticket }) {
   const { t } = usePanel()
   const { gates } = latestGatesOf(ticket)
   if (!gates.length) return <Hint>{pt(t, 'gate.none')}</Hint>
@@ -1297,7 +1309,7 @@ function GateSummary({ ticket }) {
 }
 
 /** Seven stages of one ticket: 触发 → 评估 → 工单 → 执行 → 闸门 → MR → UAT. */
-function StageRail({ ticket, detail = false }) {
+export function StageRail({ ticket, detail = false }) {
   const { t } = usePanel()
   const origin = ticket.origin ?? {}
   const links = ticket.links ?? {}
@@ -1354,7 +1366,7 @@ function StageRail({ ticket, detail = false }) {
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */
-function MergeRequestCard({ ticket }) {
+export function MergeRequestCard({ ticket }) {
   const { t } = usePanel()
   const links = ticket?.links ?? {}
   const mr = links.mergeRequest ?? {}
@@ -1406,7 +1418,7 @@ function MergeRequestCard({ ticket }) {
 }
 
 /** UAT acceptance card: merge state, commit, reachability, build change and the deploy job. */
-function UatCard({ ticket }) {
+export function UatCard({ ticket }) {
   const { t } = usePanel()
   const links = ticket?.links ?? {}
   const verification = links.verification ?? {}
@@ -1445,11 +1457,11 @@ function UatCard({ ticket }) {
 // ---- transitional shims ---------------------------------------------------------------------------------------
 // The six page fragments are being rewritten against the new components above; until every page lands, keep the
 // old composition seams alive so an intermediate build cannot blank a page with a ReferenceError.
-function LiveFrame({ children }) { return <>{children}</> }
-function LiveTicketList({ tickets, page = 'overview', actions, reload, now }) {
+export function LiveFrame({ children }) { return <>{children}</> }
+export function LiveTicketList({ tickets, page = 'overview', actions, reload, now }) {
   return <TicketList tickets={tickets} page={page} actions={actions} reload={reload} now={now} />
 }
-function LiveRunRows({ runs, limit = Infinity }) {
+export function LiveRunRows({ runs, limit = Infinity }) {
   const { t } = usePanel()
   const list = Array.isArray(runs) ? runs.slice(0, limit) : []
   if (!list.length) return <Hint>{t('empty')}</Hint>
@@ -1473,7 +1485,7 @@ function LiveRunRows({ runs, limit = Infinity }) {
     </li>
   })}</ul>
 }
-function LiveStatusTags({ engine, config }) {
+export function LiveStatusTags({ engine, config }) {
   const { t } = usePanel()
   return <div className="sa-actions">
     <StatusText state={globalHealth({ engine, config }).state}>{pt(t, globalHealth({ engine, config }).labelKey)}</StatusText>
