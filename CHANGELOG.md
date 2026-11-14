@@ -2,6 +2,10 @@
 
 ## [0.9.2] — 2026-11-14
 
+这是 v0.8.0 之后累计到 `main` 的发布：0.8.1 证据空态语义、0.8.2 CI 去人工 approve + README 带数据截图、
+0.9.0 P4 类型契约、0.9.1 文档状态标注，以及本节的 render-check 轮询修复。仍然 `"private": true`，只发 Release
+tarball，不进 npm。
+
 ### 修复
 - `scripts/render-check.mjs` 挂载后不再固定 `await sleep(900)`，改为轮询等待「`.sa-page` 出现且没有骨架屏」，
   超时 20 秒才报 `WAIT panel first data load timed out`。PR #50 的 Node 24 任务曾出现一次
