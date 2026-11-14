@@ -6,6 +6,9 @@
 # the repository's GitFlow layout:
 #
 #   feature/**  -> develop   (integration branch, Tickets merge here)
+#   fix/**      -> develop   (bug fixes that are not a Ticket)
+#   chore/**    -> develop   (tooling, scripts, docs plumbing)
+#   docs/**     -> develop   (documentation-only changes)
 #   release/**  -> main      (release branch cut from develop)
 #   hotfix/**   -> main      (hotfix branch cut from main)
 #
@@ -20,6 +23,8 @@ on:
     branches:
       - 'feature/**'
       - 'fix/**'
+      - 'chore/**'
+      - 'docs/**'
       - 'release/**'
       - 'hotfix/**'
 

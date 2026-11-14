@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.7] — 2026-11-14
+
+### 变更
+- `.github/workflows/auto-pr.yml` 的触发前缀补上 `chore/**` 与 `docs/**`（此前只有 `feature/**`、`fix/**`、
+  `release/**`、`hotfix/**`）：这两类分支 push 后不会再只跑 CI、需要人手动 `gh pr create`。
+- `ci.yml` 的 push 触发早已含这两个前缀，现在两套工作流的触发面一致。
+
 ## [0.9.6] — 2026-11-14
 
 ### 变更
