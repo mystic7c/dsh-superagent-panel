@@ -53,7 +53,7 @@ dsh plugin --profile desktop add /path/to/dsh-superagent-panel
 npm ci                                 # 只有 devDependencies，无运行时依赖
 node scripts/build-client.mjs          # client/src → client/index.js（esbuild bundle）
 node --check index.js                  # Host 半语法
-node --test lib/store.test.js lib/live/*.test.js
+node --test lib/live/*.test.js
 node scripts/check-keys.mjs            # 中英文 key 覆盖
 npm run types                          # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                       # checkJs 已清零的那一档（清单在 tsconfig.check.json）
