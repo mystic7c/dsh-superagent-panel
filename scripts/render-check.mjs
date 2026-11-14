@@ -430,11 +430,27 @@ console.error = (...args) => { errors.push(args.map(a => a?.stack ?? String(a)).
 window.addEventListener('error', event => errors.push(String(event.error ?? event.message)))
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const waitFor = async (predicate, { timeout = 20_000, step = 50, reason = 'condition' } = {}) => {
+  const started = Date.now()
+  while (Date.now() - started < timeout) {
+    if (predicate()) return true
+    await sleep(step)
+  }
+  console.log(`WAIT ${reason} timed out after ${timeout}ms`)
+  return false
+}
 const rootElement = window.document.getElementById('root')
 console.log('STEP mount')
 const rootDom = ReactDOM.createRoot(rootElement)
 rootDom.render(React.createElement(App, { openSession: async () => {}, t }))
-await sleep(900)
+// The panel paints an empty shell first and fills it from the host API, so wait for the data instead of for a fixed
+// delay. A flat 900 ms was enough on a laptop but not always on a CI runner, where the late first render cascaded into
+// 53 unrelated failures (the inbox, the desk actions and everything reached through them). Polling keeps the gate about
+// behaviour rather than about machine speed; the timeout still fails loudly if the panel genuinely never loads.
+await waitFor(
+  () => Boolean(rootElement.querySelector('.sa-page')) && !rootElement.querySelector('.sa-skeleton, [aria-busy="true"]'),
+  { reason: 'panel first data load' })
+await sleep(150)
 console.log('STEP rendered')
 
 const text = () => rootElement.textContent

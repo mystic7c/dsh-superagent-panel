@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.2] — 2026-11-14
+
+### 修复
+- `scripts/render-check.mjs` 挂载后不再固定 `await sleep(900)`，改为轮询等待「`.sa-page` 出现且没有骨架屏」，
+  超时 20 秒才报 `WAIT panel first data load timed out`。PR #50 的 Node 24 任务曾出现一次
+  `FAILED 53/194`：CI 上首次数据加载晚于 900 ms，收件箱还没到，后面所有经它进入的断言连锁失败
+  （`gh run rerun` 即通过，本地 Node 24 也通过——典型的固定等待 vs 机器速度）。轮询让这道闸门验行为，
+  不验机器快慢；真加载不出来时仍然会超时报错。
+
+### 验证
+- 本机 `node scripts/render-check.mjs`（Node 24.22.2）：194 checks / 0 failed / 0 skipped，exit 0。
+- `node --check index.js`、`--check`、`npm run types`、Host 556 pass 未变。
+
 ## [0.9.1] — 2026-11-14
 
 ### 变更
