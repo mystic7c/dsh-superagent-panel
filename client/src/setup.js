@@ -2,12 +2,12 @@
    It is deliberately a client-only projection: the host does not need a new "onboarding" endpoint, and the card
    disappears as soon as the four prerequisites are true. The copy names the operator's next action, not a file. */
 
-import { when } from "./06-i18n.js"
-import { Button, StatusIcon, Tag } from "./10-controls.js"
-import { usePanel } from "./15-api.js"
-import { When } from "./20-widgets.js"
-import { PAGE_TEXT, pt } from "./21-localtext.js"
-import { React, h } from "./00-react.js"
+import { when } from "./i18n.js"
+import { Button, StatusIcon, Tag } from "./controls.js"
+import { usePanel } from "./api.js"
+import { When } from "./widgets.js"
+import { PAGE_TEXT, pt } from "./localtext.js"
+import { React, h } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'setup.title': ['开始使用', 'Get started'],
   'setup.lead': ['完成下面几步，群里的一条请求就会变成可执行的工单。', 'A few steps turn a group message into a runnable Ticket.'],

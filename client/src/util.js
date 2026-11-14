@@ -1,10 +1,10 @@
 /* Small utilities shared by the Superagent panel: class names, icons, time/format helpers, and a safe Markdown subset.
    Plain script text inside the bundle factory; see scripts/build-client.mjs. */
 
-import { timeLocale, when } from "./06-i18n.js"
-import { StatusIcon } from "./10-controls.js"
-import { RawValue } from "./20-widgets.js"
-import { React, h } from "./00-react.js"
+import { timeLocale, when } from "./i18n.js"
+import { StatusIcon } from "./controls.js"
+import { RawValue } from "./widgets.js"
+import { React, h } from "./react.js"
 export const PANEL_ID = 'superagent'
 export const LOCALE_NS = 'superagent'
 export const API = '/superagent/api'

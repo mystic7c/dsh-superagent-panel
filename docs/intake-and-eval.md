@@ -1,6 +1,6 @@
 # 评估、接单与决策模型
 
-本文件是评估与接单的进阶配置，非安装必读；安装、5 分钟接入与面板概览见 [README](../README.md)。
+本文件是评估与接单的进阶配置，非安装必读；安装与快速开始见 [README](../README.md) 与 [quickstart.md](quickstart.md)。
 
 ## hybrid 接单试点（0.3.4）
 
