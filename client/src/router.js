@@ -104,6 +104,56 @@ export const PAGE_QUERY_KEYS = {
   settings: [],
 }
 const OWNED_QUERY_KEYS = new Set(Object.values(PAGE_QUERY_KEYS).flat())
+
+/* R2-15: the URL as it was when the bundle was evaluated. A host may consume its own parameter (an invite token) and
+   rewrite the search string before the panel mounts; reading the location then would drop a shared filter link. */
+export const INITIAL_SEARCH = (() => { try { return window.location.search } catch { return '' } })()
+const initialSearchPending = new Set(TABS)
+
+/** The query parameters a page should read on its first mount. The live URL wins whenever it carries one of this
+    page's parameters; a page whose parameters the host stripped may fall back once to the copy captured at load. */
+export function firstQueryParams(page) {
+  let live
+  try { live = new URLSearchParams(window.location.search) } catch { live = new URLSearchParams() }
+  const keys = PAGE_QUERY_KEYS[page] ?? []
+  if (!keys.length || keys.some(key => live.has(key)) || !initialSearchPending.has(page)) return live
+  initialSearchPending.delete(page)
+  try {
+    const initial = new URLSearchParams(INITIAL_SEARCH)
+    return keys.some(key => initial.has(key)) ? initial : live
+  } catch { return live }
+}
+
+/* R2-08: filters belong to one page (U-08), so leaving a tab prunes them from the URL. Each page also remembers its
+   last slice here, per tab, so coming back restores the filters and the page instead of resetting to the first page. */
+export const PAGE_STATE_KEY = 'superagent-panel/page-state'
+export function rememberPageState(page, values) {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(PAGE_STATE_KEY) ?? '{}')
+    const all = raw && typeof raw === 'object' ? raw : {}
+    all[page] = values
+    sessionStorage.setItem(PAGE_STATE_KEY, JSON.stringify(all))
+  } catch { /* private mode: the in-memory state still works */ }
+}
+export function recallPageState(page) {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(PAGE_STATE_KEY) ?? '{}')
+    const value = raw && typeof raw === 'object' ? raw[page] : undefined
+    return value && typeof value === 'object' ? value : undefined
+  } catch { return undefined }
+}
+/** A page's first-mount filter state: a URL that carries the page's parameters wins (shared link), otherwise the
+    remembered slice, otherwise the documented defaults. */
+export function initialPageQuery(page, fromParams, defaults) {
+  const params = firstQueryParams(page)
+  const keys = PAGE_QUERY_KEYS[page] ?? []
+  const fromUrl = fromParams(params)
+  if (!keys.some(key => params.has(key))) {
+    const remembered = recallPageState(page)
+    if (remembered) return { ...defaults, ...fromUrl, ...remembered }
+  }
+  return { ...defaults, ...fromUrl }
+}
 /** Drop the query parameters that belong to other pages; the `#sa` fragment and host parameters are kept. replaceState
     is deliberate: a cleanup must not fire the routing events a real navigation would (no hashchange/popstate). */
 export function prunePageQuery(page) {

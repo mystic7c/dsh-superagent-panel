@@ -4,13 +4,14 @@
    keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
    no request of its own. */
 
-import { API, Icon, hhmm, scrollPanelTo, shortId } from "./util.js"
+import { API, Icon, hostName, hostOfUrl, hhmm, scrollPanelTo, shortId } from "./util.js"
 import { errorText, localized, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
 import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { useLiveResource } from "./live-model.js"
+import { initialPageQuery, rememberPageState } from "./router.js"
 import { setupStateOf } from "./setup.js"
 import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
 import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./react.js"
@@ -33,7 +34,7 @@ Object.assign(PAGE_TEXT, {
   'src.stat.mrOpen': ['待合并 MR', 'Open MRs'],
   'src.lastMessage': ['最近消息', 'Last message'],
   'src.groupIm': ['IM 消息源', 'IM sources'],
-  'src.groupCode': ['GitLab 仓库', 'GitLab repositories'],
+  'src.groupCode': ['代码仓库', 'Code repositories'],
   'src.stat.deployed': ['UAT 已部署', 'Deployed to UAT'],
   'src.stat.failed': ['失败', 'Failed'],
   'src.action.filtered': ['查看被过滤', 'See filtered'],
@@ -149,13 +150,15 @@ export function sourceStatRows(source) {
 export function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
-  if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
+  // R2-05: label the project/URL with the host the base URL actually names.
+  const host = hostName(hostOfUrl(config.baseUrl))
+  if (config.project) rows.push([pt(t, 'repo.project', { host }), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
   if (config.baseUrl) {
     const remote = String(config.baseUrl)
     // U-10: a GitHub-backed repository was labelled "GitLab 地址" because the label was hard-coded.
     const remoteKey = /github\.com/i.test(remote) ? 'repo.baseUrlGithub'
       : /gitlab/i.test(remote) ? 'repo.baseUrl' : 'repo.baseUrlOther'
-    rows.push([pt(t, remoteKey), h(ExternalLink, { href: remote, icon: null }, remote)])
+    rows.push([pt(t, remoteKey, { host }), h(ExternalLink, { href: remote, icon: null }, remote)])
   }
   if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
   rows.push([pt(t, 'repo.token'),
@@ -417,17 +420,17 @@ export function LiveSourcePage({ route }) {
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
-  const srcInitial = useRef((() => {
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const offset = Number(params.get('srcOffset') ?? 0)
-      const status = params.get('srcStatus') || 'all'
-      return { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
-        repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
-        from: params.get('srcFrom') || '', to: params.get('srcTo') || '',
-        offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
-    } catch { return { q: '', status: 'all', repo: '', reason: '', from: '', to: '', offset: 0 } }
-  })())
+  // R2-01/R2-08/R2-15: a URL that carries this page's parameters wins (a shared or reloaded link, including the page
+  // offset); otherwise the tab's remembered slice is restored, and the query string captured at load time covers a host
+  // that consumed its own parameter before the panel mounted.
+  const srcInitial = useRef(initialPageQuery('source', params => {
+    const offset = Number(params.get('srcOffset') ?? 0)
+    const status = params.get('srcStatus') || 'all'
+    return { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
+      repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
+      from: params.get('srcFrom') || '', to: params.get('srcTo') || '',
+      offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
+  }, { q: '', status: 'all', repo: '', reason: '', from: '', to: '', offset: 0 }))
   const [sigQuery, setSigQuery] = useState(srcInitial.current.q)
   const [sigQ, setSigQ] = useState(srcInitial.current.q)
   const [sigStatus, setSigStatus] = useState(srcInitial.current.status)
@@ -440,7 +443,12 @@ export function LiveSourcePage({ route }) {
     const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepo); setSigReason(sigReason) }, 300)
     return () => clearTimeout(timer)
   }, [sigQuery, sigRepo, sigReason])
-  useEffect(() => { setSigOffset(0) }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
+  // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
+  const firstSignalFilterRun = useRef(true)
+  useEffect(() => {
+    if (firstSignalFilterRun.current) { firstSignalFilterRun.current = false; return }
+    setSigOffset(0)
+  }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
   useEffect(() => {
     try {
       const url = new URL(window.location.href)
@@ -453,6 +461,9 @@ export function LiveSourcePage({ route }) {
       if (sigOffset > 0) url.searchParams.set('srcOffset', String(sigOffset)); else url.searchParams.delete('srcOffset')
       window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     } catch { /* private mode */ }
+    // R2-08: the URL only holds the current page's parameters (U-08), so the tab also remembers the slice.
+    rememberPageState('source', { q: sigQ, status: sigStatus, repo: sigRepo, reason: sigReason,
+      from: sigFrom, to: sigTo, offset: sigOffset })
   }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo, sigOffset])
   useEffect(() => {
     const restore = () => {

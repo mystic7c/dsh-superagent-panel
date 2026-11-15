@@ -199,3 +199,10 @@ export function writeHashState(prefix, value) {
     return next
   } catch { return undefined }
 }
+
+/* R2-05: one remote repository may be hosted on GitLab or GitHub, so labels that name the host must be computed from
+   the base URL instead of hard-coding "GitLab" on a GitHub-backed repository. Unknown/empty URLs keep the GitLab
+   wording, which is what the engine's Merge Request flow assumes. */
+export const repoHost = repo => hostOfUrl(repo?.gitlab?.baseUrl ?? repo?.baseUrl)
+export const hostOfUrl = url => /github\.com/i.test(String(url ?? '')) ? 'github' : 'gitlab'
+export const hostName = host => host === 'github' ? 'GitHub' : 'GitLab'

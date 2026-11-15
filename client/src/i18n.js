@@ -388,6 +388,20 @@ export const TEXT = {
     noRuleMatched: ['没有启用的规则匹配', 'No enabled rule matched'],
     handback: ['执行器交回：{reason}', 'Handed back by the executor: {reason}'],
     senderNotBot: ['机器人不在该来源的机器人名单里', 'The bot is not on that Source\'s bot list'],
+    // R2-02: the source page had these phrases under `src.reason.*`; the eval page renders the same codes through
+    // `reasonLabel`, so the shared vocabulary must carry them too (one set of words for both pages).
+    highRisk: ['命中高风险主题（生产 / DDL / 合并 / 密钥）', 'High-risk topic (production / DDL / merge / secret)'],
+    senderNotAllowed: ['发送者不在允许名单', 'The sender is not in the allow list'],
+    channelMissing: ['缺少群 ID，无法匹配监听群', 'No chat ID, so it matches no watched chat'],
+    chatNotWatched: ['不在监听群', 'The chat is not watched'],
+    systemMessage: ['系统消息（没有发送者）', 'System message (no sender)'],
+    notText: ['不是文本消息', 'Not a text message'],
+    botSelf: ['本机器人自己发出的消息', 'Sent by this bot itself'],
+    botSender: ['发送者是机器人', 'The sender is a bot'],
+    selfReply: ['以回复前缀开头的自身消息', 'Own message starting with the reply prefix'],
+    modelSkip: ['模型判断这不是本仓库的任务', 'The model judged this is not a task for this repository'],
+    modelRisk: ['模型判断属于高风险', 'The model judged this high risk'],
+    modelUncertain: ['模型不确定，留给人工', 'The model was unsure, so a person decides'],
   },
   // Filters, statuses not covered above
   filter: { all: ['全部', 'All'] },
@@ -419,7 +433,9 @@ export const TEXT = {
   health: { github: ['GitHub 来源', 'GitHub Source'], feishu: ['飞书来源', 'Feishu Source'], runtime: ['运行', 'Runtime'], models: ['模型服务', 'Model service'], assessment: ['评估', 'Assessment'], evals: ['未完成评估', 'Unfinished Evals'], history: ['历史', 'History'], 'sync:github': ['GitHub 名单同步', 'GitHub list sync'], 'sync:feishu': ['飞书名单同步', 'Feishu list sync'] },
   // Shared component text appended for redesign-2026-11 §3/§7 (design-system); existing keys above keep their semantics.
   copy: ['复制', 'Copy'],
-  rawError: ['原始错误', 'Raw error'],
+  // N4: the fold holds the untruncated technical text; the label says so (the CHANGELOG and the comment in
+  // live-ui.js already called it 技术详情, so the visible label was the odd one out).
+  rawError: ['技术详情', 'Technical details'],
   glossaryValues: ['状态取值', 'State values'],
   moreActions: ['更多操作', 'More actions'],
   savebarDirty: ['有未保存的修改', 'Unsaved changes'],

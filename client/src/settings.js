@@ -1,4 +1,4 @@
-import { API, Icon, hhmmss } from "./util.js"
+import { API, Icon, hhmmss, hostName, hostOfUrl } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
@@ -48,15 +48,15 @@ Object.assign(PAGE_TEXT, {
    (live.json / built-in prompts) and never render a fake switch. */
 
 Object.assign(PAGE_TEXT, {
-  'repos.intro': ['执行器使用的 GitLab 仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的 GitLab token。',
-    'GitLab repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one GitLab token per repository.'],
+  'repos.intro': ['执行器使用的代码仓库：本地克隆、分支、闸门、验证与验收方式，以及每个仓库独立的远端令牌。',
+    'Code repositories used by the executor: local clone, branches, gates, verification and acceptance, plus one remote token per repository.'],
   'repos.summary': ['{count} 个仓库 · 默认仓库 {default}', '{count} repositories · default {default}'],
   'repos.empty': ['live.json 里还没有仓库；先用示例补一条仓库定义，再回到这里保存 token。',
     'No repository in live.json yet; add one from the example, then come back to save its token.'],
   'repos.emptyAction': ['查看示例', 'View example'],
   'repos.sampleTitle': ['仓库配置示例', 'Repository configuration example'],
-  'repos.sampleHint': ['把绝对路径、GitLab 项目与 tokenFile 换成你的值；保存后点「重载配置」。token 值不要写在这里。',
-    'Replace the absolute path, GitLab project and tokenFile with yours; save, then “Reload config”. Never put the token value here.'],
+  'repos.sampleHint': ['把绝对路径、远端项目与 tokenFile 换成你的值；保存后点「重载配置」。令牌值不要写在这里。',
+    'Replace the absolute path, remote project and tokenFile with yours; save, then “Reload config”. Never put the token value here.'],
   'repos.sampleCopy': ['复制示例', 'Copy example'],
 
   // ---- P2-5: read-only worker backend capability matrix (static, mirrors the actual implementation) --------------
@@ -135,8 +135,8 @@ Object.assign(PAGE_TEXT, {
   'repos.gatesJsonHint': ['每项包含 name/command，可选 cwd（相对仓库路径）、timeoutMs、onFail、dryRunCommand。目录越界或重复名称会被拒绝。',
     'Each entry has name/command plus optional cwd (relative to the repository), timeoutMs, onFail and dryRunCommand. Escaping paths and duplicate names are rejected.'],
   'repos.addTitle': ['添加仓库', 'Add repository'],
-  'repos.addHint': ['填写本地路径、GitLab 项目与验证方式；保存后可在这张卡片上保存 GitLab token。',
-    'Fill in the local path, GitLab project and verification mode; save the GitLab token on the new card afterwards.'],
+  'repos.addHint': ['填写本地路径、远端项目与验证方式；保存后可在这张卡片上保存该仓库的令牌。',
+    'Fill in the local path, remote project and verification mode; save the remote token on the new card afterwards.'],
   'repos.saved': ['仓库已添加', 'Repository added'],
   'repos.field.id': ['仓库 id', 'Repository id'],
   'repos.field.idHint': ['小写字母、数字、点、下划线或短横线；创建后不可改。', 'Lowercase letters, digits, dots, underscores or dashes; immutable after creation.'],
@@ -146,8 +146,8 @@ Object.assign(PAGE_TEXT, {
   'repos.field.repoHint': ['必须是已存在的本地仓库目录。', 'Must be an existing local repository directory.'],
   'repos.field.baseBranch': ['基础分支', 'Base branch'],
   'repos.field.targetBranch': ['目标分支', 'Target branch'],
-  'repos.field.baseUrl': ['GitLab 地址', 'GitLab base URL'],
-  'repos.field.project': ['GitLab 项目', 'GitLab project'],
+  'repos.field.baseUrl': ['远端地址', 'Remote base URL'],
+  'repos.field.project': ['远端项目', 'Remote project'],
   'repos.field.verifyMode': ['验证方式', 'Verification mode'],
   'repos.field.acceptance': ['验收方式', 'Acceptance'],
   'repos.field.uatUrl': ['UAT 地址（可选）', 'UAT URL (optional)'],
@@ -168,15 +168,15 @@ Object.assign(PAGE_TEXT, {
     'Group → repository bindings live under Settings → Source; manual tickets pick a repository under Settings → Runtime.'],
   'repos.gates': ['闸门', 'Gates'],
   'repos.gatesEmpty': ['默认闸门', 'Default gates'],
-  'repos.tokenSaved': ['{name} 的 GitLab token 已保存', 'GitLab token saved for {name}'],
-  'repos.tokenCleared': ['已清除 {name} 的 GitLab token', 'GitLab token cleared for {name}'],
-  'repos.tokenPlaceholder': ['粘贴 GitLab token', 'Paste a GitLab token'],
+  'repos.tokenSaved': ['{name} 的 {host} 令牌已保存', '{host} token saved for {name}'],
+  'repos.tokenCleared': ['已清除 {name} 的 {host} 令牌', '{host} token cleared for {name}'],
+  'repos.tokenPlaceholder': ['粘贴 {host} 令牌', 'Paste a {host} token'],
   'repos.tokenSave': ['保存令牌', 'Save token'],
   'repos.tokenClear': ['清除令牌', 'Clear token'],
   // Clearing a token stops CI/deploy/UAT observation for that repository, so it asks first and states the consequence
   // (unlike saving, which is reversible by saving again).
-  'repos.tokenClearTitle': ['清除这个仓库的 GitLab token？', 'Clear the GitLab token for this repository?'],
-  'repos.tokenClearMessage': ['清除后该仓库的 CI/部署/UAT 观测会停止，直到重新配置 token；不会影响已合并的工单。',
+  'repos.tokenClearTitle': ['清除这个仓库的 {host} 令牌？', 'Clear the {host} token for this repository?'],
+  'repos.tokenClearMessage': ['清除后该仓库的 CI/部署/UAT 观测会停止，直到重新配置令牌；不会影响已合并的工单。',
     'After clearing, CI, deployment and UAT observation stop for this repository until a token is configured again; already merged Tickets are not affected.'],
   'repos.tokenHint': ['写入该仓库在 live.json 里声明的 tokenFile（权限 600），不会回显。',
     'Written to the tokenFile declared for this repository in live.json (mode 600); never echoed back.'],
@@ -194,7 +194,7 @@ Object.assign(PAGE_TEXT, {
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
-  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写 chatId，保存后按引擎开关状态开始监听。',
+  'st.bindingsHint': ['给每个监听群绑定一个仓库；新群可以从群列表选择，也可以手工填写群 ID，保存后按引擎开关状态开始监听。',
     'Bind one repository to each watched group. Add a group from the list or paste a chat id; the engine watches it once enabled and saved.'],
   'st.bindingTitle': ['群名称（可选）', 'Group name (optional)'],
   'st.bindingRepo': ['接单仓库', 'Repository'],
@@ -203,24 +203,24 @@ Object.assign(PAGE_TEXT, {
   'st.bindingEmpty': ['还没有绑定的群。现有群默认走默认仓库。',
     'No bound group yet. Existing groups fall back to the default repository.'],
   'st.bindingSaved': ['群绑定已保存', 'Group bindings saved'],
-  'st.bindingChatRequired': ['请填写群 chatId。', 'Enter the group chat id.'],
+  'st.bindingChatRequired': ['请填写群 ID。', 'Enter the group chat ID.'],
   'st.groupsPick': ['从群列表选择', 'Pick from group list'],
   'st.groupsLoading': ['读取群列表…', 'Loading groups…'],
-  'st.groupsSearch': ['搜索群名或 chatId…', 'Search group name or chat id…'],
+  'st.groupsSearch': ['搜索群名或群 ID…', 'Search group name or group ID…'],
   'st.groupsCount': ['{count} 个群', '{count} groups'],
-  'st.groupsEmpty': ['没有可用的群。确认机器人已在群里，或直接填写 chatId。',
+  'st.groupsEmpty': ['没有可用的群。确认机器人已在群里，或直接填写群 ID。',
     'No group available. Make sure the bot is in a group, or paste a chat id.'],
   'st.groupsWatched': ['已监听', 'Watched'],
   'st.groupsClose': ['收起', 'Collapse'],
-  'st.groupsNoToken': ['先保存 Octo token，再读取群列表。', 'Save the Octo token before loading groups.'],
+  'st.groupsNoToken': ['先保存 Octo 令牌，再读取群列表。', 'Save the Octo token before loading groups.'],
   'st.octoTokenHint': ['保存在本机 token 文件（权限 600），不会回显；读取群列表可验证 token 是否有效。',
     'Stored in the local token file (mode 600) and never echoed; load the group list to verify it.'],
   'st.octoTokenPlaceholder': ['粘贴 Octo token', 'Paste the Octo token'],
   'st.octoTokenSave': ['保存令牌', 'Save token'],
-  'st.octoTokenSaved': ['Octo token 已保存', 'Octo token saved'],
-  'st.octoTokenCleared': ['已清除 Octo token', 'Octo token cleared'],
-  'st.octoTokenClearTitle': ['清除 Octo token？', 'Clear the Octo token?'],
-  'st.octoTokenClearMessage': ['清除后引擎无法读取群消息，监听、评估与派工都会停止；需要重新粘贴 token 才能恢复。已合并的工单不受影响。',
+  'st.octoTokenSaved': ['Octo 令牌已保存', 'Octo token saved'],
+  'st.octoTokenCleared': ['已清除 Octo 令牌', 'Octo token cleared'],
+  'st.octoTokenClearTitle': ['清除 Octo 令牌？', 'Clear the Octo token?'],
+  'st.octoTokenClearMessage': ['清除后引擎无法读取群消息，监听、评估与派工都会停止；需要重新粘贴令牌才能恢复。已合并的工单不受影响。',
     'After clearing, the engine cannot read group messages; intake, Eval and dispatch stop until a token is pasted again. Already merged Tickets are not affected.'],
   'st.octoTokenEnv': ['环境变量', 'Env var'],
   'st.octoTokenEnvHint': ['当前使用 OCTO_TOKEN 环境变量；要改为本机保存，请移除该环境变量后再保存令牌。',
@@ -237,6 +237,16 @@ Object.assign(PAGE_TEXT, {
   'st.historySettings': ['设置变更', 'Settings change'],
   'st.historyAddRepo': ['添加仓库', 'Add repository'],
   'st.historyBeforeRestore': ['恢复前的备份', 'Backup before restore'],
+  // R2-04: each row can show the field-level old → new diff behind that save instead of only a timestamp.
+  'st.historyChanges': ['查看改动（{count}）', 'Show changes ({count})'],
+  'st.historyChangesHide': ['收起改动', 'Hide changes'],
+  'st.historyNoChanges': ['这一版没有可对比的字段改动。', 'This version has no comparable field change.'],
+  'st.historyOn': ['开', 'On'],
+  'st.historyOff': ['关', 'Off'],
+  'st.historyUnset': ['（未设置）', '(unset)'],
+  'st.historyExpandValue': ['展开全文', 'Show full value'],
+  'st.historyCollapseValue': ['收起全文', 'Hide full value'],
+  'st.historyChangesTruncated': ['改动较多，只列出前 {count} 项。', 'Many changes; only the first {count} are listed.'],
 
   // ---- one-line intro hints of the groups (the group name itself lives in the left nav) ----
   'st.sourceHint': ['输入通道：先连接 Octo，再选择监听群、触发人范围与轮询间隔；只读项由宿主状态提供。',
@@ -273,10 +283,10 @@ Object.assign(PAGE_TEXT, {
   'st.workTypeInteractive': ['需提问/确认', 'Interactive'],
   'st.routeReadOnly': ['只读', 'read-only'],
   'st.routeWrite': ['可写', 'write'],
-  'st.writeHint': ['执行器对 GitLab 和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
-    'What the executor may write to GitLab and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
-  'st.deployHint': ['部署与 GitLab 目标由 live.json 文件配置。这里只读展示，可重载配置或检查 UAT。',
-    'Deployment and the GitLab target are configured in live.json. Shown read-only here, with reload and a UAT check.'],
+  'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
+    'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
+  'st.deployHint': ['部署与远端目标由 live.json 文件配置。这里只读展示，可重载配置或检查 UAT。',
+    'Deployment and the remote target are configured in live.json. Shown read-only here, with reload and a UAT check.'],
 
   // ---- source group ----
   'st.enabled': ['启用引擎', 'Engine enabled'],
@@ -298,14 +308,14 @@ Object.assign(PAGE_TEXT, {
   'st.watchChats': ['监听群', 'Watched groups'],
   'st.senders': ['允许发送者', 'Allowed senders'],
   'st.allHumans': ['任意人类', 'Any human'],
-  'st.octoToken': ['Octo token', 'Octo token'],
-  'st.tokenOk': ['已配置', 'Configured'],
-  'st.tokenMissing': ['未配置', 'Missing'],
+  'st.octoToken': ['Octo 令牌', 'Octo token'],
+  'st.tokenOk': ['令牌已配置', 'Configured'],
+  'st.tokenMissing': ['令牌未配置', 'Token not configured'],
   'st.cursors': ['群游标', 'Group cursors'],
   'st.lastPoll': ['最近轮询', 'Last poll'],
   'st.noSenders': ['没有允许发送者，也没有“允许任意人类”：轮询会被引擎拒绝。',
     'No allowed senders and “accept any human” is off, so the engine rejects polling.'],
-  'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写 chatId。',
+  'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写群 ID。',
     'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
   'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
     '“Check for new messages” is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
@@ -317,13 +327,13 @@ Object.assign(PAGE_TEXT, {
   'st.errPaused': ['引擎已暂停：非干跑轮询会被拒绝。', 'The engine is paused: a non-dry-run poll is rejected.'],
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
   'st.errDisabled': ['引擎未启用，请先在设置→来源打开「启用引擎」。', 'The engine is disabled; turn on “Engine enabled” under Settings → Source first.'],
-  'st.errNoToken': ['Octo token 未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
+  'st.errNoToken': ['Octo 令牌未配置，读不到群消息。', 'The Octo token is missing, so group messages cannot be read.'],
   'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and “accept any human” is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
   'st.reloading': ['重载中…', 'Reloading…'],
   'st.probing': ['检查中…', 'Checking…'],
   'st.senderPlaceholderExample': ['发送者 UID，如 oc_xxxx…', 'Sender UID, e.g. oc_xxxx…'],
-  'st.chatIdPlaceholder': ['群 chatId，如 oc_xxxx…', 'Group chat id, e.g. oc_xxxx…'],
+  'st.chatIdPlaceholder': ['群 ID，如 oc_xxxx…', 'Group ID, e.g. oc_xxxx…'],
   'st.historyRestoreTitle': ['恢复这个历史版本？', 'Restore this version?'],
   'st.historyRestoreMessage': ['恢复前会先把当前 live.json 备份为「恢复前的备份」，再用所选版本覆盖；正在运行的任务不受影响。',
     'The current live.json is backed up as “before restore” first, then replaced by the chosen version; running work is unaffected.'],
@@ -345,8 +355,8 @@ Object.assign(PAGE_TEXT, {
   'st.judgeTitle': ['判定模型（shadow）', 'Decision model (shadow)'],
   'st.judgeEndpoint': ['模型地址', 'Model endpoint'],
   'st.judgeModel': ['模型名', 'Model'],
-  'st.judgeToken': ['模型 token', 'Model token'],
-  'st.judgeCalls': ['模型调用（成功 / 失败 / 跳过）', 'Model calls (ok / failed / skipped)'],
+  'st.judgeToken': ['模型令牌', 'Model token'],
+  'st.judgeCalls': ['模型调用（总计 / 成功 / 失败 / 跳过）', 'Model calls (total / ok / failed / skipped)'],
   'st.configured': ['已配置', 'Configured'],
   'st.notConfigured': ['未配置', 'Not configured'],
   'st.reviewIntro': ['每条评估都会回发来源群；只有下面列出的操作人回复「接单 ABCD / 忽略 ABCD」才会生效。保存后下一轮轮询生效。',
@@ -379,11 +389,11 @@ Object.assign(PAGE_TEXT, {
   'st.autoRunHint': ['新接的工单自动交给执行器；关闭后需要手动干跑或发布。',
     'Newly accepted Tickets go to the executor automatically; when off, run or publish them by hand.'],
   'st.allowPush': ['允许推送分支', 'Allow branch pushes'],
-  'st.allowPushHint': ['执行器可以推送分支到 GitLab 并创建 MR。', 'The executor may push a branch to GitLab and open an MR.'],
+  'st.allowPushHint': ['执行器可以推送分支到远端仓库并创建 MR。', 'The executor may push a branch to the remote and open an MR.'],
   'st.allowMerge': ['允许合并 MR', 'Allow MR merges'],
   'st.allowMergeHint': ['CI 通过后执行器可以直接合并到目标分支。',
     'After CI passes the executor may merge into the target branch.'],
-  'st.allowMergeNoToken': ['没有 GitLab token，不能合并 MR。', 'Merging an MR needs a GitLab token.'],
+  'st.allowMergeNoToken': ['没有远端令牌，不能合并 MR。', 'Merging an MR needs a remote token.'],
   // High-risk emphasis for allowMerge: the warning tag says what it is, the info tip and the on-state line say what
   // it costs. Turning a high-risk switch ON or OFF is the one save that gets a second confirmation (U-06): the save bar
   // expands a plain-language list of what changes first, and `riskChangesOf` computes it from the two configs locally.
@@ -423,9 +433,9 @@ Object.assign(PAGE_TEXT, {
   'st.pausedDispatchHint': ['不自动开始新的工单；队列和在跑任务都保留，手工开始仍可用。',
     'Starts no new Ticket automatically; the queue and running work are kept and manual starts still work.'],
   'st.mrMode': ['发布 MR 方式', 'MR creation mode'],
-  'st.mrModeHint': ['api：用 GitLab API 建 MR；push：用 git push options 建 MR。',
-    'api: create the MR through the GitLab API; push: create it with git push options.'],
-  'st.mrModeApi': ['GitLab API（api）', 'GitLab API (api)'],
+  'st.mrModeHint': ['api：用远端 API 建 MR；push：用 git push options 建 MR。',
+    'api: create the MR through the remote API; push: create it with git push options.'],
+  'st.mrModeApi': ['远端 API（api）', 'Remote API (api)'],
   'st.mrModePush': ['推送选项（push）', 'Push options (push)'],
   'st.workerBackend': ['Worker 后端', 'Worker backend'],
   'st.workerDsh': ['DSH（进程内）', 'DSH (in-process)'],
@@ -483,10 +493,10 @@ Object.assign(PAGE_TEXT, {
   'st.configExists': ['配置文件', 'Config file'],
   'st.fileExists': ['已找到', 'Found'],
   'st.fileMissing': ['不存在（使用默认值）', 'Missing (defaults in use)'],
-  'st.gitlabProject': ['GitLab 项目', 'GitLab project'],
-  'st.gitlabBase': ['GitLab 地址', 'GitLab base URL'],
+  'st.gitlabProject': ['{host} 项目', '{host} project'],
+  'st.gitlabBase': ['{host} 地址', '{host} base URL'],
   'st.branches': ['分支', 'Branches'],
-  'st.gitlabToken': ['GitLab token', 'GitLab token'],
+  'st.gitlabToken': ['{host} 令牌', '{host} token'],
   'st.uatUrl': ['UAT 地址', 'UAT URL'],
   'st.healthUrl': ['健康检查地址', 'Health URL'],
   'st.reloadHint': ['改完 live.json 后重载，引擎会重新读取配置与 token 状态。',
@@ -885,6 +895,8 @@ export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.no
   token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
 
 export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
+  // R2-05: a GitHub-backed repository must not be called "GitLab project" on the same card that shows a GitHub URL.
+  const host = hostName(hostOfUrl(repo?.baseUrl))
   const { t, actions } = usePanel()
   const [token, setToken] = useState('')
   const [test, setTest] = useState({ busy: false })
@@ -900,8 +912,8 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
   const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const gates = Array.isArray(repo.gates) ? repo.gates : []
   const rows = [
-    [pt(t, 'repo.project'), repo.project ? <span className="sa-mono" translate="no">{String(repo.project)}</span> : t('empty')],
-    [pt(t, 'repo.baseUrl'), repo.baseUrl ? <span className="sa-mono" translate="no">{String(repo.baseUrl)}</span> : t('empty')],
+    [pt(t, 'repo.project', { host }), repo.project ? <span className="sa-mono" translate="no">{String(repo.project)}</span> : t('empty')],
+    [pt(t, 'repo.baseUrl', { host }), repo.baseUrl ? <span className="sa-mono" translate="no">{String(repo.baseUrl)}</span> : t('empty')],
     [pt(t, 'repo.localPath'), repo.repo ? <span className="sa-mono" translate="no">{String(repo.repo)}</span> : t('empty')],
     [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
     [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
@@ -948,7 +960,7 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
       <span className="sa-field-head">{pt(t, 'repo.token')}</span>
       <div style={{ display: 'flex', width: '100%', minWidth: 0 }}>
         <Input type="password" autoComplete="off" value={token} disabled={tokenBusy} className="sa-input-full"
-          placeholder={pt(t, 'repos.tokenPlaceholder')} aria-label={pt(t, 'repos.tokenPlaceholder')}
+          placeholder={pt(t, 'repos.tokenPlaceholder', { host })} aria-label={pt(t, 'repos.tokenPlaceholder', { host })}
           onChange={event => setToken(event.target.value)} />
       </div>
       <div className="sa-actions">
@@ -959,7 +971,7 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
         </Button>
         {repo.tokenConfigured
           // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
-          ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle')}
+          ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle', { host })}
             message={pt(t, 'repos.tokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
             onConfirm={async () => {
               if (tokenBusy) return
@@ -970,6 +982,54 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
       </div>
       <Hint>{pt(t, 'repos.tokenHint')}</Hint>
     </div>
+  </div>
+}
+
+const HISTORY_VALUE_PREVIEW = 80
+
+/** One side of a field diff: booleans read as 开/关, long values preview then expand instead of stretching the row. */
+function HistoryValue({ t, value }) {
+  const [open, setOpen] = useState(false)
+  const text = String(value ?? '')
+  if (text === 'true' || text === 'false') {
+    return <span className="sa-history-value">{pt(t, text === 'true' ? 'st.historyOn' : 'st.historyOff')}</span>
+  }
+  if (!text) return <span className="sa-history-value sa-hint">{pt(t, 'st.historyUnset')}</span>
+  if (text.length <= HISTORY_VALUE_PREVIEW) return <span className="sa-history-value sa-mono">{text}</span>
+  return <span className="sa-history-value">
+    <span className="sa-mono">{open ? text : `${text.slice(0, HISTORY_VALUE_PREVIEW)}…`}</span>
+    <Button variant="ghost" size="sm" onClick={() => setOpen(current => !current)}>
+      {pt(t, open ? 'st.historyCollapseValue' : 'st.historyExpandValue')}
+    </Button>
+  </span>
+}
+
+/** The field-level "old → new" list of one snapshot (R2-04); collapsed by default so the modal stays scannable. */
+export function HistoryChanges({ t, entry, open, onToggle }) {
+  const changes = Array.isArray(entry?.changes) ? entry.changes : []
+  if (!changes.length) return <p className="sa-hint">{pt(t, 'st.historyNoChanges')}</p>
+  return <div className="sa-history-changes">
+    <Button variant="ghost" size="sm" aria-expanded={open}
+      onClick={() => onToggle?.(entry.id)}>
+      {pt(t, open ? 'st.historyChangesHide' : 'st.historyChanges', { count: changes.length })}
+    </Button>
+    {open
+      ? <ul className="sa-list">
+        {changes.map((change, index) => <li key={`${change.key}-${index}`} className="sa-row sa-history-change">
+          <div className="sa-row-main">
+            <span className="sa-mono sa-history-key">{change.key}</span>
+            <span className="sa-row-meta">
+              <HistoryValue t={t} value={change.before} />
+              <span className="sa-history-arrow" aria-hidden="true">→</span>
+              <HistoryValue t={t} value={change.after} />
+            </span>
+          </div>
+        </li>)}
+      </ul>
+      : null}
+    {open && entry.changesTruncated
+      ? <p className="sa-hint">{pt(t, 'st.historyChangesTruncated', { count: changes.length })}</p>
+      : null}
   </div>
 }
 
@@ -1007,6 +1067,10 @@ export function LiveSettingsPage({ route }) {
   const [repoSaving, setRepoSaving] = useState(false)
   const [repoError, setRepoError] = useState(undefined)
   const [repoFieldErrors, setRepoFieldErrors] = useState({})
+  // R2-04's per-entry expansion state. It lives here, with the other Hooks, because the page returns a skeleton before
+  // `data` arrives: a Hook declared after that early return would change the Hook count between the first and second
+  // render (React #310) and take the whole panel down on a cold open / F5 of the Settings tab.
+  const [historyChangesOpen, setHistoryChangesOpen] = useState({})
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyEntries, setHistoryEntries] = useState([])
   const [historyBusy, setHistoryBusy] = useState(false)
@@ -1071,7 +1135,7 @@ export function LiveSettingsPage({ route }) {
     try {
       await actions.saveRepoToken(repo.id, token)
       await reload()
-      notify(pt(t, token ? 'repos.tokenSaved' : 'repos.tokenCleared', { name: repo.name ?? repo.id }))
+      notify(pt(t, token ? 'repos.tokenSaved' : 'repos.tokenCleared', { name: repo.name ?? repo.id, host: hostName(hostOfUrl(repo.baseUrl)) }))
       return true
     } catch (failure) {
       notify(errorText(failure))
@@ -1250,6 +1314,7 @@ export function LiveSettingsPage({ route }) {
   }
 
   /** Load saved live.json versions; the list contains configuration only, never tokens. */
+  const toggleHistoryChanges = id => setHistoryChangesOpen(current => ({ ...current, [id]: !current[id] }))
   const openHistory = async () => {
     setHistoryOpen(true)
     setHistoryBusy(true)
@@ -1292,15 +1357,16 @@ export function LiveSettingsPage({ route }) {
   // Deployment used to be its own group; it describes the same GitLab target and worktree as these repositories, so it
   // lives here as a read-only sub-section instead of owning a seventh navigation entry.
   const renderRepos = () => {
+    const deployHost = hostName(hostOfUrl(gitlab.baseUrl))
     const deployRows = [
       [pt(t, 'st.configFile'), <span className="sa-mono" translate="no">{config.file ?? t('empty')}</span>],
       [pt(t, 'st.configExists'), config.exists ? pt(t, 'st.fileExists') : pt(t, 'st.fileMissing')],
-      [pt(t, 'st.gitlabProject'), gitlab.project ? <span className="sa-mono" translate="no">{gitlab.project}</span> : t('empty')],
-      [pt(t, 'st.gitlabBase'), gitlab.baseUrl ? <ExternalLink href={gitlab.baseUrl} icon={null}>{gitlab.baseUrl}</ExternalLink> : t('empty')],
+      [pt(t, 'st.gitlabProject', { host: deployHost }), gitlab.project ? <span className="sa-mono" translate="no">{gitlab.project}</span> : t('empty')],
+      [pt(t, 'st.gitlabBase', { host: deployHost }), gitlab.baseUrl ? <ExternalLink href={gitlab.baseUrl} icon={null}>{gitlab.baseUrl}</ExternalLink> : t('empty')],
       [pt(t, 'st.branches'), `${config.baseBranch ?? t('empty')} → ${gitlab.targetBranch ?? t('empty')}`],
       [pt(t, 'st.uatUrl'), gitlab.uatUrl ? <ExternalLink href={gitlab.uatUrl} icon={null}>{gitlab.uatUrl}</ExternalLink> : t('empty')],
       [pt(t, 'st.healthUrl'), gitlab.healthUrl ? <ExternalLink href={gitlab.healthUrl} icon={null}>{gitlab.healthUrl}</ExternalLink> : t('empty')],
-      [pt(t, 'st.gitlabToken'), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
+      [pt(t, 'st.gitlabToken', { host: deployHost }), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
       [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? <span className="sa-mono" translate="no">{config.worktreeRoot}</span> : t('empty')],
     ]
     return <div className="sa-settings-group">
@@ -2312,6 +2378,8 @@ export function LiveSettingsPage({ route }) {
             <span className="sa-history-label">{historyLabel(entry)}</span>
             <span className="sa-hint"><When at={entry.at} /></span>
           </div>
+          <HistoryChanges t={t} entry={entry} open={Boolean(historyChangesOpen[entry.id])}
+            onToggle={toggleHistoryChanges} />
           <ConfirmButton label={pt(t, 'st.historyRestore')} title={pt(t, 'st.historyRestoreTitle')}
             message={pt(t, 'st.historyRestoreMessage')} confirmLabel={pt(t, 'st.historyRestoreConfirm')}
             onConfirm={async () => { await restoreHistory(entry.id) }} />

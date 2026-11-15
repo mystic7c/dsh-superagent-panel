@@ -28,7 +28,7 @@ Object.assign(PAGE_TEXT, {
     'deploy-pending': ['部署 UAT 中', 'Deploying to UAT'], 'deploy-failed': ['部署失败', 'Deploy failed'], closed: ['MR 已关闭', 'MR closed'],
     failed: ['失败', 'Failed'] },
   pilotGate: { standards: ['规范闸门', 'Standards'], backend: ['后端测试', 'Backend tests'], frontend: ['前端检查', 'Frontend checks'] },
-  pilotNoPermission: ['缺少 GitLab token 或推送未授权', 'GitLab token missing or push not allowed'],
+  pilotNoPermission: ['缺少远端令牌或推送未授权', 'Remote token missing or push not allowed'],
   pilotDryRun: ['干跑执行', 'Dry run'], pilotPublish: ['发布 MR', 'Publish MR'], pilotCi: ['刷新 CI', 'Refresh CI'],
   pilotVerify: ['核对合并/UAT', 'Verify merge/UAT'], pilotPoll: ['立即轮询', 'Poll now'], pilotReloadConfig: ['重载配置', 'Reload config'],
   pilotRefresh: ['刷新', 'Refresh'], pilotCheckUat: ['检查 UAT', 'Check UAT'],
@@ -69,7 +69,9 @@ Object.assign(PAGE_TEXT, {
     error: ['异常', 'Error'], blocked: ['被阻塞', 'Blocked'], unknown: ['状态未知', 'Status unknown'],
     loading: ['读取中…', 'Loading…'], pending: ['需要你处理 {count} 件', '{count} need you'],
     active: ['执行中 {count}', '{count} running'],
-    setupChip: ['配置 {done}/{total}', 'Set up {done}/{total}'] },
+    // R2-11: setup progress is a countdown ("N left"), not a fraction a reader has to invert. Shared by the header
+    // chip and AutomationBar so the two surfaces cannot drift apart.
+    setupChip: ['还有 {remaining} 项待配置', '{remaining} setup steps left'] },
   menu: { label: ['工单动作', 'Ticket actions'], dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'],
     refreshCi: ['刷新 CI', 'Refresh CI'], verify: ['核对合并/UAT', 'Verify merge/UAT'], stop: ['停止工单', 'Stop ticket'] },
   row: { untitled: ['（未命名工单）', '(Untitled Ticket)'], openDetail: ['打开工单详情', 'Open Ticket details'],
@@ -90,28 +92,36 @@ Object.assign(PAGE_TEXT, {
     bootstrap_failed: ['依赖安装失败', 'Dependency install failed'], guard_failed: ['改动校验失败', 'Change guard failed'],
     commit_failed: ['提交失败', 'Commit failed'], push_failed: ['推送失败', 'Push failed'],
     mr_failed: ['MR 创建失败', 'MR creation failed'], interrupted: ['已中断', 'Interrupted'],
-    stopped: ['人工终止', 'Stopped by a person'], other: ['其他原因（{reason}）', 'Other ({reason})'] },
+    stopped: ['人工终止', 'Stopped by a person'],
+    // D2-07: these five reasons are written by the executor/engine but were missing from the dictionary, so the panel
+    // fell back to 「其他原因（worker_lost）」 — an internal identifier in the UI.
+    worker_lost: ['worker 失联', 'Worker lost'],
+    route_unsupported: ['所选路由不可用', 'Route unavailable'],
+    review_stale: ['评审结论已过期', 'Review is stale'],
+    report_delivered: ['报告已交付', 'Report delivered'],
+    waiting_for_human: ['等你处理', 'Waiting on you'],
+    other: ['其他原因（{reason}）', 'Other ({reason})'] },
   // A settled run keeps the Ticket phase it handed off at as history, never as a live state (see runView).
   runState: { handoff: ['交付时：{phase}', 'Handed off: {phase}'] },
   problem: { engineError: ['引擎报告异常', 'The engine reported an error'], paused: ['处理已暂停', 'Processing is paused'],
     engineOff: ['自动触发未开启', 'Automatic intake is off'], sourceError: ['{name} 异常', '{name} is failing'],
-    octoToken: ['Octo token 未配置', 'Octo token is missing'], gitlabToken: ['GitLab token 未配置', 'GitLab token is missing'],
+    octoToken: ['Octo 令牌未配置', 'Octo token is missing'], gitlabToken: ['远端令牌未配置', 'Remote token is missing'],
     pausedDetail: ['恢复前不会开始新的评估、派工或回复。', 'No new Eval, dispatch or reply runs until you resume.'],
     engineOffDetail: ['在设置→来源打开「启用引擎」并保存后，引擎才会自动轮询群消息。',
       'Turn on “Engine enabled” under Settings → Source and save; the engine then polls the group automatically.'],
     octoTokenDetail: ['没有 Octo token，引擎读不到群消息。', 'Without an Octo token the engine cannot read the group.'],
-    gitlabTokenDetail: ['没有 GitLab token 时无法观测 CI 与部署，只能做无 token 的核对。',
-      'Without a GitLab token CI and deploy results cannot be observed; only token-free verification runs.'] },
+    gitlabTokenDetail: ['没有远端令牌时无法观测 CI 与部署，只能做无令牌的核对。',
+      'Without a remote token CI and deploy results cannot be observed; only token-free verification runs.'] },
   problemAction: { retry: ['检查新消息', 'Check for new messages'], reload: ['重载配置', 'Reload config'],
     settings: ['去设置', 'Open settings'], execution: ['去执行页', 'Open execution'] },
   // ---- multi-repository execution surface (contract §12) ----
   repo: { label: ['仓库', 'Repository'], name: ['仓库名称', 'Repository name'],
     repoId: ['仓库 ID', 'Repository ID'], localPath: ['本地路径', 'Local path'],
-    project: ['GitLab 项目', 'GitLab project'], baseUrl: ['GitLab 地址', 'GitLab base URL'],
+    project: ['{host} 项目', '{host} project'], baseUrl: ['{host} 地址', '{host} base URL'],
     baseUrlGithub: ['GitHub 地址', 'GitHub base URL'], baseUrlOther: ['远程地址', 'Remote URL'],
-    tokenMissingLocal: ['未配置（不影响本地只读）', 'Missing (local read-only still works)'],
+    tokenMissingLocal: ['令牌未配置（不影响本地只读）', 'Token not configured (local read-only still works)'],
     branches: ['分支', 'Branches'], targetBranch: ['目标分支', 'Target branch'],
-    token: ['Token', 'Token'], tokenConfigured: ['已配置', 'Configured'], tokenMissing: ['未配置', 'Missing'],
+    token: ['令牌', 'Token'], tokenConfigured: ['令牌已配置', 'Token configured'], tokenMissing: ['令牌未配置', 'Token missing'],
     verifyMode: ['验证方式', 'Verification'], acceptance: ['验收方式', 'Acceptance'],
     verifyModeWebUat: ['网页 UAT', 'Web UAT'], verifyModeManual: ['人工验收', 'Manual acceptance'],
     acceptanceDeployed: ['部署后验收', 'Accept after deploy'], acceptanceMerged: ['合并后验收', 'Accept after merge'],
@@ -160,7 +170,8 @@ Object.assign(PAGE_TEXT, {
       'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
     stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
       'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
-    publishUnavailable: ['缺少推送权限、执行器未启用或没有 GitLab token。', 'Push is not allowed, the executor is off, or the GitLab token is missing.'],
+    publishUnavailable: ['缺少推送权限、执行器未启用、没有远端令牌，或工单状态还不能发布。',
+      'Push is not allowed, the executor is off, the remote token is missing, or the Ticket is not at a publishable state.'],
     dryTag: ['干跑', 'Dry run'], publishTitle: ['发布这个工单的 MR？', "Publish this Ticket's MR?"],
     publishConfirm: ['会在现有工作区重跑闸门，然后推送分支并创建/刷新 MR：{title}',
       'Re-runs the gates in the existing worktree, then pushes the branch and creates/refreshes the MR: {title}'],
@@ -277,7 +288,7 @@ Object.assign(PAGE_TEXT, {
     verifyOk: ['核对完成：UAT 可访问，构建已更新。', 'Checked: UAT reachable, new build detected.'],
     verifyDown: ['核对完成：UAT 当前不可访问，详见工单详情。', 'Checked: UAT is not reachable right now; see the Ticket detail.'],
     ciDone: ['CI 已刷新：{status}', 'CI refreshed: {status}'],
-    ciNoToken: ['没有 GitLab token，无法观测 CI。', 'No GitLab token, CI cannot be observed.'],
+    ciNoToken: ['没有远端令牌，无法观测 CI。', 'No remote token, CI cannot be observed.'],
     dryDone: ['干跑完成。', 'Dry run finished.'],
     publishStarted: ['已开始发布：闸门失败会自动让 worker 修复并重试，进度看工单状态',
       'Publish started; a failing gate is repaired by the worker and retried'],
@@ -300,7 +311,7 @@ Object.assign(PAGE_TEXT, {
   'st.titleLabel': ['工单标题', 'Ticket title'],
   'st.bodyLabel': ['需求正文', 'Request body'],
   // A raw run error opens in a fold instead of stretching the row (WIG B).
-  'run.rawError': ['原始错误', 'Raw error'],
+  'run.rawError': ['技术详情', 'Technical details'],
 })
 
 export const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
@@ -528,10 +539,15 @@ export const RUN_STOP_REASON_KEYS = { done: 'runStop.done', error: 'runStop.erro
   worker_failed: 'runStop.worker_failed', no_changes: 'runStop.no_changes', gate_failed: 'runStop.gate_failed',
   prepare_failed: 'runStop.prepare_failed', bootstrap_failed: 'runStop.bootstrap_failed', guard_failed: 'runStop.guard_failed',
   commit_failed: 'runStop.commit_failed', push_failed: 'runStop.push_failed', mr_failed: 'runStop.mr_failed',
-  interrupted: 'runStop.interrupted', stopped: 'runStop.stopped' }
+  interrupted: 'runStop.interrupted', stopped: 'runStop.stopped',
+  worker_lost: 'runStop.worker_lost', route_unsupported: 'runStop.route_unsupported',
+  review_stale: 'runStop.review_stale', report_delivered: 'runStop.report_delivered',
+  waiting_for_human: 'runStop.waiting_for_human' }
 export const RUN_STOP_TONE = { done: 'success', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
   interrupted: 'warning', stopped: 'neutral', error: 'danger', timeout: 'danger', worker_failed: 'danger',
-  prepare_failed: 'danger', bootstrap_failed: 'danger', guard_failed: 'danger', commit_failed: 'danger', push_failed: 'danger' }
+  prepare_failed: 'danger', bootstrap_failed: 'danger', guard_failed: 'danger', commit_failed: 'danger', push_failed: 'danger',
+  worker_lost: 'danger', route_unsupported: 'danger', review_stale: 'warning', report_delivered: 'success',
+  waiting_for_human: 'warning' }
 export function runStopLabel(t, run) {
   const reason = run?.stopReason ?? run?.errorCode
   if (!reason) return null
@@ -550,7 +566,9 @@ export const RUN_HANDOFF_STATUSES = new Set(['ci-pending', 'ci-passed', 'mr-open
 /** A settled run's shape comes from how it ended (`stopReason`); an unknown reason keeps the phase's own shape. */
 export const RUN_STOP_STATE = { done: 'done', no_changes: 'warning', gate_failed: 'warning', mr_failed: 'warning',
   interrupted: 'warning', stopped: 'idle', error: 'error', timeout: 'error', worker_failed: 'error',
-  prepare_failed: 'error', bootstrap_failed: 'error', guard_failed: 'error', commit_failed: 'error', push_failed: 'error' }
+  prepare_failed: 'error', bootstrap_failed: 'error', guard_failed: 'error', commit_failed: 'error', push_failed: 'error',
+  worker_lost: 'error', route_unsupported: 'error', review_stale: 'warning', report_delivered: 'done',
+  waiting_for_human: 'warning' }
 
 /**
  * One run → the state and label its row renders. A run that stopped at hand-off must never borrow the phase's live
@@ -603,8 +621,8 @@ export function AutomationBar({ paused, engineEnabled, executorEnabled, onStart,
   if (!executorEnabled) facts.push(pt(t, 'automation.executorOff'))
   const title = onlyPaused ? pt(t, 'automation.pausedTitle') : pt(t, 'automation.offTitle')
   const hint = onlyPaused ? pt(t, 'automation.resumeHint') : pt(t, 'automation.startHint')
-  const progressText = progress && progress.done < progress.total
-    ? pt(t, 'shell.setupChip', { done: progress.done, total: progress.total }) : null
+  const progressLeft = progress ? progress.total - progress.done : 0
+  const progressText = progressLeft > 0 ? pt(t, 'shell.setupChip', { remaining: progressLeft }) : null
   return <div className="sa-automation" role="group" aria-label={title} data-compact={compact ? 'true' : undefined}>
     <div className="sa-automation-main">
       {/* The icon travels with the title: as a sibling of the flex-basis block it wrapped onto a line of its own on a
@@ -731,9 +749,9 @@ export function problemsOf(data) {
       action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'source' } } })
   }
   if (config.gitlab && config.gitlab.tokenConfigured === false) {
-    out.push({ key: 'gitlab-token', severity: 'warning', title: liveText('GitLab token 未配置', 'GitLab token is missing'),
-      detail: liveText('在设置→仓库为对应仓库保存 GitLab token 后，才能观测 CI 与部署。',
-        'Save a GitLab token for the repository under Settings → Repositories to observe CI and deployment.'),
+    out.push({ key: 'gitlab-token', severity: 'warning', title: liveText('远端令牌未配置', 'Remote token is missing'),
+      detail: liveText('在设置→仓库为对应仓库保存远端令牌后，才能观测 CI 与部署。',
+        'Save a remote token for the repository under Settings → Repositories to observe CI and deployment.'),
       action: { labelKey: 'problemAction.settings', kind: 'navigate', payload: { page: 'settings', group: 'repos' } } })
   }
   const sources = Array.isArray(data.sources) ? data.sources : []
@@ -876,6 +894,10 @@ export function ticketEvidence(t, ticket, view, now = Date.now()) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
+/** R2-10: the server only publishes ready/failed/pushed Tickets; the menu must not offer the entry before that. */
+export function publishableStatusOf(ticket) {
+  return ['ready', 'failed', 'pushed'].includes(String(ticket?.status ?? ''))
+}
 /** @param {{ ticket: any, page?: string, actions?: any, reload?: any, compact?: boolean, extra?: any, now?: any }} props */
 export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
   const { t, navigate, notify } = usePanel()
@@ -908,7 +930,8 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
     const cleanup = result?.cleanup ?? result?.ticket?.links?.cleanup
     notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
   }, { reload: refreshAll })
-  const canPublish = Boolean(data?.config?.executor?.enabled && data?.config?.executor?.allowPush)
+  const canPublish = Boolean(data?.config?.executor?.enabled && data?.config?.executor?.allowPush
+    && publishableStatusOf(ticket))
   const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   const primary = primaryActionOf(ticket, view)
 

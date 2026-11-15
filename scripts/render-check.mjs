@@ -159,6 +159,16 @@ engine.state.runs.unshift({ id: 'run_demo_failed', ticketId: 'tkt_demo_accept', 
   completedAt: failedAt, endedAt: failedAt, error: fixtureFailure, stopReason: 'gate-failed',
   steps: [{ name: 'gate:standards', state: 'failed', at: failedAt, exitCode: 1 }],
   worker: { text: '闸门 standards 未通过' } })
+// N2-03 fixture: a failed Ticket shows up as a non-blocking inbox item, which the Overview merges into 系统问题 —
+// a row that must carry the same cleanup entry as the desk.
+const demoFailedId = 'tkt_demo_failed'
+engine.state.tickets[demoFailedId] = {
+  id: demoFailedId, title: '演示：失败的工单', body: 'UC-DEMO-006：失败后等待人工处理。',
+  status: 'failed', repoId: primaryRepoId, createdAt: failedAt, updatedAt: failedAt,
+  assignments: [{ at: failedAt, report: { state: 'failed', reason: fixtureFailure } }],
+  origin: { threadKey: 'octo:demo', actor: 'demo' }, links: {},
+}
+engine.state.state.ticketOrder.push(demoFailedId)
 const demoDismissedId = 'tkt_demo_dismissed'
 engine.state.tickets[demoDismissedId] = {
   id: demoDismissedId, title: '演示：失败后被忽略的工单', body: 'UC-DEMO-004：失败后由人放弃，检查执行页的已忽略切片。',
@@ -417,7 +427,10 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   // U-05…U-11 (one source of truth for the wording): the risk-change diff, the page query whitelist, the signal body
   // row component, the reason/failure vocabulary and the source/repo label projections.
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
-  workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, inject: pluginInject } = loadClient({
+  workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
+  hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState,
+  inject: pluginInject } = loadClient({
   App: 'shell.js',
   translate: 'i18n.js',
   DICTS: 'i18n.js',
@@ -439,6 +452,20 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   workflowBlockedDetail: 'live-ui.js',
   runTriggerLabel: 'live-ui.js',
   sourceRepoRows: 'source.js',
+  initialPageQuery: 'router.js',
+  rememberPageState: 'router.js',
+  hostOfUrl: 'util.js',
+  hostName: 'util.js',
+  reasonLabel: 'i18n.js',
+  publishableStatusOf: 'live-ui.js',
+  ticketDismissable: 'ticket-detail.js',
+  HistoryChanges: 'settings.js',
+  AutomationBar: 'live-ui.js',
+  failureReasonTextOf: 'overview.js',
+  LiveSettingsPage: 'settings.js',
+  PanelState: 'api.js',
+  clampEvalOffset: 'eval.js',
+  Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
   openLinkedPanelWhenReady: 'apply.js',
   inject: 'apply.js',
@@ -541,6 +568,12 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
   check('overview lists the injected failure under the worth-a-look block',
     watchRows >= 1 && /过去 24 小时 \d+ 次执行失败/.test(watchSection?.textContent ?? ''),
     `rows=${watchRows} · ${watchSection?.textContent?.slice(0, 200) ?? 'no section'}`)
+  // N2-03: a failure-class inbox item is non-blocking, so it renders in 系统问题; that row needs the cleanup entry too.
+  const problemRow = [...rootElement.querySelectorAll('.sa-row')]
+    .find(node => /演示：失败的工单/.test(node.textContent ?? ''))
+  check('a failed Ticket in 系统问题 offers 忽略并清理 (N2-03)',
+    Boolean(problemRow) && /忽略并清理/.test(problemRow.textContent ?? ''),
+    problemRow ? problemRow.textContent.slice(0, 160) : 'no failed row')
   check('overview names the needs-you vs worth-a-look split when both are on screen',
     watchRows >= 1 && deskWithWork.includes('需要你处理 = ') && deskWithWork.includes('无需你动作'),
     deskWithWork.slice(0, 700))
@@ -611,10 +644,12 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('the worker summary names the run it came from', /执行总结（来自运行/.test(detailText), detailText.slice(0, 200))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
-  check('detail nav keeps all seven jumps (automation included, activities folded into the timeline) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
+  check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
-check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 7,
+check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
+check('jump nav names the request block (R2-09)', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '需求'),
+  [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
 check('jump nav names the automation block', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '自动化'),
   [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
 // The automation block is a folded setting, and saving only appears once the form differs from the stored config.
@@ -675,12 +710,21 @@ check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
 {
+  // R2-09: the request is promoted to its own expanded section above the changes, instead of a disclosure folded
+  // into the right-hand column of "what changed".
+  const request = rootElement.querySelector('#sa-ticket-request')
   const changes = rootElement.querySelector('#sa-ticket-changes')
-  const changeText = changes?.textContent ?? ''
-  const fold = changes?.querySelector('details')
-  check('changes lists files before the folded request', Boolean(fold)
-    && changeText.indexOf('改动文件') >= 0 && changeText.indexOf('改动文件') < changeText.indexOf('需求'),
-    changeText.slice(0, 300))
+  const requestFirst = Boolean(request && changes
+    && (request.compareDocumentPosition(changes) & window.Node.DOCUMENT_POSITION_FOLLOWING))
+  check('the request is its own expanded section above the changes (R2-09)',
+    Boolean(request) && Boolean(request.querySelector('.sa-md')) && !request.querySelector('details') && requestFirst,
+    request?.textContent?.slice(0, 120) ?? 'no request section')
+  const foldedRequest = changes
+    ? [...changes.querySelectorAll('details summary')].some(node => (node.textContent ?? '').trim() === '需求')
+    : false
+  check('changes no longer folds the request away (R2-09)',
+    Boolean(changes) && !foldedRequest && (changes.textContent ?? '').indexOf('改动文件') >= 0,
+    changes?.textContent?.slice(0, 200) ?? 'no changes section')
 }
 check('sign-off note and the action cluster ride on the title row',
   Boolean(rootElement.querySelector('.sa-page-head-actions .sa-page-head-note'))
@@ -820,7 +864,7 @@ await sleep(1000)
 const sourceText = text()
 if (sourcePageReady) {
   check('source page shows both repositories', repoLabels.every(label => sourceText.includes(label)), sourceText.slice(0, 260))
-  check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('GitLab 仓库'), sourceText.slice(0, 260))
+  check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('代码仓库'), sourceText.slice(0, 260))
   check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
     String(rootElement.querySelectorAll('.sa-cards-2').length))
 } else {
@@ -1626,9 +1670,217 @@ console.log('STEP pure projections')
   const rowLabelOf = (rows, label) => rows.some(row => row[0] === label)
   check('the remote address is named after its host and a token-less repository says what still works (U-10)',
     rowLabelOf(githubRows, 'GitHub 地址') && rowLabelOf(gitlabRows, 'GitLab 地址')
-      && githubRows.some(row => row[1] === '未配置（不影响本地只读）')
-      && !rowLabelOf(githubRows, 'GitLab 地址'),
+      && githubRows.some(row => row[1] === '令牌未配置（不影响本地只读）')
+      && !rowLabelOf(githubRows, 'GitLab 地址')
+      // R2-05: the project row follows the same host, so one card never pairs "GitLab 项目" with "GitHub 地址".
+      && rowLabelOf(githubRows, 'GitHub 项目') && rowLabelOf(gitlabRows, 'GitLab 项目'),
     JSON.stringify({ github: githubRows.map(row => row[0]), gitlab: gitlabRows.map(row => row[0]) }))
+
+  // R2-05: one helper decides the host name every card reads, so no surface can disagree with the URL beside it.
+  check('repository wording follows the hosting provider (R2-05)',
+    hostOfUrl('https://github.com/org/app') === 'github' && hostName('github') === 'GitHub'
+      && hostOfUrl('https://gitlab.example.com/grp/app') === 'gitlab' && hostName('gitlab') === 'GitLab',
+    JSON.stringify({ github: hostName(hostOfUrl('https://github.com/a')),
+      gitlab: hostName(hostOfUrl('https://gitlab.b')) }))
+
+  // R2-01/R2-08/R2-15: a shared link wins on a cold open, and a tab whose URL was pruned on the way out restores the
+  // slice it remembers instead of snapping back to page one.
+  const restoreHref = window.location.href
+  const readSourceQuery = params => ({ offset: Number(params.get('srcOffset') ?? 0) || 0,
+    q: params.get('srcQ') ?? '' })
+  try {
+    window.history.replaceState(null, '', '/?srcOffset=40&srcQ=needle#sa=%7B%22page%22%3A%22source%22%7D')
+    const fromUrl = initialPageQuery('source', readSourceQuery, { offset: 0, q: '' })
+    rememberPageState('source', { offset: 20, q: 'remembered' })
+    window.history.replaceState(null, '', '/#sa=%7B%22page%22%3A%22source%22%7D')
+    const fromStore = initialPageQuery('source', readSourceQuery, { offset: 0, q: '' })
+    check('a shared link keeps its filter, and a pruned tab restores the slice it remembered (R2-01/R2-08/R2-15)',
+      fromUrl.offset === 40 && fromUrl.q === 'needle'
+        && fromStore.offset === 20 && fromStore.q === 'remembered',
+      JSON.stringify({ fromUrl, fromStore }))
+  } finally {
+    window.history.replaceState(null, '', restoreHref)
+    try { window.sessionStorage.removeItem('superagent-panel/page-state') } catch { /* ignore */ }
+  }
+
+  // R2-02: the eval page renders the same reason codes the source page does; every model verdict has words of its own.
+  const modelReasons = ['modelSkip', 'modelRisk', 'modelUncertain', 'highRisk'].map(code => reasonLabel(t, { code }))
+  check('model verdicts and filter reasons read as Chinese on every page (R2-02)',
+    modelReasons[0] === '模型判断这不是本仓库的任务' && modelReasons[1] === '模型判断属于高风险'
+      && modelReasons[2] === '模型不确定，留给人工' && modelReasons[3].startsWith('命中高风险主题'),
+    JSON.stringify(modelReasons))
+
+  // R2-03: four numbers need four labelled buckets; the old label named three.
+  check('the judge counter labels all four numbers (R2-03)',
+    t('st.judgeCalls') === '模型调用（总计 / 成功 / 失败 / 跳过）', t('st.judgeCalls'))
+
+  // R2-06: "no thread matched this filter" is not "no source configured", and it offers a way out of the filter.
+  check('an empty thread filter names the filter and offers to clear it (R2-06)',
+    t('trg.noneInFilter').includes('没有符合当前筛选') && t('trg.clearFilter') === '清除筛选',
+    JSON.stringify({ none: t('trg.noneInFilter'), clear: t('trg.clearFilter') }))
+
+  // R2-07: a zero-failure window is a statement, not a link into an unfiltered list of older failures.
+  check('the 24h failure counter has a non-clickable zero state (R2-07)',
+    t('ex.runs24hNone') === '24 小时没有运行失败', t('ex.runs24hNone'))
+
+  // R2-11: the banner says how much is left instead of presenting a frozen 3/4 fraction.
+  check('the setup banner says how many steps are left (R2-11)',
+    t('setup.banner', { remaining: 1 }) === '还有 1 项待配置', t('setup.banner', { remaining: 1 }))
+  // R2-11's real surface is AutomationBar (the banner is hidden while automation is on): assert the rendered line,
+  // not only the dictionary, so a fix aimed at the wrong component fails here.
+  const barHost = document.createElement('div')
+  document.body.appendChild(barHost)
+  const barRoot = ReactDOM.createRoot(barHost)
+  const renderBar = progress => barRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(AutomationBar, { paused: false, engineEnabled: false, executorEnabled: false,
+      onStart() {}, onCheck() {}, progress })))
+  renderBar({ done: 3, total: 4 })
+  await sleep(80)
+  const barText = barHost.textContent ?? ''
+  check('AutomationBar prints the setup progress as a countdown, not a fraction (R2-11)',
+    /还有 1 项待配置/.test(barText) && !/3\/4|配置 3/.test(barText), barText.slice(0, 160))
+  renderBar({ done: 4, total: 4 })
+  await sleep(80)
+  check('AutomationBar drops the setup line once every step is done (R2-11)',
+    !/项待配置/.test(barHost.textContent ?? ''), (barHost.textContent ?? '').slice(0, 160))
+  barRoot.unmount()
+  barHost.remove()
+
+  // R2-12: credentials are 令牌/未配置, chats are 群 ID — one vocabulary across settings, sources and tickets.
+  check('credentials and chats use one vocabulary (R2-12)',
+    t('st.octoToken') === 'Octo 令牌' && t('st.tokenMissing') === '令牌未配置'
+      && !String(t('st.bindingsHint') ?? '').includes('chatId')
+      && !String(t('st.chatIdPlaceholder') ?? '').includes('chatId'),
+    JSON.stringify({ octo: t('st.octoToken'), missing: t('st.tokenMissing'),
+      hint: t('st.bindingsHint'), placeholder: t('st.chatIdPlaceholder') }))
+
+  // R2-10: a queued Ticket has not run yet, so the publish entry is withheld until the server would accept it.
+  check('the publish entry waits for a publishable Ticket status (R2-10)',
+    publishableStatusOf({ status: 'ready' }) && publishableStatusOf({ status: 'failed' })
+      && publishableStatusOf({ status: 'pushed' }) && !publishableStatusOf({ status: 'queued' })
+      && !publishableStatusOf({ status: 'ci-pending' }) && !publishableStatusOf({}),
+    JSON.stringify(['ready', 'failed', 'pushed', 'queued', 'ci-pending', undefined]
+      .map(status => [status ?? 'none', publishableStatusOf({ status })])))
+
+  // R2-14: an offset past the end is a page problem, not an empty filter; the helper keeps the last real page.
+  check('an out-of-range eval offset clamps to the last page (R2-14)',
+    clampEvalOffset(1000, 30) === 25 && clampEvalOffset(30, 30) === 25 && clampEvalOffset(50, 30) === 25
+      && clampEvalOffset(25, 30) === undefined && clampEvalOffset(0, 30) === undefined
+      && clampEvalOffset(0, 0) === undefined,
+    JSON.stringify({ far: clampEvalOffset(1000, 30), edge: clampEvalOffset(30, 30),
+      valid: clampEvalOffset(25, 30), empty: clampEvalOffset(0, 0) }))
+
+  // D2-09: the dismissal entry is no longer limited to `failed` — a dry run, a real run with push disabled, a queued
+  // stub and a question nobody will answer all reach the same cleanup path.
+  check('dismissal covers finished-but-undelivered Tickets, not only failures (D2-09)',
+    ['failed', 'ci-failed', 'deploy-failed', 'queued', 'ready', 'awaiting-answer'].every(status => ticketDismissable({ status }))
+      && ['deployed', 'merged', 'dismissed', 'closed', 'ci-pending'].every(status => !ticketDismissable({ status })),
+    JSON.stringify([...['failed', 'ready', 'awaiting-answer', 'deployed', 'ci-pending']].map(status => [status, ticketDismissable({ status })])))
+
+  // R2-04: a history row explains what changed. Old and new values, booleans spelled out, long values folded behind
+  // an explicit "show full value" control instead of being dumped into the row.
+  const historyHost = document.createElement('div')
+  document.body.appendChild(historyHost)
+  const historyRoot = ReactDOM.createRoot(historyHost)
+  const historyEntry = { id: 'hist_1', at: new Date().toISOString(), label: 'settings: executor',
+    changes: [{ key: 'executor.timeoutMs', before: '600000', after: '900000' },
+      { key: 'executor.autoRun', before: 'false', after: 'true' }], changesTruncated: false }
+  const renderHistory = open => historyRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(HistoryChanges, { t, entry: historyEntry, open, onToggle() {} })))
+  renderHistory(false)
+  await sleep(80)
+  const historyClosed = historyHost.textContent ?? ''
+  renderHistory(true)
+  await sleep(80)
+  const historyOpen = historyHost.textContent ?? ''
+  check('history rows offer the changed fields as a toggle (R2-04)',
+    /查看改动（2）/.test(historyClosed) && !/900000/.test(historyClosed), historyClosed.slice(0, 120))
+  check('history rows spell out the old and new value, booleans included (R2-04)',
+    /600000/.test(historyOpen) && /900000/.test(historyOpen) && /开/.test(historyOpen) && /关/.test(historyOpen)
+      && historyOpen.indexOf('600000') < historyOpen.indexOf('900000'),
+    historyOpen.slice(0, 200))
+  const longEntry = { id: 'hist_2', at: new Date().toISOString(), label: 'settings: executor.workerCommand',
+    changes: [{ key: 'executor.workerCommand', before: '', after: `node ${'x'.repeat(160)}` }], changesTruncated: false }
+  historyRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(HistoryChanges, { t, entry: longEntry, open: true, onToggle() {} })))
+  await sleep(80)
+  const longButton = [...historyHost.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '展开全文')
+  check('a long history value is truncated with a way to expand it (R2-04)',
+    Boolean(longButton) && !/x{100}/.test(historyHost.textContent ?? ''), historyHost.textContent?.slice(0, 120) ?? 'no row')
+  longButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(120)
+  check('expanding a long history value shows it whole (R2-04)',
+    /x{100}/.test(historyHost.textContent ?? ''), String((historyHost.textContent ?? '').length))
+  historyRoot.unmount()
+  historyHost.remove()
+
+  // N2-04: metric failure causes are stop reasons/codes; the brief must read them as causes, and an unknown code must
+  // be named as a technical id rather than passed off as a sentence.
+  check('failure causes read in Chinese, including stop reasons (N2-04)',
+    failureReasonTextOf(t, 'stopped') === '人工终止' && failureReasonTextOf(t, 'worker_lost') === 'worker 失联',
+    JSON.stringify([failureReasonTextOf(t, 'stopped'), failureReasonTextOf(t, 'worker_lost')]))
+  check('a workflow-blocked cause is spelled out, not shown as an English blob (N2-04)',
+    /分阶段流程被阻塞/.test(failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)')),
+    failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)'))
+  check('an unknown failure code is labelled as a technical id (N2-04)',
+    failureReasonTextOf(t, 'mystery_code') === '技术标识：mystery_code', failureReasonTextOf(t, 'mystery_code'))
+
+
+  // N2-06: a cold open of Settings has no data on the first frame (the panel is still fetching status while the page
+  // mounts). R2-04's per-entry Hook used to sit after the skeleton return, so the second frame changed the Hook count
+  // and React threw #310 — invisible to the checks above, which mount the app with data already loaded. Mount the real
+  // page through both frames and fail on any render error.
+  class ColdBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { error: null } }
+    static getDerivedStateFromError(error) { return { error } }
+    render() { return this.state.error ? React.createElement('div', { className: 'sa-cold-failed' }) : this.props.children }
+  }
+  const coldHost = document.createElement('div')
+  document.body.appendChild(coldHost)
+  const coldRoot = ReactDOM.createRoot(coldHost)
+  const coldBoundary = React.createRef()
+  const coldActions = new Proxy({}, { get: () => async () => ({}) })
+  const coldPanel = { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, openSession() {},
+    backLabel: '', route: { page: 'settings' } }
+  const renderCold = stateValue => coldRoot.render(
+    React.createElement(ColdBoundary, { ref: coldBoundary },
+      React.createElement(Panel.Provider, { value: coldPanel },
+        React.createElement(PanelState.Provider, { value: stateValue },
+          React.createElement(LiveSettingsPage, { route: { page: 'settings', group: 'source' } })))))
+  const coldError = () => coldBoundary.current?.state?.error ?? null
+  renderCold({ data: undefined, error: undefined, reload: async () => {}, actions: coldActions })
+  await sleep(120)
+  check('cold-open Settings renders its first frame without a Hook error (N2-06)',
+    !coldError() && Boolean(coldHost.querySelector('.sa-skeleton')), String(coldError()?.message ?? coldHost.textContent?.slice(0, 80)))
+  renderCold({ data: fixtures.status, error: undefined, reload: async () => {}, actions: coldActions })
+  await sleep(160)
+  check('cold-open Settings keeps rendering once data arrives (N2-06)',
+    !coldError() && !coldHost.querySelector('.sa-skeleton') && /设置|来源|执行器/.test(coldHost.textContent ?? ''),
+    String(coldError()?.message ?? coldHost.textContent?.slice(0, 160)))
+  coldRoot.unmount()
+  coldHost.remove()
+
+  const menuHost = document.createElement('div')
+  document.body.appendChild(menuHost)
+  const menuRoot = ReactDOM.createRoot(menuHost)
+  menuRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(Menu, { label: '更多操作', items: [
+      { key: 'ci', label: '刷新 CI', onSelect() {}, disabled: true, title: '没有 MR' },
+      { key: 'stop', label: '停止工单', onSelect() {}, disabled: false },
+    ] })))
+  await sleep(120)
+  menuHost.querySelector('.sa-menu-trigger')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(120)
+  const disabledMenuItems = [...menuHost.querySelectorAll('.sa-menu-item')].filter(node => node.disabled)
+  check('a disabled menu entry also carries aria-disabled (R2-13)',
+    disabledMenuItems.length >= 1 && disabledMenuItems.every(node => node.getAttribute('aria-disabled') === 'true'),
+    JSON.stringify(disabledMenuItems.map(node => node.getAttribute('aria-disabled'))))
+  menuRoot.unmount()
+  menuHost.remove()
 
   // U-08: filters belong to the page that owns them. Switching tabs drops the previous page's parameters while the
   // shareable fragment and the host's own parameters survive. Every key a page actually writes must be in the

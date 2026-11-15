@@ -107,7 +107,7 @@ export function GlobalStatus() {
       ? <>
         <span aria-hidden="true">·</span>
         <button type="button" className="sa-setup-chip" onClick={() => navigate({ page: 'overview' })}>
-          {pt(t, 'shell.setupChip', { done: setup.done, total: setup.total })}
+          {pt(t, 'shell.setupChip', { remaining: setup.total - setup.done })}
         </button>
       </>
       : null}

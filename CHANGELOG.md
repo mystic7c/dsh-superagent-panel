@@ -1,5 +1,89 @@
 # Changelog
 
+## [1.0.4] — 2026-11-15
+
+一轮开发视角深挖审计（`verification/dev-audit-round2.md`）的 10 条缺陷，加上用户第二轮点检（`verification/ui-review-round2.md`）的 13 条修复与 5 条体验问题，合并发布。服务端修的是「并发/契约/生命周期」，界面修的是「刷新、筛选、命名与可达性」。
+
+### 修复（服务端）
+
+- **两组设置同时保存会丢改动并报 500**：`updateLiveConfig` 先读整份 `live.json` 再写回，临时文件名只用进程号加毫秒，
+  同一毫秒的两个请求撞名后，后一个 `rename` 找不到临时文件（`ENOENT … .live-<pid>-<ms>.json`），先到的那组改动也
+  被后写者覆盖。现在读改写整段进单进程串行队列，临时名带随机后缀（`lib/live/live-json.js`）。
+- **同一工单的并发动作返回 500 和英文内部文案**：`withTicketClaim` 撞上在跑动作时抛普通 `Error`，Host 只把
+  `ActionError` 映射成 4xx；详情页双击「运行/重试/回答」会看到 `ticket … is already busy (executing)`。
+  现在抛带 `httpStatus:409` 的 `TicketBusyError`，文案是「工单 … 正在执行「…」，请等这次操作结束再试。」，并且
+  Host 在 run/gate/resume/answer/publish 前主动检查（`lib/live/executor.js`、`index.js`）。
+- **发布 MR 接口先答应再失败**：对不存在或状态不对的工单也立刻返回 202，真正的失败只进 Host 日志；`wait:true` 时
+  甚至返回 `undefined` 字符串（不是 JSON）。现在前置校验「未知工单 404 / 状态不允许 409 / 执行器关闭 403 /
+  未允许推送 409」，`wait:true` 恒返回 JSON，异步失败写进工单时间线（`index.js`）。
+- **`awaiting-answer` 工单没有出口**：stop、dismiss、追加要求三个入口都拒绝等待回答的工单，唯一出路是「回答」，
+  而回答会整单重跑。现在可以「放弃并清理」：`dismissTicket` 收 `awaiting-answer`，把停在 `waiting_for_human` 的运行
+  结算成 `failed/abandoned`，清工作树与分支；`requestStop` 也改成指路「回答或忽略」（`lib/live/engine.js`）。
+- **禁用/重载插件时在跑的工单被写成「已中断」**：`engine.stop()` 只清定时器，旧运行仍在写盘；新引擎 `reconcile()`
+  把它标 `interrupted` 后，旧运行完成时的整份文档写回又把状态改回去，两边的写入互相覆盖。现在 `stop()` 置
+  `disposed`、关闭文档（`LiveState.save()` 不再落盘），执行器在停止检查、持久化与证据写入前都看 `disposed`
+  （`lib/live/engine.js`、`lib/live/state.js`、`lib/live/executor.js`）。
+- **`allowPush=false` 把「真跑」也拦掉了**：只关推送时，入口 403，用户既跑不了也看不懂。现在 `allowPush` 只决定
+  「推不推」：真跑照常执行、本地 commit、落 `gates-passed`，待办明确写「改动已完成但未推送（allowPush=false）」；
+  发布 MR 返回 409 并给出「打开推送后再发布，或忽略并清理」两条路（`index.js`、`lib/live/executor.js`）。
+- **运行停止原因有 5 个码没有文案**：`worker_lost` / `route_unsupported` / `review_stale` / `report_delivered` /
+  `waiting_for_human` 曾显示成「其他原因（raw）」，现在各有中文结论与情绪色（`client/src/live-ui.js`）。
+- **设置项越界返回 500 + 英文**：`updateLiveConfig` 的字段校验抛的是普通 `Error`，Host 只能按 500 回包，提示还是
+  `executor.timeoutMs must be whole milliseconds between …`。现在校验失败带 400 语义、文案改中文并带字段名与范围，
+  Host 统一映射成 400（`lib/live/live-json.js`、`index.js`）。
+- **状态文件的临时名没有随机后缀**：`live-state.json` 的原子写临时名同样只含进程号与毫秒，写失败时还会留下 0 字节
+  残留。现在带随机后缀，异常时清理该临时文件（`lib/live/state.js`）。
+- **验收清理失败的分支永远不会触发**：Host 判断 `result.cleanupFailed`，`acceptTicket` 返回的却是 `cleanup.failed`，
+  清理失败只能静默 200。现在对齐真实返回（`index.js`）。
+
+### 修复（界面）
+
+- **来源页翻页后刷新/分享回到第 1 页**：首屏的「筛选变了就回第 1 页」effect 在挂载时也跑一次，把 URL 里的
+  `srcOffset` 归零。现在首屏按 URL 取数，翻页写回 URL，`offset=0` 省略（`client/src/source.js`）。
+- **评估页显示英文 `modelSkip` 等原因码**：全局原因字典缺模型判断与过滤类编码。现在补齐 `modelSkip` / `modelRisk` /
+  `modelUncertain` 及 9 个过滤码，来源页与评估页共用一套文案（`client/src/i18n.js`）。
+- **「模型调用（成功 / 失败 / 跳过）」后面有 4 个数字**：标签只列 3 桶。现在标签写「总计 / 成功 / 失败 / 跳过」，
+  与 `${calls} / ${ok} / ${errors} / ${skipped}` 一一对应（`client/src/settings.js`）。
+- **GitHub 仓库被叫「GitLab 项目 / GitLab token」**：同卡还并排「GitLab 项目」与「GitHub 地址」。现在「项目 / 地址 /
+  令牌」按托管方取词（GitHub / GitLab），表单字段保持中性的「远端项目 / 远端地址」（`client/src/util.js`、
+  `settings.js`、`source.js`、`live-ui.js`）。
+- **触发页搜索无结果时谎报「还没配来源」**：现在区分「没有符合当前筛选的线程」并给「清除筛选」，只有真的没有线程
+  才引导去来源页（`client/src/trigger.js`）。
+- **「24 小时运行失败 0 次 →」仍可点**：点进去是历史失败单。现在 0 次时只显示一句「24 小时没有运行失败」，不再可点
+  （`client/src/execution.js`）。
+- **评估页筛选切页签再回来全清**：跨页清理把同页筛选也删了。现在每页的最近筛选/分页写进 `sessionStorage`，切回时
+  恢复，URL 仍只留当前页参数（`client/src/router.js`、source/trigger/eval）。
+- **排队未执行的工单也能点「发布 MR」**：现在入口与服务端白名单一致，只有 `ready` / `failed` / `pushed` 可发布
+  （`client/src/live-ui.js`、`ticket-detail.js`）。
+- **评估页 offset 越界误报「筛选无记录」**：现在收回到最后一页并提示「你打开的位置超出范围；已显示最后一页」
+  （`client/src/eval.js`）。
+- **概览「主要失败原因」显示原始码**：指标里的失败原因是 `stopReason` 或错误码，页面上直接出现 `stopped`、
+  `workflow blocked`。现在已知原因走运行字典（如「人工终止」），`workflow blocked: …` 翻成中文结论，未知标识
+  写成「技术标识：…」而不是冒充一句人话（`client/src/overview.js`）。
+- **失败工单在概览「系统问题」里没有清理入口**：失败待办是非阻塞项，会被并进系统问题块，而那里只有「去工单」。
+  现在该行同样提供「忽略并清理」（`client/src/overview.js`）。
+- **首次带 token 打开带筛选的链接丢筛选**：模块求值时先捕获初始 query，宿主清理地址栏后仍能回落到它；每页只回落
+  一次（`client/src/router.js`）。
+
+### 体验
+
+- **变更历史只有一句标签**：展开每条历史即可看到字段的「旧值 → 新值」，开关类写「开 / 关」，长值截断后可展开全文；
+  Host 用快照 diff 出改动清单，不再需要额外接口（`lib/live/live-json.js`、`client/src/settings.js`）。
+- **新单的「需求」藏在改动内容里**：工单详情把需求提成独立章节、默认展开并加进页内跳转，改动内容仍可折叠
+  （`client/src/ticket-detail.js`）。
+- **「配置 3/4」是死文本**：自动化状态条（`AutomationBar`，设置流程卡出现时它仍是实际可见的那一条）和头部配置条目
+  改成「还有 N 项待配置」，保留可点的「继续配置」（`client/src/live-ui.js`、`client/src/shell.js`、`client/src/setup.js`）。
+- **Token / 令牌 / chatId 混用**：凭据类统一「令牌」并区分「已配置 / 未配置」，群标识统一「群 ID」（`client/src/settings.js`、
+  `live-ui.js`）。
+- **禁用菜单项读屏无法得知原因**：禁用项补 `aria-disabled="true"`（`client/src/controls.js`）。
+- **折叠标签统一为「技术详情」**（原「原始错误」），与 CHANGELOG 及注释一致（`client/src/i18n.js`、`live-ui.js`、
+  `ticket-detail.js`）。
+
+### 已知限制
+
+- 禁用/重载插件仍可能中断在跑的工单（本次在停止后不再写盘，但不提供运行租约）；带筛选的深链依赖宿主不提前改写
+  `query`，被改写时首屏只能回落到模块加载时捕获的那份参数。
+
 ## [1.0.3] — 2026-11-15
 
 一轮 11 条用户点检（`verification/ui-review-team.md`）加 4 条自查缺陷的修复，分「修复」（行为确实不对）和「体验」
