@@ -241,9 +241,16 @@ export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []
         h(InfoTip, { text: pt(t, 'ev.dismissHint'), warn: true })) : null))
 }
 
-/** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-export function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
+/** Empty state depends on whether there is no history at all, an empty 24h window, or a filter that matched nothing.
+ *  An active filter wins over the counts: "模型分歧" (or any kind/repo/reason/search filter) with zero rows is a filter
+ *  result, not an empty history, and saying "还没有评估记录…触发一条消息后" there sent people looking for messages that
+ *  had already been recorded (U-07). */
+export function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll, activeFilters = false) {
   const noRecords = (counts.all ?? 0) === 0
+  if (activeFilters) {
+    return h(EmptyState, { icon: 'filter', title: pt(t, 'ev.emptyFilterTitle'), hint: pt(t, 'ev.emptyFilterHint'),
+      action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { clearAll(); setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
+  }
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', onClick: () => navigate({ page: 'trigger' }) }, pt(t, 'ev.emptyAction')) })
@@ -424,5 +431,5 @@ export function LiveEvalPage() {
         : evalEmptyState(t, openFromEval, counts, kind, range, setKind, setRange, () => {
           setQuery(''); setRepo(''); setReason(''); setFrom(''); setTo(''); setView('all')
           setQ(''); setRepoFilter(''); setReasonFilter(''); setOffset(0)
-        })))
+        }, kind !== 'all' || view !== 'all' || Boolean(query.trim() || repoFilter || reasonFilter || from || to))))
 }

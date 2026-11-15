@@ -9,7 +9,7 @@ import { Button, IconButton, Input, Menu, Modal, SegmentedTabs, StatusIcon, Tag 
 import { Panel, PanelProvider, PanelState, same, stay, useAction, usePanel, usePanelData } from "./api.js"
 import { GlossaryModal, Hint, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
-import { HOME, TABS, initialLocation, releaseLinkedRoute, remember, routeEquivalent, routeFromHash, routeLabel } from "./router.js"
+import { HOME, TABS, initialLocation, prunePageQuery, releaseLinkedRoute, remember, routeEquivalent, routeFromHash, routeLabel } from "./router.js"
 import { usePanelModel } from "./live-model.js"
 import { setupStateOf } from "./setup.js"
 import { needsYouCount, ticketStatus } from "./live-ui.js"
@@ -48,7 +48,14 @@ export function globalHealth(data) {
   if (engine.phase === 'error') return { state: 'error', labelKey: 'shell.error' }
   if (engine.phase === 'blocked') return { state: 'warning', labelKey: 'shell.blocked' }
   if (paused) return { state: 'warning', labelKey: 'shell.paused' }
-  if (['idle', 'ok', 'dry-run', 'starting'].includes(engine.phase)) return { state: 'ongoing', labelKey: 'shell.running' }
+  // A boot that has not finished is not a running engine (B8: a start that threw looked identical to a healthy one,
+  // with every route answering 503 behind a green "运行中").
+  if (engine.phase === 'starting') return { state: 'warning', labelKey: 'shell.starting' }
+  // "Running" is the engine switch, not the last poll: a dry run on a stopped engine used to read 运行中 while the
+  // automation line under it said 自动化未启动 (U-03). An older host may not send a config at all; keep its reading.
+  const enabled = data?.config ? data.config.enabled === true : true
+  if (!enabled) return { state: 'idle', labelKey: 'shell.stopped' }
+  if (['idle', 'ok', 'dry-run'].includes(engine.phase)) return { state: 'ongoing', labelKey: 'shell.running' }
   return { state: 'idle', labelKey: 'shell.stopped' }
 }
 
@@ -371,6 +378,9 @@ export function PanelShell({ location, openTab }) {
 export function App({ openSession, t }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
+  // U-08: a page owns its own filter parameters. Switching tabs drops the ones that belong to the page we left, so a URL
+  // copied on the execution tab no longer resurrects Source filters nobody set. The `#sa` fragment is untouched.
+  useEffect(() => { prunePageQuery(location.route.page) }, [location.route.page])
   // The page-load fragment only seeds this first mount. A later remount inside the host SPA reads the remembered route
   // instead, so a fragment the host stripped or rewrote after boot cannot drag the panel back to an older screen.
   useEffect(() => { releaseLinkedRoute() }, [])

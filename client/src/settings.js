@@ -385,8 +385,28 @@ Object.assign(PAGE_TEXT, {
     'After CI passes the executor may merge into the target branch.'],
   'st.allowMergeNoToken': ['没有 GitLab token，不能合并 MR。', 'Merging an MR needs a GitLab token.'],
   // High-risk emphasis for allowMerge: the warning tag says what it is, the info tip and the on-state line say what
-  // it costs. Both are copy, not a second confirmation: the save bar keeps its usual one-step semantics.
+  // it costs. Turning a high-risk switch ON or OFF is the one save that gets a second confirmation (U-06): the save bar
+  // expands a plain-language list of what changes first, and `riskChangesOf` computes it from the two configs locally.
   'st.highRisk': ['高危', 'High risk'],
+  'st.riskTitle': ['这次保存会改变高风险设置', 'This save changes high-risk settings'],
+  'st.riskIntro': ['以下是保存后会发生的变化，确认后才会写入：', 'These take effect only after you confirm:'],
+  'st.riskConfirm': ['确认保存', 'Confirm save'],
+  'st.riskCancel': ['取消', 'Cancel'],
+  'st.riskEngineOn': ['启用引擎：开始自动轮询群消息、评估并开单', 'Engine on: poll the watched groups, evaluate and open Tickets'],
+  'st.riskEngineOff': ['关闭引擎：停止自动轮询（已开的工单保留）',
+    'Engine off: polling stops; existing Tickets stay'],
+  'st.riskExecOn': ['启用执行器：工单会真正运行 worker', 'Executor on: Tickets actually run a worker'],
+  'st.riskExecOff': ['关闭执行器：工单只排队，不再运行 worker', 'Executor off: Tickets only queue'],
+  'st.riskAutoRunOn': ['自动执行新工单：接单后立即交给执行器',
+    'Auto-run on: newly accepted Tickets go straight to the executor'],
+  'st.riskAutoRunOff': ['不再自动执行新工单：需要手动干跑或发布', 'Auto-run off: run or publish by hand'],
+  'st.riskPushOn': ['允许推送分支：执行器可以推分支到远端并建 MR',
+    'Pushes on: the executor may push branches and open merge requests'],
+  'st.riskPushOff': ['不再允许推送分支：执行器只到闸门为止', 'Pushes off: the executor stops after the gates'],
+  'st.riskMergeOn': ['允许合并 MR：CI 通过后自动合并到目标分支，不再人工确认',
+    'Merges on: a passing CI merges into the target branch without a human'],
+  'st.riskMergeOff': ['不再自动合并 MR：合并回到人工', 'Merges off: merging goes back to a person'],
+  'st.riskWatchChats': ['监听群变更为 {count} 个群', 'Watched groups change to {count}'],
   'st.allowMergeRisk': ['开启后 CI 通过即自动合并到目标分支，不再需要人工确认。',
     'When on, a passing CI pipeline merges into the target branch automatically — no human confirmation.'],
   'st.allowMergeOn': ['已开启自动合并：CI 通过后执行器直接合并到目标分支，不再等待人工确认。',
@@ -573,6 +593,47 @@ export function settingsSame(left, right) {
 }
 
 /** Draft (UI values) → the patch the host accepts. Only live-json allow-listed keys are ever sent. */
+/* U-06: the switches whose flip changes what the machine does on its own. A save that touches one of them is not a
+   copy edit — enabling the engine starts polling real groups, allowMerge merges real branches — so the save bar asks
+   for an explicit confirmation listing the changes in words. `octo.watchChatIds` is covered where it is edited (the
+   binding rows already confirm a removal). */
+export const RISK_FIELDS = [
+  { key: 'enabled', on: 'st.riskEngineOn', off: 'st.riskEngineOff' },
+  { key: 'executor.enabled', on: 'st.riskExecOn', off: 'st.riskExecOff' },
+  { key: 'executor.autoRun', on: 'st.riskAutoRunOn', off: 'st.riskAutoRunOff' },
+  { key: 'executor.allowPush', on: 'st.riskPushOn', off: 'st.riskPushOff' },
+  { key: 'executor.allowMerge', on: 'st.riskMergeOn', off: 'st.riskMergeOff' },
+]
+const configAt = (config, path) => path.split('.').reduce((value, key) => (value == null ? undefined : value[key]), config)
+/** The high-risk changes a `settingsPatchOf` patch would make, in plain language. Pure and local: no Host round-trip. */
+export function riskChangesOf(patch, config) {
+  const changes = []
+  if (!patch || typeof patch !== 'object') return changes
+  for (const field of RISK_FIELDS) {
+    if (!Object.hasOwn(patch, field.key)) continue
+    const next = patch[field.key] === true
+    const current = configAt(config, field.key) === true
+    if (next === current) continue
+    changes.push({ key: field.key, labelKey: next ? field.on : field.off })
+  }
+  if (Object.hasOwn(patch, 'octo.watchChatIds')) {
+    const next = [...(patch['octo.watchChatIds'] ?? [])].map(String).sort()
+    const current = [...(configAt(config, 'octo.watchChatIds') ?? [])].map(String).sort()
+    if (next.join() !== current.join()) {
+      changes.push({ key: 'octo.watchChatIds', labelKey: 'st.riskWatchChats', values: { count: next.length } })
+    }
+  }
+  return changes
+}
+
+/** U-06: whether two `riskChangesOf` lists say the same thing — used to notice that the draft moved while the
+ * confirmation was on screen. Compared by identity of the wording, not by array instance. */
+export function sameRiskChanges(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
+  return a.every((change, index) => change.key === b[index].key && change.labelKey === b[index].labelKey
+    && (change.values?.count ?? null) === (b[index].values?.count ?? null))
+}
+
 export function settingsPatchOf(group, draft) {
   const patch = {}
   if (!draft) return patch
@@ -924,6 +985,8 @@ export function LiveSettingsPage({ route }) {
   const [saveErrors, setSaveErrors] = useState({})
   const [fieldErrors, setFieldErrors] = useState({})
   const [savedTimes, setSavedTimes] = useState({})
+  // U-06: a save that flips a high-risk switch waits here for a second confirmation instead of writing immediately.
+  const [riskConfirm, setRiskConfirm] = useState(undefined)
   const savedTimers = useRef({})
   const bodyRef = useRef(null)
   const [reloadState, setReloadState] = useState({ busy: false })
@@ -1361,7 +1424,7 @@ export function LiveSettingsPage({ route }) {
       : null
   }
 
-  /** Save one group: patch → model reload → 3s "saved" state; failures keep the draft for a retry. */
+  /** Save one group: patch → (high-risk confirm) → model reload → 3s "saved" state; failures keep the draft for a retry. */
   const saveGroup = async group => {
     const draft = drafts[group]
     if (!draft || !Object.keys(draft).length || savingGroup) return
@@ -1386,6 +1449,19 @@ export function LiveSettingsPage({ route }) {
       failField(group, 'expire', 'st.reviewExpireInvalid')
       return
     }
+    // U-06: enabling the engine, auto-run, pushes or merges is not a copy edit. The first Save only expands the
+    // plain-language change list; the write happens from the confirmation's own button.
+    const changes = riskChangesOf(patch, config)
+    if (changes.length) {
+      setRiskConfirm({ group, patch, changes })
+      return
+    }
+    await commitGroup(group, patch)
+  }
+
+  /** The write itself: patch → model reload → 3s "saved" state; failures keep the draft for a retry. */
+  const commitGroup = async (group, patch) => {
+    setRiskConfirm(undefined)
     setSavingGroup(group)
     setSaveErrors(previous => settingsOmit(previous, group))
     setFieldErrors(previous => settingsOmit(previous, group))
@@ -1406,6 +1482,24 @@ export function LiveSettingsPage({ route }) {
     } finally {
       setSavingGroup(current => current === group ? null : current)
     }
+  }
+
+  /** U-06: the confirmation writes the *draft as it is now*, never the patch captured when the list was drawn. When a
+   * field moved in the meantime the list is refreshed and the person confirms again — an old patch must never be the
+   * thing that turns the engine on. */
+  const confirmRisk = async group => {
+    const patch = settingsPatchOf(group, drafts[group] ?? {})
+    const changes = riskChangesOf(patch, config)
+    const shown = riskConfirm && riskConfirm.group === group ? riskConfirm.changes : []
+    if (!sameRiskChanges(changes, shown)) {
+      if (!changes.length) {
+        await commitGroup(group, patch)
+        return
+      }
+      setRiskConfirm({ group, patch, changes })
+      return
+    }
+    await commitGroup(group, patch)
   }
 
   /** Conflict recovery: re-read live.json, refresh the model and drop the stale draft. */
@@ -1473,11 +1567,25 @@ export function LiveSettingsPage({ route }) {
     // SaveBar has no disabled state; while any group is saving its save/retry actions would be silent no-ops
     // (saveGroup returns early), so other groups only keep the local-only discard action.
     const canSave = !savingGroup
+    const risk = riskConfirm && riskConfirm.group === group ? riskConfirm : undefined
     return <>
+      {risk
+        ? <div className="sa-risk" role="group" aria-label={pt(t, 'st.riskTitle')}>
+          <p className="sa-field-head">{pt(t, 'st.riskTitle')}</p>
+          <p className="sa-hint">{pt(t, 'st.riskIntro')}</p>
+          <ul className="sa-risk-list">{risk.changes.map(change => <li key={change.key}>{pt(t, change.labelKey, change.values)}</li>)}</ul>
+          <div className="sa-actions">
+            <Button variant="primary" size="sm" disabled={Boolean(savingGroup)}
+              onClick={() => { void confirmRisk(group) }}>{pt(t, 'st.riskConfirm')}</Button>
+            <Button variant="ghost" size="sm" disabled={Boolean(savingGroup)}
+              onClick={() => setRiskConfirm(undefined)}>{pt(t, 'st.riskCancel')}</Button>
+          </div>
+        </div>
+        : null}
       <SaveBar state={state} savedAt={savedAt} error={stored?.error} dirty={dirtyOf(group)}
         onSave={canSave ? () => { void saveGroup(group) } : undefined}
         onRetry={canSave ? () => { void saveGroup(group) } : undefined}
-        onDiscard={() => discardGroup(group)} />
+        onDiscard={() => { setRiskConfirm(undefined); discardGroup(group) }} />
       {stored ? <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
         <div className="sa-actions">
           <Button variant="outline" size="sm" icon={<Icon name="refresh" size={14} />}
@@ -2038,7 +2146,8 @@ export function LiveSettingsPage({ route }) {
         checked={Boolean(field('executor.allowReply', executor.allowReply === true))}
         onChange={next => editField('write', 'executor.allowReply', next, executor.allowReply === true)} />
       {/* The one irreversible permission: a warning tag, a warn-styled info tip and — while it is on — a standing
-          warning line. Saving still goes through the ordinary save bar; this is emphasis, not a second confirmation. */}
+          warning line. Saving it is also the save that gets a second confirmation (U-06), because a merge cannot be
+          undone by turning the switch back off. */}
       <SettingsSwitchRow label={pt(t, 'st.allowMerge')}
         hint={pt(t, token ? 'st.allowMergeHint' : 'st.allowMergeNoToken')}
         badge={<Tag tone="warning">{pt(t, 'st.highRisk')}</Tag>}

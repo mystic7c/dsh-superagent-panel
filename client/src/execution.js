@@ -333,8 +333,11 @@ export function ExecutionQueuePage({ route }) {
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
             h(When, { at: recentRun.startedAt ?? recentRun.at }),
             h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
-            // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
-            runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
+            // P1-2 (optional): how the run was started — manual / automatic / retry / resume. U-09: this is a fact about
+            // the run, not a control, so it renders in the quiet tone (no pill border) under the trigger's own label.
+            runTriggerLabel(t, recentRun)
+              ? h(Tag, { tone: 'quiet', title: pt(t, 'runTrigger.hint') }, runTriggerLabel(t, recentRun))
+              : null,
             recentRun.error
               ? h(Fragment, null,
                 // The failure cause stays visible; the raw error is supplementary detail behind a real focusable InfoTip

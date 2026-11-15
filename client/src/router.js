@@ -92,3 +92,32 @@ export function remember(location) {
 /** Header back-button label: a record id reads as its noun, otherwise the destination tab. */
 export const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
 export const detailOf = (route, page) => route.page === page && route.id ? route.id : undefined
+
+/* U-08: filters are view state of ONE page, not of the panel. Each page declares the query parameters it owns, and a
+   tab switch deletes the parameters of the other pages (their prefixes are ours, so a host parameter is never touched). */
+export const PAGE_QUERY_KEYS = {
+  overview: [],
+  source: ['srcQ', 'srcStatus', 'srcRepo', 'srcReason', 'srcFrom', 'srcTo', 'srcOffset'],
+  trigger: ['trgFilter', 'trgQ', 'trgRepo', 'trgReason', 'trgFrom', 'trgTo', 'trgOffset'],
+  eval: ['evalKind', 'evalWindow', 'evalQ', 'evalRepo', 'evalReason', 'evalFrom', 'evalTo', 'evalView', 'evalOffset'],
+  execution: [],
+  settings: [],
+}
+const OWNED_QUERY_KEYS = new Set(Object.values(PAGE_QUERY_KEYS).flat())
+/** Drop the query parameters that belong to other pages; the `#sa` fragment and host parameters are kept. replaceState
+    is deliberate: a cleanup must not fire the routing events a real navigation would (no hashchange/popstate). */
+export function prunePageQuery(page) {
+  try {
+    const allowed = new Set(PAGE_QUERY_KEYS[page] ?? [])
+    const url = new URL(window.location.href)
+    let changed = false
+    for (const key of [...url.searchParams.keys()]) {
+      if (allowed.has(key) || !OWNED_QUERY_KEYS.has(key)) continue
+      url.searchParams.delete(key)
+      changed = true
+    }
+    if (!changed) return false
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    return true
+  } catch { return false }
+}

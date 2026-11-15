@@ -4,7 +4,7 @@
    keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
    no request of its own. */
 
-import { API, Icon, hhmm, shortId } from "./util.js"
+import { API, Icon, hhmm, scrollPanelTo, shortId } from "./util.js"
 import { errorText, localized, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -21,6 +21,11 @@ Object.assign(PAGE_TEXT, {
   'src.state.error': ['异常', 'Error'],
   'src.state.idle': ['空闲', 'Idle'],
   'src.state.off': ['未启用', 'Off'],
+  // U-10: without a token CI, deploy and MR observation are all unavailable, so a card that only reads the local path
+  // must not claim "正常" — that label hid exactly the part that was not working.
+  'src.state.localOnly': ['本地可用', 'Local only'],
+  'src.localOnlyNote': ['未配置 token：不影响本地只读，但无法观测 CI / 部署、也无法建 MR。',
+    'No token: local read-only work still runs, but CI, deploys and merge requests are unobservable.'],
   'src.stat.received': ['24h 到达', 'Arrived (24h)'],
   'src.stat.filtered': ['24h 过滤', 'Filtered (24h)'],
   'src.stat.accepted': ['24h 接单', 'Accepted (24h)'],
@@ -50,6 +55,17 @@ Object.assign(PAGE_TEXT, {
   'src.reason.sourceNotWatched': ['不在监听群', 'Chat is not watched'],
   'src.reason.senderNotAllowed': ['发送者不在允许名单', 'Sender is not in the allow list'],
   'src.reason.notText': ['不是文本消息', 'Not a text message'],
+  'src.reason.channelMissing': ['缺少群 ID，无法匹配监听群', 'No chat id, so it matches no watched chat'],
+  'src.reason.chatNotWatched': ['不在监听群', 'Chat is not watched'],
+  'src.reason.systemMessage': ['系统消息（没有发送者）', 'System message (no sender)'],
+  'src.reason.botSender': ['发送者是机器人', 'Sender is a bot'],
+  'src.reason.botSelf': ['本机器人自己发出的消息', 'Sent by this bot itself'],
+  'src.reason.selfReply': ['以回复前缀开头的自身消息', 'Own message starting with the reply prefix'],
+  'src.reason.contextOnly': ['仅作为上下文送到执行器，没有单独开单', 'Context only: passed to the executor, no Ticket of its own'],
+  'src.reason.modelSkip': ['模型判断这不是本仓库的任务', 'The model judged this is not a task for this repository'],
+  'src.reason.modelRisk': ['模型判断属于高风险', 'The model judged this high risk'],
+  'src.reason.modelUncertain': ['模型不确定，留给人工', 'The model was unsure, so a person decides'],
+  'src.reasonUnknown': ['未识别原因（技术标识：{code}）', 'Unrecognised reason (code: {code})'],
   'src.emptyTitle': ['还没有来源', 'No Source yet'],
   'src.emptyHint': ['先配置 Octo token 并添加一个监听群，消息会在这里出现。',
     'Connect the Octo token and add a watched group; its messages will show up here.'],
@@ -66,6 +82,9 @@ Object.assign(PAGE_TEXT, {
   'src.signalReason': ['原因：{reason}', 'Reason: {reason}'],
   'src.signalTicket': ['查看工单', 'Open Ticket'],
   'src.signalPreviewEmpty': ['（无文本）', '(no text)'],
+  // U-05: the expandable row shows the body once — open, the preview span collapses into this control instead of
+  // repeating the first 160 characters above the full text.
+  'src.signalCollapse': ['收起', 'Collapse'],
   'src.signalsRefresh': ['刷新', 'Refresh'],
   'src.signalSearch': ['搜索原始信号', 'Search raw signals'],
   'src.signalRepo': ['按仓库筛选', 'Filter by repository'],
@@ -131,9 +150,16 @@ export function sourceRepoRows(t, source, repo) {
   const config = source?.config ?? {}
   const rows = []
   if (config.project) rows.push([pt(t, 'repo.project'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
-  if (config.baseUrl) rows.push([pt(t, 'repo.baseUrl'), h(ExternalLink, { href: String(config.baseUrl), icon: null }, String(config.baseUrl))])
+  if (config.baseUrl) {
+    const remote = String(config.baseUrl)
+    // U-10: a GitHub-backed repository was labelled "GitLab 地址" because the label was hard-coded.
+    const remoteKey = /github\.com/i.test(remote) ? 'repo.baseUrlGithub'
+      : /gitlab/i.test(remote) ? 'repo.baseUrl' : 'repo.baseUrlOther'
+    rows.push([pt(t, remoteKey), h(ExternalLink, { href: remote, icon: null }, remote)])
+  }
   if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
-  rows.push([pt(t, 'repo.token'), config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissing')])
+  rows.push([pt(t, 'repo.token'),
+    config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissingLocal')])
   if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo))])
   if (repo?.baseBranch || config.targetBranch) {
     rows.push([pt(t, 'repo.branches'), `${repo?.baseBranch ?? '—'} → ${config.targetBranch ?? '—'}`])
@@ -191,14 +217,32 @@ export function FilteredMessages({ source, items }) {
 /** Signal status → the shared shape vocabulary; the label always comes from `src.signalStatus.*`. */
 export const SIGNAL_SHAPE = { pending: 'ongoing', processed: 'done', ignored: 'idle', skipped: 'warning', failed: 'error' }
 export const SIGNAL_TONE = { pending: 'info', processed: 'success', ignored: 'neutral', skipped: 'warning', failed: 'danger' }
-/** Host skip codes → the same human reasons the filtered-message list already uses; an unknown code stays raw. */
-export const SIGNAL_REASON_KEYS = { 'chat-not-watched': 'src.reason.sourceNotWatched', sender: 'src.reason.senderNotAllowed',
-  'sender-not-allowed': 'src.reason.senderNotAllowed', 'not-text': 'src.reason.notText', 'high-risk': 'src.reason.highRisk' }
+/** Host skip codes → human reasons. A row can carry a candidate skip (`bot-sender`, `chat-not-watched`, …) or a rule
+    decision code (`sourceNotWatched`, `modelSkip`, …), so both spellings are mapped; an unknown code is labelled as
+    unrecognised instead of leaking the identifier as the visible reason (U-11). */
+export const SIGNAL_REASON_KEYS = {
+  'channel-missing': 'src.reason.channelMissing',
+  'chat-not-watched': 'src.reason.chatNotWatched',
+  'system-message': 'src.reason.systemMessage',
+  'not-text': 'src.reason.notText', notText: 'src.reason.notText',
+  'bot-self': 'src.reason.botSelf',
+  'bot-sender': 'src.reason.botSender',
+  'self-reply': 'src.reason.selfReply',
+  'high-risk': 'src.reason.highRisk', highRisk: 'src.reason.highRisk',
+  contextOnly: 'src.reason.contextOnly',
+  sourceNotWatched: 'src.reason.sourceNotWatched',
+  sender: 'src.reason.senderNotAllowed', 'sender-not-allowed': 'src.reason.senderNotAllowed',
+  senderNotAllowed: 'src.reason.senderNotAllowed',
+  modelSkip: 'src.reason.modelSkip', modelRisk: 'src.reason.modelRisk', modelUncertain: 'src.reason.modelUncertain',
+  ignore: 'src.reason.contextOnly',
+}
+/** True when the host code is one this build knows how to phrase; used by the row to decide whether to add a code hint. */
+export const signalReasonKnown = code => Object.hasOwn(SIGNAL_REASON_KEYS, String(code ?? ''))
 export function signalReasonText(t, item) {
   const code = item?.skipReason
   if (!code) return ''
   const key = SIGNAL_REASON_KEYS[String(code)]
-  return key ? pt(t, key) : String(code)
+  return key ? pt(t, key) : pt(t, 'src.reasonUnknown', { code: String(code) })
 }
 /** A replayable signal is one the rules did not deliver (P1 §2.2): skipped, ignored or failed. */
 export const signalReplayable = item => ['skipped', 'ignored', 'failed'].includes(item?.status)
@@ -215,6 +259,10 @@ export const signalLabelText = (t, label) => {
 /** The raw signal log as rows: status, text preview, why it did not become a Ticket, and the one replay action. */
 export function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focusId, onOpenTicket }) {
   const { t, navigate } = usePanel()
+  // U-05: the host only sends a 160-char preview, so a long message could never be read. The row stays one line when
+  // collapsed (same row height as before) and expands in place; the open row is component state, never the URL.
+  const [openId, setOpenId] = useState('')
+  const toggleRow = id => setOpenId(current => (current === id ? '' : id))
   return h('ul', { className: 'sa-list' }, items.map(item => {
     const status = String(item?.status ?? '')
     const reason = signalReasonText(t, item)
@@ -222,13 +270,28 @@ export function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focus
     const statusKey = `src.signalStatus.${status}`
     const statusLabel = pt(t, statusKey)
     const labels = Array.isArray(item?.labels) ? item.labels.filter(entry => entry && typeof entry === 'object') : []
+    const preview = String(item?.textPreview ?? '')
+    // `text` is only sent when the body is longer than the preview, so short rows keep today's plain one-liner.
+    const full = typeof item?.text === 'string' && item.text ? item.text : preview
+    const expandable = Boolean(full) && full !== preview
+    const open = expandable && openId === item.id
     return h('li', { key: item.id, id: `sa-signal-${item.id}`,
       className: item.id === focusId ? 'sa-row sa-row-focus' : 'sa-row' },
       h(StatusIcon, { state: SIGNAL_SHAPE[status] ?? 'idle', size: 14, spin: false }),
       h('div', { className: 'sa-row-main' },
         h('div', { className: 'sa-row-title' },
           h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel),
-          h('span', { className: 'sa-ellipsis' }, String(item?.textPreview ?? '') || pt(t, 'src.signalPreviewEmpty'))),
+          expandable
+            ? h('span', { className: open ? 'sa-signal-text sa-signal-text-open' : 'sa-ellipsis sa-signal-toggle',
+              title: full, role: 'button', tabIndex: 0, 'aria-expanded': open ? 'true' : 'false',
+              onClick: () => toggleRow(item.id),
+              onKeyDown: event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                toggleRow(item.id)
+              } },
+            open ? pt(t, 'src.signalCollapse') : (preview || pt(t, 'src.signalPreviewEmpty')))
+            : h('span', { className: 'sa-ellipsis' }, preview || pt(t, 'src.signalPreviewEmpty'))),
         (item?.source || reason || at)
           ? h('div', { className: 'sa-row-meta' },
             item?.source ? h('span', { className: 'sa-mono', translate: 'no' }, String(item.source)) : null,
@@ -241,6 +304,9 @@ export function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focus
                 signalLabelText(t, entry.label))))
               : null)
           : null),
+      open
+        ? h('p', { className: 'sa-signal-full' }, full)
+        : null,
       h('div', { className: 'sa-row-actions' },
         item?.ticketId ? h(Button, { variant: 'ghost', size: 'sm',
           onClick: () => (onOpenTicket ? onOpenTicket(item.ticketId) : navigate({ page: 'execution', id: item.ticketId })) },
@@ -347,7 +413,7 @@ export function LiveSourcePage({ route }) {
     catch (failure) { setUat({ ok: false, error: errorText(failure) }) }
     finally { setUatBusy(false) }
   }
-  const focusFiltered = () => filteredRef.current?.scrollIntoView({ block: 'start' })
+  const focusFiltered = () => scrollPanelTo(filteredRef.current)
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
@@ -426,7 +492,8 @@ export function LiveSourcePage({ route }) {
     const node = document.getElementById(`sa-signal-${focusId}`) ?? document.getElementById('sa-located-signal')
     if (!node) return
     scrolledFocus.current = focusId
-    if (typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
+    // U-01: keep the jump inside the panel's scroller; the host frame is not ours to move.
+    scrollPanelTo(node, { align: 'center' })
   }, [focusId, focus.data, signals.data])
   useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
   const label = useAction(async (signal, labelId) => {
@@ -467,19 +534,26 @@ export function LiveSourcePage({ route }) {
         onClick: () => navigate({ page: 'settings', group: 'source' }) }, pt(t, 'src.openSettings')) })
   }
 
-  const enabled = sources.filter(source => source.enabled).length
-  const lastAt = sources.map(source => source.lastAt).filter(Boolean).sort().at(-1)
-  const clock = lastAt ? hhmm(lastAt, t.lang) : ''
-  const summary = clock
-    ? pt(t, 'src.summary', { active: enabled, total: sources.length, time: clock })
-    : pt(t, 'src.summaryNoSync', { active: enabled, total: sources.length })
   const filtered = Array.isArray(octo?.filtered) ? octo.filtered : []
   const signalItems = Array.isArray(signals.data?.items) ? signals.data.items : []
   const labelCounts = signals.data?.counts?.labels ?? {}
   const labelTotal = SIGNAL_LABEL_ORDER.reduce((sum, label) => sum + (Number(labelCounts[label]) || 0), 0)
   // Two source classes (IM vs code repositories); each class renders its own section with a two-up card grid.
   const imSources = sources.filter(source => !isExecutionSource(source))
-  const codeSources = sources.filter(isExecutionSource)
+  // U-10: `normalizeRepos` synthesizes one placeholder repository even when live.json binds none, and counting it made
+  // a freshly installed panel read "已启用 2/2" (same cause as B1). A card without a local path or a project is not a
+  // repository the page can report on, so it is neither rendered nor counted.
+  const codeSources = sources.filter(isExecutionSource).filter(source => {
+    const repo = panelRepoOf(data, source.repoId)
+    return Boolean(String(source.config?.project ?? '').trim() || String(repo?.repo ?? '').trim())
+  })
+  const counted = [...imSources, ...codeSources]
+  const enabled = counted.filter(source => source.enabled).length
+  const lastAt = counted.map(source => source.lastAt).filter(Boolean).sort().at(-1)
+  const clock = lastAt ? hhmm(lastAt, t.lang) : ''
+  const summary = clock
+    ? pt(t, 'src.summary', { active: enabled, total: counted.length, time: clock })
+    : pt(t, 'src.summaryNoSync', { active: enabled, total: counted.length })
   // One execution card per repository (contract §12); the matching `repos` summary adds the local clone and modes.
   const repoOf = source => isExecutionSource(source) ? panelRepoOf(data, source.repoId) : undefined
   const isManual = source => repoOf(source)?.verifyMode === 'manual'
@@ -529,6 +603,9 @@ export function LiveSourcePage({ route }) {
     // Every disabled Source says so on its own card: the page-level automation bar explains the pause, not which
     // Sources are switched off, and two cards reading only "空闲" looked like healthy repositories (critique 2026-11-11).
     if (!source.enabled) notes.push(pt(t, source.kind === 'execution' ? 'src.disabledRepo' : 'src.disabled'))
+    // U-10: `ready` only means the local path is readable. Say what is missing (the token) instead of a green "正常".
+    const localOnly = isExecutionSource(source) && source.state === 'ready' && source.config?.tokenConfigured === false
+    if (localOnly) notes.push(pt(t, 'src.localOnlyNote'))
     if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
     const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
@@ -536,7 +613,7 @@ export function LiveSourcePage({ route }) {
       h('div', { className: 'sa-card-head' },
         h('span', { className: 'sa-section-icon' }, h(Icon, { name: sourceIconName(source), size: 16 })),
         h('div', { className: 'sa-card-title' }, localized(t, source.title) || repoName || source.id),
-        h(StatusText, { state: view.state }, pt(t, view.labelKey))),
+        h(StatusText, { state: view.state }, pt(t, localOnly ? 'src.state.localOnly' : view.labelKey))),
       notes.length ? h(Hint, null, notes.join(' · ')) : null,
       // IM cards have no repository detail; let their two actions sit beside the stats instead of under them, so the
       // single-card row is not a full-width card with content only on the left.

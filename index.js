@@ -99,7 +99,11 @@ export function apply(ctx, config = {}) {
       ctx.effect(() => () => engine?.stop())
       ctx.logger?.info?.('superagent live engine: %s', engine.status().engine.phase)
     } catch (error) {
-      ctx.logger?.warn?.('superagent live engine failed to start: %s', error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      // The route table stays up (the status document is what tells a person what is wrong); an engine that exists but
+      // failed to start reports that in its status instead of sitting at `starting`, which the panel shows as running.
+      engine?.setStartError?.(message)
+      ctx.logger?.warn?.('superagent live engine failed to start: %s', message)
     }
   })()
 

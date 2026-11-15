@@ -105,7 +105,9 @@ declare namespace DSH {
   interface ClientPluginContext {
     logger?: Logger
     slots: SlotsService
-    /** The Client resolves services by name too: `locale`, `uiWorkspace`, … */
+    /** Rounds up a cleanup with this plugin's lifetime — the Client context carries it exactly like the Host's. */
+    effect(callback: () => void | Disposable, label?: string): void
+    /** The Client resolves services by name too: `locale`, `layout`, `uiWorkspace`, … */
     get<T = unknown>(name: string): T | undefined
     [extra: string]: unknown
   }

@@ -1,4 +1,4 @@
-import { Icon, safeHttpUrl, shortId } from "./util.js"
+import { Icon, safeHttpUrl, scrollPanelTo, shortId } from "./util.js"
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -64,6 +64,12 @@ Object.assign(PAGE_TEXT, {
   'detail.errorCli': ['本地 CLI 缺失或未登录。', 'The local CLI is missing or not signed in.'],
   'detail.errorTimeout': ['执行超时。', 'The run timed out.'],
   'detail.errorGate': ['闸门未通过。', 'A gate failed.'],
+  // U-11: a staged workflow block and any unrecognised host error keep their English sentence as the *detail* of a
+  // Chinese conclusion, and the untruncated text is folded below (`detail.rawError`).
+  'detail.errorWorkflowBlocked': ['分阶段流程被阻塞：{detail}', 'The staged workflow was blocked: {detail}'],
+  'detail.workflowReview': ['独立审查仍要求修改（返工轮次已用完）',
+    'The independent review still requested changes (repair budget spent)'],
+  'detail.errorOther': ['其他原因：{cause}', 'Other cause: {cause}'],
   'detail.rawError': ['原始错误', 'Raw error'],
   'detail.copyTicketId': ['复制工单 ID', 'Copy Ticket ID'],
   'ticket.sectionNav': ['页内跳转', 'Jump to section'],
@@ -845,7 +851,8 @@ export function TicketRunRows({ runs }) {
         <div className="sa-row-title">
           <StatusIcon state={view.state} size={14} />
           <span>{view.label}</span>
-          {trigger ? <Tag tone="outline">{trigger}</Tag> : null}
+          {/* U-09: "恢复" read like a button. The quiet tone plus the trigger label makes it a fact, not a control. */}
+          {trigger ? <Tag tone="quiet" title={pt(t, 'runTrigger.hint')}>{trigger}</Tag> : null}
           {runRouteTag(t, run)}
           {stop ? <Tag tone={stop.tone}>{stop.label}</Tag> : null}
           {/* P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched. */}
@@ -863,7 +870,12 @@ export function TicketRunRows({ runs }) {
           {commit ? <span className="sa-mono">{liveShortId(commit, 8)}</span> : null}
           {Array.isArray(run.steps) ? <span className="sa-hint">{pt(t, 'ticket.stepsCount', { count: run.steps.length })}</span> : null}
         </div>
-        {run.error ? <p className="sa-error" title={String(run.error)}>{failureLabel(t, run.error)}</p> : null}
+        {run.error
+          ? <Folded summary={pt(t, 'detail.rawError')}>
+            <p className="sa-error">{failureLabel(t, run.error)}</p>
+            <p className="sa-hint sa-mono" translate="no">{String(run.error)}</p>
+          </Folded>
+          : null}
         <RunHandoff run={run} />
         <RunReport run={run} />
         <RunTrace run={run} />
@@ -1364,7 +1376,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   useEffect(() => {
     if (!focusRun || focusedRun.current === focusRun) return
     const node = document.getElementById(`sa-run-${focusRun}`)
-    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
+    if (node) { focusedRun.current = focusRun; scrollPanelTo(node, { align: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
   }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
@@ -1644,7 +1656,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
     ? <Button variant="primary" size="sm" onClick={() =>
-      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
+      scrollPanelTo('sa-answer', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
     : failed
     ? canRun
       // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
@@ -1667,7 +1679,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         {pt(t, 'primary.openMr')}</a> : null)
       : needsAcceptance
         ? <Button variant="primary" size="sm" onClick={() =>
-          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>
+          scrollPanelTo('sa-acceptance', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>
           {pt(t, 'primary.accept')}
         </Button>
         // A parked gate already carries all three decisions in the banner above this row, and running work has
@@ -1877,10 +1889,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // A jump is only offered for a section this Ticket actually renders (dismissed/closed hide automation, a Ticket
   // without gate results hides the gates section) — the observer below uses the same filtered list.
   const jumps = ticketVisibleJumps(ticket, hasGateResults)
+  // U-01: scroll the panel's own scroller. `scrollIntoView` also moved the host frame around the panel, so a section
+  // jump pushed the DSH header and sidebar out of the viewport.
   const jumpTo = id => {
     setActiveJump(id)
-    const node = document.getElementById(id)
-    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
+    scrollPanelTo(id, { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
   }
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the

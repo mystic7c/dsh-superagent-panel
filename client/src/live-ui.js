@@ -64,6 +64,8 @@ Object.assign(PAGE_TEXT, {
     ciPassed: ['CI 通过', 'CI passed'], merged: ['已合并', 'Merged'], deploying: ['部署中', 'Deploying'],
     mrOpen: ['MR 待合并', 'MR open'], pushed: ['待发布 MR', 'MR not published'], closed: ['MR 已关闭', 'MR closed'] },
   shell: { running: ['运行中', 'Running'], paused: ['已暂停', 'Paused'], stopped: ['已停止', 'Stopped'],
+    // `starting` is its own state: an engine that is still coming up (or whose start threw) is not running yet.
+    starting: ['启动中', 'Starting'],
     error: ['异常', 'Error'], blocked: ['被阻塞', 'Blocked'], unknown: ['状态未知', 'Status unknown'],
     loading: ['读取中…', 'Loading…'], pending: ['需要你处理 {count} 件', '{count} need you'],
     active: ['执行中 {count}', '{count} running'],
@@ -79,8 +81,9 @@ Object.assign(PAGE_TEXT, {
     interrupted: ['已中断', 'Interrupted'] },
   // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
   runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
-    revise: ['追加要求', 'Revision'], publish: ['发布', 'Publish'], resume: ['恢复', 'Resume'], pipeline: ['流水线', 'Pipeline'],
-    other: ['触发方式：{trigger}', 'Trigger: {trigger}'] },
+    revise: ['追加要求', 'Revision'], publish: ['发布', 'Publish'], resume: ['恢复触发', 'Resumed'],
+    pipeline: ['流水线', 'Pipeline'], other: ['触发方式：{trigger}', 'Trigger: {trigger}'],
+    label: ['触发方式', 'Triggered by'], hint: ['这次运行是怎么触发的', 'How this run was started'] },
   runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
     worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
     gate_failed: ['闸门未通过', 'Gate failed'], prepare_failed: ['准备工作区失败', 'Worktree preparation failed'],
@@ -105,6 +108,8 @@ Object.assign(PAGE_TEXT, {
   repo: { label: ['仓库', 'Repository'], name: ['仓库名称', 'Repository name'],
     repoId: ['仓库 ID', 'Repository ID'], localPath: ['本地路径', 'Local path'],
     project: ['GitLab 项目', 'GitLab project'], baseUrl: ['GitLab 地址', 'GitLab base URL'],
+    baseUrlGithub: ['GitHub 地址', 'GitHub base URL'], baseUrlOther: ['远程地址', 'Remote URL'],
+    tokenMissingLocal: ['未配置（不影响本地只读）', 'Missing (local read-only still works)'],
     branches: ['分支', 'Branches'], targetBranch: ['目标分支', 'Target branch'],
     token: ['Token', 'Token'], tokenConfigured: ['已配置', 'Configured'], tokenMissing: ['未配置', 'Missing'],
     verifyMode: ['验证方式', 'Verification'], acceptance: ['验收方式', 'Acceptance'],
@@ -783,7 +788,18 @@ export const FAILURE_LABELS = [
   { pattern: /CLI not found|cli was not found|ENOENT|not logged in|signed out/i, key: 'detail.errorCli' },
   { pattern: /timed out|timeout/i, key: 'detail.errorTimeout' },
   { pattern: /gate failed|gates? (did not pass|failed)/i, key: 'detail.errorGate' },
+  // The staged workflow reports `workflow blocked: <reason>` verbatim; the reason is a host sentence, so it is
+  // translated when it is one of the known causes and otherwise kept as the detail of a Chinese conclusion (U-11).
+  { pattern: /workflow blocked:\s*([\s\S]+)/i, key: 'detail.errorWorkflowBlocked',
+    values: (match, t) => ({ detail: workflowBlockedDetail(t, match?.[1]) }) },
 ]
+/** Known staged-workflow block reasons → a short sentence; anything else keeps the host text as the detail. */
+export const WORKFLOW_BLOCKED_LABELS = [{ pattern: /review still requested changes/i, key: 'detail.workflowReview' }]
+export function workflowBlockedDetail(t, raw) {
+  const text = String(raw ?? '').trim()
+  const known = WORKFLOW_BLOCKED_LABELS.find(item => item.pattern.test(text))
+  return known ? pt(t, known.key) : text
+}
 export const FAILURE_RAW_LIMIT = 120
 /** True when the text is one of the known failure causes (used to map step messages too, not only run.error). */
 export const failureKnown = text => FAILURE_LABELS.some(item => item.pattern.test(String(text ?? '')))
@@ -791,8 +807,11 @@ export function failureLabel(t, error) {
   const text = String(error ?? '').trim()
   if (!text) return ''
   const known = FAILURE_LABELS.find(item => item.pattern.test(text))
-  if (known) return pt(t, known.key)
-  return text.length > FAILURE_RAW_LIMIT ? `${text.slice(0, FAILURE_RAW_LIMIT)}…` : text
+  if (known) return pt(t, known.key, known.values ? known.values(known.pattern.exec(text), t) : undefined)
+  // U-11: an unrecognised cause is usually an English host sentence. Lead with a Chinese conclusion and keep the
+  // original (clipped) inside it; the untruncated text is folded under 技术详情 wherever a run row shows it.
+  const clipped = text.length > FAILURE_RAW_LIMIT ? `${text.slice(0, FAILURE_RAW_LIMIT)}…` : text
+  return pt(t, 'detail.errorOther', { cause: clipped })
 }
 
 /**
@@ -1162,14 +1181,22 @@ export function ManualTicketForm({ onDone, onCancel, heading = true }) {
       placeholder={pt(t, 'st.bodyPh')} disabled={busy} onChange={event => setBody(event.target.value)} />
     {/* Manual override is two independent choices, each defaulting to "let routing decide". They are saved on the
         Ticket by the host; an unsupported combination is warned about here and rejected by the executor. */}
+    {/* U-04: each choice carries a visible label; the select keeps the same accessible name through aria-label, so a
+        screen reader hears exactly what the eye reads. A placeholder alone is not a label. */}
     <div className="sa-route-controls">
-      <Select label={pt(t, 'st.routeDeliverable')} value={deliverable} disabled={busy}
-        options={[{ value: '', label: pt(t, 'st.routeAuto') },
-          { value: 'change', label: pt(t, 'st.routeChange') },
-          { value: 'report', label: pt(t, 'st.routeReport') }]}
-        onChange={next => setDeliverable(next)} />
-      <Select label={pt(t, 'st.routeBackend')} value={backend} disabled={busy} options={backendOptions}
-        onChange={next => setBackend(next)} />
+      <label className="sa-route-field">
+        <span className="sa-field-head">{pt(t, 'st.routeDeliverable')}</span>
+        <Select label={pt(t, 'st.routeDeliverable')} value={deliverable} disabled={busy}
+          options={[{ value: '', label: pt(t, 'st.routeAuto') },
+            { value: 'change', label: pt(t, 'st.routeChange') },
+            { value: 'report', label: pt(t, 'st.routeReport') }]}
+          onChange={next => setDeliverable(next)} />
+      </label>
+      <label className="sa-route-field">
+        <span className="sa-field-head">{pt(t, 'st.routeBackend')}</span>
+        <Select label={pt(t, 'st.routeBackend')} value={backend} disabled={busy} options={backendOptions}
+          onChange={next => setBackend(next)} />
+      </label>
     </div>
     {route
       ? <div className="sa-route-preview">

@@ -117,6 +117,48 @@ export function safeHttpUrl(url) {
   return typeof url === 'string' && /^https?:\/\//i.test(url) ? url : ''
 }
 
+/* ---------- scrolling inside the panel ----------
+   The panel renders inside the host's SPA, which wraps every plugin page in its own scroll container. `scrollIntoView`
+   walks every scrollable ancestor, so jumping to a section also moved the host frame — the DSH header and sidebar slid
+   out of the viewport (UI review U-01). Sections therefore scroll the panel's own scroller (`.sa-scroll`) by setting
+   its scrollTop, and the host frame keeps the position it had. */
+
+/** The scroll container that belongs to the panel for `node`: `.sa-scroll` when present, else the nearest scrolling
+    ancestor inside the panel. Returns undefined for a detached node. */
+export function panelScroller(node) {
+  let current = node?.nodeType === 1 ? node : undefined
+  while (current) {
+    if (current.classList?.contains?.('sa-scroll')) return current
+    if (typeof current.scrollHeight === 'number' && current.scrollHeight > current.clientHeight + 1) return current
+    current = current.parentElement
+  }
+  return undefined
+}
+
+/** Bring `target` (an element, or an element id inside the panel) to the top of the panel's scroller. `align:'center'`
+    centres it instead. Returns false when the target or its geometry is unavailable, in which case nothing is scrolled:
+    a test DOM (jsdom reports zeroed rects) and a detached node must not move the page. */
+export function scrollPanelTo(target, options = {}) {
+  const node = typeof target === 'string'
+    ? (typeof document === 'undefined' ? undefined : document.getElementById(target))
+    : target
+  if (!node || typeof node.getBoundingClientRect !== 'function') return false
+  const scroller = panelScroller(node)
+  if (!scroller || typeof scroller.getBoundingClientRect !== 'function') return false
+  const behavior = options.behavior ?? 'smooth'
+  const gap = options.gap ?? 12
+  const nodeRect = node.getBoundingClientRect()
+  const scrollerRect = scroller.getBoundingClientRect()
+  const offset = nodeRect.top - scrollerRect.top
+  const top = options.align === 'center'
+    ? scroller.scrollTop + offset - (scroller.clientHeight - nodeRect.height) / 2
+    : scroller.scrollTop + offset - gap
+  const next = Math.max(0, Math.round(top))
+  if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top: next, behavior })
+  else scroller.scrollTop = next
+  return true
+}
+
 /* ---------- shareable URL state (deep links) ----------
    The panel lives inside a host SPA that owns the address bar, so it only ever claims a fragment of its own
    (`#<prefix>=<json>`; anything else belongs to the host). Reads and writes are best-effort: an opaque origin can

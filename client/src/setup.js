@@ -45,13 +45,17 @@ export function setupStateOf(data) {
   const config = data?.config ?? {}
   const octo = config.octo ?? {}
   const repos = Array.isArray(config.repos) ? config.repos : []
+  // `config.repos` is never empty: the host normalizes a live.json without repositories into one placeholder entry
+  // (`repos.js normalizeRepos`), so counting entries ticked "bind a repository" on a fresh install that has none. A
+  // real repository is one with a local path or a GitLab project; the placeholder has neither.
+  const boundRepo = repos.some(repo => String(repo?.repo ?? '').trim() !== '' || String(repo?.project ?? '').trim() !== '')
   const steps = SETUP_STEPS.map(step => ({
     key: step.key,
     group: step.group,
     focus: step.focus,
     done: step.key === 'token' ? octo.tokenConfigured === true
       : step.key === 'groups' ? Array.isArray(octo.watchChatIds) && octo.watchChatIds.length > 0
-        : step.key === 'repo' ? repos.length > 0
+        : step.key === 'repo' ? boundRepo
           : config.enabled === true,
   }))
   // The group step also carries the trigger-people rule: a watched group with no allowed sender (and "any human"

@@ -1,5 +1,76 @@
 # Changelog
 
+## [1.0.3] — 2026-11-15
+
+一轮 11 条用户点检（`verification/ui-review-team.md`）加 4 条自查缺陷的修复，分「修复」（行为确实不对）和「体验」
+（行为对、但用户读不懂或够不着）两组。
+
+### 修复
+
+- **待办箱里出现过没人能解掉的验收条目**：`ACCEPT_STATUSES` 曾把 `mr-open` / `ci-passed` 也算成「等待验收」，
+  这两张工单的前端验收按钮是禁用的（验收要等合并/部署），于是它变成一条 `blocking` 待办，`resolveInbox` 又因
+  `blocking` 拒绝关闭（409），只能等外部系统推进才消失。现在 `lib/live/engine.js` 只把 `deployed` 当验收待办，
+  合并后验收仍由 `acceptance='merged'` 分支覆盖。
+- **`allowPush=false` 的真跑结果没有待办**：跑完闸门、`run.status='gates-passed'`、工单停在 `ready`，但待办箱只认
+  `dry-run`，运营看不到「该发 MR 了」。现在 `deriveInboxItems` 的 publish 分支同时收 `dry-run` 与 `gates-passed`，
+  标题按哪种完成分别说「干跑完成」/「闸门已通过」（`lib/live/engine.js`）。
+- **空装时首屏谎报「绑定仓库已完成」**：`normalizeRepos` 恒合成一条占位仓库（`repo-1`，路径与项目都为空），
+  而配置卡按 `repos.length > 0` 打勾。现在 `client/src/setup.js` 的 `setupStateOf` 要求仓库有本地路径或远程项目
+  才算绑定（4 步里会正确显示 0/4）。
+- **干跑会被依赖安装卡死**：frontend 闸门前会先跑 `pnpm install --frozen-lockfile`，失败即 `bootstrap_failed` 致命退出，
+  于是任何没有 pnpm/lockfile 的仓库连第一次干跑都过不去。现在 `lib/live/executor.js` 的 `runGatePhase` 在干跑时把
+  安装失败降级成 `bootstrap:pnpm` 的 `warn` 步骤并继续跑闸门；真跑仍按致命处理（失败原因更接近「仓库没准备好」
+  而不是「改动有问题」）。
+- **启动失败的引擎会永远显示「运行中」**：`engine.start()` 抛错时 Host 只打 warning，`lastStatus` 停在 `starting`，
+  侧栏把 `starting` 归入「运行中」，所有 `engine/*` 接口却是 503。现在 `lib/live/engine.js` 新增 `setStartError()`，
+  `index.js` 在启动失败时调用，头部显示明确的错误态。
+- **被停止的 bootstrap 步骤永远停在「运行中」**：`pnpm install` 或闸门命令在停止请求到达后 `aborted` 早退，只把
+  运行记录收成 stopped，却没有给该步骤写终态，执行页于是同时显示「已停止」和一条转圈的步骤。现在
+  `lib/live/executor.js` 的三处早退（bootstrap、`runGatePhase`、`publishTicket` 的闸门）都补 `state:'stopped'`
+  + `aborted:true` 的终态步骤。
+
+### 体验
+
+- **章节锚点会把整个宿主外壳滚走**（`client/src/ticket-detail.js` 的回答/查看验收/运行记录跳转，`client/src/source.js`
+  的筛选定位）：原来用 `scrollIntoView`，浏览器会连带滚动宿主的外层框架。现在统一走 `client/src/util.js` 的
+  `panelScroller`/`scrollPanelTo`，只改面板自己的 `.sa-scroll`。
+- **带 `#sa=…` 刷新不回到面板**：`client/src/apply.js` 在注册主区后，如果本次加载带着面板的深链，就反复尝试用
+  宿主的 `ctx.layout.selectPanel(PANEL_ID)` 把面板激活（每 120ms 重新取一次 layout 服务，最多 17 次≈2s，成功或
+  用户自己切走就停）。`layout` **不再写进 `inject`**：旧宿主没有这个服务时插件仍然照常激活，只是深链打不开面板
+  （深链自动挂载依赖宿主的 `layout` 服务；没有它的宿主上，链接会像以前一样停在落地页，不报错）。
+- **`dry-run` / `starting` 被读成「运行中」**：`client/src/shell.js` 的 `globalHealth` 不再把干跑和启动中说成运行中，
+  引擎未启用时一律落到「已停止」，并新增 `shell.starting`（启动中）。干跑后头部与「自动化未启动」的矛盾随之消失。
+- **手工建单的两个下拉没有可见标签**：`client/src/live-ui.js` 的交付目标/执行后端各自补 `<label>` 与字段标题，
+  `aria-label` 不变。
+- **评估页「筛选后为空」说的是「还没有记录」**：`client/src/eval.js` 的 `evalEmptyState` 增加筛选态分支（「这个筛选条件下
+  没有记录／换个决定类型，或清除筛选」），与执行页口径一致；`decisionsView` 的 counts 改为按历史（不含 kind/view）算，
+  避免「分歧」视图下总数显示成 1。
+- **原始信号的长文本只能看 160 字**：`lib/live/engine.js` 的 `signalRow` 额外下发 `text`（>160 字时截到 1000），
+  `client/src/source.js` 的行标题带 `title` 全量，点击/回车就地展开全文（不弹窗、不跳页、折叠态行高不变）。
+  展开后标题变成「收起」、原来的预览段不再重复渲染，正文只出现一次。
+- **保存高危开关只差一次点击就写盘**：`client/src/settings.js` 对 `enabled`、`executor.enabled/autoRun/allowPush/
+  allowMerge` 的变化先展开人话差异清单（「启用引擎：开始自动轮询群消息…」），确认后才写；普通字段仍一步保存。
+  监听群的新增/移除本来就有独立确认，未改动。点「确认保存」的瞬间会按**当前草稿**重算一次风险差异：打开清单之后
+  又改过的高危开关不会被当成旧清单里的样子写盘——清单变了就先刷新清单、要求再确认一次；差异归零（改回原值）
+  则按普通保存处理。
+- **执行记录里的「恢复」看起来像按钮**：`client/src/live-ui.js` 的触发方式标签改「恢复触发」，两处渲染从
+  `Tag tone="outline"` 改为 `quiet` 并带「这次运行是怎么触发的」提示（`client/src/execution.js`、`client/src/ticket-detail.js`）。
+- **GitHub 仓库被写成「GitLab 地址」**：`client/src/source.js` 的 `sourceRepoRows` 按托管方选标签（GitHub 地址／
+  GitLab 地址／远程地址），token 缺失改「未配置（不影响本地只读）」，仓库卡在无 token 时状态改「本地可用」并说明
+  仍可本地只读；来源页「已启用 x/y」不再把未绑定的占位仓库算进去。
+- **筛选参数在页签之间串台**：`client/src/router.js` 新增每页的参数白名单 `PAGE_QUERY_KEYS` 与 `prunePageQuery`，
+  切页时只清掉不属于该页的参数，保留 `#sa` 深链与宿主自己的参数。
+- **后台枚举值直接透出**（`bot-sender`、`modelSkip`、`workflow blocked: …`）：`client/src/source.js` 补齐跳过码中文，
+  未知码显示「未识别原因（技术标识：…）」；`client/src/live-ui.js` 的失败映射新增分阶段流程阻塞（含独立审查要求修改），
+  未知英文错误首行给「其他原因：…」结论，原文收进可展开的技术详情。
+
+### 验证
+- `node --check index.js`、`node scripts/build-client.mjs`（23 modules / 492,485 bytes）、`node scripts/check-keys.mjs`
+  （967 / 513 / 1398）、`npm run types`、`npm run check:js`、`node --test lib/live/*.test.js`（557 pass / 0 fail）、
+  `node scripts/render-check.mjs`（217 checks / 0 failed / 0 skipped）。
+- 真机（dev 实例）复验深链：F5 保留 `#sa={"page":"eval"}` 后 252ms 自动挂载并落在评估页，冷开
+  `?token=…#sa=…` 同样挂载，console 0 error。
+
 ## [1.0.2] — 2026-11-14
 
 ### 文档
