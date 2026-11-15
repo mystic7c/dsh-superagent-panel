@@ -359,7 +359,10 @@ export function Menu({ label, items = [], iconName = 'more', align = 'end', text
     {triggerNode}
     {open ? <div ref={pop} role="menu" aria-label={label} className="sa-menu-pop" data-align={side} onKeyDown={onPopKeyDown}>
       {items.map(item => <button key={item.key} type="button" role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
-        aria-checked={item.checked === undefined ? undefined : Boolean(item.checked)} disabled={item.disabled}
+        aria-checked={item.checked === undefined ? undefined : Boolean(item.checked)}
+        // R2-13: `disabled` alone leaves screen readers without the disabled semantics some of them announce.
+        aria-disabled={item.disabled ? 'true' : undefined}
+        disabled={item.disabled}
         title={item.title} className="sa-menu-item" onClick={() => choose(item)}>
         {item.icon !== undefined ? <span className="sa-menu-item-icon">{controlIcon(item.icon, 14)}</span> : null}
         <span className="sa-menu-item-label">

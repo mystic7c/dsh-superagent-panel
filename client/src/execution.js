@@ -67,6 +67,7 @@ Object.assign(PAGE_TEXT, {
   'ex.recentTicket': ['查看工单', 'Open Ticket'],
   'ex.runs24hFailed': ['24 小时运行失败 {count} 次', '{count} failed runs in 24h'],
   'ex.runs24hLink': ['去看概览', 'View overview'],
+  'ex.runs24hNone': ['24 小时没有运行失败', 'No failed runs in 24h'],
   'ex.colStatus': ['状态', 'Status'],
   'ex.colTicket': ['工单', 'Ticket'],
   'ex.colEvidence': ['证据', 'Evidence'],
@@ -333,8 +334,11 @@ export function ExecutionQueuePage({ route }) {
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
             h(When, { at: recentRun.startedAt ?? recentRun.at }),
             h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
-            // P1-2 (optional): how the run was started — manual / automatic / retry / resume.
-            runTriggerLabel(t, recentRun) ? h(Tag, { tone: 'outline' }, runTriggerLabel(t, recentRun)) : null,
+            // P1-2 (optional): how the run was started — manual / automatic / retry / resume. U-09: this is a fact about
+            // the run, not a control, so it renders in the quiet tone (no pill border) under the trigger's own label.
+            runTriggerLabel(t, recentRun)
+              ? h(Tag, { tone: 'quiet', title: pt(t, 'runTrigger.hint') }, runTriggerLabel(t, recentRun))
+              : null,
             recentRun.error
               ? h(Fragment, null,
                 // The failure cause stays visible; the raw error is supplementary detail behind a real focusable InfoTip
@@ -349,9 +353,13 @@ export function ExecutionQueuePage({ route }) {
                 onClick: () => navigate({ page: 'execution', id: recentRun.ticketId }) },
               pt(t, 'ex.recentTicket'))
               : null) : null,
-          h('button', { type: 'button', className: 'sa-textlink',
-            onClick: () => navigate({ page: 'overview' }) },
-          pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed ?? 0) }) + ' →'))),
+          // R2-07: the number counts the last 24 hours, so its link must land on that same slice. With zero failures
+          // there is nothing to open, and a link would only send the operator to an unfiltered list of older failures.
+          Number(status.runs24hFailed ?? 0) > 0
+            ? h('button', { type: 'button', className: 'sa-textlink',
+              onClick: () => navigate({ page: 'overview' }) },
+            pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed) }) + ' →')
+            : h('span', { className: 'sa-hint' }, pt(t, 'ex.runs24hNone')))),
       status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },

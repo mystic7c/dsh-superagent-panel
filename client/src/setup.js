@@ -17,7 +17,7 @@ Object.assign(PAGE_TEXT, {
   'setup.done': ['完成', 'Done'],
   'setup.footer': ['完成后用顶部「检查新消息」做一次试运行；试运行不会写入状态。',
     'When the steps are done, use “Check for new messages” at the top for a dry run; it writes no state.'],
-  'setup.banner': ['配置未完成 · {done}/{total}', 'Setup incomplete · {done}/{total}'],
+  'setup.banner': ['还有 {remaining} 项待配置', '{remaining} setup steps left'],
   'setup.token.title': ['配置 Octo token', 'Connect Octo'],
   'setup.token.hint': ['让面板能读取群消息；保存在本机 token 文件，不会回显。',
     'Lets the panel read group messages; stored in a local token file and never echoed.'],
@@ -45,13 +45,17 @@ export function setupStateOf(data) {
   const config = data?.config ?? {}
   const octo = config.octo ?? {}
   const repos = Array.isArray(config.repos) ? config.repos : []
+  // `config.repos` is never empty: the host normalizes a live.json without repositories into one placeholder entry
+  // (`repos.js normalizeRepos`), so counting entries ticked "bind a repository" on a fresh install that has none. A
+  // real repository is one with a local path or a GitLab project; the placeholder has neither.
+  const boundRepo = repos.some(repo => String(repo?.repo ?? '').trim() !== '' || String(repo?.project ?? '').trim() !== '')
   const steps = SETUP_STEPS.map(step => ({
     key: step.key,
     group: step.group,
     focus: step.focus,
     done: step.key === 'token' ? octo.tokenConfigured === true
       : step.key === 'groups' ? Array.isArray(octo.watchChatIds) && octo.watchChatIds.length > 0
-        : step.key === 'repo' ? repos.length > 0
+        : step.key === 'repo' ? boundRepo
           : config.enabled === true,
   }))
   // The group step also carries the trigger-people rule: a watched group with no allowed sender (and "any human"
@@ -95,7 +99,7 @@ export function SetupBanner({ setup, onNavigate }) {
   if (!setup || setup.complete) return null
   return h('div', { className: 'sa-setup-banner' },
     h(StatusIcon, { state: 'idle', size: 14 }),
-    h('span', { className: 'sa-hint' }, pt(t, 'setup.banner', { done: setup.done, total: setup.total })),
+    h('span', { className: 'sa-hint' }, pt(t, 'setup.banner', { remaining: setup.total - setup.done })),
     h(Button, { variant: 'ghost', size: 'sm', onClick: () => onNavigate({ page: 'settings', group: setup.next.group, focus: setup.next.focus }) },
       pt(t, 'setup.continue')))
 }

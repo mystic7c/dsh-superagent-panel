@@ -10,7 +10,7 @@ import { Button, IconButton, Input, SegmentedControl, StatusText } from "./contr
 import { same, usePanel, usePanelData } from "./api.js"
 import { EmptyState, ErrorState, Hint, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
-import { remember } from "./router.js"
+import { initialPageQuery, remember, rememberPageState } from "./router.js"
 import { useLiveResource } from "./live-model.js"
 import { ThreadDetail } from "./thread-detail.js"
 import { React, h, useEffect, useRef, useState } from "./react.js"
@@ -26,12 +26,13 @@ Object.assign(PAGE_TEXT, {
   'trg.status.recent': ['24h 有新触发', 'New in 24h'],
   'trg.status.idle': ['无新触发', 'Quiet'],
   'trg.source.octo': ['Octo 群', 'Octo group'],
-  'trg.source.gitlab': ['GitLab', 'GitLab'],
+  'trg.source.gitlab': ['代码仓库', 'Code repo'],
   'trg.emptyTitle': ['还没有线程', 'No Thread yet'],
   'trg.emptyHint': ['去来源页配置一个来源并触发一条消息，线程会出现在这里。',
     'Set up a Source and send one message; Threads will appear here.'],
   'trg.emptyAction': ['去来源页', 'Open Source'],
-  'trg.noneInFilter': ['这个筛选下没有线程。', 'No Thread matches this filter.'],
+  'trg.noneInFilter': ['没有符合当前筛选的线程。', 'No Thread matches the current filter.'],
+  'trg.clearFilter': ['清除筛选', 'Clear filters'],
   'trg.search': ['搜索线程', 'Search Threads'],
   'trg.searchPlaceholder': ['标题、来源或会话 key…', 'Title, source or chat key…'],
   'trg.repo': ['按仓库筛选', 'Filter by repository'],
@@ -64,7 +65,7 @@ export function threadViewOf(row) {
   return THREAD_STATE[row?.state] ?? THREAD_STATE.idle
 }
 
-/** Source id → its short label (Octo / GitLab); an unknown id stays readable as-is instead of showing a bare key. */
+/** Source id → its short label (Octo group / code repository); an unknown id stays readable as-is, never a bare key. */
 export function threadSourceLabel(t, source) {
   const key = `trg.source.${source}`
   const text = pt(t, key)
@@ -261,16 +262,17 @@ export function restoreTriggerScroll() {
 // slice, not silently drop back to the default one.
 export const TRG_URL_KEYS = { filter: 'trgFilter', q: 'trgQ', repo: 'trgRepo', reason: 'trgReason', from: 'trgFrom',
   to: 'trgTo', offset: 'trgOffset' }
-export function trgUrlState() {
+const TRG_DEFAULTS = { filter: THREAD_FILTERS[0], q: '', repo: '', reason: '', from: '', to: '', offset: 0 }
+export function trgUrlState(search) {
   try {
-    const params = new URLSearchParams(window.location.search)
+    const params = search ?? new URLSearchParams(window.location.search)
     const offset = Number(params.get(TRG_URL_KEYS.offset) ?? 0)
     const filter = params.get(TRG_URL_KEYS.filter)
     return { filter: THREAD_FILTERS.includes(filter) ? filter : THREAD_FILTERS[0],
       q: params.get(TRG_URL_KEYS.q) || '', repo: params.get(TRG_URL_KEYS.repo) || '',
       reason: params.get(TRG_URL_KEYS.reason) || '', from: params.get(TRG_URL_KEYS.from) || '',
       to: params.get(TRG_URL_KEYS.to) || '', offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
-  } catch { return { filter: THREAD_FILTERS[0], q: '', repo: '', reason: '', from: '', to: '', offset: 0 } }
+  } catch { return { ...TRG_DEFAULTS } }
 }
 
 /** A date input is local midnight; the API compares ISO instants, so widen the end date to its last millisecond. */
@@ -283,7 +285,9 @@ export function trgDayBound(value, end = false) {
 export function LiveTriggerPage({ route }) {
   const { t, navigate } = usePanel()
   const compact = useCompactTriggerLayout()
-  const initial = useRef(trgUrlState())
+  // R2-01/R2-08/R2-15: the URL (shared or reloaded link, offset included) wins; otherwise the tab's remembered slice,
+  // with the load-time query string covering a host that consumed its own parameter before the panel mounted.
+  const initial = useRef(initialPageQuery('trigger', trgUrlState, TRG_DEFAULTS))
   const [filter, setFilter] = useState(initial.current.filter)
   const [query, setQuery] = useState(initial.current.q)
   const [q, setQ] = useState(initial.current.q)
@@ -296,7 +300,12 @@ export function LiveTriggerPage({ route }) {
     const timer = setTimeout(() => { setQ(query); setRepo(repo); setReason(reason) }, 300)
     return () => clearTimeout(timer)
   }, [query, repo, reason])
-  useEffect(() => { setOffset(0) }, [filter, q, repo, reason, from, to])
+  // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
+  const firstThreadFilterRun = useRef(true)
+  useEffect(() => {
+    if (firstThreadFilterRun.current) { firstThreadFilterRun.current = false; return }
+    setOffset(0)
+  }, [filter, q, repo, reason, from, to])
   // Keep the filter (chip selection) plus the free-text filter in our own URL params; the host route (including the
   // selected Thread) is untouched.
   useEffect(() => {
@@ -312,6 +321,8 @@ export function LiveTriggerPage({ route }) {
       else url.searchParams.delete(TRG_URL_KEYS.offset)
       window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
     } catch { /* private mode */ }
+    // R2-08: the URL only holds the current page's parameters (U-08), so the tab also remembers the slice.
+    rememberPageState('trigger', { filter, q, repo, reason, from, to, offset })
   }, [filter, q, repo, reason, from, to, offset])
   useEffect(() => {
     const restore = () => {
@@ -368,7 +379,10 @@ export function LiveTriggerPage({ route }) {
     if (key !== selected || (compact && !routeId)) navigate({ page: 'trigger', id: key })
   }
 
-  if (data !== undefined && (counts.all ?? 0) === 0) {
+  // R2-06: only a workspace with no Thread at all says "go configure a source"; an empty search/filter result must
+  // offer to clear the filter instead of sending the operator back to source setup.
+  const activeFilter = filter !== THREAD_FILTERS[0] || Boolean(q || repo || reason || from || to)
+  if (data !== undefined && (counts.all ?? 0) === 0 && !activeFilter) {
     return h(EmptyState, { icon: 'inbox', title: pt(t, 'trg.emptyTitle'), hint: pt(t, 'trg.emptyHint'),
       action: h(Button, { variant: 'primary', icon: h(Icon, { name: 'inbox', size: 14 }),
         onClick: () => navigate({ page: 'source' }) }, pt(t, 'trg.emptyAction')) })
@@ -407,7 +421,11 @@ export function LiveTriggerPage({ route }) {
             selected: compact ? row.key === routeId : row.key === selected,
             tabbable: row.key === tabbableKey,
             onOpen: () => openThread(row.key), octoConfig })))
-          : h(Hint, null, pt(t, 'trg.noneInFilter'))),
+          : h(EmptyState, { icon: 'filter', title: pt(t, 'trg.noneInFilter'),
+            action: h(Button, { variant: 'outline', size: 'sm', onClick: () => {
+              setFilter(THREAD_FILTERS[0]); setQuery(''); setQ(''); setRepo(''); setReason('')
+              setFrom(''); setTo(''); setOffset(0)
+            } }, pt(t, 'trg.clearFilter')) })),
       items.length
         ? h('div', { className: 'sa-pagination' },
           h(Button, { variant: 'ghost', size: 'sm', disabled: offset <= 0,

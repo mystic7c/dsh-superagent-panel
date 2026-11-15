@@ -159,6 +159,16 @@ engine.state.runs.unshift({ id: 'run_demo_failed', ticketId: 'tkt_demo_accept', 
   completedAt: failedAt, endedAt: failedAt, error: fixtureFailure, stopReason: 'gate-failed',
   steps: [{ name: 'gate:standards', state: 'failed', at: failedAt, exitCode: 1 }],
   worker: { text: '闸门 standards 未通过' } })
+// N2-03 fixture: a failed Ticket shows up as a non-blocking inbox item, which the Overview merges into 系统问题 —
+// a row that must carry the same cleanup entry as the desk.
+const demoFailedId = 'tkt_demo_failed'
+engine.state.tickets[demoFailedId] = {
+  id: demoFailedId, title: '演示：失败的工单', body: 'UC-DEMO-006：失败后等待人工处理。',
+  status: 'failed', repoId: primaryRepoId, createdAt: failedAt, updatedAt: failedAt,
+  assignments: [{ at: failedAt, report: { state: 'failed', reason: fixtureFailure } }],
+  origin: { threadKey: 'octo:demo', actor: 'demo' }, links: {},
+}
+engine.state.state.ticketOrder.push(demoFailedId)
 const demoDismissedId = 'tkt_demo_dismissed'
 engine.state.tickets[demoDismissedId] = {
   id: demoDismissedId, title: '演示：失败后被忽略的工单', body: 'UC-DEMO-004：失败后由人放弃，检查执行页的已忽略切片。',
@@ -262,6 +272,8 @@ const calls = []
 // Captured by the mock so AC-01 (manual override submit) and AC-03 (stop UI) can assert the actual request.
 let lastCreateRequest = null
 let lastStopId = null
+// U-06 (N3): the confirmation must send the draft it re-reads, so the check asserts the patch body itself.
+let lastSettingsBody = null
 // AC-07 deep-link probe: set just before the source-page remount so earlier checks still see the real (empty) log.
 let signalFixture
 window.fetch = global.fetch = async (input, init = {}) => {
@@ -294,6 +306,10 @@ window.fetch = global.fetch = async (input, init = {}) => {
     const item = fixtures.inbox.items.find(candidate => candidate.id === decodeURIComponent(readItem[1]))
     if (item) item.readAt = new Date().toISOString()
     return json({ item })
+  }
+  if (method === 'POST' && p === 'engine/settings') {
+    try { lastSettingsBody = init.body ? JSON.parse(String(init.body)) : null } catch { lastSettingsBody = null }
+    return json({})
   }
   const diffRoute = /^engine\/ticket\/([^/]+)\/diff$/.exec(p)
   if (method === 'GET' && diffRoute) {
@@ -406,7 +422,15 @@ window.fetch = global.fetch = async (input, init = {}) => {
 }
 
 // ---- load the real client modules ------------------------------------------------------------------------------
-const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANEL_CSS, settingsPatchOf } = loadClient({
+const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANEL_CSS, settingsPatchOf,
+  setupStateOf, globalHealth, evalEmptyState,
+  // U-05…U-11 (one source of truth for the wording): the risk-change diff, the page query whitelist, the signal body
+  // row component, the reason/failure vocabulary and the source/repo label projections.
+  riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
+  workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
+  hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState,
+  inject: pluginInject } = loadClient({
   App: 'shell.js',
   translate: 'i18n.js',
   DICTS: 'i18n.js',
@@ -415,6 +439,36 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   diffPlaceholderKey: 'ticket-detail.js',
   PANEL_CSS: 'style.js',
   settingsPatchOf: 'settings.js',
+  // Pure projections the checks below drive directly, without a second panel mount.
+  setupStateOf: 'setup.js',
+  globalHealth: 'shell.js',
+  evalEmptyState: 'eval.js',
+  riskChangesOf: 'settings.js',
+  prunePageQuery: 'router.js',
+  RawSignalRows: 'source.js',
+  Panel: 'api.js',
+  signalReasonText: 'source.js',
+  failureLabel: 'live-ui.js',
+  workflowBlockedDetail: 'live-ui.js',
+  runTriggerLabel: 'live-ui.js',
+  sourceRepoRows: 'source.js',
+  initialPageQuery: 'router.js',
+  rememberPageState: 'router.js',
+  hostOfUrl: 'util.js',
+  hostName: 'util.js',
+  reasonLabel: 'i18n.js',
+  publishableStatusOf: 'live-ui.js',
+  ticketDismissable: 'ticket-detail.js',
+  HistoryChanges: 'settings.js',
+  AutomationBar: 'live-ui.js',
+  failureReasonTextOf: 'overview.js',
+  LiveSettingsPage: 'settings.js',
+  PanelState: 'api.js',
+  clampEvalOffset: 'eval.js',
+  Menu: 'controls.js',
+  openLinkedPanel: 'apply.js',
+  openLinkedPanelWhenReady: 'apply.js',
+  inject: 'apply.js',
 }, { react: React })
 
 const t = (key, values) => {
@@ -514,6 +568,12 @@ check('overview shows the desk', text().includes('需要你处理'), text().slic
   check('overview lists the injected failure under the worth-a-look block',
     watchRows >= 1 && /过去 24 小时 \d+ 次执行失败/.test(watchSection?.textContent ?? ''),
     `rows=${watchRows} · ${watchSection?.textContent?.slice(0, 200) ?? 'no section'}`)
+  // N2-03: a failure-class inbox item is non-blocking, so it renders in 系统问题; that row needs the cleanup entry too.
+  const problemRow = [...rootElement.querySelectorAll('.sa-row')]
+    .find(node => /演示：失败的工单/.test(node.textContent ?? ''))
+  check('a failed Ticket in 系统问题 offers 忽略并清理 (N2-03)',
+    Boolean(problemRow) && /忽略并清理/.test(problemRow.textContent ?? ''),
+    problemRow ? problemRow.textContent.slice(0, 160) : 'no failed row')
   check('overview names the needs-you vs worth-a-look split when both are on screen',
     watchRows >= 1 && deskWithWork.includes('需要你处理 = ') && deskWithWork.includes('无需你动作'),
     deskWithWork.slice(0, 700))
@@ -584,10 +644,12 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('the worker summary names the run it came from', /执行总结（来自运行/.test(detailText), detailText.slice(0, 200))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
-  check('detail nav keeps all seven jumps (automation included, activities folded into the timeline) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
+  check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
-check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 7,
+check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
+check('jump nav names the request block (R2-09)', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '需求'),
+  [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
 check('jump nav names the automation block', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '自动化'),
   [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
 // The automation block is a folded setting, and saving only appears once the form differs from the stored config.
@@ -605,6 +667,23 @@ check('any activity fold lives inside the timeline',
   && [...rootElement.querySelectorAll('details > summary')].filter(node => /宿主活动记录|Host activity/.test(node.textContent ?? ''))
     .every(node => node.closest('#sa-ticket-timeline')),
   timelineSection?.textContent?.slice(0, 120) ?? 'no timeline')
+{
+  // U-01: `scrollIntoView` scrolls every scrollable ancestor, including the host frame the panel is mounted in, so a
+  // section jump used to drag the whole DSH shell. Stand in a host frame that follows the browser API and fail if the
+  // panel reaches for it at all: the jump must move only the panel's own `.sa-scroll`.
+  const hostFrame = { scrollTop: 0 }
+  let scrollCalls = 0
+  const originalScrollIntoView = window.Element.prototype.scrollIntoView
+  window.Element.prototype.scrollIntoView = function () { scrollCalls += 1; hostFrame.scrollTop += 184.5 }
+  const jumpButtons = [...rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump')]
+  const acceptanceJump = jumpButtons.find(node => (node.textContent ?? '').trim() === '验收')
+  acceptanceJump?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(300)
+  check('a section jump scrolls the panel scroller, never a host ancestor (U-01)',
+    Boolean(acceptanceJump) && scrollCalls === 0 && hostFrame.scrollTop === 0,
+    `jump=${Boolean(acceptanceJump)} calls=${scrollCalls} hostScrollTop=${hostFrame.scrollTop}`)
+  window.Element.prototype.scrollIntoView = originalScrollIntoView
+}
 check('empty gate results no longer own a section', !sectionTitles.includes('闸门结果') || Boolean(detailText.match(/失败策略|通过/)),
   JSON.stringify(sectionTitles))
 // The gate section must render the gates the run actually recorded. A fixed standards/backend/frontend list printed
@@ -631,12 +710,21 @@ check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
 {
+  // R2-09: the request is promoted to its own expanded section above the changes, instead of a disclosure folded
+  // into the right-hand column of "what changed".
+  const request = rootElement.querySelector('#sa-ticket-request')
   const changes = rootElement.querySelector('#sa-ticket-changes')
-  const changeText = changes?.textContent ?? ''
-  const fold = changes?.querySelector('details')
-  check('changes lists files before the folded request', Boolean(fold)
-    && changeText.indexOf('改动文件') >= 0 && changeText.indexOf('改动文件') < changeText.indexOf('需求'),
-    changeText.slice(0, 300))
+  const requestFirst = Boolean(request && changes
+    && (request.compareDocumentPosition(changes) & window.Node.DOCUMENT_POSITION_FOLLOWING))
+  check('the request is its own expanded section above the changes (R2-09)',
+    Boolean(request) && Boolean(request.querySelector('.sa-md')) && !request.querySelector('details') && requestFirst,
+    request?.textContent?.slice(0, 120) ?? 'no request section')
+  const foldedRequest = changes
+    ? [...changes.querySelectorAll('details summary')].some(node => (node.textContent ?? '').trim() === '需求')
+    : false
+  check('changes no longer folds the request away (R2-09)',
+    Boolean(changes) && !foldedRequest && (changes.textContent ?? '').indexOf('改动文件') >= 0,
+    changes?.textContent?.slice(0, 200) ?? 'no changes section')
 }
 check('sign-off note and the action cluster ride on the title row',
   Boolean(rootElement.querySelector('.sa-page-head-actions .sa-page-head-note'))
@@ -776,7 +864,7 @@ await sleep(1000)
 const sourceText = text()
 if (sourcePageReady) {
   check('source page shows both repositories', repoLabels.every(label => sourceText.includes(label)), sourceText.slice(0, 260))
-  check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('GitLab 仓库'), sourceText.slice(0, 260))
+  check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('代码仓库'), sourceText.slice(0, 260))
   check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
     String(rootElement.querySelectorAll('.sa-cards-2').length))
 } else {
@@ -847,12 +935,79 @@ check('write group is its own H2 group', writeTitles.length === 1 && writeTitles
 check('write group holds the three executor write permissions',
   writeText.includes('允许推送分支') && writeText.includes('允许回群消息') && writeText.includes('允许合并 MR'), writeText.slice(0, 400))
 check('the merge permission is marked as high risk', writeText.includes('高危'), writeText.slice(0, 400))
+
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
   navLabels.slice(0, 6).join('/') === '来源/评估确认/运行/Worker/写权限/仓库'
     && navLabels.slice(6).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
+
+// U-06: turning on a permission is not a one-step save. The save bar expands a plain-language change list first and
+// the write happens only from that confirmation — a merge cannot be undone by turning the switch back off.
+const settingsWrites = () => calls.filter(call => call === 'POST /superagent/api/engine/settings').length
+const pushSwitch = rootElement.querySelector('.sa-main .sa-switch-row input[aria-label="允许推送分支"]')
+const writesBefore = settingsWrites()
+if (pushSwitch && !pushSwitch.disabled) {
+  pushSwitch.click()
+  await sleep(150)
+  clickByText('保存', '.sa-savebar button')
+  await sleep(200)
+  const riskNode = rootElement.querySelector('.sa-risk')
+  const riskText = riskNode ? riskNode.textContent : ''
+  check('a high-risk save asks for a confirmation and writes nothing yet (U-06)',
+    Boolean(riskNode) && riskText.includes('这次保存会改变高风险设置') && riskText.includes('确认后才会写入') && (riskText.includes('允许推送分支：执行器可以推分支到远端并建 MR')
+        || riskText.includes('不再允许推送分支：执行器只到闸门为止'))
+      && settingsWrites() === writesBefore, riskText.slice(0, 300))
+  // N3: the confirmation must read the draft again at the moment of the click. Flip a second high-risk switch while
+  // the list is open: the click must not write anything, and the list has to refresh to the new change set before a
+  // second confirmation is accepted.
+  const mergeSwitch = rootElement.querySelector('.sa-main .sa-switch-row input[aria-label="允许合并 MR"]')
+  if (mergeSwitch && !mergeSwitch.disabled) {
+    mergeSwitch.click()
+    await sleep(150)
+    clickByText('确认保存', '.sa-risk button')
+    await sleep(250)
+    const refreshedText = rootElement.querySelector('.sa-risk')?.textContent ?? ''
+    check('confirming a stale change list re-reads the draft and asks again (U-06)',
+      Boolean(rootElement.querySelector('.sa-risk')) && settingsWrites() === writesBefore
+        && refreshedText.includes('推送分支') && refreshedText.includes('合并 MR'),
+      JSON.stringify({ writes: settingsWrites() - writesBefore, text: refreshedText.slice(0, 240) }))
+  } else {
+    skip('confirming a stale change list re-reads the draft and asks again (U-06)',
+      'no second writable high-risk switch on this machine')
+  }
+  clickByText('取消', '.sa-risk button')
+  await sleep(150)
+  check('cancelling the confirmation keeps the draft and writes nothing (U-06)',
+    !rootElement.querySelector('.sa-risk') && settingsWrites() === writesBefore
+      && Boolean(rootElement.querySelector('.sa-savebar')), String(settingsWrites() - writesBefore))
+  // N3 (the other half): a field changed after the list was drawn is part of the write. The old one-step patch would
+  // have dropped it.
+  clickByText('保存', '.sa-savebar button')
+  await sleep(250)
+  const writesBeforeConfirm = settingsWrites()
+  const replySwitch = rootElement.querySelector('.sa-main .sa-switch-row input[aria-label="允许回群消息"]')
+  const replyWasOn = Boolean(replySwitch?.checked)
+  if (replySwitch) {
+    replySwitch.click()
+    await sleep(150)
+    clickByText('确认保存', '.sa-risk button')
+    await sleep(300)
+  }
+  const confirmedBody = lastSettingsBody ?? {}
+  check('the confirmation writes the draft it re-reads, including edits made after the list opened (U-06)',
+    Boolean(replySwitch) && settingsWrites() === writesBeforeConfirm + 1
+      && confirmedBody['executor.allowReply'] === !replyWasOn, JSON.stringify(confirmedBody).slice(0, 300))
+  clickByText('放弃', '.sa-savebar button')
+  await sleep(400)
+} else {
+  skip('a high-risk save asks for a confirmation and writes nothing yet (U-06)', 'no writable push switch on this machine')
+  skip('confirming a stale change list re-reads the draft and asks again (U-06)', 'no writable push switch on this machine')
+  skip('cancelling the confirmation keeps the draft and writes nothing (U-06)', 'no writable push switch on this machine')
+  skip('the confirmation writes the draft it re-reads, including edits made after the list opened (U-06)', 'no writable push switch on this machine')
+}
+
 clickByText('评估确认', '.sa-settings-nav button')
 await sleep(800)
 const reviewSettingsText = text()
@@ -1065,6 +1220,18 @@ const deliverableSelect = routeSelects.find(select => [...select.options].some(o
 const backendSelect = routeSelects.find(select => [...select.options].some(option => option.value === 'codex'))
 check('manual Ticket form separates deliverable and backend', Boolean(deliverableSelect) && Boolean(backendSelect),
   routeSelects.map(select => [...select.options].map(option => option.value).join(',')).join(' | '))
+{
+  // U-04: a `select` with only an `aria-label` looks like an unlabelled box on screen. Both controls need a visible
+  // label, and the accessible name has to stay the same (screen readers and the checks above rely on it).
+  const fieldLabels = [...(manualModal?.querySelectorAll('.sa-route-field .sa-field-head') ?? [])]
+    .map(node => (node.textContent ?? '').trim())
+  check('manual Ticket form labels both selects visibly (U-04)',
+    fieldLabels.includes('交付目标') && fieldLabels.includes('执行后端')
+    && deliverableSelect?.getAttribute('aria-label') === '交付目标'
+    && backendSelect?.getAttribute('aria-label') === '执行后端',
+    JSON.stringify({ fields: fieldLabels, deliverable: deliverableSelect?.getAttribute('aria-label'),
+      backend: backendSelect?.getAttribute('aria-label') }))
+}
 if (manualModal && deliverableSelect && backendSelect) {
   const titleInput = manualModal.querySelector('input')
   // The dialog is a React portal, so a DOM-dispatched input event does not reach the root's delegated listener.
@@ -1362,6 +1529,414 @@ check('back/forward restores the eval view in place', overrideChip?.getAttribute
 evalDeepRoot.unmount()
 window.history.replaceState(null, '', '/')
 window.sessionStorage.removeItem('superagent-panel/eval-scroll')
+
+// ---- pure projections: states the fixtures cannot reach -----------------------------------------------------------
+console.log('STEP pure projections')
+{
+  // B1: `normalizeRepos` always hands the client one repository, so counting entries claimed "bind a repository" was
+  // done on a fresh install. Only a repository with a local path or a remote project counts.
+  const placeholder = setupStateOf({ config: { repos: [{ id: 'repo-1', repo: '', project: '' }],
+    octo: { tokenConfigured: true, watchChatIds: ['chat-1'], allowAnyHuman: true }, enabled: false } })
+  const bound = setupStateOf({ config: { repos: [{ id: 'repo-1', repo: '/src/app', project: 'group/app' }],
+    octo: { tokenConfigured: true, watchChatIds: ['chat-1'], allowAnyHuman: true }, enabled: false } })
+  check('the setup card does not tick “bind a repository” for the placeholder repo (B1)',
+    placeholder.steps.find(step => step.key === 'repo')?.done === false && placeholder.done === 2
+    && bound.steps.find(step => step.key === 'repo')?.done === true,
+    JSON.stringify({ placeholder: placeholder.done, bound: bound.done }))
+
+  // U-03/B8: a stopped or booting engine must never read 运行中; a start failure keeps its error state.
+  const health = phase => globalHealth({ engine: { phase }, config: { enabled: phase !== 'dry-run' } })
+  check('header health never calls a stopped engine 运行中 (U-03)',
+    globalHealth({ engine: { phase: 'dry-run' }, config: { enabled: false } }).labelKey === 'shell.stopped'
+    && globalHealth({ engine: { phase: 'idle' }, config: { enabled: false } }).labelKey === 'shell.stopped',
+    JSON.stringify({ dry: globalHealth({ engine: { phase: 'dry-run' }, config: { enabled: false } }),
+      idle: globalHealth({ engine: { phase: 'idle' }, config: { enabled: false } }) }))
+  check('header health calls a booting engine 启动中, not 运行中 (B8)',
+    health('starting').labelKey === 'shell.starting'
+    && globalHealth({ engine: { phase: 'error', error: 'engine start failed: boom' },
+      config: { enabled: true } }).labelKey === 'shell.error'
+    && health('idle').labelKey === 'shell.running',
+    JSON.stringify({ starting: health('starting'), error: globalHealth({ engine: { phase: 'error' },
+      config: { enabled: true } }), idle: health('idle') }))
+
+  // U-07: a filter that matched nothing says so; it never claims there is no evaluation history.
+  const filtered = evalEmptyState(t, () => {}, { all: 5, accept: 5 }, 'accept', 'all', () => {}, () => {}, () => {},
+    true)
+  const unfiltered = evalEmptyState(t, () => {}, { all: 0, accept: 0 }, 'all', 'all', () => {}, () => {}, () => {})
+  check('an empty eval filter names the filter, not an empty history (U-07)',
+    filtered?.props?.title === '这个筛选条件下没有记录。'
+    && unfiltered?.props?.title !== '这个筛选条件下没有记录。',
+    JSON.stringify({ filtered: filtered?.props?.title, unfiltered: unfiltered?.props?.title }))
+
+  // U-02: a `#sa=…` page load opens the panel through the host's layout service. That service is optional on purpose:
+  // injecting it would keep the whole plugin (sidebar icon included) from activating on a host that lacks it, so the
+  // service is re-read on every retry tick instead. `selectPanel` also throws until our `main` key is registered, so
+  // the open is retried while the link is still unclaimed.
+  const openedPanels = []
+  const layoutHost = { get: name => (name === 'layout' ? { selectPanel: id => openedPanels.push(id) } : undefined) }
+  const openedDirect = openLinkedPanel(layoutHost, { route: { page: 'source' } })
+  const openedWithoutHost = openLinkedPanel({}, { route: { page: 'source' } })
+  const openedWithoutRoute = openLinkedPanel(layoutHost, {})
+  // Product semantics, not a detail: the panel opens itself only for a page load that carried one of our `#sa=…`
+  // links. With no link in the URL the module-level `LINKED_ROUTE` is null, so the retry loop must not even start —
+  // otherwise a plain load would steal focus from whatever the person was reading.
+  const idleRuns = openLinkedPanelWhenReady(layoutHost)
+  check('a shared panel link opens the panel, and a host without a layout service keeps the plugin active (U-02)',
+    pluginInject.join() === 'slots,locale' && openedDirect === true && openedWithoutHost === false
+    && openedWithoutRoute === false && idleRuns === undefined && openedPanels.length === 1
+    && openedPanels[0] === 'superagent',
+    JSON.stringify({ inject: pluginInject, openedPanels, openedDirect, openedWithoutHost, openedWithoutRoute,
+      idleRuns: idleRuns === undefined ? 'no attempt' : 'started' }))
+
+  // The retry loop: the key is not registered yet, so the first attempts throw; it must stop as soon as the panel
+  // claims the link (or the link stops being pending), and it must never keep a timer alive afterwards.
+  const retryCalls = []
+  let retryThrows = 2
+  const retryLayout = { selectPanel: id => { retryCalls.push(id); if (retryThrows-- > 0) throw new Error('main key not registered') } }
+  const stopRetry = openLinkedPanelWhenReady({ get: () => retryLayout },
+    { isPending: () => true, route: { page: 'eval' }, intervalMs: 10, limit: 8 })
+  await sleep(120)
+  stopRetry?.()
+  const retried = retryCalls.length
+  await sleep(60)
+  const afterDispose = retryCalls.length
+
+  const stopCalls = []
+  let pendingStop = true
+  const neverLayout = { selectPanel: () => { stopCalls.push(1); throw new Error('main key not registered') } }
+  const releaseStop = openLinkedPanelWhenReady({ get: () => neverLayout },
+    { isPending: () => pendingStop, route: { page: 'eval' }, intervalMs: 10, limit: 20 })
+  await sleep(15)
+  pendingStop = false
+  await sleep(80)
+  const stoppedAt = stopCalls.length
+  await sleep(50)
+  const stoppedAfter = stopCalls.length
+  releaseStop?.()
+
+  check('opening a shared panel retries while the key is unregistered and stops once the link is claimed (U-02)',
+    retried === 3 && afterDispose === retried && stoppedAt < 20 && stoppedAfter === stoppedAt,
+    JSON.stringify({ retried, afterDispose, stoppedAt, stoppedAfter }))
+
+  // Soft dependency: a host that provides `layout` only after the first tick (a slow boot) must still open the linked
+  // panel — reading the service once at apply time would miss it forever.
+  const latePanels = []
+  const lateCalls = []
+  const lateCtx = { get: name => {
+    if (name !== 'layout') return undefined
+    lateCalls.push(1)
+    return lateCalls.length === 1 ? undefined : { selectPanel: id => latePanels.push(id) }
+  } }
+  const stopLate = openLinkedPanelWhenReady(lateCtx,
+    { isPending: () => true, route: { page: 'eval' }, intervalMs: 10, limit: 8 })
+  await sleep(80)
+  stopLate?.()
+  check('a layout service that appears late still opens the shared panel (U-02)',
+    latePanels.length === 1 && latePanels[0] === 'superagent' && lateCalls.length >= 2,
+    JSON.stringify({ lateCalls: lateCalls.length, latePanels }))
+
+  // U-11: host enums reach the panel as identifiers. Every skip code and every known failure gets Chinese wording, and
+  // an unrecognised English message leads with a Chinese conclusion instead of dumping its raw text in the row.
+  const reasonSamples = {
+    botSender: signalReasonText(t, { skipReason: 'bot-sender' }),
+    modelSkip: signalReasonText(t, { skipReason: 'modelSkip' }),
+    unknown: signalReasonText(t, { skipReason: 'no-such-code' })
+  }
+  check('raw signal rows phrase host skip codes in Chinese (U-11)',
+    reasonSamples.botSender === '发送者是机器人' && reasonSamples.modelSkip === '模型判断这不是本仓库的任务'
+      && reasonSamples.unknown === '未识别原因（技术标识：no-such-code）',
+    JSON.stringify(reasonSamples))
+  const blockedFailure = failureLabel(t, 'ticket tkt_1 workflow blocked: review still requested changes after 2 rounds')
+  const unknownFailure = failureLabel(t, 'TypeError: something exploded deep inside')
+  check('a workflow block and an unknown error lead with a Chinese conclusion (U-11)',
+    blockedFailure.includes('分阶段流程被阻塞') && blockedFailure.includes('独立审查仍要求修改')
+      && unknownFailure.startsWith('其他原因')
+      && workflowBlockedDetail(t, 'review still requested changes') === '独立审查仍要求修改（返工轮次已用完）',
+    JSON.stringify({ blockedFailure, unknownFailure }))
+
+  // U-09: the run trigger is a state, not a button, and every value the host emits has a Chinese label.
+  const triggerLabels = ['manual', 'auto', 'retry', 'resume'].map(trigger => runTriggerLabel(t, { trigger }))
+  check('every run trigger maps to a Chinese label, and resume reads as a state (U-09)',
+    triggerLabels.join('/') === '手动/自动/重试/恢复触发', JSON.stringify(triggerLabels))
+
+  // U-10: the remote address is named after the host (a GitHub repository is not a "GitLab 地址"), and a repository
+  // without a token says what still works instead of implying it is broken.
+  const githubRows = sourceRepoRows(t,
+    { config: { baseUrl: 'https://github.com/org/app', project: 'org/app', tokenConfigured: false } },
+    { repo: '/src/app' })
+  const gitlabRows = sourceRepoRows(t,
+    { config: { baseUrl: 'https://gitlab.example.com', project: 'grp/app', tokenConfigured: true } },
+    { repo: '/src/app' })
+  const rowLabelOf = (rows, label) => rows.some(row => row[0] === label)
+  check('the remote address is named after its host and a token-less repository says what still works (U-10)',
+    rowLabelOf(githubRows, 'GitHub 地址') && rowLabelOf(gitlabRows, 'GitLab 地址')
+      && githubRows.some(row => row[1] === '令牌未配置（不影响本地只读）')
+      && !rowLabelOf(githubRows, 'GitLab 地址')
+      // R2-05: the project row follows the same host, so one card never pairs "GitLab 项目" with "GitHub 地址".
+      && rowLabelOf(githubRows, 'GitHub 项目') && rowLabelOf(gitlabRows, 'GitLab 项目'),
+    JSON.stringify({ github: githubRows.map(row => row[0]), gitlab: gitlabRows.map(row => row[0]) }))
+
+  // R2-05: one helper decides the host name every card reads, so no surface can disagree with the URL beside it.
+  check('repository wording follows the hosting provider (R2-05)',
+    hostOfUrl('https://github.com/org/app') === 'github' && hostName('github') === 'GitHub'
+      && hostOfUrl('https://gitlab.example.com/grp/app') === 'gitlab' && hostName('gitlab') === 'GitLab',
+    JSON.stringify({ github: hostName(hostOfUrl('https://github.com/a')),
+      gitlab: hostName(hostOfUrl('https://gitlab.b')) }))
+
+  // R2-01/R2-08/R2-15: a shared link wins on a cold open, and a tab whose URL was pruned on the way out restores the
+  // slice it remembers instead of snapping back to page one.
+  const restoreHref = window.location.href
+  const readSourceQuery = params => ({ offset: Number(params.get('srcOffset') ?? 0) || 0,
+    q: params.get('srcQ') ?? '' })
+  try {
+    window.history.replaceState(null, '', '/?srcOffset=40&srcQ=needle#sa=%7B%22page%22%3A%22source%22%7D')
+    const fromUrl = initialPageQuery('source', readSourceQuery, { offset: 0, q: '' })
+    rememberPageState('source', { offset: 20, q: 'remembered' })
+    window.history.replaceState(null, '', '/#sa=%7B%22page%22%3A%22source%22%7D')
+    const fromStore = initialPageQuery('source', readSourceQuery, { offset: 0, q: '' })
+    check('a shared link keeps its filter, and a pruned tab restores the slice it remembered (R2-01/R2-08/R2-15)',
+      fromUrl.offset === 40 && fromUrl.q === 'needle'
+        && fromStore.offset === 20 && fromStore.q === 'remembered',
+      JSON.stringify({ fromUrl, fromStore }))
+  } finally {
+    window.history.replaceState(null, '', restoreHref)
+    try { window.sessionStorage.removeItem('superagent-panel/page-state') } catch { /* ignore */ }
+  }
+
+  // R2-02: the eval page renders the same reason codes the source page does; every model verdict has words of its own.
+  const modelReasons = ['modelSkip', 'modelRisk', 'modelUncertain', 'highRisk'].map(code => reasonLabel(t, { code }))
+  check('model verdicts and filter reasons read as Chinese on every page (R2-02)',
+    modelReasons[0] === '模型判断这不是本仓库的任务' && modelReasons[1] === '模型判断属于高风险'
+      && modelReasons[2] === '模型不确定，留给人工' && modelReasons[3].startsWith('命中高风险主题'),
+    JSON.stringify(modelReasons))
+
+  // R2-03: four numbers need four labelled buckets; the old label named three.
+  check('the judge counter labels all four numbers (R2-03)',
+    t('st.judgeCalls') === '模型调用（总计 / 成功 / 失败 / 跳过）', t('st.judgeCalls'))
+
+  // R2-06: "no thread matched this filter" is not "no source configured", and it offers a way out of the filter.
+  check('an empty thread filter names the filter and offers to clear it (R2-06)',
+    t('trg.noneInFilter').includes('没有符合当前筛选') && t('trg.clearFilter') === '清除筛选',
+    JSON.stringify({ none: t('trg.noneInFilter'), clear: t('trg.clearFilter') }))
+
+  // R2-07: a zero-failure window is a statement, not a link into an unfiltered list of older failures.
+  check('the 24h failure counter has a non-clickable zero state (R2-07)',
+    t('ex.runs24hNone') === '24 小时没有运行失败', t('ex.runs24hNone'))
+
+  // R2-11: the banner says how much is left instead of presenting a frozen 3/4 fraction.
+  check('the setup banner says how many steps are left (R2-11)',
+    t('setup.banner', { remaining: 1 }) === '还有 1 项待配置', t('setup.banner', { remaining: 1 }))
+  // R2-11's real surface is AutomationBar (the banner is hidden while automation is on): assert the rendered line,
+  // not only the dictionary, so a fix aimed at the wrong component fails here.
+  const barHost = document.createElement('div')
+  document.body.appendChild(barHost)
+  const barRoot = ReactDOM.createRoot(barHost)
+  const renderBar = progress => barRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(AutomationBar, { paused: false, engineEnabled: false, executorEnabled: false,
+      onStart() {}, onCheck() {}, progress })))
+  renderBar({ done: 3, total: 4 })
+  await sleep(80)
+  const barText = barHost.textContent ?? ''
+  check('AutomationBar prints the setup progress as a countdown, not a fraction (R2-11)',
+    /还有 1 项待配置/.test(barText) && !/3\/4|配置 3/.test(barText), barText.slice(0, 160))
+  renderBar({ done: 4, total: 4 })
+  await sleep(80)
+  check('AutomationBar drops the setup line once every step is done (R2-11)',
+    !/项待配置/.test(barHost.textContent ?? ''), (barHost.textContent ?? '').slice(0, 160))
+  barRoot.unmount()
+  barHost.remove()
+
+  // R2-12: credentials are 令牌/未配置, chats are 群 ID — one vocabulary across settings, sources and tickets.
+  check('credentials and chats use one vocabulary (R2-12)',
+    t('st.octoToken') === 'Octo 令牌' && t('st.tokenMissing') === '令牌未配置'
+      && !String(t('st.bindingsHint') ?? '').includes('chatId')
+      && !String(t('st.chatIdPlaceholder') ?? '').includes('chatId'),
+    JSON.stringify({ octo: t('st.octoToken'), missing: t('st.tokenMissing'),
+      hint: t('st.bindingsHint'), placeholder: t('st.chatIdPlaceholder') }))
+
+  // R2-10: a queued Ticket has not run yet, so the publish entry is withheld until the server would accept it.
+  check('the publish entry waits for a publishable Ticket status (R2-10)',
+    publishableStatusOf({ status: 'ready' }) && publishableStatusOf({ status: 'failed' })
+      && publishableStatusOf({ status: 'pushed' }) && !publishableStatusOf({ status: 'queued' })
+      && !publishableStatusOf({ status: 'ci-pending' }) && !publishableStatusOf({}),
+    JSON.stringify(['ready', 'failed', 'pushed', 'queued', 'ci-pending', undefined]
+      .map(status => [status ?? 'none', publishableStatusOf({ status })])))
+
+  // R2-14: an offset past the end is a page problem, not an empty filter; the helper keeps the last real page.
+  check('an out-of-range eval offset clamps to the last page (R2-14)',
+    clampEvalOffset(1000, 30) === 25 && clampEvalOffset(30, 30) === 25 && clampEvalOffset(50, 30) === 25
+      && clampEvalOffset(25, 30) === undefined && clampEvalOffset(0, 30) === undefined
+      && clampEvalOffset(0, 0) === undefined,
+    JSON.stringify({ far: clampEvalOffset(1000, 30), edge: clampEvalOffset(30, 30),
+      valid: clampEvalOffset(25, 30), empty: clampEvalOffset(0, 0) }))
+
+  // D2-09: the dismissal entry is no longer limited to `failed` — a dry run, a real run with push disabled, a queued
+  // stub and a question nobody will answer all reach the same cleanup path.
+  check('dismissal covers finished-but-undelivered Tickets, not only failures (D2-09)',
+    ['failed', 'ci-failed', 'deploy-failed', 'queued', 'ready', 'awaiting-answer'].every(status => ticketDismissable({ status }))
+      && ['deployed', 'merged', 'dismissed', 'closed', 'ci-pending'].every(status => !ticketDismissable({ status })),
+    JSON.stringify([...['failed', 'ready', 'awaiting-answer', 'deployed', 'ci-pending']].map(status => [status, ticketDismissable({ status })])))
+
+  // R2-04: a history row explains what changed. Old and new values, booleans spelled out, long values folded behind
+  // an explicit "show full value" control instead of being dumped into the row.
+  const historyHost = document.createElement('div')
+  document.body.appendChild(historyHost)
+  const historyRoot = ReactDOM.createRoot(historyHost)
+  const historyEntry = { id: 'hist_1', at: new Date().toISOString(), label: 'settings: executor',
+    changes: [{ key: 'executor.timeoutMs', before: '600000', after: '900000' },
+      { key: 'executor.autoRun', before: 'false', after: 'true' }], changesTruncated: false }
+  const renderHistory = open => historyRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(HistoryChanges, { t, entry: historyEntry, open, onToggle() {} })))
+  renderHistory(false)
+  await sleep(80)
+  const historyClosed = historyHost.textContent ?? ''
+  renderHistory(true)
+  await sleep(80)
+  const historyOpen = historyHost.textContent ?? ''
+  check('history rows offer the changed fields as a toggle (R2-04)',
+    /查看改动（2）/.test(historyClosed) && !/900000/.test(historyClosed), historyClosed.slice(0, 120))
+  check('history rows spell out the old and new value, booleans included (R2-04)',
+    /600000/.test(historyOpen) && /900000/.test(historyOpen) && /开/.test(historyOpen) && /关/.test(historyOpen)
+      && historyOpen.indexOf('600000') < historyOpen.indexOf('900000'),
+    historyOpen.slice(0, 200))
+  const longEntry = { id: 'hist_2', at: new Date().toISOString(), label: 'settings: executor.workerCommand',
+    changes: [{ key: 'executor.workerCommand', before: '', after: `node ${'x'.repeat(160)}` }], changesTruncated: false }
+  historyRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(HistoryChanges, { t, entry: longEntry, open: true, onToggle() {} })))
+  await sleep(80)
+  const longButton = [...historyHost.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '展开全文')
+  check('a long history value is truncated with a way to expand it (R2-04)',
+    Boolean(longButton) && !/x{100}/.test(historyHost.textContent ?? ''), historyHost.textContent?.slice(0, 120) ?? 'no row')
+  longButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(120)
+  check('expanding a long history value shows it whole (R2-04)',
+    /x{100}/.test(historyHost.textContent ?? ''), String((historyHost.textContent ?? '').length))
+  historyRoot.unmount()
+  historyHost.remove()
+
+  // N2-04: metric failure causes are stop reasons/codes; the brief must read them as causes, and an unknown code must
+  // be named as a technical id rather than passed off as a sentence.
+  check('failure causes read in Chinese, including stop reasons (N2-04)',
+    failureReasonTextOf(t, 'stopped') === '人工终止' && failureReasonTextOf(t, 'worker_lost') === 'worker 失联',
+    JSON.stringify([failureReasonTextOf(t, 'stopped'), failureReasonTextOf(t, 'worker_lost')]))
+  check('a workflow-blocked cause is spelled out, not shown as an English blob (N2-04)',
+    /分阶段流程被阻塞/.test(failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)')),
+    failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)'))
+  check('an unknown failure code is labelled as a technical id (N2-04)',
+    failureReasonTextOf(t, 'mystery_code') === '技术标识：mystery_code', failureReasonTextOf(t, 'mystery_code'))
+
+
+  // N2-06: a cold open of Settings has no data on the first frame (the panel is still fetching status while the page
+  // mounts). R2-04's per-entry Hook used to sit after the skeleton return, so the second frame changed the Hook count
+  // and React threw #310 — invisible to the checks above, which mount the app with data already loaded. Mount the real
+  // page through both frames and fail on any render error.
+  class ColdBoundary extends React.Component {
+    constructor(props) { super(props); this.state = { error: null } }
+    static getDerivedStateFromError(error) { return { error } }
+    render() { return this.state.error ? React.createElement('div', { className: 'sa-cold-failed' }) : this.props.children }
+  }
+  const coldHost = document.createElement('div')
+  document.body.appendChild(coldHost)
+  const coldRoot = ReactDOM.createRoot(coldHost)
+  const coldBoundary = React.createRef()
+  const coldActions = new Proxy({}, { get: () => async () => ({}) })
+  const coldPanel = { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, openSession() {},
+    backLabel: '', route: { page: 'settings' } }
+  const renderCold = stateValue => coldRoot.render(
+    React.createElement(ColdBoundary, { ref: coldBoundary },
+      React.createElement(Panel.Provider, { value: coldPanel },
+        React.createElement(PanelState.Provider, { value: stateValue },
+          React.createElement(LiveSettingsPage, { route: { page: 'settings', group: 'source' } })))))
+  const coldError = () => coldBoundary.current?.state?.error ?? null
+  renderCold({ data: undefined, error: undefined, reload: async () => {}, actions: coldActions })
+  await sleep(120)
+  check('cold-open Settings renders its first frame without a Hook error (N2-06)',
+    !coldError() && Boolean(coldHost.querySelector('.sa-skeleton')), String(coldError()?.message ?? coldHost.textContent?.slice(0, 80)))
+  renderCold({ data: fixtures.status, error: undefined, reload: async () => {}, actions: coldActions })
+  await sleep(160)
+  check('cold-open Settings keeps rendering once data arrives (N2-06)',
+    !coldError() && !coldHost.querySelector('.sa-skeleton') && /设置|来源|执行器/.test(coldHost.textContent ?? ''),
+    String(coldError()?.message ?? coldHost.textContent?.slice(0, 160)))
+  coldRoot.unmount()
+  coldHost.remove()
+
+  const menuHost = document.createElement('div')
+  document.body.appendChild(menuHost)
+  const menuRoot = ReactDOM.createRoot(menuHost)
+  menuRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(Menu, { label: '更多操作', items: [
+      { key: 'ci', label: '刷新 CI', onSelect() {}, disabled: true, title: '没有 MR' },
+      { key: 'stop', label: '停止工单', onSelect() {}, disabled: false },
+    ] })))
+  await sleep(120)
+  menuHost.querySelector('.sa-menu-trigger')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(120)
+  const disabledMenuItems = [...menuHost.querySelectorAll('.sa-menu-item')].filter(node => node.disabled)
+  check('a disabled menu entry also carries aria-disabled (R2-13)',
+    disabledMenuItems.length >= 1 && disabledMenuItems.every(node => node.getAttribute('aria-disabled') === 'true'),
+    JSON.stringify(disabledMenuItems.map(node => node.getAttribute('aria-disabled'))))
+  menuRoot.unmount()
+  menuHost.remove()
+
+  // U-08: filters belong to the page that owns them. Switching tabs drops the previous page's parameters while the
+  // shareable fragment and the host's own parameters survive. Every key a page actually writes must be in the
+  // whitelist: `evalWindow` shipped as `evalRange` once, so the Eval range survived a tab switch forever.
+  const restoreUrl = window.location.href
+  const allFilterParams = ['srcQ=needle', 'srcStatus=skipped', 'srcOffset=20',
+    'trgFilter=recent', 'trgQ=thread', 'evalKind=accept', 'evalWindow=24h', 'evalView=divergence', 'evalOffset=25']
+  window.history.replaceState(null, '', `/?${allFilterParams.join('&')}&host=keep#sa=%7B%22page%22%3A%22eval%22%7D`)
+  const pruned = prunePageQuery('execution')
+  const afterPrune = `${window.location.search}|${window.location.hash}`
+  window.history.replaceState(null, '', `/?${allFilterParams.join('&')}`)
+  const keptEval = prunePageQuery('eval')
+  const afterEval = window.location.search
+  window.history.replaceState(null, '', '/?srcQ=needle&host=keep#sa=x')
+  const keptOwn = prunePageQuery('source')
+  const afterKeep = window.location.search
+  window.history.replaceState(null, '', restoreUrl)
+  check('a page keeps only the query parameters it owns (U-08)',
+    pruned === true && afterPrune === '?host=keep|#sa=%7B%22page%22%3A%22eval%22%7D'
+      && keptEval === true
+      && afterEval === '?evalKind=accept&evalWindow=24h&evalView=divergence&evalOffset=25'
+      && keptOwn === false && afterKeep === '?srcQ=needle&host=keep',
+    JSON.stringify({ afterPrune, afterEval, afterKeep }))
+
+  // U-05: a raw signal longer than the 160-character preview opens in place — no dialog, no navigation, and the
+  // closed row keeps its single-line height.
+  const longBody = `${'这是一条很长的群消息，'.repeat(4)}完整内容只在这里出现。`
+  const previewText = `预览段：${longBody.slice(0, 20)}…`
+  const signalHost = document.createElement('div')
+  document.body.appendChild(signalHost)
+  const signalRoot = ReactDOM.createRoot(signalHost)
+  signalRoot.render(React.createElement(Panel.Provider, { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(RawSignalRows, {
+      items: [{ id: 'sig_demo', source: 'octo', status: 'skipped', skipReason: 'not-text',
+        receivedAt: new Date().toISOString(), textPreview: previewText, text: longBody, labels: [] }],
+      onReplay() {}, onLabel() {}, busy: false, labelBusy: false, focusId: ''
+    })))
+  await sleep(150)
+  const signalToggle = signalHost.querySelector('.sa-signal-toggle')
+  const signalClosed = signalHost.querySelectorAll('.sa-signal-full').length
+  const previewWhileClosed = signalHost.textContent.includes(previewText)
+  if (signalToggle) signalToggle.click()
+  await sleep(150)
+  const signalOpened = signalHost.querySelector('.sa-signal-full')
+  const openTitle = signalHost.querySelector('.sa-signal-text-open')
+  // N2: open, the row shows the body once. The preview span collapses into a 「收起」 control — keeping it above the
+  // full paragraph repeated the first 160 characters, which read like the same message had been posted twice.
+  const previewWhileOpen = signalHost.textContent.includes(previewText)
+  check('a long raw signal opens in place instead of staying truncated (U-05)',
+    Boolean(signalToggle) && signalClosed === 0 && Boolean(signalOpened) && previewWhileClosed
+      && signalOpened.textContent === longBody && !previewWhileOpen
+      && openTitle?.textContent === '收起',
+    JSON.stringify({ previewWhileClosed, previewWhileOpen, titleWhileOpen: openTitle?.textContent ?? null }))
+  signalRoot.unmount()
+  signalHost.remove()
+}
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))
 const failed = checks.filter(item => !item.ok)

@@ -85,6 +85,12 @@ export const PANEL_CSS = `
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
 .sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
 .sa-repo-diff { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8) var(--sa-sp-12); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-layer-2); }
+.sa-risk { display: flex; flex-direction: column; gap: var(--sa-sp-8); padding: var(--sa-sp-12);
+  border-radius: var(--sa-r-md); border: 0.5px solid var(--sa-line);
+  background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 8%, transparent); }
+.sa-risk .sa-field-head { margin: 0; }
+.sa-risk-list { margin: 0; padding-left: var(--sa-sp-16); display: flex; flex-direction: column; gap: var(--sa-sp-4);
+  font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-primary); overflow-wrap: anywhere; }
 .sa-diff-row { display: flex; align-items: baseline; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-diff-label { min-width: 96px; color: var(--dsw-alias-label-secondary); }
 .sa-diff-old { color: var(--sa-label-tertiary); text-decoration: line-through; overflow-wrap: anywhere; }
@@ -525,6 +531,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
 .sa-route-controls { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); }
+/* Each manual-route choice is a labelled field (U-04): the visible text sits above its select, not only in aria-label. */
+.sa-route-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 0; flex: 1 1 160px; }
 .sa-route-preview { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8);
   border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md);
   background: var(--dsw-alias-bg-layer-1, transparent); }

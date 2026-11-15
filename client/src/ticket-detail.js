@@ -1,4 +1,4 @@
-import { Icon, safeHttpUrl, shortId } from "./util.js"
+import { Icon, safeHttpUrl, scrollPanelTo, shortId } from "./util.js"
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -6,7 +6,7 @@ import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyV
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
-import { GateSummary, MergeRequestCard, StageRail, TicketRow, TicketStatusTag, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
+import { GateSummary, MergeRequestCard, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
@@ -64,7 +64,13 @@ Object.assign(PAGE_TEXT, {
   'detail.errorCli': ['本地 CLI 缺失或未登录。', 'The local CLI is missing or not signed in.'],
   'detail.errorTimeout': ['执行超时。', 'The run timed out.'],
   'detail.errorGate': ['闸门未通过。', 'A gate failed.'],
-  'detail.rawError': ['原始错误', 'Raw error'],
+  // U-11: a staged workflow block and any unrecognised host error keep their English sentence as the *detail* of a
+  // Chinese conclusion, and the untruncated text is folded below (`detail.rawError`).
+  'detail.errorWorkflowBlocked': ['分阶段流程被阻塞：{detail}', 'The staged workflow was blocked: {detail}'],
+  'detail.workflowReview': ['独立审查仍要求修改（返工轮次已用完）',
+    'The independent review still requested changes (repair budget spent)'],
+  'detail.errorOther': ['其他原因：{cause}', 'Other cause: {cause}'],
+  'detail.rawError': ['技术详情', 'Technical details'],
   'detail.copyTicketId': ['复制工单 ID', 'Copy Ticket ID'],
   'ticket.sectionNav': ['页内跳转', 'Jump to section'],
   'detail.dismiss': ['忽略并清理', 'Dismiss and clean up'],
@@ -252,6 +258,10 @@ Object.assign(PAGE_TEXT, {
   'detail.answerSubmit': ['提交回答', 'Submit answer'],
   'detail.answerRequired': ['请先填写回答。', 'Type an answer first.'],
   'detail.answerSent': ['回答已提交，执行将继续。', 'Answer submitted; the run continues.'],
+  // D2-04: a parked question had no exit — the only action was answering. Abandoning is now offered here.
+  'detail.answerAbandon': ['放弃这张工单', 'Abandon this Ticket'],
+  'detail.answerAbandonHint': ['如果不需要这次改动，可以放弃：工单会被忽略，本地分支与工作树一并删除。',
+    'If you do not need this change, abandon it: the Ticket is dismissed and its local branch and worktree are removed.'],
   'detail.answerHistory': ['此前的回答（{count}）', 'Previous answers ({count})'],
   'detail.resume': ['继续执行', 'Resume run'],
   'detail.resumeBusy': ['正在继续…', 'Resuming…'],
@@ -845,7 +855,8 @@ export function TicketRunRows({ runs }) {
         <div className="sa-row-title">
           <StatusIcon state={view.state} size={14} />
           <span>{view.label}</span>
-          {trigger ? <Tag tone="outline">{trigger}</Tag> : null}
+          {/* U-09: "恢复" read like a button. The quiet tone plus the trigger label makes it a fact, not a control. */}
+          {trigger ? <Tag tone="quiet" title={pt(t, 'runTrigger.hint')}>{trigger}</Tag> : null}
           {runRouteTag(t, run)}
           {stop ? <Tag tone={stop.tone}>{stop.label}</Tag> : null}
           {/* P2-2: only a run that actually attempted repair says so; every other run keeps the row untouched. */}
@@ -863,7 +874,12 @@ export function TicketRunRows({ runs }) {
           {commit ? <span className="sa-mono">{liveShortId(commit, 8)}</span> : null}
           {Array.isArray(run.steps) ? <span className="sa-hint">{pt(t, 'ticket.stepsCount', { count: run.steps.length })}</span> : null}
         </div>
-        {run.error ? <p className="sa-error" title={String(run.error)}>{failureLabel(t, run.error)}</p> : null}
+        {run.error
+          ? <Folded summary={pt(t, 'detail.rawError')}>
+            <p className="sa-error">{failureLabel(t, run.error)}</p>
+            <p className="sa-hint sa-mono" translate="no">{String(run.error)}</p>
+          </Folded>
+          : null}
         <RunHandoff run={run} />
         <RunReport run={run} />
         <RunTrace run={run} />
@@ -1239,7 +1255,18 @@ export function AutomationCard({ ticket, onSaved }) {
  */
 // One list drives both the jump row and the scroll observer, so a section can never be navigable from one and
 // invisible to the other (the automation block used to be missing from both).
+/** Statuses that may be dismissed (with cleanup): terminal failures, a question nobody will answer, and the
+    finished-but-undelivered states the desk can otherwise ask about forever (D2-04/D2-09). */
+export const TICKET_DISMISSABLE = ['failed', 'ci-failed', 'deploy-failed', 'queued', 'ready', 'awaiting-answer']
+
+/** @param {{ status?: any }} ticket */
+export function ticketDismissable(ticket) {
+  return TICKET_DISMISSABLE.includes(String(ticket?.status ?? ''))
+}
+
 export const DETAIL_JUMPS = [
+  // R2-09: the request is what the Ticket is about, so it owns its own section above the change summary.
+  { id: 'sa-ticket-request', labelKey: 'ticket.request' },
   { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
   { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
   { id: 'sa-automation', labelKey: 'auto.section' },
@@ -1253,6 +1280,7 @@ export const DETAIL_JUMPS = [
 export function ticketVisibleJumps(ticket, hasGateResults) {
   const status = typeof ticket?.status === 'string' ? ticket.status : ''
   return DETAIL_JUMPS.filter(jump => {
+    if (jump.id === 'sa-ticket-request') return Boolean(ticket?.body)
     if (jump.id === 'sa-automation') return !['dismissed', 'closed'].includes(status)
     if (jump.id === 'sa-ticket-gates') return Boolean(hasGateResults)
     return true
@@ -1364,7 +1392,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   useEffect(() => {
     if (!focusRun || focusedRun.current === focusRun) return
     const node = document.getElementById(`sa-run-${focusRun}`)
-    if (node) { focusedRun.current = focusRun; node.scrollIntoView({ block: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
+    if (node) { focusedRun.current = focusRun; scrollPanelTo(node, { align: 'center', behavior: ticketReduceMotion() ? 'auto' : 'smooth' }) }
   }, [focusRun, data?.runs?.length])
   // "Add a requirement and rerun": the box stays local until submitted; the host appends the revision and starts
   // the dry run, so the page only clears it and lets the existing poll show the new run.
@@ -1561,7 +1589,12 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const failedSteps = (failedRun?.steps ?? [])
     .filter(step => step.state === 'failed' && step.name !== 'error').map(step => ticketStepLabel(t, step.name))
   const canRun = config.executor?.enabled === true
-  const canPush = canRun && config.executor?.allowPush === true
+  // R2-10: match the server's PUBLISHABLE_STATUSES (ready/failed/pushed) — a queued Ticket has not run yet, so
+  // offering "发布 MR" on it promised an action the API rejects.
+  const canPush = canRun && config.executor?.allowPush === true && publishableStatusOf(ticket)
+  // D2-09: finished-but-not-delivered Tickets (a dry run, a real run with push disabled) and queued stubs are
+  // abandoned through the same cleanup path as a failed one, so the switch to remove them is not hidden behind `failed`.
+  const dismissable = ticketDismissable(ticket)
   // push mode records the GitHub `/pull/new/` URL without a PR number; the link alone still counts as an MR.
   const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   // Which repository this Ticket runs on (contract §12): the derived name/id plus the local clone and branch flow.
@@ -1644,7 +1677,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const primaryAction = awaitingAnswer
     // A parked question owns the primary slot: the answer form is the banner right below the header.
     ? <Button variant="primary" size="sm" onClick={() =>
-      document.getElementById('sa-answer')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
+      scrollPanelTo('sa-answer', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
     : failed
     ? canRun
       // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
@@ -1667,7 +1700,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         {pt(t, 'primary.openMr')}</a> : null)
       : needsAcceptance
         ? <Button variant="primary" size="sm" onClick={() =>
-          document.getElementById('sa-acceptance')?.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>
+          scrollPanelTo('sa-acceptance', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>
           {pt(t, 'primary.accept')}
         </Button>
         // A parked gate already carries all three decisions in the banner above this row, and running work has
@@ -1709,7 +1742,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     { key: 'stop', label: pt(t, ticket.stopRequested ? 'ticket.stopping' : 'menu.stop'), icon: 'stop',
       onSelect: () => setPending('stop'), disabled: stopRun.busy || !activeRun || Boolean(ticket.stopRequested),
       note: !activeRun ? pt(t, 'ticket.stopUnavailable') : ticket.stopRequested ? pt(t, 'ticket.stopping') : undefined },
-    ...failed ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
+    // D2-04/D2-09: an awaiting-answer Ticket is parked until a person answers, and a ready/dry-run/gates-passed one is
+    // waiting for a delivery decision that may never come — dismissing with cleanup is the way out of both.
+    ...dismissable
+      ? [{ key: 'dismiss', label: pt(t, 'detail.dismiss'), icon: 'stop', onSelect: () => setPending('dismiss') }] : [],
   ]
   const runPending = async action => { const done = await action.run(); if (done) setPending(null) }
   const confirmActionLabels = {
@@ -1846,6 +1882,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
           </div>
         </div>
         {answerError ? <p className="sa-error" role="alert">{pt(t, 'detail.answerRequired')}</p> : null}
+        <div className="sa-actions" style={{ alignItems: 'center' }}>
+          <Button variant="ghost" size="sm" icon="stop" disabled={busy.dismiss}
+            onClick={() => setPending('dismiss')}>{pt(t, 'detail.answerAbandon')}</Button>
+          <span className="sa-hint">{pt(t, 'detail.answerAbandonHint')}</span>
+        </div>
         {previousAnswers.length
           ? <Folded summary={pt(t, 'detail.answerHistory', { count: previousAnswers.length })}>
             <ul className="sa-list">{previousAnswers.map((entry, index) => <li key={index} className="sa-row">
@@ -1877,10 +1918,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // A jump is only offered for a section this Ticket actually renders (dismissed/closed hide automation, a Ticket
   // without gate results hides the gates section) — the observer below uses the same filtered list.
   const jumps = ticketVisibleJumps(ticket, hasGateResults)
+  // U-01: scroll the panel's own scroller. `scrollIntoView` also moved the host frame around the panel, so a section
+  // jump pushed the DSH header and sidebar out of the viewport.
   const jumpTo = id => {
     setActiveJump(id)
-    const node = document.getElementById(id)
-    if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'start', behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
+    scrollPanelTo(id, { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
   }
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
@@ -1957,7 +1999,15 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       </Folded>)}
     </Section> : null}
 
-    {/* 1. What changed: repository, request body, changed files and the worker's summary — gates stay in their section. */}
+    {/* R2-09: the request is read first, expanded by default; it used to be folded inside "what changed", which hid
+        the one thing a Ticket is about behind a disclosure on the far side of the grid. */}
+    {ticket.body
+      ? <Section id="sa-ticket-request" title={pt(t, 'ticket.request')}>
+        <div className="sa-ticket-request"><MarkdownLite text={ticket.body} /></div>
+      </Section>
+      : null}
+
+    {/* 1. What changed: repository, changed files and the worker's summary — gates stay in their section. */}
     <Section id="sa-ticket-changes" title={pt(t, 'ticket.changes')}>
       {repoRows.length
         ? <div style={{ marginBottom: 'var(--sa-sp-8)' }}><KeyValues rows={repoRows} /></div>
@@ -1966,7 +2016,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
           left, and the evidence it talks about on the right — the changed files and the original request. On a narrow
           panel the grid collapses and the left column leads; the request stays folded so a long SQL paste cannot push
           the actual changes below the first screen (critique C24). */}
-      {!changes.worker && !changes.files.length && !ticket.body
+      {!changes.worker && !changes.files.length
         // Nothing to show at all: one sentence, not two empty columns.
         ? <Hint>{pt(t, 'ticket.noChanges')}</Hint>
         : <div className="sa-changes-grid">
@@ -2008,11 +2058,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
                   : null}
               </>
               : <Hint>{pt(t, 'ticket.noChangedFiles')}</Hint>}
-            {ticket.body
-              ? <div style={{ marginTop: 'var(--sa-sp-8)' }}>
-                <Folded summary={pt(t, 'ticket.request')}><MarkdownLite text={ticket.body} /></Folded>
-              </div>
-              : null}
             <div className="sa-revision" style={{ marginTop: 'var(--sa-sp-8)' }}>
               <div className="sa-actions">
                 <label htmlFor="sa-revision-input" className="sa-hint">{pt(t, 'ticket.revisionTitle')}</label>

@@ -12,7 +12,7 @@ import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
 import { DELIVERABLES, enabledBackends } from './lib/live/routing.js'
 import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
-  resumeInterruptedTicket, answerTicket } from './lib/live/executor.js'
+  resumeInterruptedTicket, answerTicket, ticketBusyAction, ticketBusyMessage } from './lib/live/executor.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
@@ -36,6 +36,42 @@ class BodyTooLarge extends Error {}
 class ActionError extends Error {
   /** @param {number} status @param {string} message @param {Record<string, any>} [extra] */
   constructor(status, message, extra = {}) { super(message); this.status = status; this.extra = extra }
+}
+
+/** D2-02: a second mutating action on one Ticket is a conflict, not a server fault — refuse it with 409 before work
+ *  starts, instead of letting the claim reject inside an already-answered 202 (where only the host log saw it). */
+function assertTicketFree(ticketId) {
+  const running = ticketBusyAction(ticketId)
+  if (running) throw new ActionError(409, ticketBusyMessage(ticketId, running))
+}
+
+/** Ticket states `publishTicket` accepts; anything else is refused up front instead of failing after a 202. */
+const PUBLISHABLE_STATUSES = ['ready', 'failed', 'pushed']
+
+/**
+ * Preflight shared by the routes that start an executor run. Without it the request answered 202 and the refusal
+ * (executor off) existed only in the host log — the panel showed a run that never started.
+ * `dryRun` stays available with the executor off: it only inspects and writes nothing.
+ * D2-06: `allowPush` no longer blocks a real run — it only decides whether the finished work is pushed. A run with
+ * push disabled still executes and commits locally, then lands on `gates-passed` for a human decision.
+ */
+function requireExecutor(engine, { dryRun = false } = {}) {
+  if (dryRun) return
+  const config = engine.configView()
+  if (!config.executor.enabled) {
+    throw new ActionError(403, '执行器未启用：请在「设置 → 执行器」里打开后再试；只做检查可以用干跑。')
+  }
+}
+
+/**
+ * D2-06: publishing always pushes. Refusing it is a conflict with a next step, not a server fault: the finished work
+ * stays in the worktree, so the operator can enable push in Settings or dismiss the Ticket instead of retrying a
+ * button that cannot work.
+ */
+function requirePush(engine) {
+  if (engine.configView().executor.allowPush === true) return
+  throw new ActionError(409, '未允许推送：这次发布需要推送远端，而「设置 → 执行器」里「允许推送」是关闭的。'
+    + '改动已保留在工作树里：可打开「允许推送」后再发布，或忽略并清理这张工单。')
 }
 
 function send(res, status, value) {
@@ -99,7 +135,11 @@ export function apply(ctx, config = {}) {
       ctx.effect(() => () => engine?.stop())
       ctx.logger?.info?.('superagent live engine: %s', engine.status().engine.phase)
     } catch (error) {
-      ctx.logger?.warn?.('superagent live engine failed to start: %s', error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      // The route table stays up (the status document is what tells a person what is wrong); an engine that exists but
+      // failed to start reports that in its status instead of sitting at `starting`, which the panel shows as running.
+      engine?.setStartError?.(message)
+      ctx.logger?.warn?.('superagent live engine failed to start: %s', message)
     }
   })()
 
@@ -378,12 +418,19 @@ export function apply(ctx, config = {}) {
         }
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'run') {
           const dryRun = body?.dryRun === true
-          if (!dryRun && !engine.configView().executor.enabled) throw new ActionError(403, 'executor.enabled is false in live.json (use dryRun)')
-          if (!dryRun && engine.configView().executor.allowPush !== true) throw new ActionError(403, 'executor.allowPush is false in live.json')
+          requireExecutor(engine, { dryRun })
+          assertTicketFree(third)
           const work = executeTicket({ ctx, engine, ticketId: third, dryRun,
             backend: typeof body?.backend === 'string' ? body.backend : undefined,
             log: line => ctx.logger?.info?.('superagent executor: %s', line) })
-            .catch(error => { ctx.logger?.warn?.('executor failed: %s', error instanceof Error ? error.message : String(error)); return { status: 'failed', error: String(error) } })
+            .catch(error => {
+              const message = error instanceof Error ? error.message : String(error)
+              ctx.logger?.warn?.('executor failed: %s', message)
+              // The preflight above closes the common race; a conflict that still lands here (claim taken between the
+              // check and the call) must not vanish into the log of an already-answered 202.
+              if (error?.code === 'ticket_busy') engine.noteTicketProblem?.(third, message)
+              return { status: 'failed', error: message }
+            })
           if (body?.wait === true) { send(res, 200, await work); return }
           void work
           send(res, 202, { started: true, ticketId: third, dryRun })
@@ -410,6 +457,7 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, 'action 必须是 release / retry / stop')
           }
           const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+          assertTicketFree(third)
           const result = /** @type {any} */ (await resumeTicket({ engine, ticketId: third, action, note,
             log: line => ctx.logger?.info?.('superagent gate: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
@@ -419,6 +467,7 @@ export function apply(ctx, config = {}) {
         }
         // P1-5: continue an interrupted run from its checkpoint (gates/commit/push/MR phase) or re-run the whole Ticket.
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'resume') {
+          assertTicketFree(third)
           const result = await resumeInterruptedTicket({ engine, ticketId: third,
             log: line => ctx.logger?.info?.('superagent resume: %s', line) })
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
@@ -440,6 +489,7 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'answer') {
           const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, 4000) : ''
           if (!answer) throw new ActionError(400, 'answer 不能为空')
+          assertTicketFree(third)
           const result = /** @type {any} */ (await answerTicket({ engine, ticketId: third, answer,
             log: line => ctx.logger?.info?.('superagent answer: %s', line) }))
           if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
@@ -459,10 +509,26 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'publish') {
           // Publishing may include automatic repair rounds, so it starts asynchronously like a manual run: the panel
           // polls the Ticket for progress instead of holding one request open for a worker's whole turn.
+          // Everything the publisher can refuse synchronously is checked here first: a 202 followed by a warning in
+          // the host log told the operator "publishing" for a Ticket that never had a run.
+          const view = engine.ticketView(third)
+          if (!view) throw new ActionError(404, `未知工单：${third}`)
+          if (!PUBLISHABLE_STATUSES.includes(view.ticket.status)) {
+            throw new ActionError(409, `工单当前状态为 ${view.ticket.status}，只有待执行、失败或已推送的工单可以发布 MR。`)
+          }
+          requireExecutor(engine, { dryRun: false })
+          requirePush(engine)
+          assertTicketFree(third)
           const work = publishTicket({ ctx, engine, ticketId: third, commitMessage: body?.commitMessage,
             log: line => ctx.logger?.info?.('superagent publish: %s', line) })
-            .catch(error => ctx.logger?.warn?.('superagent publish failed: %s',
-              error instanceof Error ? error.message : String(error)))
+            .catch(error => {
+              const message = error instanceof Error ? error.message : String(error)
+              ctx.logger?.warn?.('superagent publish failed: %s', message)
+              // The request already answered (202, or a 200 wait that must stay JSON): keep the failure on the
+              // Ticket timeline so the panel shows it instead of only the host log.
+              engine.noteTicketProblem?.(third, `发布 MR 失败：${message}`)
+              return { status: 'failed', error: message }
+            })
           if (body?.wait === true) { send(res, 200, await work); return }
           void work
           send(res, 202, { started: true, ticketId: third })
@@ -476,7 +542,10 @@ export function apply(ctx, config = {}) {
           const result = await engine.acceptTicket({ ticketId: third, ok: body?.ok !== false, note: body?.note, intents })
           if (result.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result.invalid) throw new ActionError(409, result.invalid)
-          if (result.cleanupFailed) throw new ActionError(409, result.cleanupFailed)
+          // acceptTicket reports a failed worktree/branch cleanup as `cleanup.failed`; dismissTicket uses the older
+          // `cleanupFailed` key. Reading only the latter made this branch unreachable and hid a half-cleaned Ticket.
+          const cleanupFailure = result.cleanupFailed ?? result.cleanup?.failed
+          if (cleanupFailure) throw new ActionError(409, cleanupFailure)
           send(res, 200, { ticket: result.ticket, cleanup: result.cleanup })
           return
         }
@@ -573,6 +642,11 @@ export function apply(ctx, config = {}) {
     } catch (error) {
       if (error instanceof BodyTooLarge) { send(res, 413, { error: '请求体过大' }); return }
       if (error instanceof ActionError) { send(res, error.status, { error: error.message, ...error.extra }); return }
+      // Engine-level conflicts (one action per Ticket at a time) carry their own client status instead of a 500.
+      if (Number.isInteger(error?.httpStatus) && error.httpStatus >= 400 && error.httpStatus < 500) {
+        send(res, error.httpStatus, { error: error.message })
+        return
+      }
       ctx.logger?.warn?.('superagent api failed: %s', error instanceof Error ? error.stack ?? error.message : String(error))
       send(res, 500, { error: error instanceof Error ? error.message : String(error) })
     }

@@ -92,3 +92,82 @@ export function remember(location) {
 /** Header back-button label: a record id reads as its noun, otherwise the destination tab. */
 export const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
 export const detailOf = (route, page) => route.page === page && route.id ? route.id : undefined
+
+/* U-08: filters are view state of ONE page, not of the panel. Each page declares the query parameters it owns, and a
+   tab switch deletes the parameters of the other pages (their prefixes are ours, so a host parameter is never touched). */
+export const PAGE_QUERY_KEYS = {
+  overview: [],
+  source: ['srcQ', 'srcStatus', 'srcRepo', 'srcReason', 'srcFrom', 'srcTo', 'srcOffset'],
+  trigger: ['trgFilter', 'trgQ', 'trgRepo', 'trgReason', 'trgFrom', 'trgTo', 'trgOffset'],
+  eval: ['evalKind', 'evalWindow', 'evalQ', 'evalRepo', 'evalReason', 'evalFrom', 'evalTo', 'evalView', 'evalOffset'],
+  execution: [],
+  settings: [],
+}
+const OWNED_QUERY_KEYS = new Set(Object.values(PAGE_QUERY_KEYS).flat())
+
+/* R2-15: the URL as it was when the bundle was evaluated. A host may consume its own parameter (an invite token) and
+   rewrite the search string before the panel mounts; reading the location then would drop a shared filter link. */
+export const INITIAL_SEARCH = (() => { try { return window.location.search } catch { return '' } })()
+const initialSearchPending = new Set(TABS)
+
+/** The query parameters a page should read on its first mount. The live URL wins whenever it carries one of this
+    page's parameters; a page whose parameters the host stripped may fall back once to the copy captured at load. */
+export function firstQueryParams(page) {
+  let live
+  try { live = new URLSearchParams(window.location.search) } catch { live = new URLSearchParams() }
+  const keys = PAGE_QUERY_KEYS[page] ?? []
+  if (!keys.length || keys.some(key => live.has(key)) || !initialSearchPending.has(page)) return live
+  initialSearchPending.delete(page)
+  try {
+    const initial = new URLSearchParams(INITIAL_SEARCH)
+    return keys.some(key => initial.has(key)) ? initial : live
+  } catch { return live }
+}
+
+/* R2-08: filters belong to one page (U-08), so leaving a tab prunes them from the URL. Each page also remembers its
+   last slice here, per tab, so coming back restores the filters and the page instead of resetting to the first page. */
+export const PAGE_STATE_KEY = 'superagent-panel/page-state'
+export function rememberPageState(page, values) {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(PAGE_STATE_KEY) ?? '{}')
+    const all = raw && typeof raw === 'object' ? raw : {}
+    all[page] = values
+    sessionStorage.setItem(PAGE_STATE_KEY, JSON.stringify(all))
+  } catch { /* private mode: the in-memory state still works */ }
+}
+export function recallPageState(page) {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(PAGE_STATE_KEY) ?? '{}')
+    const value = raw && typeof raw === 'object' ? raw[page] : undefined
+    return value && typeof value === 'object' ? value : undefined
+  } catch { return undefined }
+}
+/** A page's first-mount filter state: a URL that carries the page's parameters wins (shared link), otherwise the
+    remembered slice, otherwise the documented defaults. */
+export function initialPageQuery(page, fromParams, defaults) {
+  const params = firstQueryParams(page)
+  const keys = PAGE_QUERY_KEYS[page] ?? []
+  const fromUrl = fromParams(params)
+  if (!keys.some(key => params.has(key))) {
+    const remembered = recallPageState(page)
+    if (remembered) return { ...defaults, ...fromUrl, ...remembered }
+  }
+  return { ...defaults, ...fromUrl }
+}
+/** Drop the query parameters that belong to other pages; the `#sa` fragment and host parameters are kept. replaceState
+    is deliberate: a cleanup must not fire the routing events a real navigation would (no hashchange/popstate). */
+export function prunePageQuery(page) {
+  try {
+    const allowed = new Set(PAGE_QUERY_KEYS[page] ?? [])
+    const url = new URL(window.location.href)
+    let changed = false
+    for (const key of [...url.searchParams.keys()]) {
+      if (allowed.has(key) || !OWNED_QUERY_KEYS.has(key)) continue
+      url.searchParams.delete(key)
+      changed = true
+    }
+    if (!changed) return false
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+    return true
+  } catch { return false }
+}

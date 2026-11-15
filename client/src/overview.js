@@ -7,15 +7,15 @@
    spec/…/.impeccable/critique/2026-11-05T10-56-46Z__superagent-panel.md (O1–O7). */
 
 import { Icon, hhmm } from "./util.js"
-import { when } from "./i18n.js"
+import { errorText, when } from "./i18n.js"
 import { Button, DisclosureRow, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
-import { ClampText, ErrorState, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
+import { ClampText, ConfirmButton, ErrorState, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { PANEL_LANG, globalHealth } from "./shell.js"
 import { useLiveResource } from "./live-model.js"
 import { SetupBanner, SetupChecklist, setupStateOf } from "./setup.js"
-import { AutomationBar, FunnelBar, TicketList, TicketRow, localizedText, needsHuman, needsYouCount, problemsOf, ticketStatus } from "./live-ui.js"
+import { AutomationBar, FunnelBar, TicketList, TicketRow, failureLabel, localizedText, needsHuman, needsYouCount, problemsOf, runStopLabel, ticketStatus } from "./live-ui.js"
 import { TicketDetail, ticketStepLabel } from "./ticket-detail.js"
 import { Fragment, React, h, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
@@ -96,6 +96,12 @@ Object.assign(PAGE_TEXT, {
 
   // ---- actionable inbox (P0-5): the desk is the host's own blocking items, not a client-side status filter --------
   'ov.inboxGoTicket': ['去工单', 'Open Ticket'],
+  // D2-09: a finished-but-undelivered Ticket can be abandoned from the desk itself, cleaning its branch/worktree.
+  'ov.inboxDismiss': ['忽略并清理', 'Dismiss and clean up'],
+  'ov.inboxDismissTitle': ['忽略这张工单', 'Dismiss this Ticket'],
+  'ov.inboxDismissMessage': ['将把工单标记为「已忽略」并删除本地分支与工作树（远程分支不自动删除）：{title}',
+    'Marks the Ticket as dismissed and deletes its local branch and worktree (the remote branch is not touched): {title}'],
+  'ov.inboxDismissDone': ['工单已忽略，待办已消解', 'Ticket dismissed; the desk item is gone'],
   'ov.inboxGoSource': ['去来源', 'Open Source'],
 
   // ---- P2-9 run quality (GET engine/metrics) ---------------------------------------------------------------------
@@ -105,6 +111,9 @@ Object.assign(PAGE_TEXT, {
     '{runs} runs · {rate}% succeeded · {avg}s avg · {repaired} auto-repairs'],
   'ov.q.failures': ['主要失败原因', 'Top failure causes'],
   'ov.q.failureCount': ['{count} 次', '{count}×'],
+  // N2-04: a failure cause is a stopReason/errorCode, not a sentence. Known codes get their Chinese label; an unknown
+  // identifier is still shown, but named as a technical id instead of reading as a human cause.
+  'ov.failureUnknown': ['技术标识：{raw}', 'Technical id: {raw}'],
   'ov.q.triggers': ['触发：手动 {manual} · 自动 {auto} · 定时 {timed}',
     'Triggers: {manual} manual · {auto} automatic · {timed} timed'],
   'ov.q.acceptance': ['验收：{rounds} 轮 · 通过 {rate}%', 'Acceptance: {rounds} rounds · {rate}% passed'],
@@ -196,6 +205,21 @@ export function ovRuleHits(decisions, now) {
 }
 
 /** Known executor failures are shown in the operator's language; an unknown error stays clipped and raw. */
+/** N2-04: metrics hand back a stopReason/errorCode (e.g. `stopped`) or a clipped error sentence, and the shift brief
+    must read like a cause, not a constant. Known reasons reuse the run dictionaries; an unknown identifier is still
+    shown, but labelled as a technical id so it does not pass for a human sentence. */
+export function failureReasonTextOf(t, reason) {
+  const raw = String(reason ?? '').trim()
+  if (!raw) return '—'
+  if (/^[A-Za-z][A-Za-z0-9_.-]*$/.test(raw)) {
+    const stop = runStopLabel(t, { stopReason: raw })
+    const label = stop?.label ?? ''
+    if (label && !/其他原因/.test(label)) return label
+    return pt(t, 'ov.failureUnknown', { raw })
+  }
+  return failureLabel(t, raw) || raw
+}
+
 export function ovErrorLabel(t, error) {
   const text = String(error ?? '')
   if (/interrupted by a plugin reload|host restart/i.test(text)) return pt(t, 'ov.errorInterrupted')
@@ -256,7 +280,7 @@ export function ovWatchItems(t, data, now, options = {}) {
       causes.set(key, (causes.get(key) ?? 0) + 1)
     }
     const [reason, count] = [...causes.entries()].sort((left, right) => right[1] - left[1])[0] ?? []
-    out.push({ key: 'runs', state: 'error', page: 'execution',
+    out.push({ key: 'runs', state: 'error', page: 'execution', stage: 'failed',
       title: pt(t, 'ov.watchRuns', { count: failedCount })
         + (count > 1 ? pt(t, 'ov.watchSameCause', { count, reason: ovErrorLabel(t, reason) }) : '') })
   }
@@ -355,6 +379,21 @@ export function LiveOverviewPage({ route }) {
   const systemInboxItems = inboxItems.filter(item => item.blocking !== true)
   const humanCount = inboxSupported ? (blockingItems.length || Math.max(0, Number(data.inbox?.blocking ?? 0))) : legacyHumanCount
   // Best effort on read: marking one item read must never stop the navigation the person asked for.
+  // D2-09: the desk row for a finished-but-undelivered Ticket can settle it in place; dismissing removes the worktree,
+  // the branch and (with them) the blocking item, so the desk cannot keep asking for a delivery that was abandoned.
+  // Deliberately not a hook: this component returns early for a deep link or a cold first paint, and a hook added after
+  // those returns would change the hook order between renders (the crash this function used to cause).
+  const dismissInboxItem = async item => {
+    const ticketId = item?.refs?.ticketId
+    if (!ticketId) return
+    try {
+      await actions.dismissTicket(ticketId)
+      notify(pt(t, 'ov.inboxDismissDone'))
+    } catch (failure) { notify(errorText(failure)) } finally {
+      await inbox.reload?.()
+      await reload()
+    }
+  }
   const readInboxItem = item => {
     if (!item?.id) return
     void Promise.resolve(actions.readInbox?.(item.id)).then(() => inbox.reload?.()).catch(() => {})
@@ -475,6 +514,9 @@ export function LiveOverviewPage({ route }) {
   const since = lastSeen ? ovSince(t, data, lastSeen) : undefined
 
   // P2-9 run quality card: KPI line, at most three failure causes (each jumps to Execution) and one small metric line.
+  /** N2-04: metrics hand back a stopReason (e.g. `stopped`) or a clipped error sentence; both reach this page. */
+  const failureReasonText = reason => failureReasonTextOf(t, reason)
+
   const qualitySection = quality
     ? h(Section, { id: 'sa-quality', title: pt(t, 'ov.q.title'),
       // One section-level jump replaces the identical per-row button a failure list used to repeat (WIG P3).
@@ -492,7 +534,7 @@ export function LiveOverviewPage({ route }) {
               h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
                 h(StatusIcon, { state: 'error', size: 14, spin: false }),
                 h('div', { className: 'sa-row-main' },
-                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, item.reason || '—')),
+                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, failureReasonText(item.reason))),
                   h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count }))))))))
             : null,
           (quality.triggerText || quality.acceptanceText)
@@ -571,6 +613,13 @@ export function LiveOverviewPage({ route }) {
             h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—'))),
           item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
         h('div', { className: 'sa-row-actions' },
+          // Only the two kinds whose Ticket can be dismissed: a gate/accept item must be settled by its real action.
+          item.kind === 'publish' || item.kind === 'failure'
+            ? h(ConfirmButton, { label: pt(t, 'ov.inboxDismiss'), title: pt(t, 'ov.inboxDismissTitle'),
+              message: pt(t, 'ov.inboxDismissMessage', { title: String(item.title ?? '') }),
+              confirmLabel: pt(t, 'ov.inboxDismiss'), icon: 'stop',
+              onConfirm: async () => { await dismissInboxItem(item) } })
+            : null,
           h(Button, { variant: 'outline', size: 'sm',
             onClick: () => openInboxItem(item) }, pt(t, ovInboxActionKey(item))))))))
     : humanCount > 0
@@ -630,6 +679,14 @@ export function LiveOverviewPage({ route }) {
             problem.detail ? h('div', { className: 'sa-row-meta' },
               h(ClampText, { text: String(problem.detail), limit: 300, lines: 2 })) : null),
           h('div', { className: 'sa-row-actions' },
+            // N2-03: failure-class inbox items are merged into this block (they are non-blocking), so the cleanup
+            // entry has to exist here too — the desk rows are not the only place a failed Ticket is listed.
+            problem.inbox && (problem.inbox.kind === 'publish' || problem.inbox.kind === 'failure')
+              ? h(ConfirmButton, { label: pt(t, 'ov.inboxDismiss'), title: pt(t, 'ov.inboxDismissTitle'),
+                message: pt(t, 'ov.inboxDismissMessage', { title: String(problem.title ?? '') }),
+                confirmLabel: pt(t, 'ov.inboxDismiss'), icon: 'stop',
+                onConfirm: async () => { await dismissInboxItem(problem.inbox) } })
+              : null,
             problem.action ? h(Button, { variant: 'outline', size: 'sm',
               onClick: () => runProblem(problem) }, pt(t, problem.action.labelKey)) : null)))))) : null,
 

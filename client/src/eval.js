@@ -10,7 +10,7 @@ import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switc
 import { same, stay, usePanel } from "./api.js"
 import { EmptyState, ErrorState, Folded, Hint, RawValue, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
-import { remember } from "./router.js"
+import { initialPageQuery, remember, rememberPageState } from "./router.js"
 import { useLiveResource } from "./live-model.js"
 import { decisionKindView, liveShortId } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
@@ -46,7 +46,8 @@ Object.assign(PAGE_TEXT, {
   'ev.detail': ['决定详情', 'Decision detail'],
   'ev.raw': ['原始决定', 'Raw decision'],
   'ev.noRules': ['这次评估没有记录规则结果。', 'This Eval recorded no rule results.'],
-  'ev.more': ['共 {total} 条，只显示最近 {shown} 条。', '{total} decisions in total; showing the latest {shown}.'],
+  'ev.offsetClamped': ['你打开的位置从第 {from} 条开始，超出共 {total} 条的范围；已显示最后一页。',
+    'The link pointed to item {from}, beyond the {total} decisions recorded; the last page is shown instead.'],
   'ev.shadow': ['模型 {p} · {verdict}', 'Model {p} · {verdict}'],
   'ev.shadowAccept': ['倾向接单', 'leans accept'],
   'ev.shadowReject': ['倾向忽略', 'leans ignore'],
@@ -241,9 +242,16 @@ export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []
         h(InfoTip, { text: pt(t, 'ev.dismissHint'), warn: true })) : null))
 }
 
-/** Empty state depends on whether there is no history at all, an empty 24h window, or an empty kind filter. */
-export function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll) {
+/** Empty state depends on whether there is no history at all, an empty 24h window, or a filter that matched nothing.
+ *  An active filter wins over the counts: "模型分歧" (or any kind/repo/reason/search filter) with zero rows is a filter
+ *  result, not an empty history, and saying "还没有评估记录…触发一条消息后" there sent people looking for messages that
+ *  had already been recorded (U-07). */
+export function evalEmptyState(t, navigate, counts, kind, range, setKind, setRange, clearAll, activeFilters = false) {
   const noRecords = (counts.all ?? 0) === 0
+  if (activeFilters) {
+    return h(EmptyState, { icon: 'filter', title: pt(t, 'ev.emptyFilterTitle'), hint: pt(t, 'ev.emptyFilterHint'),
+      action: h(Button, { variant: 'outline', size: 'sm', onClick: () => { clearAll(); setKind('all'); setRange('all') } }, pt(t, 'ev.clearFilter')) })
+  }
   if (noRecords && kind === 'all' && range === 'all') {
     return h(EmptyState, { icon: 'decision', title: pt(t, 'ev.emptyTitle'), hint: pt(t, 'ev.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', onClick: () => navigate({ page: 'trigger' }) }, pt(t, 'ev.emptyAction')) })
@@ -263,9 +271,10 @@ export const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
 export const EVAL_VIEWS = ['all', 'divergence', 'override']
 
 /** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
-export function evalUrlState() {
+const EVAL_DEFAULTS = { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 }
+export function evalUrlState(search) {
   try {
-    const params = new URLSearchParams(window.location.search)
+    const params = search ?? new URLSearchParams(window.location.search)
     const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
     return { kind: params.get(EVAL_URL_KEYS.kind) || 'all', range: params.get(EVAL_URL_KEYS.range) || 'all',
       q: params.get(EVAL_URL_KEYS.q) || '', repo: params.get(EVAL_URL_KEYS.repo) || '',
@@ -273,7 +282,7 @@ export function evalUrlState() {
       to: params.get(EVAL_URL_KEYS.to) || '',
       view: EVAL_VIEWS.includes(params.get(EVAL_URL_KEYS.view)) ? params.get(EVAL_URL_KEYS.view) : 'all',
       offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0 }
-  } catch { return { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 } }
+  } catch { return { ...EVAL_DEFAULTS } }
 }
 
 export function rememberEvalFilters(next) {
@@ -295,9 +304,18 @@ export function dateBound(value, end = false) {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString()
 }
 
+/** R2-14: an offset from a pasted link (or a shrinking result set) can point past the end. Returns the last page's
+    offset when that happens, and `undefined` when the requested offset is fine. */
+export function clampEvalOffset(offset, total, pageSize = EVAL_PAGE_SIZE) {
+  if (!Number.isFinite(offset) || !Number.isFinite(total) || total <= 0 || offset < total) return undefined
+  return Math.max(0, Math.floor((total - 1) / pageSize) * pageSize)
+}
+
 export function LiveEvalPage() {
   const { t, navigate } = usePanel()
-  const initial = useRef(evalUrlState())
+  // R2-01/R2-08/R2-15: the URL (shared or reloaded link, offset included) wins; otherwise the tab's remembered slice,
+  // with the load-time query string covering a host that consumed its own parameter before the panel mounted.
+  const initial = useRef(initialPageQuery('eval', evalUrlState, EVAL_DEFAULTS))
   const [kind, setKind] = useState(initial.current.kind)
   const [range, setRange] = useState(initial.current.range)
   const [query, setQuery] = useState(initial.current.q)
@@ -326,6 +344,8 @@ export function LiveEvalPage() {
   }, [kind, range, q, repoFilter, reasonFilter, from, to, view])
   useEffect(() => {
     rememberEvalFilters({ kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view, offset })
+    // R2-08: the URL only holds the current page's parameters (U-08), so the tab also remembers the slice.
+    rememberPageState('eval', { kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view, offset })
   }, [kind, range, q, repoFilter, reasonFilter, from, to, view, offset])
   // Back/forward restores the filters from the URL; the host route keeps working because only our own params move.
   useEffect(() => {
@@ -369,6 +389,18 @@ export function LiveEvalPage() {
       })
     } catch { /* private mode */ }
   }, [data])
+  // R2-14: an offset from a pasted link (or a shrinking result set) can point past the end. The list then rendered a
+  // "filter matched nothing" empty state with no pagination, which is a lie: the filters are fine, the page is not.
+  // Clamp to the last page once the total is known and say what happened instead.
+  const loadedTotal = Number.isFinite(data?.total) ? data.total : (Array.isArray(data?.items) ? data.items.length : 0)
+  const [clampedFrom, setClampedFrom] = useState(0)
+  useEffect(() => {
+    const lastPage = clampEvalOffset(offset, loadedTotal)
+    if (!data || lastPage === undefined) return
+    setClampedFrom(offset)
+    setOffset(lastPage)
+  }, [data, loadedTotal, offset])
+  const goOffset = next => { setClampedFrom(0); setOffset(next) }
   if (loading && !data) return h(Skeleton, { rows: 5 })
   if (!data) return h(ErrorState, { error, onRetry: reload })
 
@@ -409,6 +441,9 @@ export function LiveEvalPage() {
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(Section, { title: pt(t, 'ev.title'), count: total },
+      clampedFrom > 0
+        ? h(Hint, null, pt(t, 'ev.offsetClamped', { from: clampedFrom + 1, total }))
+        : null,
       items.length
         ? h(Fragment, null,
           h('ul', { className: 'sa-list' }, groupEvalDecisions(items).map(group =>
@@ -416,13 +451,13 @@ export function LiveEvalPage() {
               group.decision.runs ?? []))),
           h('div', { className: 'sa-pagination' },
             h(Button, { variant: 'ghost', size: 'sm', disabled: !hasPrev,
-              onClick: () => setOffset(Math.max(0, offset - EVAL_PAGE_SIZE)) }, pt(t, 'ev.prev')),
+              onClick: () => goOffset(Math.max(0, offset - EVAL_PAGE_SIZE)) }, pt(t, 'ev.prev')),
             h('span', { className: 'sa-hint', role: 'status' },
               pt(t, 'ev.pageInfo', { from: pageFrom, to: pageTo, total })),
             h(Button, { variant: 'ghost', size: 'sm', disabled: !hasNext,
-              onClick: () => setOffset(offset + EVAL_PAGE_SIZE) }, pt(t, 'ev.next'))))
+              onClick: () => goOffset(offset + EVAL_PAGE_SIZE) }, pt(t, 'ev.next'))))
         : evalEmptyState(t, openFromEval, counts, kind, range, setKind, setRange, () => {
           setQuery(''); setRepo(''); setReason(''); setFrom(''); setTo(''); setView('all')
           setQ(''); setRepoFilter(''); setReasonFilter(''); setOffset(0)
-        })))
+        }, kind !== 'all' || view !== 'all' || Boolean(query.trim() || repoFilter || reasonFilter || from || to))))
 }
