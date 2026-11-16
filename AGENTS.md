@@ -69,7 +69,7 @@ node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                       # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                                    # checkJs 清单（全量：Host 半 + 客户端入口）
 node --test lib/live/*.test.js                     # Host 测试（全量）
-node scripts/render-check.mjs                      # jsdom 渲染回归（干净 clone 先 npm ci；无 live.json 时用内置 fixture）
+node scripts/render-check.mjs                      # jsdom 渲染回归（247 条；固定用 test/fixtures 建临时状态，本机与 CI 同源）
 ```
 
 - 改了客户端源码：先 `node scripts/build-client.mjs`，把 `client/index.js` 一起提交，否则闸门失败。
