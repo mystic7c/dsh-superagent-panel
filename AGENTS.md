@@ -121,9 +121,9 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（干净
   等于没有。（交付分支上改自己还没合并的提交，`--force-with-lease` 可以；合并进 `develop` 之后就不要再改写历史。）
 - 不 squash：合并用 merge commit（fast-forward 也算）。面板用 `git merge-base --is-ancestor` 判断改动是否已进集成分支。
 - PR 合并前 `.github/workflows/ci.yml` 必须是绿的；Actions 开的 PR 不能被同一个 token 合并，必须由人评审后合并。
-- 推送前用**干净状态**再跑一遍渲染闸门：`render-check` 在 `~/.dsh/superagent/live.json` 存在时读的是**本机真实状态**，
-  干净 clone 与 CI 读的是 `test/fixtures/live.json`，两边结果可以不同。`DSH_SUPERAGENT_STATE_DIR=$(mktemp -d)
-  node scripts/render-check.mjs` 就是 CI 的条件（1.0.4 的 CI 红就是“本地有 42 条决策、CI 只有 1 条”漏出去的）。
+- 渲染闸门本地跑的就是 CI 跑的那一份：`render-check` 固定用 `test/fixtures/live.json` 建临时状态，**不读**
+  `~/.dsh/superagent`（1.0.6 起），所以本地绿与 CI 绿是同一件事。排障时才用 `DSH_SUPERAGENT_STATE_DIR=<目录>`
+  指向真实状态，脚本会打印警告“结果可能与 CI 不同”。
 
 ## 交付语义（GitHub 仓库）
 

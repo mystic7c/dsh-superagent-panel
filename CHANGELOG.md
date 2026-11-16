@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.0.6] — 2026-11-16
+
+渲染闸门原来是「看本机脸色」的：同一句 `node scripts/render-check.mjs`，本机跑 246 条、CI 跑 245 条，结果还不一样。
+1.0.4 的 CI 红就是这么漏过去的——本地全绿，合进 `main` 之后 CI 才红。这一版把闸门固定在一份自带状态上。
+
+### 修复（闸门）
+
+- **`render-check` 不再读 `~/.dsh/superagent`**：原来 `DSH_SUPERAGENT_STATE_DIR` 未设时会直接拿本机真实 `live.json`，
+  于是决策条数、信号、线程都随机器变，面板的请求断言（深链 offset、筛选、空态）跟着变；CI 上干净检出只有 1 条决策，
+  本机 42 条，两边断言命中的分支不同。现在默认永远用 `test/fixtures/live.json` 在临时目录建状态，本机与 CI 跑的是同一个
+  条件。`DSH_SUPERAGENT_STATE_DIR=<目录>` 保留为排障用的显式 opt-out（目录里必须有 `live.json`），会打印
+  `[render-check] 用外部状态目录 …（结果可能与 CI 不同；CI 跑的是自带 fixture）`；目录里没有 `live.json` 时警告并回退 fixture。
+- **fixture 补远程凭据占位**：`gitlab.token` / `octo.token` 写进临时状态目录。原来干净 clone 上「允许合并 MR」开关因为
+  没有 token 而 disabled，U-06 的两步确认检查被 SKIP（`no second writable high-risk switch on this machine`）——
+  这条覆盖洞跟凭据无关，是 fixture 缺省值造成的。
+- **新增一条 hermetic 断言** `the gate runs on its own fixture state unless an operator opts in (hermetic)`：
+  状态目录若不是 fixture 又没显式 opt-in，闸门自己报红，避免以后有人又把本机状态接回来。
+
+### 验证
+
+- 默认（本机，有真实状态）：**247 checks / 0 failed / 0 skipped**。
+- 无 `~/.dsh/superagent` 的干净状态：同样 **247 / 0 / 0**（此前 245 + 1 SKIP）。
+- `DSH_SUPERAGENT_STATE_DIR=/tmp/<有 live.json 的目录>`：走外部状态并打印警告；目录不存在或没有 `live.json`：警告后回退 fixture。
+- 其余闸门不变：`node --check index.js`、`build-client --check`（23 modules / 501,251 bytes）、`check-keys` 986/525/1421、
+  `npm run types`、`npm run check:js`、`node --test lib/live/*.test.js` 572 pass / 0 fail。
+
 ## [1.0.5] — 2026-11-16
 
 纯文档：把「怎么改这个仓库」从只有面板自开发一种角色，补成两种开发方式并列出共同的 GitFlow 硬线。
