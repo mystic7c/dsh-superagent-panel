@@ -44,7 +44,7 @@ node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                      # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                                   # checkJs 已清零的那一档（清单在 tsconfig.check.json）
 node --test lib/live/*.test.js   # Host 测试（全量）
-node scripts/render-check.mjs                      # jsdom 渲染回归（194 条；无 live.json 时自动用 test/fixtures）
+node scripts/render-check.mjs                      # jsdom 渲染回归（247 条；固定用 test/fixtures 建临时状态，CI 同源）
 ```
 
 CI 在干净 clone 上跑的就是这八条。`npm run check:js` 用的是「分档清单」：`tsconfig.check.json` 的 `files`

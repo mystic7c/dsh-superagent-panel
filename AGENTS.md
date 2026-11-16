@@ -69,7 +69,7 @@ node scripts/check-keys.mjs                        # 中英文 key 覆盖
 npm run types                                       # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                                    # checkJs 清单（全量：Host 半 + 客户端入口）
 node --test lib/live/*.test.js                     # Host 测试（全量）
-node scripts/render-check.mjs                      # jsdom 渲染回归（干净 clone 先 npm ci；无 live.json 时用内置 fixture）
+node scripts/render-check.mjs                      # jsdom 渲染回归（247 条；固定用 test/fixtures 建临时状态，本机与 CI 同源）
 ```
 
 - 改了客户端源码：先 `node scripts/build-client.mjs`，把 `client/index.js` 一起提交，否则闸门失败。
@@ -91,12 +91,39 @@ node scripts/render-check.mjs                      # jsdom 渲染回归（干净
 
 ## 禁止
 
-- 不要 `git push` / `git merge` / `git tag` / `gh pr`：执行器负责提交、推送与交付；worker 只改工作树。
+- 面板自开发模式下 worker 只改工作树：不要 `git push` / `git merge` / `git tag` / `gh pr`——跑闸门、提交、推送与
+  交付是执行器的活（见下面「两种开发方式」）。
+- 在 DSH 会话里直接本地开发时，会话里的 Agent 可以提交并推**交付分支**，但同样受「两种开发方式」的硬线约束，
+  不因为“不是执行器”就可以直推受保护分支。
 - 不要碰受保护分支（`main`/`dev`/`develop`/`master`）或强推；不要改 `.git/config`、`.env*`、`secrets/`、
   `node_modules/`、`logs/`、`graphify-out/`。
 - 不要修改 `scripts/local/` 之外的部署/导出脚本，不要执行生产部署、DDL/DML。
 - 不要删 `spec/`、`verification/` 或 `.gitignore` 里的忽略规则（它们是本地材料，不进仓库）。
 - 不要凭猜测改 `live.json` 契约（`lib/live/live-json.js` 的白名单、`repos.js` 的归一化）而不加测试。
+
+## 两种开发方式（同一套 GitFlow）
+
+在本仓库写代码有两种方式，角色不同、交付路径相同：
+
+| 方式 | 谁写代码 | 谁提交与推送 | 怎么进集成分支 |
+| --- | --- | --- | --- |
+| **面板自开发**（工单驱动） | 执行器为工单开 worktree；worker 只改工作树 | 执行器：跑闸门 → 提交 → 推 `feature/<ticketId>` | auto-pr 开 PR（base `develop`）→ 人评审合并 |
+| **DSH 会话里直接本地开发** | 会话里的 Agent 或人，直接改本仓库工作树 | 会话里的 Agent/人自己提交、推交付分支（`fix/**`、`feature/**`、`chore/**`、`docs/**`） | 同上：auto-pr 开 PR（base `develop`）→ 人评审合并 |
+
+第二种方式**不是**“本地开发就可以随便推”：`禁止`一节里“worker 只改工作树、由执行器交付”说的是第一种方式的分工，
+换到会话里直接开发，规矩变成“自己就是提交者，但仍必须走交付分支 + PR”。
+
+两种方式共同的硬线（**没有例外**）：
+
+- 只在交付分支上提交，推上去交给 auto-pr 开 PR；发布只从 `release/**` / `hotfix/**` 进 `main`。
+- **不直接推 `main`/`develop`，不向受保护分支强推**。这两个分支挂着 required status checks，直推会“推送成功”但绕过检查
+  （GitHub 回显 `Bypassed rule violations … required status checks are expected`）；本地闸门绿不等于 CI 绿，被绕过的检查
+  等于没有。（交付分支上改自己还没合并的提交，`--force-with-lease` 可以；合并进 `develop` 之后就不要再改写历史。）
+- 不 squash：合并用 merge commit（fast-forward 也算）。面板用 `git merge-base --is-ancestor` 判断改动是否已进集成分支。
+- PR 合并前 `.github/workflows/ci.yml` 必须是绿的；Actions 开的 PR 不能被同一个 token 合并，必须由人评审后合并。
+- 渲染闸门本地跑的就是 CI 跑的那一份：`render-check` 固定用 `test/fixtures/live.json` 建临时状态，**不读**
+  `~/.dsh/superagent`（1.0.6 起），所以本地绿与 CI 绿是同一件事。排障时才用 `DSH_SUPERAGENT_STATE_DIR=<目录>`
+  指向真实状态，脚本会打印警告“结果可能与 CI 不同”。
 
 ## 交付语义（GitHub 仓库）
 

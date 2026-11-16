@@ -45,18 +45,31 @@ global.location = window.location
 global.ResizeObserver = window.ResizeObserver
 try { Object.defineProperty(global, 'navigator', { value: window.navigator, configurable: true }) } catch { /* node keeps its own */ }
 
-// ---- fixtures from the real live state (read-only) ---------------------------------------------------------------
+// ---- state: always the committed fixture unless an operator asks otherwise -------------------------------------
 const { Engine } = await import('../lib/live/engine.js')
-// Operator machines keep their real live.json; a clean clone (or CI) has none, so the committed fixture is copied
-// into a throw-away temp dir and the config-dependent checks (repositories, UAT link, Octo groups, worker backends)
-// run there instead of skipping. Nothing outside that temp dir is read or written.
+// The gate must read the same state on every machine: a clean clone, CI and an operator's laptop all build the same
+// throw-away temp dir from the committed fixture, so the check set and the row counts cannot drift with whatever is in
+// ~/.dsh/superagent. (Before 1.0.6 the operator's real live.json was picked up silently: a machine with 42 decisions
+// and CI with 1 ran different checks and the local gate went green on a red CI.)
+// DSH_SUPERAGENT_STATE_DIR still works, but only as an explicit debugging escape hatch — it prints a warning, because
+// its results are no longer comparable with CI.
 const requestedStateDir = process.env.DSH_SUPERAGENT_STATE_DIR
-  ?? join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
-const stateDir = existsSync(join(requestedStateDir, 'live.json')) ? requestedStateDir : prepareFixtureState()
+let stateDir
+if (requestedStateDir && existsSync(join(requestedStateDir, 'live.json'))) {
+  stateDir = requestedStateDir
+  console.warn(`[render-check] 用外部状态目录 ${requestedStateDir}（结果可能与 CI 不同；CI 跑的是自带 fixture）`)
+} else {
+  if (requestedStateDir) console.warn(`[render-check] ${requestedStateDir} 里没有 live.json，改用自带 fixture`)
+  stateDir = prepareFixtureState()
+}
 function prepareFixtureState () {
   const dir = mkdtempSync(join(tmpdir(), 'sa-render-'))
   const fixture = readFileSync(join(root, 'test', 'fixtures', 'live.json'), 'utf8').split('@STATE@').join(dir)
   writeFileSync(join(dir, 'live.json'), fixture)
+  // Stand-in remote credentials. Without a token the Settings write-permission group disables 允许合并 MR, which skipped
+  // the U-06 two-step confirmation checks on a clean clone — a coverage hole that had nothing to do with credentials.
+  writeFileSync(join(dir, 'gitlab.token'), 'fixture-gitlab-token\n')
+  writeFileSync(join(dir, 'octo.token'), 'fixture-octo-token\n')
   console.log(`STATE fixture ${dir}`)
   return dir
 }
@@ -516,6 +529,13 @@ const check = (name, ok, detail = '') => { checks.push({ name, ok, detail }); if
 // change under review did not cause. Skips are printed and counted in the summary, never as failures.
 const skipped = []
 const skip = (name, reason) => { skipped.push({ name, reason }); console.log(`SKIP ${name} — ${reason}`) }
+// The gate must be hermetic: it reads the committed fixture in a temp dir, never the operator's ~/.dsh/superagent.
+// Silently picking up the operator's live.json is what let a red CI pass a green local gate at 1.0.4 — same command,
+// different state, different row counts, different check outcome. DSH_SUPERAGENT_STATE_DIR is an explicit opt-out.
+const operatorStateDir = join(process.env.DSH_HOME ?? join(homedir(), '.dsh'), 'superagent')
+check('the gate runs on its own fixture state unless an operator opts in (hermetic)',
+  Boolean(requestedStateDir) || stateDir !== operatorStateDir,
+  `stateDir=${stateDir} operatorStateDir=${operatorStateDir}`)
 const octoCard = (fixtures.status.sources ?? []).find(source => source.id === 'octo')
 const sourcePageReady = (fixtures.status.sources ?? []).length > 0
   && !(octoCard && (octoCard.config?.watchChatIds ?? []).length === 0 && fixtures.status.config?.octo?.tokenConfigured !== true)
