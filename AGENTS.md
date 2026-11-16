@@ -30,6 +30,10 @@ DeepSeek Harness（DSH）插件：Web UI 里的「超级智能体」管理面板
   `docs/intake-and-eval.md` 的评估与接单配置、`docs/feature-maturity.md` 的功能成熟度清单）；README 只留摘要与入口。
 - `cordis.patch.yml`：插件注册（sidebar/main 槽位）。
 - `.github/workflows/auto-pr.yml`：GitHub 仓库的交付桥——执行器只能推 feature 分支，这个 workflow 负责开 PR。
+  `ci.yml` 是闸门本体（分支保护引用的 required checks 就是它），`.github/` 下都是功能性文件，不进 `.gitignore`。
+- `DESIGN.md` 与 `.impeccable/design.json`：设计契约的人读 / 机器读两半。`design.json` 是**生成物**，跟着
+  `DESIGN.md` 一起重生成（impeccable 的 `document` 流程），不手改、不单独提交；`.impeccable/` 下其余目录
+  （`critique/`、`build/`、`review/`、`mocks/`、`config.local.json`）是本机工作目录，已在 `.gitignore` 忽略。
 
 客户端改动刷新页面即生效；Host 半改动要重载插件。**验收/截图类脚本可能在 `spec/`、`verification/` 写文件，
 这两个目录被 gitignore，不要把它们的产物提交。**
