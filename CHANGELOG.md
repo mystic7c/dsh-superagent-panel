@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.7] — 2026-11-16
+
+仓库卫生：把 `impeccable` 的工作目录从版本控制的口子上挡掉，并写清 `.github/` 与 `DESIGN.md` 侧的契约产物各自该不该进仓库。
+
+### 文档
+
+- **`.impeccable/` 只留契约 sidecar**：`.impeccable/design.json` 是 `DESIGN.md` 的机器可读另一半（impeccable `document`
+  流程随 `DESIGN.md` 一起重生成），属于设计契约，继续纳入仓库且不手改；`config.local.json`、`critique/`、`build/`、
+  `review/`、`mocks/` 是工具在一个人机器上的工作目录（评审报告、构建状态、组件评审清单、示意图），已加入 `.gitignore`，
+  避免以后整目录 `git add` 时把本机产物和截图提交上去。
+- **`AGENTS.md` 结构一节补两条**：`.github/` 下是功能性文件（`ci.yml` 就是分支保护引用的 required checks、
+  `auto-pr.yml` 是交付桥），不进 `.gitignore`；`DESIGN.md` 与 `.impeccable/design.json` 是人读/机器读两半，
+  `design.json` 是生成物，跟着 `DESIGN.md` 重生成。
+
 ## [1.0.6] — 2026-11-16
 
 渲染闸门原来是「看本机脸色」的：同一句 `node scripts/render-check.mjs`，本机跑 246 条、CI 跑 245 条，结果还不一样。
