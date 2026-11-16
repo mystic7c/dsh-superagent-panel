@@ -1501,6 +1501,12 @@ triggerRoot.unmount()
 // AC-06/07: a refresh (or a pasted link) restores the eval filters, the result page and the list position; back/forward
 // updates the view in place. The mock ignores the params, so assert the request and the restored controls, not the rows.
 console.log('STEP eval deep link restore')
+// The mock answers every decisions request from one fixture (it ignores `offset`/`limit`), so page 2 only exists when
+// the fixture claims enough rows. A clean checkout has a single seeded decision, which made offset=25 genuinely out of
+// range there: R2-14 correctly clamped it to the last page, and the real-state-only run hid that. Give the fixture a
+// page-2-sized total for this step so the restore path is exercised in every state.
+const decisionsTotalBefore = fixtures.decisions.total
+fixtures.decisions.total = 100
 window.history.replaceState(null, '', '/?evalView=divergence&evalQ=DDL&evalOffset=25')
 window.sessionStorage.setItem('superagent-panel/eval-scroll', '180')
 window.sessionStorage.setItem('superagent-panel/route', JSON.stringify({ route: { page: 'eval' }, stack: [] }))
@@ -1527,8 +1533,42 @@ const overrideChip = [...rootElement.querySelectorAll('.sa-main .sa-filters butt
 check('back/forward restores the eval view in place', overrideChip?.getAttribute('aria-checked') === 'true',
   overrideChip?.getAttribute('aria-checked') ?? 'missing')
 evalDeepRoot.unmount()
+fixtures.decisions.total = decisionsTotalBefore
 window.history.replaceState(null, '', '/')
 window.sessionStorage.removeItem('superagent-panel/eval-scroll')
+
+// R2-14: a link to page 2 that is past the end of the current result set must clamp to the last page and say so. The
+// fixture below is the empty-state shape CI sees (one recorded decision), so offset=25 is out of range on every machine.
+console.log('STEP eval out-of-range deep link')
+const decisionsForClamp = fixtures.decisions
+fixtures.decisions = { items: [], total: 1, counts: {} }
+window.history.replaceState(null, '', '/?evalOffset=25')
+window.sessionStorage.setItem('superagent-panel/route', JSON.stringify({ route: { page: 'eval' }, stack: [] }))
+const clampRoot = ReactDOM.createRoot(rootElement)
+clampRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const clampText = rootElement.textContent ?? ''
+const clampRequest = calls.filter(entry => /engine\/decisions\?/.test(entry)).at(-1) ?? ''
+check('an out-of-range eval deep link clamps to the last page and says so (R2-14)',
+  clampText.includes('已显示最后一页') && clampText.includes('共 1 条'), clampText.slice(0, 300))
+check('the clamped eval page refetches from the last page instead of leaving the list empty (R2-14)',
+  /offset=0/.test(clampRequest) && !/offset=25/.test(clampRequest), clampRequest)
+clampRoot.unmount()
+
+// The empty result set is not "clamped": there is no last page to go back to, so the page shows the empty state and
+// keeps working (no clamp loop, no request storm). This is the CI shape too, made explicit rather than inherited.
+fixtures.decisions = { items: [], total: 0, counts: {} }
+const emptyRoot = ReactDOM.createRoot(rootElement)
+emptyRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const emptyText = rootElement.textContent ?? ''
+const emptyRequests = calls.filter(entry => /engine\/decisions\?/.test(entry))
+check('an empty result set with a deep-linked offset renders the empty state, not a phantom page (R2-14)',
+  emptyText.includes('还没有评估记录。') && emptyRequests.at(-1) !== undefined
+  && !emptyText.includes('已显示最后一页'), emptyText.slice(0, 300))
+emptyRoot.unmount()
+fixtures.decisions = decisionsForClamp
+window.history.replaceState(null, '', '/')
 
 // ---- pure projections: states the fixtures cannot reach -----------------------------------------------------------
 console.log('STEP pure projections')
