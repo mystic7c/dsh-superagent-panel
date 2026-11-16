@@ -75,7 +75,7 @@ node scripts/check-keys.mjs               # i18n key 完整性
 npm run types                             # types/dsh.d.ts 自身能否通过 tsc
 npm run check:js                          # tsc checkJs：Host 半 + 客户端整条 import 链
 node --test lib/live/*.test.js            # Host 半测试
-node scripts/render-check.mjs             # jsdom 全页回归（198 项）
+node scripts/render-check.mjs             # jsdom 全页回归（247 项；固定 fixture，本机与 CI 同源）
 node scripts/isolated-verify.mjs          # 真机：起隔离 DSH + Chrome，开面板
 ```
 
