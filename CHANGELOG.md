@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.5] — 2026-11-16
+
+纯文档：把「怎么改这个仓库」从只有面板自开发一种角色，补成两种开发方式并列出共同的 GitFlow 硬线。
+
+### 文档
+
+- **AGENTS.md 区分两种开发方式**：`禁止`一节原来写的是「不要 `git push` / `git merge` / `git tag` / `gh pr`：执行器负责
+  提交、推送与交付；worker 只改工作树」——那是**面板自开发**（工单驱动、执行器开 worktree）的角色分工。在 DSH 会话里
+  直接改本地仓库时，提交者就是会话里的 Agent 自己，照字面读容易得出「Agent 不能提交/推送」，或者反过来直推受保护分支。
+  现在新增「两种开发方式（同一套 GitFlow）」一节，把两者并排列出，并写清共同的硬线：只在交付分支提交、交给 auto-pr 开 PR、
+  PR 前 CI 必须绿、不直推 `main`/`develop`、不 `--force`、不 squash；`禁止`一节的措辞同步按两种方式改写。
+- **补一条「推之前用干净状态跑渲染闸门」**：`render-check` 在 `~/.dsh/superagent/live.json` 存在时读的是本机真实状态，
+  干净 clone 与 CI 读 `test/fixtures/live.json`，两边结果可以不同——1.0.4 的 CI 红（本机 42 条决策、CI 只有 1 条）就是这么
+  漏出去的。现在写明 `DSH_SUPERAGENT_STATE_DIR=$(mktemp -d) node scripts/render-check.mjs` 就是 CI 的条件。
+
 ## [1.0.4] — 2026-11-15
 
 一轮开发视角深挖审计（`verification/dev-audit-round2.md`）的 10 条缺陷，加上用户第二轮点检（`verification/ui-review-round2.md`）的 13 条修复与 5 条体验问题，合并发布。服务端修的是「并发/契约/生命周期」，界面修的是「刷新、筛选、命名与可达性」。
