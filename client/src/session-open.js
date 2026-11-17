@@ -5,8 +5,9 @@
      (phase !== 'ready') — i.e. right after a page load, when the panel is already clickable;
    - the Workspace controller drops a selection whose Session is archived (`clearArchivedCurrent`), so a finished run's
      Session would open and then bounce the reader back to the landing page.
-   So: wait until the list can answer, restore an archived Session first, then hand the jump over. A host whose list
-   cannot answer at all is not blocked — the call goes through and the host's own error surfaces. */
+   So: give the list a moment, restore an archived Session first, then hand the jump over. The list is only an
+   early-warning device, never a gate: a Session it does not name yet (or names while still loading) must still reach
+   the host, whose `retain` call is what actually decides — and whose refusal is the only accurate failure. */
 
 export const SESSION_OPEN_UNSUPPORTED = 'session-open-unsupported'
 export const SESSION_OPEN_UNAVAILABLE = 'session-open-unavailable'
@@ -78,13 +79,19 @@ export function createSessionOpener(ctx, options = {}) {
   return async function openSession(sessionId) {
     const workspace = ctx?.get?.('uiWorkspace')
     if (typeof workspace?.openSession !== 'function') throw openerError(SESSION_OPEN_UNSUPPORTED)
-    const state = await waitListState(ctx?.get?.('sessions'), sessionId, waitMs)
-    if (state === 'missing' || state === 'loading') throw openerError(SESSION_OPEN_UNAVAILABLE)
-    const archived = ctx?.get?.('workspaces')?.list?.getSnapshot?.()?.archivedSessionIds
-    if (Array.isArray(archived) && archived.includes(sessionId) && typeof workspace.unarchiveSession === 'function') {
-      await workspace.unarchiveSession(sessionId)
+    // A selection made while the list is still loading is dropped by the host, so wait for it to settle — but a list
+    // that stays pending, or that does not name this Session yet, is not a reason to refuse: the host is the authority
+    // (it also knows Sessions this list has not projected), and its refusal is what the reader should be told about.
+    await waitListState(ctx?.get?.('sessions'), sessionId, waitMs)
+    try {
+      const archived = ctx?.get?.('workspaces')?.list?.getSnapshot?.()?.archivedSessionIds
+      if (Array.isArray(archived) && archived.includes(sessionId) && typeof workspace.unarchiveSession === 'function') {
+        await workspace.unarchiveSession(sessionId)
+      }
+      workspace.openSession(sessionId)
+    } catch (failure) {
+      throw Object.assign(openerError(SESSION_OPEN_UNAVAILABLE), { cause: failure })
     }
-    workspace.openSession(sessionId)
   }
 }
 

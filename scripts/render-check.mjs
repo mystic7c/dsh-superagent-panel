@@ -716,13 +716,13 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   }
   {
     const services = {
-      uiWorkspace: { openSession() {} },
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
       sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }), subscribe: () => () => {} } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
     }
     const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-gone')
       .then(() => undefined, error => error)
-    check('an unknown Session reports the unavailable code instead of navigating',
+    check('a Session the host refuses reports the unavailable code instead of navigating',
       failure?.message === 'session-open-unavailable', String(failure?.message))
     check('the unavailable failure reads as a sentence, not as a code',
       String(openSessionMessage(failure, t)).includes('会话列表'), String(openSessionMessage(failure, t)))
@@ -730,6 +730,30 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
       .then(() => undefined, error => error)
     check('a host without uiWorkspace reports the unsupported code',
       missing?.message === 'session-open-unsupported', String(missing?.message))
+  }
+  {
+    // A Session the client's list does not name yet is the host's call, not this panel's: the list can lag behind a
+    // Session the executor just created, and refusing there is a false negative the reader cannot act on.
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'ready', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-unlisted')
+    check('a Session missing from the client list still reaches the host',
+      calls.join(',') === 'worker-unlisted', JSON.stringify(calls))
+  }
+  {
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-late')
+    check('a Session list that never becomes ready still hands the jump to the host',
+      calls.join(',') === 'worker-late', JSON.stringify(calls))
   }
   {
     const calls = []

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.10] — 2026-11-17
+
+两个都在 `tkt_59a2d395723646b9` 上暴露：staged 工作流的 `assess` 阶段把散文当 JSON 交回来，整条运行直接 failed；那条运行留下的 run ID 又在会话列表还没投影出这个会话时被 opener 判成「不存在」。
+
+### 修复：DSH 阶段没有回答契约，模型交回散文
+
+- 根因：CLI 阶段靠 `outputSchema` 告诉模型交什么，DSH 阶段只拿到 `instructions.assess`（"Read relevant source and tests. Assess complexity…"）这类散文指令，没有任何「用一个 JSON 对象回答」的要求；`parseStageResult` 随后对一个 markdown 报告做 `JSON.parse`，冒出的就是 V8 的 `Expected property name or '}' in JSON at position 1`。
+- `lib/live/workflow-worker.js` 新增 `stageJsonMarker(role)`：按 `SCHEMAS[role]` 生成 `Return only a json object with keys: workflow, reason.`，只对 `backend === 'dsh'` 的阶段追加（CLI 已有 `outputSchema`，`implement` 仍要求散文总结）。
+- `lib/live/review-json.js` 把 JSON 模式的判据从 review 专用标记泛化成 `JSON_OBJECT_PROMPT`（"Return only a json object with keys:"），于是 assess / plan 的收尾回合也拿到 DeepSeek `response_format: {type:'json_object'}`；「还没看到任何 tool 结果前不开 JSON 模式」这条规则保持不动，避免模型先答后读。
+- `parseStageResult` 改成括号配对扫描：接受裸对象、```json 围栏、带前言的回答、嵌套对象与字符串里的花括号；只有整段都解析不出对象时才失败，错误改成 `assess did not answer with one JSON object: <原文前 160 字>`，不再把裸解析器的报错丢给用户。
+
+### 修复：会话列表还没投影出会话时，run ID 链接误报不存在
+
+- `client/src/session-open.js` 的 `createSessionOpener` 不再拿 `sessions.list` 当闸门：列表只用来「等它别再 loading」和「查是不是归档」，真正的裁决交给宿主的 `openSession`；宿主拒绝（`unknown session`）才报 `session-open-unavailable`。列表比执行器慢一拍、或当前列表根本没投影这个会话时，跳转照常发生。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**（新增 `lib/live/workflow-worker.test.js` 5 条：schema 文案、裸/围栏/前言、嵌套与字符串花括号、散文报错文案、数组与标量；`review-json.test.js` 补 assess 也进 JSON 模式、implement 不进）。
+- `node scripts/render-check.mjs` → **258 checks / ok true**（新增「列表里没有该会话仍交给宿主」「列表永远不 ready 也照常跳」两条）。
+- `build-client --check` 24 modules / 504,064 bytes；`check-keys` 990/528/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+
 ## [1.0.9] — 2026-11-17
 
 一条：把「运行记录」里的 run ID 变成进执行器会话的门。此前 worker 的 DSH Session 在左侧「未分组」下能打开，但要从一次运行里看它跑的过程，只能自己去会话列表里一个个找。
