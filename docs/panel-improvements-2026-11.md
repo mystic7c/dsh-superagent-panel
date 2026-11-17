@@ -7,8 +7,9 @@
 
 - `lib/live/routing.js` 先判定 **交付物**（`change` / `report`）和 **所需能力**（`edit` / `exec` / `web` / `report`），
   再选择后端（`dsh` / `codex` / `claude`）。标题/正文里同时出现「修复」和「分析」时不再降级为报告。
-- 显式只读文案（只分析、不要修改、只读、read-only 等）保持 `report`；显式修改动词（修复、实现、新增、重构等）
-  保持 `change`。能力仍会拒绝无法满足的后端，并给出 `missing-<cap>` 提示。
+- 显式只读**动作**（只分析、不要修改、本次只读/只读分析、read-only review 等）保持 `report`；显式修改动词（修复、实现、新增、重构等）
+  保持 `change`。裸「只读」不再单独把工单钉成报告：引用既有的“EBS 只读口径”“只读输入框”“--verify 只读检查”这类名词
+  是需求的一部分，不能反过来改变交付物。能力仍会拒绝无法满足的后端，并给出 `missing-<cap>` 提示。
 - `POST engine/route` 返回预览；建单表单可覆盖交付物与后端，选择保存在 `ticket.routeSelection`，执行时
   `run.route` 快照实际使用的交付物/能力/后端。人工覆盖不能绕过能力检查。
 
