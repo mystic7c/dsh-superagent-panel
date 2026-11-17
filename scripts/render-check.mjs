@@ -715,14 +715,111 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
       JSON.stringify(events) === JSON.stringify(['unarchive:worker-demo', 'open:worker-demo']), JSON.stringify(events))
   }
   {
+    // A run that is still going creates its Session seconds before the reader clicks it, and the Host's retain decides
+    // from the same list it pushes: the first attempt refuses the Session as unknown, the push that names it arrives a
+    // moment later, and the second attempt lands. Refusing outright here is the false negative a WORKING run produced.
+    const events = []
+    const listeners = new Set()
+    let snapshot = { phase: 'ready', byId: {} }
+    const list = {
+      getSnapshot: () => snapshot,
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      push() { snapshot = { phase: 'ready', byId: { 'worker-new': { id: 'worker-new' } } }; for (const fn of listeners) fn() },
+    }
     const services = {
-      uiWorkspace: { openSession() {} },
+      uiWorkspace: {
+        openSession(id) {
+          if (snapshot.byId[id] === undefined) throw new Error(`unknown session ${id}`)
+          events.push(`open:${id}`)
+        },
+      },
+      sessions: { list },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    setTimeout(() => list.push(), 30)
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 2000 })('worker-new')
+    check('a Session a live run just created is opened once the list push names it',
+      JSON.stringify(events) === JSON.stringify(['open:worker-new']), JSON.stringify(events))
+  }
+  {
+    // A run that is STILL going can leave its Session on disk with no push at all, so the page's list stays stale for
+    // its whole life and the Host's retain keeps refusing a Session that exists. The catalog's implementation `refresh()`
+    // is the lever: one fresh pull, then the jump lands without waiting for a push that never comes.
+    const events = []
+    const listeners = new Set()
+    let snapshot = { phase: 'ready', byId: {} }
+    const list = {
+      getSnapshot: () => snapshot,
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) {
+          if (snapshot.byId[id] === undefined) throw new Error(`unknown session ${id}`)
+          events.push(`open:${id}`)
+        },
+      },
+      sessions: {
+        list,
+        async refresh() {
+          events.push('refresh')
+          snapshot = { phase: 'ready', byId: { 'worker-stale': { id: 'worker-stale' } } }
+          for (const fn of listeners) fn()
+        },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-stale')
+    check('a stale list is pulled again before the Session jump gives up',
+      JSON.stringify(events) === JSON.stringify(['refresh', 'open:worker-stale']), JSON.stringify(events))
+  }
+  {
+    // A pull that still does not name the Session is a refusal like any other: one refresh, no second open, and the
+    // host's words survive into the message.
+    const events = []
+    const services = {
+      uiWorkspace: {
+        openSession(id) { events.push(`open:${id}`); throw new Error(`unknown session ${id}`) },
+      },
+      sessions: {
+        list: { getSnapshot: () => ({ phase: 'ready', byId: {} }), subscribe: () => () => {} },
+        async refresh() { events.push('refresh') },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-void')
+      .then(() => undefined, error => error)
+    check('a pull that still misses the Session reports unavailable, quoting the host',
+      failure?.message === 'session-open-unavailable'
+        && events.filter(event => event === 'refresh').length === 1
+        && events.filter(event => event === 'open:worker-void').length === 1
+        && String(openSessionMessage(failure, t)).includes('unknown session worker-void'),
+      JSON.stringify({ events, message: String(failure?.message) }))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
+      sessions: {
+        list: { getSnapshot: () => ({ phase: 'ready', byId: {} }), subscribe: () => () => {} },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a Session the list never names reports the unavailable code',
+      failure?.message === 'session-open-unavailable', String(failure?.message))
+    check('the unavailable message quotes the host reason, so a stale list is not read as a deleted Session',
+      String(openSessionMessage(failure, t)).includes('unknown session worker-gone'), String(openSessionMessage(failure, t)))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
       sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }), subscribe: () => () => {} } },
       workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
     }
     const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-gone')
       .then(() => undefined, error => error)
-    check('an unknown Session reports the unavailable code instead of navigating',
+    check('a Session the host refuses reports the unavailable code instead of navigating',
       failure?.message === 'session-open-unavailable', String(failure?.message))
     check('the unavailable failure reads as a sentence, not as a code',
       String(openSessionMessage(failure, t)).includes('会话列表'), String(openSessionMessage(failure, t)))
@@ -730,6 +827,30 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
       .then(() => undefined, error => error)
     check('a host without uiWorkspace reports the unsupported code',
       missing?.message === 'session-open-unsupported', String(missing?.message))
+  }
+  {
+    // A Session the client's list does not name yet is the host's call, not this panel's: the list can lag behind a
+    // Session the executor just created, and refusing there is a false negative the reader cannot act on.
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'ready', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-unlisted')
+    check('a Session missing from the client list still reaches the host',
+      calls.join(',') === 'worker-unlisted', JSON.stringify(calls))
+  }
+  {
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-late')
+    check('a Session list that never becomes ready still hands the jump to the host',
+      calls.join(',') === 'worker-late', JSON.stringify(calls))
   }
   {
     const calls = []
