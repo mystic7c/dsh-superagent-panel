@@ -7,3 +7,10 @@ node_modules/
 # 本地验收截图与内部设计/评审文档：只保留在本地，不进仓库
 verification/
 spec/
+
+# impeccable：design.json 是 DESIGN.md 的契约 sidecar（进仓库）；以下是本机工作目录，不提交
+.impeccable/config.local.json
+.impeccable/critique/
+.impeccable/build/
+.impeccable/review/
+.impeccable/mocks/

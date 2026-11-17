@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.0.8] — 2026-11-17
+
+两条：把「只读」从关键词升级为语境判断（工单 `tkt_e3c4b7ce8ddd4399` 只出报告、不落地需求的根因），并让一张工单能在标题/正文/追加要求里引用另一张工单，执行时自动带上被引用工单的报告。
+
+### 修复（路由）
+
+- **裸「只读」不再把工单钉成报告**：`lib/live/routing.js` 的 `READ_ONLY_INTENT` 现在只认只读**动作**（只读分析/审查/评审/梳理/本次只读/`read-only review` 等）与明确的禁改措辞（只分析/不要修改/不改代码）；引用语境里的“EBS 只读”“只读输入框”“`--verify` 只读检查”不再压制显式修改动词。根因是 0.4.31 引入的裸词把“修正 freeze.md 的 EBS 只读口径”判成只读分析，run 以 `report_delivered` 结束、worktree 干净。
+- `routing.test.js` 补回归：引文式「只读」仍判 `change`；`只读分析/本次只读/read-only review` 仍判 `report`。
+
+### 新增（工单引用）
+
+- 新文件 `lib/live/references.js`：`ticketIdsIn(text)` 解析 `tkt_…`；`referenceContext(engine, ticket)` 取被引用工单的 `links.report.text`（没有报告则正文）拼成 worker 上下文块；最多 5 张、单张 40k 字符、总计 60k，缺号只写「未找到」不失败。
+- `lib/live/executor.js` 的 `workerContext()` 把引用块接到 extraContext 之后，staged 工作流、单轮 worker 与发布修复三处都使用（`workerTask` 本身保持纯函数）。
+- 引用内容是「背景需求」而非新指令：块头重复硬边界（不执行参考内容里的部署/发版/生产/EBS DDL/DML）。引用文本在建单时不再经过 R3（它已作为独立工单被接手并产出报告），新工单正文本身仍走 R3。
+- 文档：`docs/pages.md` 手工建单说明；`docs/panel-improvements-2026-11.md` 的行为契约同步。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：**580 pass / 0 fail**（新增 references 5 条、routing 1 条、executor 2 条）。
+- `node scripts/render-check.mjs`：**248 checks / `"ok": true`**（hermetic fixture）。
+- `node scripts/isolated-verify.mjs`：**PASS**（临时 DSH profile + 临时状态 + headless Chrome，随机端口独立启动；真实面板挂载、6 个页签、0 console error，未触碰运行中的面板与 `~/.dsh/superagent`）。
+- 其余闸门：`node --check index.js`、`build-client --check`（23 modules / 501,251 bytes）、`check-keys`（986/525/1421）、`npm run types`、`npm run check:js` 全绿。
+- 独立验证（真实状态只读）：`tkt_e3c4b7ce8ddd4399` 现在判 `dev/change/write`；草稿工单「按 tkt_e3c4b7ce8ddd4399 的报告落地」判 `change`、R3 不命中、worker task 已带 17,374 字符引用块；`live-state.json` 的 sha 前后一致（未写状态）。
+
+## [1.0.7] — 2026-11-16
+
+仓库卫生：把 `impeccable` 的工作目录从版本控制的口子上挡掉，并写清 `.github/` 与 `DESIGN.md` 侧的契约产物各自该不该进仓库。
+
+### 文档
+
+- **`.impeccable/` 只留契约 sidecar**：`.impeccable/design.json` 是 `DESIGN.md` 的机器可读另一半（impeccable `document`
+  流程随 `DESIGN.md` 一起重生成），属于设计契约，继续纳入仓库且不手改；`config.local.json`、`critique/`、`build/`、
+  `review/`、`mocks/` 是工具在一个人机器上的工作目录（评审报告、构建状态、组件评审清单、示意图），已加入 `.gitignore`，
+  避免以后整目录 `git add` 时把本机产物和截图提交上去。
+- **`AGENTS.md` 结构一节补两条**：`.github/` 下是功能性文件（`ci.yml` 就是分支保护引用的 required checks、
+  `auto-pr.yml` 是交付桥），不进 `.gitignore`；`DESIGN.md` 与 `.impeccable/design.json` 是人读/机器读两半，
+  `design.json` 是生成物，跟着 `DESIGN.md` 重生成。
+
 ## [1.0.6] — 2026-11-16
 
 渲染闸门原来是「看本机脸色」的：同一句 `node scripts/render-check.mjs`，本机跑 246 条、CI 跑 245 条，结果还不一样。
