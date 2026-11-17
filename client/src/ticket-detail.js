@@ -1,4 +1,4 @@
-import { Icon, safeHttpUrl, scrollPanelTo, shortId } from "./util.js"
+import { Icon, executorSessionId, safeHttpUrl, scrollPanelTo, shortId } from "./util.js"
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -6,7 +6,7 @@ import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyV
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
-import { GateSummary, MergeRequestCard, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
+import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
@@ -867,7 +867,9 @@ export function TicketRunRows({ runs }) {
             : null}
           {run.dryRun ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
           {run.startedAt ? <TicketStamp at={run.startedAt} /> : null}
-          <CopyButton value={String(run.id)} label={liveShortId(run.id)} />
+          {/* The run ID is the way into its execution when a DSH Session carried it; a CLI runner has no session this
+              UI can open, so that row keeps the copy affordance instead. */}
+          {executorSessionId(run) ? <RunSessionLink run={run} /> : <CopyButton value={String(run.id)} label={liveShortId(run.id)} />}
         </div>
         <div className="sa-row-meta">
           {run.branch ? <span className="sa-mono">{run.branch}</span> : null}

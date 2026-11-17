@@ -29,6 +29,7 @@ export const TEXT = {
   back: ['返回', 'Back'],
   details: ['详情 ›', 'Details ›'],
   openSession: ['打开 Session', 'Open Session'],
+  openSessionHint: ['打开执行器 Session，查看这次运行的过程', "Open the executor Session that ran this"],
   openMaster: ['打开主 Session', 'Open main Session'],
   openInSource: ['在来源中打开', 'Open in source'],
   searchPlaceholder: ['搜索工单、线程、触发或链接', 'Search tickets, threads, triggers or links'],

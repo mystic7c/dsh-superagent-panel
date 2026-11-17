@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.9] — 2026-11-17
+
+一条：把「运行记录」里的 run ID 变成进执行器会话的门。此前 worker 的 DSH Session 在左侧「未分组」下能打开，但要从一次运行里看它跑的过程，只能自己去会话列表里一个个找。
+
+### 新增（客户端）
+
+- **run ID 即入口**：`client/src/util.js` 新增 `executorSessionId(run)`，只认 DSH worker 的会话（`run.worker.backend === 'dsh'` 且有 `sessionId`；staged 工作流取最后一个 dsh 阶段的 `sessionId`）。CLI worker（Codex / Claude Code）留下的是它自己的 thread id，不能当 Harness Session 打开，所以它们不进这条链路。
+- `client/src/live-ui.js` 新增 `RunSessionLink`：run ID 渲染成 ghost 小按钮（图标 `session`，`title` 带完整 run id），点击调用面板早已接入的 `openSession`（`client/src/apply.js` 拿到的宿主 `uiWorkspace.openSession`），失败仍走 `useAction` 的统一报错。`LiveRunRows` 与工单详情的 `TicketRunRows` 都是「有可打开会话就链接、否则保留原来的复制按钮」，两者不并列。
+- `client/src/i18n.js` 加 `openSessionHint`；`client/src/style.js` 加 `.sa-runid-open`（链接色 + hover 下划线）；`docs/pages.md` 的运行记录一行补上这条入口。
+
+### 验证
+
+- `node scripts/render-check.mjs`：**250 checks / `"ok": true`**（原 247 + 3：DSH run 有链接、CLI run 无链接且仍是复制、点击后宿主收到 `worker-tkt_demo_accept-abc123`）。
+- `node --test lib/live/*.test.js`：**580 pass / 0 fail**。
+- 其余闸门：`node --check index.js`、`build-client --check`（23 modules / 502,538 bytes）、`check-keys`（988/526/1421）、`npm run types`、`npm run check:js` 全绿。
+
 ## [1.0.8] — 2026-11-17
 
 两条：把「只读」从关键词升级为语境判断（工单 `tkt_e3c4b7ce8ddd4399` 只出报告、不落地需求的根因），并让一张工单能在标题/正文/追加要求里引用另一张工单，执行时自动带上被引用工单的报告。

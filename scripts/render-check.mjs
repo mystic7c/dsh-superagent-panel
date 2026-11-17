@@ -125,12 +125,15 @@ const nowIso = new Date().toISOString()
   // merge and deploy. Its row must read that phase as history, never as a live CI spinner.
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
     completedAt: nowIso, endedAt: nowIso,
-    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
+    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。', backend: 'dsh',
+      sessionId: 'worker-tkt_demo_accept-abc123' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }, { name: 'demo-deploy', exitCode: 0 }] })
-  // An older round: the changes section must describe the newest run, not the first one.
+  // An older round: the changes section must describe the newest run, not the first one. It ran through a CLI worker,
+  // which leaves a thread id of its own — the run row must not offer to open that as a Harness Session.
   engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
     startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
-    steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里' }, changedPaths: [] })
+    steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
+    changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -508,9 +511,12 @@ const waitFor = async (predicate, { timeout = 20_000, step = 50, reason = 'condi
   return false
 }
 const rootElement = window.document.getElementById('root')
+// The host's `uiWorkspace.openSession` is the only way the panel can navigate to a Session, so the spy records every
+// id the panel asks the host to open; the checks below assert both the id and which runs may offer the link at all.
+const openedSessions = []
 console.log('STEP mount')
 const rootDom = ReactDOM.createRoot(rootElement)
-rootDom.render(React.createElement(App, { openSession: async () => {}, t }))
+rootDom.render(React.createElement(App, { openSession: async sessionId => { openedSessions.push(String(sessionId)) }, t }))
 // The panel paints an empty shell first and fills it from the host API, so wait for the data instead of for a fixed
 // delay. A flat 900 ms was enough on a laptop but not always on a CI runner, where the late first render cascaded into
 // 53 unrelated failures (the inbox, the desk actions and everything reached through them). Polling keeps the gate about
@@ -664,6 +670,17 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('the worker summary names the run it came from', /执行总结（来自运行/.test(detailText), detailText.slice(0, 200))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
+  // The run ID is the way into the executor's own conversation: a DSH run names a Session this UI can open, while a
+  // CLI run only leaves a thread id of its own, so that row keeps the copy button instead of a dead link.
+  const sessionLink = rootElement.querySelector('#sa-run-run_demo .sa-runid-open')
+  const cliRunRow = rootElement.querySelector('#sa-run-run_demo_old')
+  check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
+  check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
+    && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
+  sessionLink?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(150)
+  check('clicking the run ID asks the host to open the executor Session',
+    openedSessions.at(-1) === 'worker-tkt_demo_accept-abc123', JSON.stringify(openedSessions))
   check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
 check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,

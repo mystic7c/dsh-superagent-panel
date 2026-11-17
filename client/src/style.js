@@ -165,6 +165,10 @@ export const PANEL_CSS = `
   background: transparent; }
 .sa-icon-btn[data-variant='outline']:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-copy-btn { color: var(--dsw-alias-label-secondary); }
+/* A run ID that opens the executor's Session reads as a link, not as a second copy button (the row shows one or the
+   other): the icon names the destination and the underline appears on hover, where the affordance is being tested. */
+.sa-runid-open { color: var(--sa-link-text); }
+.sa-runid-open:hover:not(:disabled) { text-decoration: underline; }
 .sa-menu { position: relative; display: inline-flex; flex: none; }
 .sa-menu-pop { position: absolute; top: calc(100% + var(--sa-sp-4)); z-index: 40; min-width: 184px; max-width: 320px;
   padding: var(--sa-sp-4); display: flex; flex-direction: column; gap: var(--sa-sp-2);
