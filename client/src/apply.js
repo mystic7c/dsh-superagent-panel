@@ -4,6 +4,7 @@
 import { LOCALE_NS, PANEL_ID, SuperagentIcon } from "./util.js"
 import { DICTS, detectLang, translate, useTranslator } from "./i18n.js"
 import { App, PanelBoundary } from "./shell.js"
+import { createSessionOpener } from "./session-open.js"
 import { LINKED_ROUTE, linkedRoutePending } from "./router.js"
 import { React, h, useCallback } from "./react.js"
 // `layout` is deliberately NOT injected: a host that predates that service (or any host where it is unavailable) must
@@ -17,11 +18,7 @@ export function SidebarIcon({ size }) {
 
 export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
-  const openSession = useCallback(async (sessionId) => {
-    const workspace = /** @type {{ openSession?: (id: string) => void } | undefined} */ (ctx.get?.('uiWorkspace'))
-    if (workspace?.openSession) { workspace.openSession(sessionId); return }
-    throw new Error('这个 Harness 版本没有 uiWorkspace 服务，无法打开 Session。')
-  }, [ctx])
+  const openSession = useCallback(createSessionOpener(ctx), [ctx])
   return h(App, { openSession, t })
 }
 

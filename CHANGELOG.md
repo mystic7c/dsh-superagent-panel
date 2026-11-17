@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.0.9] — 2026-11-17
+
+一条：把「运行记录」里的 run ID 变成进执行器会话的门。此前 worker 的 DSH Session 在左侧「未分组」下能打开，但要从一次运行里看它跑的过程，只能自己去会话列表里一个个找。
+
+### 新增（客户端）
+
+- **run ID 即入口**：`client/src/util.js` 新增 `executorSessionId(run)`，只认 DSH worker 的会话（`run.worker.backend === 'dsh'` 且有 `sessionId`；staged 工作流取最后一个 dsh 阶段的 `sessionId`）。CLI worker（Codex / Claude Code）留下的是它自己的 thread id，不能当 Harness Session 打开，所以它们不进这条链路。
+- `client/src/live-ui.js` 新增 `RunSessionLink`：run ID 渲染成 ghost 小按钮（图标 `session`，`title` 带完整 run id），点击调用面板早已接入的 `openSession`（`client/src/apply.js` 拿到的宿主 `uiWorkspace.openSession`），失败仍走 `useAction` 的统一报错。`LiveRunRows` 与工单详情的 `TicketRunRows` 都是「有可打开会话就链接、否则保留原来的复制按钮」，两者不并列。
+- `client/src/i18n.js` 加 `openSessionHint`；`client/src/style.js` 加 `.sa-runid-open`（链接色 + hover 下划线）；`docs/pages.md` 的运行记录一行补上这条入口。
+
+### 修复（实机验证后补的）
+
+- 直接调 `uiWorkspace.openSession` 有两种失败态，实测都会掉回落地页（「选择一个工作区开始」），看着像插件没反应：
+  - **页面刚加载**：`openSession` 内部先 `sessions.retain()`，而此时 Session 列表还是 `pending`，抛 `unknown session`，什么都不会打开；
+  - **运行已结束、会话被归档**：`openSession` 不抛错，但 Workspace 控制器的 `clearArchivedCurrent()` 立刻把 selection 清掉。
+- 新增 `client/src/session-open.js`：`createSessionOpener(ctx, { waitMs })` 先等 `sessions.list` 变成 `ready` 且 `byId` 里有这个 id（`missing` 才算打不开，6s 内仍未就绪也按「找不到」报错；列表形状读不出来就不拦截），命中 `archivedSessionIds` 就先 `unarchiveSession()` 再 `openSession()`；`openSessionMessage()` 把两种失败映射成 `openSessionUnsupported` / `openSessionUnavailable` 的人话。`apply.js` 的 `Mounted` 改用它（原来那段「没有 uiWorkspace 就抛中文」的判空逻辑搬进 opener）。
+- 语义说明：点已归档运行的 run ID 会**顺带取消归档**——不这么做，Harness 会立刻把 selection 清掉，看不到会话。
+
+### 验证
+
+- `node scripts/render-check.mjs`：**256 checks / `"ok": true`**（原 247 + 3：DSH run 有链接、CLI run 无链接且仍是复制、点击后宿主收到 `worker-tkt_demo_accept-abc123`；+ 6 条 opener 单测：等 pending 列表、先取消归档再打开、未知会话报 `session-open-unavailable`、失败文案是人话、无 uiWorkspace 报 `session-open-unsupported`、列表形状不可读时不拦截跳转）。
+- 实机（dev profile + 临时状态目录，ego lite 点真按钮）：
+  - 运行中的 worker 会话 `worker-tkt_84fa0db527e24a0a-d64987` → 打开成功，标题「修复 freeze.md 并完成 BI-02」；
+  - 已归档的 `worker-tkt_640380ab550b4e54-f04262` → 取消归档并打开，标题「发出商品报表数据传BI开发」；
+  - 修复前同一操作停在「选择一个工作区开始」落地页（对照证据见本轮排障）。
+- `node --test lib/live/*.test.js`：**580 pass / 0 fail**。
+- 其余闸门：`node --check index.js`、`build-client --check`（24 modules / 504,063 bytes）、`check-keys`（990/528/1421）、`npm run types`、`npm run check:js` 全绿。
+
 ## [1.0.8] — 2026-11-17
 
 两条：把「只读」从关键词升级为语境判断（工单 `tkt_e3c4b7ce8ddd4399` 只出报告、不落地需求的根因），并让一张工单能在标题/正文/追加要求里引用另一张工单，执行时自动带上被引用工单的报告。
