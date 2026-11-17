@@ -48,6 +48,7 @@
     "lib/live/worker.js",
     "lib/live/engine.js",
     "lib/live/shadow.js",
-    "client/src/index.js"
+    "client/src/index.js",
+    "client/src/session-open.js"
   ]
 }

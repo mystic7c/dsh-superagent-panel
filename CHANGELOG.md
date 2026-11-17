@@ -1,5 +1,85 @@
 # Changelog
 
+## [1.0.12] — 2026-11-17
+
+1.0.11 的「等推送再试一次」没救回来：`tkt_59a2d395723646b9` 的运行结束后再点，宿主仍答 `sessions.retain: unknown session workflow-run_2ac91627b4374739-plan-2` —— 而同一个 id 在新起进程的列表里是有的（651 行，含 plan-2 / assess-1 / 旧 assess-1）。
+
+### 修复：等不到推送时，主动拉一次列表
+
+- 根因：客户端 `summaries` 只在连接时 pull 一次、之后靠宿主推送。运行由执行器 Host 半经 `agents.create` 起会话，这类会话不保证产生列表变更帧；页面又从运行开始前就加载着，于是这份快照整个页面生命周期内都不会自己补上那一行 —— 单靠「等」永远等不到。
+- 客户端 `sessions` 的**文档面**没有 `refresh`（`retain/using/retainInfo/refreshProjections/search/fork/scope/binding`），但实现里有：`service.refresh()` → `manager.refreshList()`（`dsh-api-session-controller/src/client/sessions/service.ts:373`、`manager.ts:395`，单飞、重连时也走它）。实机确认桌面端可调用。
+- `client/src/session-open.js`：被宿主拒绝后先 `refreshList(sessions)`（`typeof === 'function'` 才调、异常吞掉，缺席不算错）→ 再 `waitListed`（3s 等推送）→ 再试一次 `openSession`；仍被拒才报 `session-open-unavailable` 并带宿主原话。
+
+### 验证
+
+- `node scripts/render-check.mjs` → **263 checks / ok true**（新增两条：列表过期 → 一次 refresh 后直接打开；refresh 后仍没这行 → 不重试、报 unavailable 且带 `unknown session worker-void`）。
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,910 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+- 实机（dev 实例，真实 `~/.dsh/sessions`）：新拉取的列表 `phase:'ready'`、含 `workflow-run_2ac91627b4374739-plan-2` 与 `assess-1`；`ctx.get("sessions").refresh` 为函数。
+
+## [1.0.11] — 2026-11-17
+
+1.0.10 之后仍然复现：`tkt_59a2d395723646b9` 的新运行（`run_2ac91627b4374739`）正在跑、它的 `assess` 会话也确实出现在左侧「未分组」，点 run ID 却还是「DSH 的会话列表里没有这个 Session」。
+
+### 修复：运行中的会话还没进列表投影，跳转就放弃了
+
+- 根因在宿主的 `retain` 而不是本面板的守卫：`sessions.retain` → `resolveTarget` 只用「已实例化的 Session」和最近一次 `session.list` 拉下来的 `summaries` 做判断（`dsh-api-session-controller/src/client/sessions/manager.ts:147`），两者都没有就抛 `unknown session <id>`。一次还在执行中的运行刚创建出来的会话，磁盘上已经有了，列表那次 pull 里可能还没有 —— 于是 1.0.10 的「交给宿主裁决」把宿主的这句拒绝原样变成了「不存在」。
+- `client/src/session-open.js`：被宿主拒绝后不再立刻放弃，改为等「列表点到这个会话的那一帧」（最多 3s，`retryMs` 可覆盖）→ 再试一次 `openSession`；第二次仍被拒绝才报 `session-open-unavailable`。注意客户端的 `sessions` 服务面**没有** `refresh`（只有 `retain/using/retainInfo/refreshProjections/search/fork/scope/binding`，列表由宿主推送），所以不能主动重拉，只能等推送；这也是为什么「真没了」和「还没推」需要靠提示语里的原因区分。
+- 提示语带上宿主原话（`openSessionReason`）：`…还没登记）。DSH 给出的原因：unknown session worker-…`，这样「会话真没了」和「列表没追上」不再长得一样。`openSessionUnavailable` 的措辞也从「还在加载」改成「还没登记」，因为等待已经由代码做掉了。
+
+### 验证
+
+- `node scripts/render-check.mjs` → **261 checks / ok true**（新增三条：拒绝后等到列表推送到位即打开、列表始终没点名 → unavailable、提示语带宿主原因）。
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,779 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+
+## [1.0.10] — 2026-11-17
+
+两个都在 `tkt_59a2d395723646b9` 上暴露：staged 工作流的 `assess` 阶段把散文当 JSON 交回来，整条运行直接 failed；那条运行留下的 run ID 又在会话列表还没投影出这个会话时被 opener 判成「不存在」。
+
+### 修复：DSH 阶段没有回答契约，模型交回散文
+
+- 根因：CLI 阶段靠 `outputSchema` 告诉模型交什么，DSH 阶段只拿到 `instructions.assess`（"Read relevant source and tests. Assess complexity…"）这类散文指令，没有任何「用一个 JSON 对象回答」的要求；`parseStageResult` 随后对一个 markdown 报告做 `JSON.parse`，冒出的就是 V8 的 `Expected property name or '}' in JSON at position 1`。
+- `lib/live/workflow-worker.js` 新增 `stageJsonMarker(role)`：按 `SCHEMAS[role]` 生成 `Return only a json object with keys: workflow, reason.`，只对 `backend === 'dsh'` 的阶段追加（CLI 已有 `outputSchema`，`implement` 仍要求散文总结）。
+- `lib/live/review-json.js` 把 JSON 模式的判据从 review 专用标记泛化成 `JSON_OBJECT_PROMPT`（"Return only a json object with keys:"），于是 assess / plan 的收尾回合也拿到 DeepSeek `response_format: {type:'json_object'}`；「还没看到任何 tool 结果前不开 JSON 模式」这条规则保持不动，避免模型先答后读。
+- `parseStageResult` 改成括号配对扫描：接受裸对象、```json 围栏、带前言的回答、嵌套对象与字符串里的花括号；只有整段都解析不出对象时才失败，错误改成 `assess did not answer with one JSON object: <原文前 160 字>`，不再把裸解析器的报错丢给用户。
+
+### 修复：会话列表还没投影出会话时，run ID 链接误报不存在
+
+- `client/src/session-open.js` 的 `createSessionOpener` 不再拿 `sessions.list` 当闸门：列表只用来「等它别再 loading」和「查是不是归档」，真正的裁决交给宿主的 `openSession`；宿主拒绝（`unknown session`）才报 `session-open-unavailable`。列表比执行器慢一拍、或当前列表根本没投影这个会话时，跳转照常发生。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**（新增 `lib/live/workflow-worker.test.js` 5 条：schema 文案、裸/围栏/前言、嵌套与字符串花括号、散文报错文案、数组与标量；`review-json.test.js` 补 assess 也进 JSON 模式、implement 不进）。
+- `node scripts/render-check.mjs` → **258 checks / ok true**（新增「列表里没有该会话仍交给宿主」「列表永远不 ready 也照常跳」两条）。
+- `build-client --check` 24 modules / 504,064 bytes；`check-keys` 990/528/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+
+## [1.0.9] — 2026-11-17
+
+一条：把「运行记录」里的 run ID 变成进执行器会话的门。此前 worker 的 DSH Session 在左侧「未分组」下能打开，但要从一次运行里看它跑的过程，只能自己去会话列表里一个个找。
+
+### 新增（客户端）
+
+- **run ID 即入口**：`client/src/util.js` 新增 `executorSessionId(run)`，只认 DSH worker 的会话（`run.worker.backend === 'dsh'` 且有 `sessionId`；staged 工作流取最后一个 dsh 阶段的 `sessionId`）。CLI worker（Codex / Claude Code）留下的是它自己的 thread id，不能当 Harness Session 打开，所以它们不进这条链路。
+- `client/src/live-ui.js` 新增 `RunSessionLink`：run ID 渲染成 ghost 小按钮（图标 `session`，`title` 带完整 run id），点击调用面板早已接入的 `openSession`（`client/src/apply.js` 拿到的宿主 `uiWorkspace.openSession`），失败仍走 `useAction` 的统一报错。`LiveRunRows` 与工单详情的 `TicketRunRows` 都是「有可打开会话就链接、否则保留原来的复制按钮」，两者不并列。
+- `client/src/i18n.js` 加 `openSessionHint`；`client/src/style.js` 加 `.sa-runid-open`（链接色 + hover 下划线）；`docs/pages.md` 的运行记录一行补上这条入口。
+
+### 修复（实机验证后补的）
+
+- 直接调 `uiWorkspace.openSession` 有两种失败态，实测都会掉回落地页（「选择一个工作区开始」），看着像插件没反应：
+  - **页面刚加载**：`openSession` 内部先 `sessions.retain()`，而此时 Session 列表还是 `pending`，抛 `unknown session`，什么都不会打开；
+  - **运行已结束、会话被归档**：`openSession` 不抛错，但 Workspace 控制器的 `clearArchivedCurrent()` 立刻把 selection 清掉。
+- 新增 `client/src/session-open.js`：`createSessionOpener(ctx, { waitMs })` 先等 `sessions.list` 变成 `ready` 且 `byId` 里有这个 id（`missing` 才算打不开，6s 内仍未就绪也按「找不到」报错；列表形状读不出来就不拦截），命中 `archivedSessionIds` 就先 `unarchiveSession()` 再 `openSession()`；`openSessionMessage()` 把两种失败映射成 `openSessionUnsupported` / `openSessionUnavailable` 的人话。`apply.js` 的 `Mounted` 改用它（原来那段「没有 uiWorkspace 就抛中文」的判空逻辑搬进 opener）。
+- 语义说明：点已归档运行的 run ID 会**顺带取消归档**——不这么做，Harness 会立刻把 selection 清掉，看不到会话。
+
+### 验证
+
+- `node scripts/render-check.mjs`：**256 checks / `"ok": true`**（原 247 + 3：DSH run 有链接、CLI run 无链接且仍是复制、点击后宿主收到 `worker-tkt_demo_accept-abc123`；+ 6 条 opener 单测：等 pending 列表、先取消归档再打开、未知会话报 `session-open-unavailable`、失败文案是人话、无 uiWorkspace 报 `session-open-unsupported`、列表形状不可读时不拦截跳转）。
+- 实机（dev profile + 临时状态目录，ego lite 点真按钮）：
+  - 运行中的 worker 会话 `worker-tkt_84fa0db527e24a0a-d64987` → 打开成功，标题「修复 freeze.md 并完成 BI-02」；
+  - 已归档的 `worker-tkt_640380ab550b4e54-f04262` → 取消归档并打开，标题「发出商品报表数据传BI开发」；
+  - 修复前同一操作停在「选择一个工作区开始」落地页（对照证据见本轮排障）。
+- `node --test lib/live/*.test.js`：**580 pass / 0 fail**。
+- 其余闸门：`node --check index.js`、`build-client --check`（24 modules / 504,063 bytes）、`check-keys`（990/528/1421）、`npm run types`、`npm run check:js` 全绿。
+
 ## [1.0.8] — 2026-11-17
 
 两条：把「只读」从关键词升级为语境判断（工单 `tkt_e3c4b7ce8ddd4399` 只出报告、不落地需求的根因），并让一张工单能在标题/正文/追加要求里引用另一张工单，执行时自动带上被引用工单的报告。

@@ -3,7 +3,7 @@
    Pages must never translate a raw engine status themselves — they call ticketStatus/decisionKindView/dispositionView
    and render the returned label key through `pt`. */
 
-import { Icon, hhmmss, safeHttpUrl, shortId } from "./util.js"
+import { Icon, cx, executorSessionId, hhmmss, safeHttpUrl, shortId } from "./util.js"
 import { errorText, fullTime, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, Modal, Select, StatusIcon, StatusText, Tag } from "./controls.js"
 import { caller, same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -14,6 +14,7 @@ import { ovCount } from "./overview.js"
 import { EXEC_STAGES } from "./execution.js"
 import { TicketStamp, ticketGateLabel } from "./ticket-detail.js"
 import { ROUTE_BACKENDS } from "./settings.js"
+import { openSessionMessage } from "./session-open.js"
 import { Fragment, React, h, useCallback, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   // ---- legacy dictionaries kept for `PilotStatusTag` compatibility (labels are Chinese; keys are unchanged) ----
@@ -340,6 +341,27 @@ export function liveShortId(value, length = 6) {
   if (typeof shortId === 'function') return shortId(value, length)
   const text = String(value ?? '')
   return text.length > length + 1 ? `${text.slice(0, length)}…` : text
+}
+
+/**
+ * The run ID as the way into its execution: a DSH worker runs inside a real Harness Session, so the run ID opens that
+ * Session's conversation where the run can be watched while it happens. A CLI worker (Codex / Claude) only leaves a
+ * thread id of its own, which this UI cannot open — the run row keeps the copy affordance there instead.
+ */
+/** @param {{ run: any, className?: any }} props */
+export function RunSessionLink({ run, className = '' }) {
+  const { t, openSession } = usePanel()
+  const { run: open } = useAction(async sessionId => {
+    try { await openSession(sessionId) } catch (failure) { throw new Error(openSessionMessage(failure, t)) }
+  })
+  const sessionId = executorSessionId(run)
+  if (!sessionId) return null
+  const id = String(run?.id ?? '')
+  return <Button variant="ghost" size="sm" className={cx('sa-runid-open', className)}
+    title={`${t('openSessionHint')}\n${id}`} aria-label={`${t('openSession')}: ${sessionId}`}
+    icon={<Icon name="session" size={14} />} onClick={() => void open(sessionId)}>
+    <span className="sa-mono">{liveShortId(id)}</span>
+  </Button>
 }
 
 // ---- repositories (contract §12: several repositories behind one panel) -----------------------------------------
@@ -1528,7 +1550,7 @@ export function LiveRunRows({ runs, limit = Infinity }) {
         <div className="sa-row-title">
           <StatusIcon state={view.state} size={14} />
           <span>{view.label}</span>
-          <span className="sa-mono sa-hint">{liveShortId(run.id)}</span>
+          {executorSessionId(run) ? <RunSessionLink run={run} /> : <span className="sa-mono sa-hint">{liveShortId(run.id)}</span>}
         </div>
         {/* A raw worker error can be a whole stack: the short cause stays inline and the untruncated text folds. */}
         {run.error ? <p className="sa-error">{cause}</p> : null}

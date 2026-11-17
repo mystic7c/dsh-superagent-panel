@@ -125,12 +125,15 @@ const nowIso = new Date().toISOString()
   // merge and deploy. Its row must read that phase as history, never as a live CI spinner.
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
     completedAt: nowIso, endedAt: nowIso,
-    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
+    steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。', backend: 'dsh',
+      sessionId: 'worker-tkt_demo_accept-abc123' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }, { name: 'demo-deploy', exitCode: 0 }] })
-  // An older round: the changes section must describe the newest run, not the first one.
+  // An older round: the changes section must describe the newest run, not the first one. It ran through a CLI worker,
+  // which leaves a thread id of its own — the run row must not offer to open that as a Harness Session.
   engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
     startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
-    steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里' }, changedPaths: [] })
+    steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
+    changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -443,6 +446,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState,
+  createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
   translate: 'i18n.js',
@@ -481,6 +485,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
   openLinkedPanelWhenReady: 'apply.js',
+  createSessionOpener: 'session-open.js',
+  openSessionMessage: 'session-open.js',
   inject: 'apply.js',
 }, { react: React })
 
@@ -508,9 +514,12 @@ const waitFor = async (predicate, { timeout = 20_000, step = 50, reason = 'condi
   return false
 }
 const rootElement = window.document.getElementById('root')
+// The host's `uiWorkspace.openSession` is the only way the panel can navigate to a Session, so the spy records every
+// id the panel asks the host to open; the checks below assert both the id and which runs may offer the link at all.
+const openedSessions = []
 console.log('STEP mount')
 const rootDom = ReactDOM.createRoot(rootElement)
-rootDom.render(React.createElement(App, { openSession: async () => {}, t }))
+rootDom.render(React.createElement(App, { openSession: async sessionId => { openedSessions.push(String(sessionId)) }, t }))
 // The panel paints an empty shell first and fills it from the host API, so wait for the data instead of for a fixed
 // delay. A flat 900 ms was enough on a laptop but not always on a CI runner, where the late first render cascaded into
 // 53 unrelated failures (the inbox, the desk actions and everything reached through them). Polling keeps the gate about
@@ -664,6 +673,196 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('the worker summary names the run it came from', /执行总结（来自运行/.test(detailText), detailText.slice(0, 200))
   check('pasted SQL body renders as a code block, not prose', rootElement.querySelectorAll('.sa-md-pre').length >= 1,
     String(rootElement.querySelectorAll('.sa-md-pre').length))
+  // The run ID is the way into the executor's own conversation: a DSH run names a Session this UI can open, while a
+  // CLI run only leaves a thread id of its own, so that row keeps the copy button instead of a dead link.
+  const sessionLink = rootElement.querySelector('#sa-run-run_demo .sa-runid-open')
+  const cliRunRow = rootElement.querySelector('#sa-run-run_demo_old')
+  check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
+  check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
+    && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
+  sessionLink?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+  await sleep(150)
+  check('clicking the run ID asks the host to open the executor Session',
+    openedSessions.at(-1) === 'worker-tkt_demo_accept-abc123', JSON.stringify(openedSessions))
+  // The jump has to survive the two states a plain `uiWorkspace.openSession` call does not: a page load whose Session
+  // list is still pending (retain throws `unknown session`) and a finished run whose Session was archived (the
+  // Workspace controller clears that selection again). Both were seen live against the desktop app.
+  {
+    const events = []
+    const listeners = new Set()
+    const list = {
+      snapshot: { phase: 'pending', byId: {} },
+      getSnapshot() { return this.snapshot },
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      ready(id) {
+        this.snapshot = { phase: 'ready', byId: { [id]: { id } } }
+        for (const fn of listeners) fn()
+      },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) { events.push(`open:${id}`) },
+        async unarchiveSession(id) { events.push(`unarchive:${id}`) },
+      },
+      sessions: { list },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: ['worker-demo'] }) } },
+    }
+    const opening = createSessionOpener({ get: name => services[name] }, { waitMs: 2000 })('worker-demo')
+    check('the Session opener waits for a list that is still loading', events.length === 0, JSON.stringify(events))
+    list.ready('worker-demo')
+    await opening
+    check('the Session opener unarchives first, then opens the executor Session',
+      JSON.stringify(events) === JSON.stringify(['unarchive:worker-demo', 'open:worker-demo']), JSON.stringify(events))
+  }
+  {
+    // A run that is still going creates its Session seconds before the reader clicks it, and the Host's retain decides
+    // from the same list it pushes: the first attempt refuses the Session as unknown, the push that names it arrives a
+    // moment later, and the second attempt lands. Refusing outright here is the false negative a WORKING run produced.
+    const events = []
+    const listeners = new Set()
+    let snapshot = { phase: 'ready', byId: {} }
+    const list = {
+      getSnapshot: () => snapshot,
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      push() { snapshot = { phase: 'ready', byId: { 'worker-new': { id: 'worker-new' } } }; for (const fn of listeners) fn() },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) {
+          if (snapshot.byId[id] === undefined) throw new Error(`unknown session ${id}`)
+          events.push(`open:${id}`)
+        },
+      },
+      sessions: { list },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    setTimeout(() => list.push(), 30)
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 2000 })('worker-new')
+    check('a Session a live run just created is opened once the list push names it',
+      JSON.stringify(events) === JSON.stringify(['open:worker-new']), JSON.stringify(events))
+  }
+  {
+    // A run that is STILL going can leave its Session on disk with no push at all, so the page's list stays stale for
+    // its whole life and the Host's retain keeps refusing a Session that exists. The catalog's implementation `refresh()`
+    // is the lever: one fresh pull, then the jump lands without waiting for a push that never comes.
+    const events = []
+    const listeners = new Set()
+    let snapshot = { phase: 'ready', byId: {} }
+    const list = {
+      getSnapshot: () => snapshot,
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) {
+          if (snapshot.byId[id] === undefined) throw new Error(`unknown session ${id}`)
+          events.push(`open:${id}`)
+        },
+      },
+      sessions: {
+        list,
+        async refresh() {
+          events.push('refresh')
+          snapshot = { phase: 'ready', byId: { 'worker-stale': { id: 'worker-stale' } } }
+          for (const fn of listeners) fn()
+        },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-stale')
+    check('a stale list is pulled again before the Session jump gives up',
+      JSON.stringify(events) === JSON.stringify(['refresh', 'open:worker-stale']), JSON.stringify(events))
+  }
+  {
+    // A pull that still does not name the Session is a refusal like any other: one refresh, no second open, and the
+    // host's words survive into the message.
+    const events = []
+    const services = {
+      uiWorkspace: {
+        openSession(id) { events.push(`open:${id}`); throw new Error(`unknown session ${id}`) },
+      },
+      sessions: {
+        list: { getSnapshot: () => ({ phase: 'ready', byId: {} }), subscribe: () => () => {} },
+        async refresh() { events.push('refresh') },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-void')
+      .then(() => undefined, error => error)
+    check('a pull that still misses the Session reports unavailable, quoting the host',
+      failure?.message === 'session-open-unavailable'
+        && events.filter(event => event === 'refresh').length === 1
+        && events.filter(event => event === 'open:worker-void').length === 1
+        && String(openSessionMessage(failure, t)).includes('unknown session worker-void'),
+      JSON.stringify({ events, message: String(failure?.message) }))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
+      sessions: {
+        list: { getSnapshot: () => ({ phase: 'ready', byId: {} }), subscribe: () => () => {} },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a Session the list never names reports the unavailable code',
+      failure?.message === 'session-open-unavailable', String(failure?.message))
+    check('the unavailable message quotes the host reason, so a stale list is not read as a deleted Session',
+      String(openSessionMessage(failure, t)).includes('unknown session worker-gone'), String(openSessionMessage(failure, t)))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
+      sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }), subscribe: () => () => {} } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a Session the host refuses reports the unavailable code instead of navigating',
+      failure?.message === 'session-open-unavailable', String(failure?.message))
+    check('the unavailable failure reads as a sentence, not as a code',
+      String(openSessionMessage(failure, t)).includes('会话列表'), String(openSessionMessage(failure, t)))
+    const missing = await createSessionOpener({ get: () => undefined }, { waitMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a host without uiWorkspace reports the unsupported code',
+      missing?.message === 'session-open-unsupported', String(missing?.message))
+  }
+  {
+    // A Session the client's list does not name yet is the host's call, not this panel's: the list can lag behind a
+    // Session the executor just created, and refusing there is a false negative the reader cannot act on.
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'ready', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-unlisted')
+    check('a Session missing from the client list still reaches the host',
+      calls.join(',') === 'worker-unlisted', JSON.stringify(calls))
+  }
+  {
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-late')
+    check('a Session list that never becomes ready still hands the jump to the host',
+      calls.join(',') === 'worker-late', JSON.stringify(calls))
+  }
+  {
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'ready' }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-plain')
+    check('a Session list this host cannot describe never blocks the jump',
+      calls.join(',') === 'worker-plain', JSON.stringify(calls))
+  }
   check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
 check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
