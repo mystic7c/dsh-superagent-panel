@@ -715,6 +715,48 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
       JSON.stringify(events) === JSON.stringify(['unarchive:worker-demo', 'open:worker-demo']), JSON.stringify(events))
   }
   {
+    // A run that is still going creates its Session seconds before the reader clicks it, and the Host's retain decides
+    // from the same list it pushes: the first attempt refuses the Session as unknown, the push that names it arrives a
+    // moment later, and the second attempt lands. Refusing outright here is the false negative a WORKING run produced.
+    const events = []
+    const listeners = new Set()
+    let snapshot = { phase: 'ready', byId: {} }
+    const list = {
+      getSnapshot: () => snapshot,
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      push() { snapshot = { phase: 'ready', byId: { 'worker-new': { id: 'worker-new' } } }; for (const fn of listeners) fn() },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) {
+          if (snapshot.byId[id] === undefined) throw new Error(`unknown session ${id}`)
+          events.push(`open:${id}`)
+        },
+      },
+      sessions: { list },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    setTimeout(() => list.push(), 30)
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 2000 })('worker-new')
+    check('a Session a live run just created is opened once the list push names it',
+      JSON.stringify(events) === JSON.stringify(['open:worker-new']), JSON.stringify(events))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
+      sessions: {
+        list: { getSnapshot: () => ({ phase: 'ready', byId: {} }), subscribe: () => () => {} },
+      },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20, retryMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a Session the list never names reports the unavailable code',
+      failure?.message === 'session-open-unavailable', String(failure?.message))
+    check('the unavailable message quotes the host reason, so a stale list is not read as a deleted Session',
+      String(openSessionMessage(failure, t)).includes('unknown session worker-gone'), String(openSessionMessage(failure, t)))
+  }
+  {
     const services = {
       uiWorkspace: { openSession() { throw new Error('unknown session worker-gone') } },
       sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }), subscribe: () => () => {} } },

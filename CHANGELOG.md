@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.11] — 2026-11-17
+
+1.0.10 之后仍然复现：`tkt_59a2d395723646b9` 的新运行（`run_2ac91627b4374739`）正在跑、它的 `assess` 会话也确实出现在左侧「未分组」，点 run ID 却还是「DSH 的会话列表里没有这个 Session」。
+
+### 修复：运行中的会话还没进列表投影，跳转就放弃了
+
+- 根因在宿主的 `retain` 而不是本面板的守卫：`sessions.retain` → `resolveTarget` 只用「已实例化的 Session」和最近一次 `session.list` 拉下来的 `summaries` 做判断（`dsh-api-session-controller/src/client/sessions/manager.ts:147`），两者都没有就抛 `unknown session <id>`。一次还在执行中的运行刚创建出来的会话，磁盘上已经有了，列表那次 pull 里可能还没有 —— 于是 1.0.10 的「交给宿主裁决」把宿主的这句拒绝原样变成了「不存在」。
+- `client/src/session-open.js`：被宿主拒绝后不再立刻放弃，改为等「列表点到这个会话的那一帧」（最多 3s，`retryMs` 可覆盖）→ 再试一次 `openSession`；第二次仍被拒绝才报 `session-open-unavailable`。注意客户端的 `sessions` 服务面**没有** `refresh`（只有 `retain/using/retainInfo/refreshProjections/search/fork/scope/binding`，列表由宿主推送），所以不能主动重拉，只能等推送；这也是为什么「真没了」和「还没推」需要靠提示语里的原因区分。
+- 提示语带上宿主原话（`openSessionReason`）：`…还没登记）。DSH 给出的原因：unknown session worker-…`，这样「会话真没了」和「列表没追上」不再长得一样。`openSessionUnavailable` 的措辞也从「还在加载」改成「还没登记」，因为等待已经由代码做掉了。
+
+### 验证
+
+- `node scripts/render-check.mjs` → **261 checks / ok true**（新增三条：拒绝后等到列表推送到位即打开、列表始终没点名 → unavailable、提示语带宿主原因）。
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,779 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+
 ## [1.0.10] — 2026-11-17
 
 两个都在 `tkt_59a2d395723646b9` 上暴露：staged 工作流的 `assess` 阶段把散文当 JSON 交回来，整条运行直接 failed；那条运行留下的 run ID 又在会话列表还没投影出这个会话时被 opener 判成「不存在」。
