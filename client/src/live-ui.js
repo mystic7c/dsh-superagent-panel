@@ -14,6 +14,7 @@ import { ovCount } from "./overview.js"
 import { EXEC_STAGES } from "./execution.js"
 import { TicketStamp, ticketGateLabel } from "./ticket-detail.js"
 import { ROUTE_BACKENDS } from "./settings.js"
+import { openSessionMessage } from "./session-open.js"
 import { Fragment, React, h, useCallback, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   // ---- legacy dictionaries kept for `PilotStatusTag` compatibility (labels are Chinese; keys are unchanged) ----
@@ -350,7 +351,9 @@ export function liveShortId(value, length = 6) {
 /** @param {{ run: any, className?: any }} props */
 export function RunSessionLink({ run, className = '' }) {
   const { t, openSession } = usePanel()
-  const { run: open } = useAction(async sessionId => { await openSession(sessionId) })
+  const { run: open } = useAction(async sessionId => {
+    try { await openSession(sessionId) } catch (failure) { throw new Error(openSessionMessage(failure, t)) }
+  })
   const sessionId = executorSessionId(run)
   if (!sessionId) return null
   const id = String(run?.id ?? '')

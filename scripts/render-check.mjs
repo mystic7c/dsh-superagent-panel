@@ -446,6 +446,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState,
+  createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
   translate: 'i18n.js',
@@ -484,6 +485,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
   openLinkedPanelWhenReady: 'apply.js',
+  createSessionOpener: 'session-open.js',
+  openSessionMessage: 'session-open.js',
   inject: 'apply.js',
 }, { react: React })
 
@@ -681,6 +684,64 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   await sleep(150)
   check('clicking the run ID asks the host to open the executor Session',
     openedSessions.at(-1) === 'worker-tkt_demo_accept-abc123', JSON.stringify(openedSessions))
+  // The jump has to survive the two states a plain `uiWorkspace.openSession` call does not: a page load whose Session
+  // list is still pending (retain throws `unknown session`) and a finished run whose Session was archived (the
+  // Workspace controller clears that selection again). Both were seen live against the desktop app.
+  {
+    const events = []
+    const listeners = new Set()
+    const list = {
+      snapshot: { phase: 'pending', byId: {} },
+      getSnapshot() { return this.snapshot },
+      subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn) },
+      ready(id) {
+        this.snapshot = { phase: 'ready', byId: { [id]: { id } } }
+        for (const fn of listeners) fn()
+      },
+    }
+    const services = {
+      uiWorkspace: {
+        openSession(id) { events.push(`open:${id}`) },
+        async unarchiveSession(id) { events.push(`unarchive:${id}`) },
+      },
+      sessions: { list },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: ['worker-demo'] }) } },
+    }
+    const opening = createSessionOpener({ get: name => services[name] }, { waitMs: 2000 })('worker-demo')
+    check('the Session opener waits for a list that is still loading', events.length === 0, JSON.stringify(events))
+    list.ready('worker-demo')
+    await opening
+    check('the Session opener unarchives first, then opens the executor Session',
+      JSON.stringify(events) === JSON.stringify(['unarchive:worker-demo', 'open:worker-demo']), JSON.stringify(events))
+  }
+  {
+    const services = {
+      uiWorkspace: { openSession() {} },
+      sessions: { list: { getSnapshot: () => ({ phase: 'pending', byId: {} }), subscribe: () => () => {} } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    const failure = await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('an unknown Session reports the unavailable code instead of navigating',
+      failure?.message === 'session-open-unavailable', String(failure?.message))
+    check('the unavailable failure reads as a sentence, not as a code',
+      String(openSessionMessage(failure, t)).includes('会话列表'), String(openSessionMessage(failure, t)))
+    const missing = await createSessionOpener({ get: () => undefined }, { waitMs: 20 })('worker-gone')
+      .then(() => undefined, error => error)
+    check('a host without uiWorkspace reports the unsupported code',
+      missing?.message === 'session-open-unsupported', String(missing?.message))
+  }
+  {
+    const calls = []
+    const services = {
+      uiWorkspace: { openSession: id => calls.push(id) },
+      sessions: { list: { getSnapshot: () => ({ phase: 'ready' }) } },
+      workspaces: { list: { getSnapshot: () => ({ archivedSessionIds: [] }) } },
+    }
+    await createSessionOpener({ get: name => services[name] }, { waitMs: 20 })('worker-plain')
+    check('a Session list this host cannot describe never blocks the jump',
+      calls.join(',') === 'worker-plain', JSON.stringify(calls))
+  }
   check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
 check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
