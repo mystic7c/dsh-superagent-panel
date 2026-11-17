@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.12] — 2026-11-17
+
+1.0.11 的「等推送再试一次」没救回来：`tkt_59a2d395723646b9` 的运行结束后再点，宿主仍答 `sessions.retain: unknown session workflow-run_2ac91627b4374739-plan-2` —— 而同一个 id 在新起进程的列表里是有的（651 行，含 plan-2 / assess-1 / 旧 assess-1）。
+
+### 修复：等不到推送时，主动拉一次列表
+
+- 根因：客户端 `summaries` 只在连接时 pull 一次、之后靠宿主推送。运行由执行器 Host 半经 `agents.create` 起会话，这类会话不保证产生列表变更帧；页面又从运行开始前就加载着，于是这份快照整个页面生命周期内都不会自己补上那一行 —— 单靠「等」永远等不到。
+- 客户端 `sessions` 的**文档面**没有 `refresh`（`retain/using/retainInfo/refreshProjections/search/fork/scope/binding`），但实现里有：`service.refresh()` → `manager.refreshList()`（`dsh-api-session-controller/src/client/sessions/service.ts:373`、`manager.ts:395`，单飞、重连时也走它）。实机确认桌面端可调用。
+- `client/src/session-open.js`：被宿主拒绝后先 `refreshList(sessions)`（`typeof === 'function'` 才调、异常吞掉，缺席不算错）→ 再 `waitListed`（3s 等推送）→ 再试一次 `openSession`；仍被拒才报 `session-open-unavailable` 并带宿主原话。
+
+### 验证
+
+- `node scripts/render-check.mjs` → **263 checks / ok true**（新增两条：列表过期 → 一次 refresh 后直接打开；refresh 后仍没这行 → 不重试、报 unavailable 且带 `unknown session worker-void`）。
+- `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,910 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+- 实机（dev 实例，真实 `~/.dsh/sessions`）：新拉取的列表 `phase:'ready'`、含 `workflow-run_2ac91627b4374739-plan-2` 与 `assess-1`；`ctx.get("sessions").refresh` 为函数。
+
 ## [1.0.11] — 2026-11-17
 
 1.0.10 之后仍然复现：`tkt_59a2d395723646b9` 的新运行（`run_2ac91627b4374739`）正在跑、它的 `assess` 会话也确实出现在左侧「未分组」，点 run ID 却还是「DSH 的会话列表里没有这个 Session」。

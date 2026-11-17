@@ -10,8 +10,9 @@
    the host, whose `retain` call is what actually decides — and whose refusal is the only accurate failure.
    The host decides from the same list it projects (`sessions.retain` → `resolveTarget`: a Session that is neither
    resident nor in `summaries` is `unknown session`), and a Session a live run opened a moment ago may not be in that
-   pull yet. So a refusal buys one short wait for the push that names it, then one more attempt; when the list never
-   names it, the host's own reason travels with the message instead of a guess about loading. */
+   pull yet. So a refusal asks the catalog for a fresh pull (the implementation has `refresh()` even though the
+   documented face does not), buys one short wait for the push that names it, then makes one more attempt; when the list
+   never names it, the host's own reason travels with the message instead of a guess about loading. */
 
 export const SESSION_OPEN_UNSUPPORTED = 'session-open-unsupported'
 export const SESSION_OPEN_UNAVAILABLE = 'session-open-unavailable'
@@ -104,6 +105,25 @@ function waitListed(sessions, sessionId, timeoutMs) {
 }
 
 /**
+ * Ask the client's Session catalog for a fresh `session.list` pull, when this build exposes one.
+ * The documented face has no `refresh` (`sessions.list` is Host-pushed, and its own comment says the client only waits),
+ * while the implementation does: `service.refresh()` → `manager.refreshList()`. A Session a WORKING run created can be
+ * on disk without ever reaching a push — the pull is then the only lever this panel has. Absence is not an error: the
+ * wait that follows still gives a push its chance, and the host's refusal stays the accurate failure.
+ * @param {{ refresh?: any } | undefined} sessions
+ * @returns {Promise<boolean>} whether a pull was requested
+ */
+async function refreshList(sessions) {
+  if (typeof sessions?.refresh !== 'function') return false
+  try {
+    await sessions.refresh()
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Build the panel's Session opener: the one action that leaves this panel for DSH's own conversation view.
  * Every service is read at call time, so a host that provides them late (or never) is handled per click.
  * @param {any} ctx client plugin context: `uiWorkspace`, `sessions` and `workspaces` are re-read on every call
@@ -134,10 +154,13 @@ export function createSessionOpener(ctx, options = {}) {
     } catch (refusal) {
       failure = refusal
     }
-    // One second look: a Session a WORKING run created can be on disk before the list names it, and the Host's retain
-    // decides from that same list (`sessions.retain` → `resolveTarget`). Wait for the row, then try once more; a list
-    // that never names it is telling the truth, and the Host's own words are what the reader gets.
-    if (!await waitListed(ctx?.get?.('sessions'), sessionId, retryMs)) {
+    // A Session a WORKING run created can be on disk before the list names it, and the Host's retain decides from that
+    // same list (`sessions.retain` → `resolveTarget`) — which never learns about it when nothing pushed the row. Ask for
+    // a fresh pull first, then wait for the row, then try once more; a list that never names it is telling the truth,
+    // and the Host's own words are what the reader gets.
+    const sessions = ctx?.get?.('sessions')
+    await refreshList(sessions)
+    if (!await waitListed(sessions, sessionId, retryMs)) {
       throw Object.assign(openerError(SESSION_OPEN_UNAVAILABLE), { cause: failure })
     }
     try {
