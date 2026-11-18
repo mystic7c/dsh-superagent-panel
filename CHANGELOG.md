@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.14] — 2026-11-18
+
+`tkt_68e399abfed64ae6` 的 `run_fb00585a0b08484a`：worker 06:31:13 正常结束、四个闸门（standards / backend / frontend / uat-sql-smoke）06:31:46.792 全绿，06:31:46.799 却以 **`其他原因：Workflow evidence is missing or stale; rerun the workflow`** 失败 —— 19 个文件留在工作树里没提交，分支 0 提交；随后点「发布」也在同一处失败。
+
+### 修复：workflow 的评审证据规则只在 workflow 轮生效，不再拦非 workflow 轮
+
+- 现场：同一工单上一轮 `run_896abf4007064892` 走 staged workflow，`plan` 抛出 2 个 open question，`executeWorkflow` 在 `workflow blocked: …` 处抛错，`ticket.workflowDigest = await digest()` 从未执行，于是工单上留下一份 `status: blocked / reason: plan_open_questions`、没有 digest 的 `ticket.workflow`。19 秒后（快照 `live-history/1794982636011-000001-14cnfd.json`，label `settings: executor.workflowMode`）配置从 `auto` 改为 `off`，重跑走单 worker 路径。
+- 根因：交付守卫原来只判断 `if (ticket.workflow && (!ticket.workflowDigest || …))`，看的是「工单上有没有 workflow 记录」而不是「这一轮是不是 workflow 轮」。非 staged 分支永远不会写 digest（`delete ticket.workflowDigest` 只在 `if (staged)` 内），于是上一轮 blocked 的残留让之后每一次普通运行都在闸门通过之后、commit/push 之前失败。
+- `lib/live/executor.js`：`finishPipeline` 的守卫改为 `run.workflow?.status === 'ready'` 才比较 digest —— `run.workflow` 只由 `executeWorkflow` 写入，正是「这一轮经 workflow 实现并交付」的证据；配置关闭、或 report/read-only 路由，都不会再有可比较的证据，残留记录对它们无效。
+- `publishTicketInner` 同一守卫改为 `workflowMode` 打开 **且** `ticket.workflow.status === 'ready'` 才校验：发布本身就是普通交付，被禁用配置遗留的 blocked 记录不拦发布。
+- 不清理 `ticket.workflow`：只要判断逻辑正确，workflow 轮留下的记录对非 workflow 轮就是惰性的；是否替换/续跑由下一轮 staged 执行自己决定。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **592 pass / 0 fail**（新增 4 条：残留 blocked workflow 不拦普通运行、report 路由在 `workflowMode: on` 下也不被残留拦住、`workflowMode: off` 时发布忽略旧 digest、`workflowMode: on` 时发布仍拒绝过期证据）。
+- 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
+
 ## [1.0.13] — 2026-11-17
 
 `tkt_59a2d395723646b9` 的 `run_2ac91627b4374739`：`assess` 通过（判为 planned），`plan` 跑了 44 步、写出一份很完整的计划，却以 **`其他原因：invalid acceptance IDs`** 结束。
