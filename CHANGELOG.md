@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.13] — 2026-11-17
+
+`tkt_59a2d395723646b9` 的 `run_2ac91627b4374739`：`assess` 通过（判为 planned），`plan` 跑了 44 步、写出一份很完整的计划，却以 **`其他原因：invalid acceptance IDs`** 结束。
+
+### 修复：契约只说键名，模型把 acceptanceCriteria 写成了字符串数组
+
+- 现场：`~/.dsh/sessions/.../workflow-run_2ac91627b4374739-plan-2` 的最终回答里，`acceptanceCriteria` 是十二个编号字符串（`"1. …", "2. …"`），不是 `{id, requirement, verification}` 对象。旧校验 `result.acceptanceCriteria.map(item => item?.id)` 于是全拿到 `undefined`，抛一句没法读回原因的 `invalid acceptance IDs`。
+- 根因：DSH 阶段拿到的契约只有键名 —— `Return only a json object with keys: summary, steps, acceptanceCriteria, openQuestions.` —— 没有说数组元素长什么样；CLI 阶段有完整 `outputSchema`，所以只有 DSH 路径踩。
+- `lib/live/workflow-worker.js`：新增 `schemaSketch(schema)`，`stageJsonMarker(role)` 从「只列键名」改为 `… keys: … . Shape: {"summary":"string","acceptanceCriteria":[{"id":"string",…}],…}`。枚举渲染成 `"simple|planned"` 字符串（若写成数组字面量，模型容易把 string 字段也答成数组）。
+- `lib/live/workflow.js`：`plan` 的校验改为说清哪一项错 —— `plan acceptanceCriteria[0] must be an object with id, requirement and verification (got string)` / `… [i] has no id` / `… repeats the id AC-1`，同时保留在 `stage.error` 里供面板复盘。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **588 pass / 0 fail**（新增：计划把 AC 答成字符串时报 shape 错误、缺 id / 重复 id 各自点名；marker 断言含 Shape 与枚举写法）。
+- `node scripts/render-check.mjs` → **263 checks / ok true**；`build-client --check` 24 modules / 504,910 bytes（客户端未变）；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+- 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
+
 ## [1.0.12] — 2026-11-17
 
 1.0.11 的「等推送再试一次」没救回来：`tkt_59a2d395723646b9` 的运行结束后再点，宿主仍答 `sessions.retain: unknown session workflow-run_2ac91627b4374739-plan-2` —— 而同一个 id 在新起进程的列表里是有的（651 行，含 plan-2 / assess-1 / 旧 assess-1）。
