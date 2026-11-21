@@ -46,6 +46,8 @@
     "lib/live/inbox.js",
     "lib/live/live-json.js",
     "lib/live/worker.js",
+    "lib/live/worker-profile.js",
+    "lib/live/backend-capability.js",
     "lib/live/engine.js",
     "lib/live/shadow.js",
     "client/src/index.js",
