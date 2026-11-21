@@ -48,6 +48,8 @@
     "lib/live/worker.js",
     "lib/live/worker-profile.js",
     "lib/live/backend-capability.js",
+    "lib/live/dispatch.js",
+    "lib/live/prompts.js",
     "lib/live/engine.js",
     "lib/live/shadow.js",
     "client/src/index.js",

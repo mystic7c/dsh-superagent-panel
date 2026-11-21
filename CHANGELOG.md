@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.0.16] — 2026-11-21
+
+`tkt_f96ee85ca71d4577`：按 `docs/worker-profiles-spec.md` 落 **P2 派单层 + P3 面板 UI**。1.0.15 只交付了档位契约层与 DSH 参数，谁来选档位、选了之后记在哪、操作员怎么看和怎么换，都还缺。
+
+### 新增：P2 派单层与 run.profile 记账
+
+- `lib/live/dispatch.js`：`resolveDispatch(ticket, config, profiles, ctx)` 四层判定 —— 显式（`profileOverride` → `backendOverride` 映射内置档位 → 仓库 `profile` → 来源会话映射的仓库 `profile`）不可用即拒绝执行（`source: 'explicit'`、`degraded: 'explicit-unusable'`，绝不悄悄换一个）；`dispatch.rules` 按序第一条全条件命中（workTypes/keywords/repos/sources/deliverable 之间 AND、数组内 OR）；决策模型只在 `mode != rules` 且有候选时调用，严格 `validateChoice`（三个键、profile 必须在候选集或 null、confidence 0–1、reason ≤200），缓存键含 `profileSetDigest`、TTL/每轮询上限/同键单飞，失败分别记 `model` / `model-null`（§7.5 只允许这两个加 `explicit-unusable`，本轮轮询额度用完也归入 `model`，下一轮重试）；最后回退 `executor.profile`（`source: 'default'`）与现拉档位（`synthesizeProfile`，`source: 'adhoc'`），都不行才拒绝并说明是现拉关了还是现拉没有能覆盖本次工作的后端。候选集只含后端已核验且 `requires ⊆ capabilities` 的档位；探针没跑过的后端按 §3.2 的降级表判断，`default` 与现拉两层都不许把 `requires` 不满足的工作派出去（例如 research 要 web）。
+- `lib/live/executor.js`：每轮先跑能力探针 → 派单 → 拒绝（`DISPATCH_DEGRADED`：没有可用档位，或显式指定的档位从未生效——AC4，此时连工作树都不开）→ `run.profileId` / `run.profile{id,backend,source,reason,degraded,capability,capabilitySource,verifiedAt,configDigest,resolvedAt}`；现拉档位额外带 `resolved` 与 `synthesizedFrom`；`profileOverride` 只写进这一轮的 run（§7.6），不改工单持久字段。预算、preset、model、deny、MCP 白名单、阶段与提示词全部从解析后的档位取。
+- `lib/live/prompts.js`：提示词段名与顺序收敛到 `PROMPT_ORDERS`（100 brief / 120 task / 140 约定 / 160 role / 165 must / 170 skills），`worker.js` 按 order 注册并按顺序排序。
+- `lib/live/worker.js`：新增 `promptSections` 与 `allowMcp`（`mcp__<server>__*` 前缀白名单，白名单外的 MCP 工具在 guard 处被拒）。
+- `lib/live/workflow.js` / `workflow-worker.js`：`stages` 透传，`surgical` 这类档位不再跑 plan/review，`gates` 恒在。
+- `lib/live/config.js`：`dispatch.adhocOrder` 缺省收窄为 `['dsh']`（§8.2：CLI 后端要等 smoke 通道落地才进现拉顺序）；`lib/live/repos.js` 支持 `repos[].profile`。
+
+### 新增：P3 面板 UI
+
+- `index.js`：`GET engine/profiles`、`POST engine/profiles`（校验失败返回 `code` + `problems`，面板就地显示）、`POST engine/profiles/verify`；`POST engine/ticket/:id/run` 接受 `profile`（换档重跑）。
+- `lib/live/engine.js`：`profilesView/saveProfiles/verifyBackend/backendStateOf/profileDriftOf`；`profilesView.ruleWarnings` 把指向不存在档位的分派规则报成 `DISPATCH_RULE_PROFILE_UNKNOWN`；`ticketView` 增加 `profileDrift`（仓库里的档位文件被忽略，附两侧路径）与 `profileChoices`（换档下拉）。
+- `client/src/settings.js`：新增「档位」组 —— 内置三档置顶且标「内置不可删」、编辑器按 §4.3 字段、保存期错误码 + 人话就地显示、「预览它能拿到什么」（能力集合/禁止工具/MCP 前缀/阶段）、复制内置、删除二次确认、后端核验状态与重新核验；`sessionStorage` 承接详情页送来的现拉档位草稿。
+- `client/src/ticket-detail.js`：每轮运行显示档位摘要（`来源 · 判定依据`）、能力与来源（`能力：edit, exec（探针 / 日期）`）、未核验警示色、降级不折叠、失败/被拒/超时的 trace 直接展开、工作树内的档位文件提示、换档重跑与存为档位。
+- `client/src/api.js`：错误响应保留 Host 的 `code`/`problems`。
+- 文案口径按 I5：只写「限制/不给」，不承诺隔离、沙箱或安全边界。
+
+### 未包含（后续工单）
+
+- P4 Claude（C1–C10 进程契约、smoke 核验通道）与 P5 Codex；`dispatch.adhocOrder` 到那时再放开。
+- P2.5 的 CLI 增量事件（`runProcess` 的 `onLine`、`applyClaudeLine/applyCodexLine`）留给 P4/P5：DSH 走进程内事件流，
+  增量通道只服务于还没有上线的 CLI 后端，先做就是没有消费者的代码。
+- 阶段级档位编排 UI（§10.2 的数据通路已通，面板还没有阶段选择器）。
+
+### 验证
+
+- `node --test lib/store.test.js lib/live/*.test.js` → **654 pass / 0 fail**（新增 `dispatch.test.js` 14 条，以及 prompt 段顺序、MCP 白名单、stages 跳过 plan/review、per-backend 保存校验、`run.profile` 记账、显式档位不可用即拒跑、仓库档位文件被忽略、未知规则档位被上报、档位路由各 1 条）。
+- `node scripts/render-check.mjs` → **279 checks / ok true**（新增详情页档位摘要/能力来源/降级/未核验/仓库文件提示/换档下拉，以及设置页档位列表、内置档位不可编辑、未核验警示、编辑器预览、错误码就地显示、核验状态、规则档位缺失提示）。
+- `node scripts/build-client.mjs` 24 modules / 525,931 bytes；`check-keys` 1049 / 530 / 1494；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+- 属于 Host 半 + 客户端改动：Host 半装上新版本后需要**重启 DSH**；客户端刷新页面即生效。
+
 ## [1.0.15] — 2026-11-21
 
 `tkt_2ee8c4b1fbf7429d`：按 `docs/worker-profiles-spec.md` 落 P0 契约层与 P1 DSH 参数。此前 worker 只有「后端 + preset」一层配置，没有可声明、可校验、可复现的档位（profile）概念。
