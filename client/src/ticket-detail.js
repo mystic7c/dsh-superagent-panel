@@ -1,6 +1,6 @@
 import { Icon, executorSessionId, safeHttpUrl, scrollPanelTo, shortId } from "./util.js"
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
-import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
+import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, Select, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
 import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
@@ -25,6 +25,37 @@ Object.assign(PAGE_TEXT, {
   'wf.stageCompleted': ['已完成', 'Completed'], 'wf.stageFailed': ['失败', 'Failed'],
   'wf.stageBlocked': ['已阻塞', 'Blocked'],
 })
+Object.assign(PAGE_TEXT, {
+  // §13.1: a run says which profile ran it, who chose it and what the choice was based on.
+  'detail.profileLabel': ['档位', 'Profile'],
+  'detail.profileAdhoc': ['现拉（{id}）', 'Synthesised ({id})'],
+  'detail.profileSource.explicit': ['手动指定', 'Manual'],
+  'detail.profileSource.rule': ['规则', 'Rule'],
+  'detail.profileSource.model': ['决策模型', 'Judge model'],
+  'detail.profileSource.default': ['默认', 'Default'],
+  'detail.profileSource.adhoc': ['现拉', 'Synthesised'],
+  'detail.profileDegraded.explicit': ['指定的档位不可用', 'The requested profile is unusable'],
+  'detail.profileDegraded.model': ['决策模型回答无效，已回退', 'The judge answered invalidly; fell back'],
+  'detail.profileDegraded.null': ['决策模型没有选出档位', 'The judge chose none'],
+  'detail.profileDegraded.budget': ['本轮回合的分派预算已用完', 'Dispatch budget for this poll is spent'],
+  'detail.profileDegraded.other': ['降级：{code}', 'Degraded: {code}'],
+  'detail.profileDegradedHint': ['这次运行用的不是首选档位，原因见右侧说明。', 'This run did not use its first-choice profile; the reason is beside it.'],
+  'detail.profileCapability': ['能力：{caps}（{source}{at}）', 'Capabilities: {caps} ({source}{at})'],
+  'detail.profileCapabilityNone': ['能力：无（后端未核验）', 'Capabilities: none (backend unverified)'],
+  'detail.profileCapabilitySource.probe': ['探针', 'probe'],
+  'detail.profileCapabilitySource.smoke': ['冒烟核验', 'smoke check'],
+  'detail.profileCapabilitySource.fallback': ['降级默认表，未核验', 'conservative default, unverified'],
+  'detail.profileUnverified': ['后端 {backend} 未核验，需先 smoke 核验。', 'Backend {backend} is unverified; run a smoke check first.'],
+  'detail.profileSave': ['存为档位', 'Save as profile'],
+  'detail.profileSaveReady': ['已填入「设置 → 档位」的编辑器，确认后手动保存。', 'Loaded into Settings → Profiles; review and save it yourself.'],
+  'detail.profileRerun': ['换档重跑', 'Rerun with profile'],
+  'detail.profileRerunPick': ['选择档位…', 'Pick a profile…'],
+  'detail.profileRerunDone': ['已用档位 {id} 重新开始一次运行。', 'Started a new run with profile {id}.'],
+  'detail.profileDriftLabel': ['档位文件', 'Profile file'],
+  'detail.profileDrift': ['仓库里的档位文件已忽略（档位只从 stateDir 读）：{path}；实际读取 {store}',
+    'The repository profile file is ignored (profiles come from the state dir only): {path}; reading {store}'],
+})
+
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
    plus a ⋯ menu; destructive ones always confirm (retry, publish MR, accept/reject).
@@ -510,16 +541,17 @@ export const TRACE_LIMIT = 80
  * Folded renders its children even while closed; a trace of up to 80 rows should build its DOM only once opened
  * (audit P3). Markup and classes mirror the shared Folded, which stays untouched for the other pages.
  */
-export function TicketLazyFolded({ summary, children }) {
-  const [open, setOpen] = useState(false)
-  return <details className="sa-folded" onToggle={event => setOpen(event.currentTarget.open)}>
+export function TicketLazyFolded({ summary, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return <details className="sa-folded" open={defaultOpen || undefined}
+    onToggle={event => setOpen(event.currentTarget.open)}>
     <summary className="sa-folded-summary"><Icon name="chevron-right" size={14} /><span>{summary}</span></summary>
     {open ? <div className="sa-folded-body">{children}</div> : null}
   </details>
 }
 
 /** The normalised worker events kept on the run (never more than 80), folded under the run so evidence stays secondary. */
-export function RunTrace({ run }) {
+export function RunTrace({ run, open = false }) {
   const { t } = usePanel()
   const trace = Array.isArray(run?.trace) ? run.trace.filter(event => event && typeof event === 'object') : []
   if (!trace.length) return null
@@ -529,7 +561,7 @@ export function RunTrace({ run }) {
   const summary = omitted > 0
     ? pt(t, 'ticket.traceCountOmitted', { count: trace.length, shown: shown.length })
     : pt(t, 'ticket.traceCount', { count: trace.length })
-  return <TicketLazyFolded summary={summary}>
+  return <TicketLazyFolded summary={summary} defaultOpen={open}>
     <ol className="sa-timeline">{shown.map((event, index) => {
       const kind = TRACE_KINDS[event.type] ?? { icon: 'circle', state: 'idle', labelKey: 'ticket.traceAssistant' }
       const full = typeof event.summary === 'string' ? event.summary : ''
@@ -826,6 +858,67 @@ export function TicketActivities({ activities }) {
   </>
 }
 
+/** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§13.1 item 5). */
+export const PROFILE_DEGRADED = { 'explicit-unusable': 'detail.profileDegraded.explicit', model: 'detail.profileDegraded.model',
+  'model-null': 'detail.profileDegraded.null', 'model-budget': 'detail.profileDegraded.budget' }
+
+/** One run's dispatch record (§7.5): which profile, who chose it and why, and the capability evidence behind it. */
+export function RunProfile({ run, choices = [], onRerun }) {
+  const { t, navigate, notify } = usePanel()
+  const [choice, setChoice] = useState('')
+  const profile = run?.profile && typeof run.profile === 'object' ? run.profile : undefined
+  if (!profile || !profile.id) return null
+  const id = String(profile.id)
+  const adhoc = String(profile.source ?? '') === 'adhoc' || id.startsWith('adhoc:')
+  const source = pt(t, `detail.profileSource.${String(profile.source ?? 'default')}`)
+  const degraded = typeof profile.degraded === 'string' && profile.degraded
+    ? pt(t, PROFILE_DEGRADED[profile.degraded] ?? 'detail.profileDegraded.other', { code: profile.degraded })
+    : ''
+  const capabilities = Array.isArray(profile.capability) ? profile.capability : []
+  const capabilitySource = pt(t, `detail.profileCapabilitySource.${String(profile.capabilitySource ?? 'fallback')}`)
+  // The capability line names when the evidence was taken; an absent or unparseable stamp simply renders none.
+  const verifiedAt = typeof profile.verifiedAt === 'string' && Number.isFinite(Date.parse(profile.verifiedAt))
+    ? fullTime(profile.verifiedAt, timeLocale(t.lang)) : ''
+  const unverified = profile.capabilitySource !== 'probe' && profile.capabilitySource !== 'smoke'
+  const options = choices.filter(item => typeof item === 'string' && item !== id)
+  const save = () => {
+    if (!profile.resolved) return
+    try { window.sessionStorage.setItem('superagent-panel/profile-draft', JSON.stringify(profile.resolved)) } catch { /* private mode */ }
+    notify(pt(t, 'detail.profileSaveReady'))
+    navigate({ page: 'settings', group: 'profiles' })
+  }
+  return <div className="sa-run-profile" data-degraded={degraded ? 'true' : undefined}>
+    <p className="sa-row-meta">
+      <Tag tone="outline">{pt(t, 'detail.profileLabel')}</Tag>
+      <span>{adhoc ? pt(t, 'detail.profileAdhoc', { id }) : id}</span>
+      <span className="sa-hint">{`${source} · ${String(profile.reason ?? '')}`}</span>
+      {degraded ? <Tag tone="warn" title={pt(t, 'detail.profileDegradedHint')}>{degraded}</Tag> : null}
+    </p>
+    <p className="sa-hint">
+      {capabilities.length
+        ? pt(t, 'detail.profileCapability', { caps: capabilities.join(', '), source: capabilitySource,
+          at: verifiedAt ? ` / ${verifiedAt}` : '' })
+        : pt(t, 'detail.profileCapabilityNone')}
+    </p>
+    {unverified
+      ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
+        {pt(t, 'detail.profileUnverified', { backend: String(profile.backend ?? profile.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
+      : null}
+    <p className="sa-row-meta">
+      {onRerun
+        ? <>
+          <Select label={pt(t, 'detail.profileRerunPick')} value={choice} onChange={setChoice}
+            options={[{ value: '', label: pt(t, 'detail.profileRerunPick') },
+              ...options.map(item => ({ value: item, label: item }))]} />
+          <Button size="sm" disabled={!choice} onClick={() => { const picked = choice; setChoice(''); void onRerun(picked) }}>
+            {pt(t, 'detail.profileRerun')}</Button>
+        </>
+        : null}
+      {profile.resolved ? <Button size="sm" variant="ghost" onClick={save}>{pt(t, 'detail.profileSave')}</Button> : null}
+    </p>
+  </div>
+}
+
 /** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
 export function runRouteTag(t, run) {
   const route = run?.route
@@ -841,7 +934,7 @@ export function runRouteTag(t, run) {
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
-export function TicketRunRows({ runs }) {
+export function TicketRunRows({ runs, choices = [], onRerun }) {
   const { t } = usePanel()
   return <ul className="sa-list">{runs.map(run => {
     const view = runView(t, run)
@@ -884,7 +977,9 @@ export function TicketRunRows({ runs }) {
           : null}
         <RunHandoff run={run} />
         <RunReport run={run} />
-        <RunTrace run={run} />
+        <RunProfile run={run} choices={choices} onRerun={onRerun} />
+        {/* §13.1: a failed, refused or timed-out run shows its trace directly instead of behind a fold. */}
+        <RunTrace run={run} open={run.status === 'failed' || Boolean(run.stopReason)} />
       </div>
     </li>
   })}</ul>
@@ -1495,6 +1590,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
+  // §7.6: rerun under another profile is a new run with an explicit override; the Ticket keeps its own fields.
+  const rerunProfile = useAction(async profile => {
+    await act.runTicket(id, { dryRun: false, wait: false, profile })
+    notify(pt(t, 'detail.profileRerunDone', { id: profile }))
+  }, { reload: refreshAll })
   const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
   const [answerText, setAnswerText] = useState('')
@@ -1631,6 +1731,14 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     onClick={() => navigate({ page: 'trigger', id: thread.key })}>{thread.title ?? liveShortId(thread.key)}</Button>])
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
+  // §4.1/AC12: a repository's own profile file never takes effect, and the page says so whether or not a route preview
+  // exists (a terminal Ticket has none, and that is when believing the repository's file took effect is most costly).
+  const drift = data?.profileDrift && typeof data.profileDrift === 'object' ? data.profileDrift : undefined
+  if (drift?.ignored) {
+    authRows.push([pt(t, 'detail.profileDriftLabel'),
+      <span>{pt(t, 'detail.profileDrift', { path: String(drift.worktreeFile ?? ''),
+        store: String(drift.storeFile ?? '') })}</span>])
+  }
   if (routePreview) {
     // Deliverable, required capabilities and backend are separate facts: a read-only report is not "the same route"
     // as a code change, and an operator override must be visible as such.
@@ -2179,7 +2287,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       </Section>
       : null}
     <Section id="sa-ticket-runs" title={pt(t, 'ticket.runs')} count={runs.length}>
-      {runs.length ? <TicketRunRows runs={runs} /> : <Hint>{pt(t, 'ticket.noRuns')}</Hint>}
+      {runs.length
+        ? <TicketRunRows runs={runs} choices={Array.isArray(data?.profileChoices) ? data.profileChoices : []}
+          onRerun={rerunProfile.run} />
+        : <Hint>{pt(t, 'ticket.noRuns')}</Hint>}
     </Section>
     {/* P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
         looking timeline above it (T16). */}

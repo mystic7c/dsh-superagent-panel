@@ -262,6 +262,28 @@ export function apply(ctx, config = {}) {
           return
         }
         if (method === 'GET' && second === 'config') { send(res, 200, engine.configView()); return }
+        // Worker profiles ("档位") live in the state dir, never in a repository (§4.1). The view carries every backend's
+        // verification state too, so the panel can warn about an unverified backend without a second request.
+        if (method === 'GET' && second === 'profiles') { send(res, 200, await engine.profilesView()); return }
+        if (method === 'POST' && second === 'profiles' && third === undefined) {
+          try {
+            send(res, 200, await engine.saveProfiles({ profiles: body?.profiles }))
+          } catch (error) {
+            const code = typeof error?.code === 'string' ? error.code : 'PROFILE_SCHEMA_INVALID'
+            const problems = Array.isArray(error?.problems) ? error.problems : []
+            throw new ActionError(400, error instanceof Error ? error.message : String(error), { code, problems })
+          }
+          return
+        }
+        // "smoke 核验": re-probe one backend now instead of trusting a cached answer (§3.7).
+        if (method === 'POST' && second === 'profiles' && third === 'verify') {
+          try {
+            send(res, 200, await engine.verifyBackend(body?.backend))
+          } catch (error) {
+            throw new ActionError(400, error instanceof Error ? error.message : String(error))
+          }
+          return
+        }
         // Read-only group list for the settings picker; writes nothing and never polls messages.
         if (method === 'GET' && second === 'octo' && third === 'groups') {
           try { send(res, 200, await engine.listGroups()); return }
@@ -422,6 +444,9 @@ export function apply(ctx, config = {}) {
           assertTicketFree(third)
           const work = executeTicket({ ctx, engine, ticketId: third, dryRun,
             backend: typeof body?.backend === 'string' ? body.backend : undefined,
+            // §7.6: a profile chosen for this run only — a new run, an explicit dispatch layer, no change to the
+            // Ticket's stored fields or to the profile file.
+            profile: typeof body?.profile === 'string' && body.profile.trim() ? body.profile.trim() : undefined,
             log: line => ctx.logger?.info?.('superagent executor: %s', line) })
             .catch(error => {
               const message = error instanceof Error ? error.message : String(error)

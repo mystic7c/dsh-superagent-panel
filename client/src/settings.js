@@ -2,7 +2,7 @@ import { API, Icon, hhmmss, hostName, hostOfUrl } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
-import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Skeleton, When } from "./widgets.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { ManualTicketForm, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
 import { gateOnFail } from "./ticket-detail.js"
@@ -544,6 +544,7 @@ export const SETTINGS_GROUPS = [
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
+  { id: 'profiles', labelKey: 'settingsGroup.profiles', icon: 'robot' },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
@@ -1032,6 +1033,374 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
       : null}
   </div>
 }
+
+Object.assign(PAGE_TEXT, {
+  'st.profilesTitle': ['档位', 'Worker profiles'],
+  'st.profilesHint': ['档位决定一次运行能用的后端、预设、模型、工具与阶段。内置三档不可编辑，可复制后改。',
+    'A profile decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
+  'st.profilesFile': ['档位文件', 'Profile file'],
+  'st.profilesRuleWarn': ['分派规则 #{index} 指向不存在的档位 {profile}，该条会被跳过。',
+    'Dispatch rule #{index} names a profile that does not exist ({profile}); the rule is skipped.'],
+  'st.profilesBuiltin': ['内置档位', 'Built-in profiles'],
+  'st.profilesBuiltinNote': ['内置三档始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
+  'st.profilesBuiltinTag': ['内置', 'built-in'],
+  'st.profilesCopy': ['复制为 JSON', 'Copy as JSON'],
+  'st.profilesDuplicate': ['复制内置', 'Copy built-in'],
+  'st.profilesDelete': ['删除', 'Delete'],
+  'st.profilesDeleteTitle': ['删除档位', 'Delete profile'],
+  'st.profilesDeleteMessage': ['删除档位 {id}？引用它的规则和显式指定会失效。', 'Delete profile {id}? Rules and explicit choices that name it will stop working.'],
+  'st.profilesDeleteConfirm': ['删除', 'Delete'],
+  'st.profilesNew': ['新建档位', 'New profile'],
+  'st.profilesBackends': ['后端核验状态', 'Backend verification'],
+  'st.profilesBackendsHint': ['未核验或版本变化的后端不能保存新档位，也不会进入分派候选集。',
+    'An unverified backend (or one whose version changed) cannot back a new profile and never enters the dispatch candidate set.'],
+  'st.profilesBackend.verified': ['已核验', 'verified'],
+  'st.profilesBackend.stale': ['版本已变，需要重新核验', 'version changed — verify again'],
+  'st.profilesBackend.unverified': ['未核验', 'unverified'],
+  'st.profilesBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
+  'st.profilesBackendNone': ['无', 'none'],
+  'st.profilesBackendVerify': ['重新核验', 'Verify'],
+  'st.profilesEditorTitle': ['编辑档位', 'Edit profile'],
+  'st.profilesEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
+    'Saving validates against the backend evidence; error codes are shown right here.'],
+  'st.profilesFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
+  'st.profilesFieldName': ['名称', 'Name'],
+  'st.profilesFieldBackend': ['后端', 'Backend'],
+  'st.profilesFieldPreset': ['预设', 'Preset'],
+  'st.profilesFieldModelProvider': ['模型 provider', 'Model provider'],
+  'st.profilesFieldModel': ['模型', 'Model'],
+  'st.profilesFieldRequires': ['需要的能力', 'Required capabilities'],
+  'st.profilesFieldStages': ['阶段（有序，必须含 implement 与 gates）', 'Stages (ordered; must include implement and gates)'],
+  'st.profilesFieldDeny': ['额外禁止的工具（逗号分隔）', 'Extra denied tools (comma separated)'],
+  'st.profilesFieldAllowMcp': ['允许的 MCP 服务器（留空=不限制）', 'Allowed MCP servers (empty = no restriction)'],
+  'st.profilesFieldRole': ['角色提示词', 'Role prompt'],
+  'st.profilesFieldMust': ['必须遵守（每行一条）', 'Must rules (one per line)'],
+  'st.profilesFieldTimeout': ['超时毫秒', 'Timeout (ms)'],
+  'st.profilesFieldIdle': ['空闲超时毫秒', 'Idle timeout (ms)'],
+  'st.profilesFieldRepairs': ['修复轮数', 'Repair rounds'],
+  'st.profilesPreview': ['预览它能拿到什么', 'Preview what it gets'],
+  'st.profilesPreviewUnverified': ['后端 {backend} 未核验：这个档位只能预览，不能保存。',
+    'Backend {backend} is unverified: this profile can be previewed but not saved.'],
+  'st.profilesPreviewCaps': ['能力', 'Capabilities'],
+  'st.profilesPreviewDeny': ['禁止的工具', 'Denied tools'],
+  'st.profilesPreviewMcp': ['可用的 MCP', 'Allowed MCP'],
+  'st.profilesPreviewStages': ['阶段', 'Stages'],
+  'st.profilesPreviewEmpty': ['—', '—'],
+  'st.profilesStagesAll': ['全部内置阶段', 'all built-in stages'],
+})
+/* ---------------------------------------------------------------------------------------------------------------
+   Worker profiles (worker-profiles spec §4, §13.2). The store lives under the state dir, so this group edits the
+   file the engine actually reads — a repository's own worker-profiles.json is ignored on purpose (§4.1).
+   --------------------------------------------------------------------------------------------------------------- */
+
+export const PROFILE_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
+/** The three built-ins ship with the plugin (§4.5): always available, never editable, copy to change (§13.2). */
+export const PROFILE_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
+export const PROFILE_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
+export const PROFILE_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
+
+export const emptyProfileForm = () => ({
+  id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
+  reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
+  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [],
+})
+
+/** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
+export function profileToForm(profile) {
+  const model = profile?.model && typeof profile.model === 'object' ? profile.model : {}
+  const tools = profile?.tools && typeof profile.tools === 'object' ? profile.tools : {}
+  const skills = profile?.skills && typeof profile.skills === 'object' ? profile.skills : {}
+  const prompt = profile?.prompt && typeof profile.prompt === 'object' ? profile.prompt : {}
+  const budget = profile?.budget && typeof profile.budget === 'object' ? profile.budget : {}
+  return {
+    ...emptyProfileForm(),
+    id: String(profile?.id ?? ''), name: String(profile?.name ?? ''), description: String(profile?.description ?? ''),
+    backend: String(profile?.backend ?? 'dsh'), preset: String(profile?.preset ?? ''),
+    modelProvider: String(model.provider ?? ''), modelModel: String(model.model ?? ''),
+    reasoningEffort: String(model.reasoningEffort ?? 'auto'),
+    requires: Array.isArray(profile?.requires) ? profile.requires.filter(capability => PROFILE_CAPABILITY_OPTIONS.includes(capability)) : [],
+    deny: (Array.isArray(tools.deny) ? tools.deny : []).join(', '),
+    allowMcp: (Array.isArray(tools.allowMcp) ? tools.allowMcp : []).join(', '),
+    prefer: (Array.isArray(skills.prefer) ? skills.prefer : []).join(', '),
+    skillsPolicy: String(skills.policy ?? 'prompt'),
+    role: String(prompt.role ?? ''), must: (Array.isArray(prompt.must) ? prompt.must : []).join('\n'),
+    timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
+    idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
+    maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
+    stages: Array.isArray(profile?.stages) ? profile.stages.filter(stage => PROFILE_STAGE_OPTIONS.includes(stage)) : [],
+  }
+}
+
+const listOf = value => String(value ?? '').split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
+const countOf = value => { const text = String(value ?? '').trim(); return text === '' ? undefined : Number(text) }
+
+/** Form → profile. Empty fields are omitted so the store only carries what the operator actually set. */
+export function formToProfile(form) {
+  const profile = { id: String(form.id ?? '').trim().toLowerCase(), name: String(form.name ?? '').trim(),
+    backend: String(form.backend ?? 'dsh') }
+  if (form.description) profile.description = form.description
+  if (form.preset) profile.preset = form.preset.trim()
+  const model = {}
+  if (form.modelProvider) model.provider = form.modelProvider.trim()
+  if (form.modelModel) model.model = form.modelModel.trim()
+  if (form.reasoningEffort && form.reasoningEffort !== 'auto') model.reasoningEffort = form.reasoningEffort
+  if (model.provider && model.model) profile.model = model
+  if (form.requires.length) profile.requires = [...form.requires]
+  const tools = {}
+  const deny = listOf(form.deny)
+  if (deny.length) tools.deny = deny
+  if (String(form.allowMcp ?? '').trim()) tools.allowMcp = listOf(form.allowMcp)
+  if (Object.keys(tools).length) profile.tools = tools
+  const skills = {}
+  const prefer = listOf(form.prefer)
+  if (prefer.length) skills.prefer = prefer
+  if (form.skillsPolicy && form.skillsPolicy !== 'prompt') skills.policy = form.skillsPolicy
+  if (Object.keys(skills).length) profile.skills = skills
+  const prompt = {}
+  if (form.role) prompt.role = form.role
+  const must = listOf(form.must)
+  if (must.length) prompt.must = must
+  if (Object.keys(prompt).length) profile.prompt = prompt
+  const budget = {}
+  for (const [key, value] of [['timeoutMs', countOf(form.timeoutMs)], ['idleTimeoutMs', countOf(form.idleTimeoutMs)],
+    ['maxRepairRounds', countOf(form.maxRepairRounds)]]) {
+    if (Number.isFinite(value)) budget[key] = value
+  }
+  if (Object.keys(budget).length) profile.budget = budget
+  if (form.stages.length) profile.stages = [...form.stages]
+  return profile
+}
+
+/** §13.2 "预览它能拿到什么": the effective deny list, MCP prefixes, capability set and stages, computed client-side. */
+export function profilePreview(t, form, backendState) {
+  const capabilities = PROFILE_CAPABILITY_OPTIONS
+    .filter(capability => backendState?.capabilities?.[capability] === true && (form.requires.length === 0
+      || form.requires.includes(capability)))
+  const mcp = listOf(form.allowMcp).map(server => `mcp__${server}__*`)
+  return {
+    capabilities,
+    unverified: !backendState || (backendState.state !== 'verified' && backendState.source !== 'smoke'),
+    deny: listOf(form.deny),
+    mcp,
+    stages: form.stages.length ? form.stages : [pt(t, 'st.profilesStagesAll')],
+  }
+}
+
+/** The store list, the backend evidence and the editor: one component so the group needs no live.json draft. */
+export function ProfilesCard() {
+  const { t } = usePanel()
+  const { actions } = usePanelData()
+  const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
+  const [editor, setEditor] = useState(undefined)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(undefined)
+  const [verifying, setVerifying] = useState('')
+  const seq = useRef(0)
+  const load = async () => {
+    const seqNow = ++seq.current
+    try {
+      const data = await actions.profiles()
+      if (seq.current === seqNow) setState({ busy: false, data, error: undefined })
+    } catch (failure) {
+      if (seq.current === seqNow) setState({ busy: false, data: undefined, error: failure })
+    }
+  }
+  useEffect(() => { void load() }, [])
+  // "存为档位" on the Ticket page hands its synthesised profile over through sessionStorage (§8.4): review, then save.
+  useEffect(() => {
+    let draft
+    try { draft = window.sessionStorage.getItem('superagent-panel/profile-draft') } catch { draft = undefined }
+    if (!draft) return
+    try {
+      const parsed = JSON.parse(draft)
+      if (parsed && typeof parsed === 'object') setEditor({ form: profileToForm(parsed), id: parsed.id, resolved: parsed })
+    } catch { /* a corrupt draft is simply not preloaded */ }
+    try { window.sessionStorage.removeItem('superagent-panel/profile-draft') } catch { /* private mode */ }
+  }, [])
+  if (state.error) return <ErrorState error={state.error} onRetry={() => { void load() }} />
+  if (!state.data) return <Skeleton rows={4} />
+  const view = state.data
+  const profiles = Array.isArray(view.profiles) ? view.profiles : []
+  const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
+  const builtinOf = profile => PROFILE_BUILTIN_IDS.includes(profile?.id)
+  const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
+  const openEditor = profile => { setSaveError(undefined); setEditor({ form: profileToForm(profile), id: profile?.id }) }
+  const closeEditor = () => { if (!saving) setEditor(undefined) }
+  const save = async () => {
+    if (!editor) return
+    setSaving(true)
+    setSaveError(undefined)
+    try {
+      const profile = formToProfile(editor.form)
+      const others = profiles.filter(item => item.id !== profile.id).map(item => stripProfileForSave(item))
+      const saved = await actions.saveProfiles([...others, profile])
+      if (saved?.profiles) setState({ busy: false, data: saved, error: undefined })
+      setEditor(undefined)
+    } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
+  }
+  const remove = async profile => {
+    try {
+      const saved = await actions.saveProfiles(profiles.filter(item => item.id !== profile.id).map(stripProfileForSave))
+      if (saved?.profiles) setState({ busy: false, data: saved, error: undefined })
+    } catch (failure) { setSaveError(failure) }
+  }
+  const verify = async backend => {
+    setVerifying(backend)
+    try {
+      await actions.verifyProfileBackend(backend)
+      await load()
+    } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
+  }
+  const capabilityOf = profile => capabilitiesOfForm(profile, backends[profile.backend])
+  const preview = editor ? profilePreview(t, editor.form, backends[editor.form.backend]) : undefined
+  const problem = saveError
+  return <>
+    <Section title={pt(t, 'st.profilesTitle')} hint={pt(t, 'st.profilesHint')}>
+      <div className="sa-settings-stack">
+        <KeyValues rows={[[pt(t, 'st.profilesFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
+          [pt(t, 'st.profilesBuiltin'), pt(t, 'st.profilesBuiltinNote')]]} />
+        {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
+          <p key={`${warning.index}-${warning.profile}`} className="sa-hint sa-info-warn">
+            {pt(t, 'st.profilesRuleWarn', { index: warning.index, profile: warning.profile })}
+          </p>
+        ))}
+        {profiles.map(profile => <div key={profile.id} className="sa-profile-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title">
+              <span>{profile.name ?? profile.id}</span>
+              <span className="sa-mono sa-hint">{profile.id}</span>
+              <Tag tone="outline">{profile.backend}</Tag>
+              {builtinOf(profile) ? <Tag tone="quiet">{pt(t, 'st.profilesBuiltinTag')}</Tag> : null}
+              {capabilityOf(profile).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
+            </div>
+            {profile.description ? <p className="sa-hint">{profile.description}</p> : null}
+          </div>
+          <div className="sa-row-meta">
+            {builtinOf(profile) ? null
+              : <Button size="sm" variant="ghost" onClick={() => openEditor(profile)}>{t('edit')}</Button>}
+            <CopyButton value={JSON.stringify(stripProfileForSave(profile), null, 2)} label={pt(t, 'st.profilesCopy')} />
+            {builtinOf(profile)
+              ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...profile, id: `${profile.id}-copy`,
+                name: `${profile.name ?? profile.id} 副本` })}>{pt(t, 'st.profilesDuplicate')}</Button>
+              : <ConfirmButton label={pt(t, 'st.profilesDelete')} title={pt(t, 'st.profilesDeleteTitle')}
+                message={pt(t, 'st.profilesDeleteMessage', { id: profile.id })} confirmLabel={pt(t, 'st.profilesDeleteConfirm')}
+                onConfirm={async () => { await remove(profile) }} />}
+          </div>
+        </div>)}
+        <Button size="sm" variant="outline" onClick={() => openEditor(undefined)}>{pt(t, 'st.profilesNew')}</Button>
+      </div>
+    </Section>
+    <Section title={pt(t, 'st.profilesBackends')} hint={pt(t, 'st.profilesBackendsHint')}>
+      <div className="sa-settings-stack">
+        {PROFILE_BACKEND_OPTIONS.map(backend => {
+          const evidence = backends[backend] ?? { state: 'unverified' }
+          const verified = evidence.state === 'verified' || evidence.source === 'smoke'
+          return <div key={backend} className="sa-row">
+            <div className="sa-row-main">
+              <div className="sa-row-title">
+                <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
+                <span>{pt(t, `st.profilesBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
+                {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
+              </div>
+              <p className="sa-hint">{pt(t, 'st.profilesBackendCap', {
+                caps: PROFILE_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
+                  || pt(t, 'st.profilesBackendNone') })}</p>
+            </div>
+            <Button size="sm" variant="ghost" disabled={verifying === backend}
+              onClick={() => { void verify(backend) }}>{pt(t, 'st.profilesBackendVerify')}</Button>
+          </div>
+        })}
+      </div>
+    </Section>
+    {problem && problem.details?.code
+      ? <p className="sa-error" role="alert">{`${String(problem.details.code)}：${problem.message}`}
+        {Array.isArray(problem.details.problems) && problem.details.problems.length
+          ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
+          : null}</p>
+      : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
+    {editor ? <Modal open={true} onClose={closeEditor} title={pt(t, 'st.profilesEditorTitle')} closeLabel={t('close')}
+      className="sa-profile-modal"
+      footer={<>
+        <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
+      </>}>
+      <p className="sa-hint">{pt(t, 'st.profilesEditorHint')}</p>
+      <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldId')}</span>
+          <Input value={editor.form.id} onChange={event => editField('id', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldName')}</span>
+          <Input value={editor.form.name} onChange={event => editField('name', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldBackend')}</span>
+          <Select value={editor.form.backend} onChange={value => editField('backend', value)}
+            options={PROFILE_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldPreset')}</span>
+          <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldModelProvider')}</span>
+          <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldModel')}</span>
+          <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
+      </div>
+      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRequires')}</span>
+        {PROFILE_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
+          <Switch checked={editor.form.requires.includes(capability)}
+            onChange={next => editField('requires', next
+              ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
+          {capability}</label>)}
+      </div>
+      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldStages')}</span>
+        {PROFILE_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
+          <Switch checked={editor.form.stages.includes(stage)}
+            onChange={next => editField('stages', next
+              ? PROFILE_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
+              : editor.form.stages.filter(item => item !== stage))} />
+          {stage}</label>)}
+      </div>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldDeny')}</span>
+        <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldAllowMcp')}</span>
+        <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRole')}</span>
+        <Input value={editor.form.role} onChange={event => editField('role', event.target.value)} /></label>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldMust')}</span>
+        <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
+      <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldTimeout')}</span>
+          <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldIdle')}</span>
+          <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRepairs')}</span>
+          <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
+      </div>
+      {preview ? <div className="sa-field" data-testid="sa-profile-preview">
+        <span className="sa-field-head">{pt(t, 'st.profilesPreview')}</span>
+        {preview.unverified
+          ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
+            {pt(t, 'st.profilesPreviewUnverified', { backend: editor.form.backend })}</p>
+          : null}
+        <KeyValues rows={[[pt(t, 'st.profilesPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.profilesBackendNone')],
+          [pt(t, 'st.profilesPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.profilesPreviewEmpty')],
+          [pt(t, 'st.profilesPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.profilesPreviewEmpty')],
+          [pt(t, 'st.profilesPreviewStages'), preview.stages.join(' → ')]]} />
+      </div> : null}
+      {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
+        ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
+    </Modal> : null}
+    {/* A synthesised profile is review-only input: saving always goes through the button above (§8.4). */}
+    {editor?.resolved ? null : null}
+  </>
+}
+
+/** Strip host-added keys before re-saving a listed profile: only the store's own fields may round-trip. */
+function stripProfileForSave(profile) {
+  const keys = ['id', 'name', 'description', 'backend', 'model', 'preset', 'requires', 'edit', 'exec', 'web', 'tools',
+    'skills', 'prompt', 'budget', 'stages']
+  const out = {}
+  for (const key of keys) if (profile?.[key] !== undefined) out[key] = profile[key]
+  return out
+}
+
+const capabilitiesOfForm = (profile, backendState) => PROFILE_CAPABILITY_OPTIONS
+  .filter(capability => (profile?.requires ?? []).includes(capability) && backendState?.capabilities?.[capability] === true)
 
 export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
@@ -2244,6 +2613,7 @@ export function LiveSettingsPage({ route }) {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()
+    if (active === 'profiles') return <ProfilesCard />
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()

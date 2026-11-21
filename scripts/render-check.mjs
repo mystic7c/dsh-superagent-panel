@@ -10,7 +10,7 @@
 // It needs no desktop app, no CDP and no operator state: when DSH_SUPERAGENT_STATE_DIR is unset or empty the
 // script builds its own fixture state under a temp dir, so a clean clone can run the same 170+ checks.
 
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { loadClient } from './client-exports.mjs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -70,6 +70,9 @@ function prepareFixtureState () {
   // the U-06 two-step confirmation checks on a clean clone — a coverage hole that had nothing to do with credentials.
   writeFileSync(join(dir, 'gitlab.token'), 'fixture-gitlab-token\n')
   writeFileSync(join(dir, 'octo.token'), 'fixture-octo-token\n')
+  // A repository may carry its own worker-profiles.json; the engine must ignore it (§4.1) and the detail page must say so.
+  mkdirSync(join(dir, 'worktree-demo'), { recursive: true })
+  writeFileSync(join(dir, 'worktree-demo', 'worker-profiles.json'), JSON.stringify({ version: 1, profiles: [] }))
   console.log(`STATE fixture ${dir}`)
   return dir
 }
@@ -111,7 +114,7 @@ const nowIso = new Date().toISOString()
     status: 'deployed', repoId: primaryRepoId, createdAt: nowIso, updatedAt: nowIso, assignments: [],
     origin: { threadKey: 'octo:demo', actor: 'demo' },
     revisions: [{ id: 'rev_demo', at: nowIso, text: '演示：BI 表改到 CUX schema' }],
-    links: { branch: 'feature/tkt_demo_accept', commit: 'demo1234', worktree: '/tmp/demo',
+    links: { branch: 'feature/tkt_demo_accept', commit: 'demo1234', worktree: join(stateDir, 'worktree-demo'),
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
       mergeRequest: { iid: 1, webUrl: 'https://example.test/mr/1', state: 'merged' },
       deployment: { status: 'success', deployJob: { name: 'deploy_dev', status: 'success' } } },
@@ -125,6 +128,9 @@ const nowIso = new Date().toISOString()
   // merge and deploy. Its row must read that phase as history, never as a live CI spinner.
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
     completedAt: nowIso, endedAt: nowIso,
+    profile: { id: 'generalist', source: 'default', reason: '默认档位 generalist（executor.profile）',
+      candidates: ['generalist'], capability: ['edit', 'exec'], capabilitySource: 'probe', verifiedAt: nowIso,
+      configDigest: 'digest-demo', resolvedAt: nowIso },
     steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。', backend: 'dsh',
       sessionId: 'worker-tkt_demo_accept-abc123' }, changedPaths: ['demo/one/File.java', 'demo/one/Service.java', 'demo/one/Validator.java', 'demo/two/FileTest.java', 'demo/two/ServiceTest.java', 'docs/spec-a.md', 'docs/spec-b.md', 'docs/push.md'],
     gates: [{ name: 'standards', exitCode: 0 }, { name: 'demo-deploy', exitCode: 0 }] })
@@ -132,6 +138,9 @@ const nowIso = new Date().toISOString()
   // which leaves a thread id of its own — the run row must not offer to open that as a Harness Session.
   engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
     startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
+    profile: { id: 'surgical', source: 'rule', reason: '规则 #1 命中（workTypes=dev）', degraded: 'model',
+      candidates: ['surgical'], capability: ['edit'], capabilitySource: 'fallback', configDigest: 'digest-demo',
+      resolvedAt: nowIso },
     steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
     changedPaths: [] })
 }
@@ -445,7 +454,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
-  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, ProfilesCard, ApiError,
+  profilePreview, profileToForm, formToProfile,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -480,7 +490,12 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar: 'live-ui.js',
   failureReasonTextOf: 'overview.js',
   LiveSettingsPage: 'settings.js',
+  ProfilesCard: 'settings.js',
+  profilePreview: 'settings.js',
+  profileToForm: 'settings.js',
+  formToProfile: 'settings.js',
   PanelState: 'api.js',
+  ApiError: 'api.js',
   clampEvalOffset: 'eval.js',
   Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
@@ -680,6 +695,25 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
   check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
     && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
+  // §7.5/§13.1: the row says which profile ran, who chose it, and what evidence backs its capabilities.
+  const profileRow = rootElement.querySelector('#sa-run-run_demo .sa-run-profile')
+  check('a run names the profile that ran it and why (§7.5)',
+    Boolean(profileRow) && /generalist/.test(profileRow.textContent ?? '') && /默认档位/.test(profileRow.textContent ?? ''),
+    profileRow?.textContent?.slice(0, 160) ?? 'no profile row')
+  check('the capability line names its source and when it was verified (§13.1)',
+    /能力：edit, exec（探针/.test(profileRow?.textContent ?? ''), profileRow?.textContent?.slice(0, 200) ?? 'no profile row')
+  check('a synthesised or degraded dispatch is marked and never folded away (§13.1)',
+    /降级/.test(cliRunRow?.textContent ?? '') && /指定的档位不可用|本次分派预算|决策模型/.test(cliRunRow?.textContent ?? '')
+      || /降级/.test(cliRunRow?.textContent ?? ''),
+    cliRunRow?.textContent?.slice(0, 200) ?? 'no run row')
+  check('an unverified capability source is flagged on the row (§13.1)',
+    /未核验/.test(cliRunRow?.textContent ?? ''), cliRunRow?.textContent?.slice(0, 200) ?? 'no run row')
+  check('a repository profile file is reported as ignored, with both paths (§4.1/AC12)',
+    /仓库里的档位文件已忽略/.test(detailText) && /worktree-demo\/worker-profiles\.json/.test(detailText), detailText.slice(0, 600))
+  const rerunPick = rootElement.querySelector('#sa-run-run_demo select[aria-label]')
+  check('the detail page offers a rerun under another profile (§7.6)',
+    Boolean(rerunPick) && [...rerunPick.options].some(option => option.value === 'surgical'),
+    [...(rerunPick?.options ?? [])].map(option => option.value).join(','))
   sessionLink?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   await sleep(150)
   check('clicking the run ID asks the host to open the executor Session',
@@ -1158,8 +1192,8 @@ check('the merge permission is marked as high risk', writeText.includes('高危'
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
-  navLabels.slice(0, 6).join('/') === '来源/评估确认/运行/Worker/写权限/仓库'
-    && navLabels.slice(6).join('/') === '评估/提示词'
+  navLabels.slice(0, 7).join('/') === '来源/评估确认/运行/Worker/档位/写权限/仓库'
+    && navLabels.slice(7).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
 
 // U-06: turning on a permission is not a one-step save. The save bar expands a plain-language change list first and
@@ -2121,6 +2155,78 @@ console.log('STEP pure projections')
     String(coldError()?.message ?? coldHost.textContent?.slice(0, 160)))
   coldRoot.unmount()
   coldHost.remove()
+
+  // §13.2/AC-B1: the profiles group lists the store, keeps the built-ins on top and refuses to save against an
+  // unverified backend — the error code is shown in place, next to the sentence, never swallowed.
+  {
+    const builtin = (id, name) => ({ id, name, description: '', backend: 'dsh', requires: [], stages: ['implement', 'gates'] })
+    const stored = [builtin('generalist', '通用'), builtin('surgical', '小修'), builtin('reviewer', '审阅者'),
+      { id: 'mine', name: '我的档位', backend: 'dsh', requires: ['edit'], tools: { deny: ['write'] },
+        skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' }, stages: ['implement', 'gates'] }]
+    const backendsOf = state => ({ dsh: { backend: 'dsh', state, source: state === 'unverified' ? 'fallback' : 'probe',
+      capabilities: { edit: true, exec: true, web: false }, verifiedAt: state === 'verified' ? nowIso : undefined },
+    claude: { backend: 'claude', state: 'unverified', source: 'fallback', capabilities: { edit: true, exec: false, web: false } },
+    codex: { backend: 'codex', state: 'unverified', source: 'fallback', capabilities: { edit: true, exec: true, web: false } } })
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = ReactDOM.createRoot(host)
+    const lists = []
+    const panel = { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, openSession() {}, backLabel: '' }
+    const renderProfiles = (state, actions) => root.render(React.createElement(Panel.Provider, { value: panel },
+      React.createElement(PanelState.Provider, { value: { data: fixtures.status, error: undefined, reload: async () => {}, actions } },
+        React.createElement(ProfilesCard))))
+    const store = state => ({ file: join(stateDir, 'worker-profiles.json'), exists: true, builtin: false, version: 1,
+      profiles: stored, backends: backendsOf(state), enabledBackends: ['dsh'],
+      ruleWarnings: [{ code: 'DISPATCH_RULE_PROFILE_UNKNOWN', index: 1, profile: 'ghost' }] })
+    renderProfiles('unverified', { profiles: async () => store('unverified'),
+      saveProfiles: async list => { lists.push(list); throw new ApiError('后端 dsh 未核验', 400,
+        { code: 'PROFILE_BACKEND_UNVERIFIED', problems: ['profile mine: backend dsh is unverified'] }) },
+      verifyProfileBackend: async () => ({}) })
+    await sleep(160)
+    const profilesText = () => host.textContent ?? ''
+    check('the profiles group lists the store and marks the built-ins (§13.2)',
+      /通用/.test(profilesText()) && /我的档位/.test(profilesText()) && /内置/.test(profilesText()), profilesText().slice(0, 200))
+    check('an unverified backend is shown as unverified, not as ready (AC-B1)',
+      /未核验/.test(profilesText()) && /dsh/.test(profilesText()), profilesText().slice(0, 240))
+    const firstRow = host.querySelector('.sa-profile-row')
+    check('a built-in profile offers copy but not edit or delete (§4.5/§13.2)',
+      /内置/.test(firstRow?.textContent ?? '') && /复制内置/.test(firstRow?.textContent ?? '')
+        && !/删除/.test(firstRow?.textContent ?? '') && [...firstRow.querySelectorAll('button')]
+          .every(node => (node.textContent ?? '').trim() !== '编辑'),
+      firstRow?.textContent?.slice(0, 160) ?? 'no row')
+    check('a dispatch rule pointing at a missing profile is reported (§5.1)',
+      /分派规则 #1/.test(profilesText()) && /ghost/.test(profilesText()), profilesText().slice(0, 300))
+    const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建档位')
+    newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(120)
+    const modalText = () => [...host.querySelectorAll('.sa-profile-modal')].map(node => node.textContent).join('')
+    check('the editor previews what the profile would get (§13.2)',
+      /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
+    check('the editor warns that an unverified backend cannot be saved (AC-B1)',
+      /未核验/.test(modalText()), modalText().slice(0, 240))
+    const saveButton = [...host.querySelectorAll('.sa-profile-modal button')]
+      .find(node => (node.textContent ?? '').trim() === '保存')
+    saveButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(160)
+    check('a rejected save shows the host error code in place (§13.2)',
+      /PROFILE_BACKEND_UNVERIFIED/.test(profilesText()), profilesText().slice(0, 300))
+    const afterReject = lists.at(-1) ?? []
+    check('a save sends the store without host-added keys (§4.2)',
+      afterReject.every(profile => !('capabilities' in profile) && !('environment' in profile)),
+      JSON.stringify(afterReject.map(profile => Object.keys(profile))).slice(0, 200))
+    // A verified backend accepts the same store: remount so the group loads the verified evidence.
+    root.unmount()
+    const verifiedRoot = ReactDOM.createRoot(host)
+    verifiedRoot.render(React.createElement(Panel.Provider, { value: panel },
+      React.createElement(PanelState.Provider, { value: { data: fixtures.status, error: undefined, reload: async () => {},
+        actions: { profiles: async () => store('verified'), saveProfiles: async list => ({ ...store('verified'), profiles: list }),
+          verifyProfileBackend: async () => ({}) } } },
+        React.createElement(ProfilesCard))))
+    await sleep(160)
+    check('a verified backend renders as verified (§13.2)', /已核验/.test(profilesText()), profilesText().slice(0, 240))
+    verifiedRoot.unmount()
+    host.remove()
+  }
 
   const menuHost = document.createElement('div')
   document.body.appendChild(menuHost)
