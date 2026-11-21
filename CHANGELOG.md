@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.17] — 2026-11-21
+
+1.0.16 打开「设置 → 档位」直接把宿主打崩（`应用无法启动或已意外停止`，`dsh: fatal load failure`），1.0.15 的档位契约层因此完全不可用。
+
+### 修复：能力探针不再调用 `tools.resolve()`，也不再丢掉它的 Promise
+
+- 根因：`lib/live/backend-capability.js` 的 `serviceToolNames` 在枚举工具名的最后一步调用宿主 `tools` 服务的 `resolve`。宿主的契约是 `async resolve(context: ToolActivationContext): Promise<ResolvedToolSet>`，`context` 必须带 `agent`/`modelSelection`/`signal`；无参调用在 async 函数里变成 **rejected Promise**，而 `call()` 是同步的、只 catch 同步异常，于是这个 rejection 没人接 —— 宿主以 `TypeError: Cannot destructure property 'agent' of 'context' as it is undefined` 退出进程。真实 `AgentPreset` 也没有 `tools` 字段，所以每次探针都会走到这条兜底路径。
+- 修改点：`serviceToolNames` 改为读宿主的只读枚举面 `definitions()` / `schemas()`，再对 `TOOL_CAPABILITIES` 里的候选名逐个问 `tools.get(name)`（契约里三者都不需要 Agent）；`resolve` 与那段同步 `call()` 一起删掉。探针里任何一次调用抛错都只记「未核验」，不再影响宿主。
+- 顺带修复同一函数的第二个偏差：`web.searchReady()` / `fetchReady()` 是 async，原代码不 await，Promise 既不是 `true` 也没有 `ready` 字段，于是 web 能力**永远**被判未核验。`readiness` 改为 async 并在 `probeDsh` 里 await，`evidence.providers` 也落成布尔值。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **657 pass / 0 fail**（新增 3 条：宿主形状的 `tools` 服务按名探测且 `resolve` 调用次数为 0、只有 `definitions()` 也能探测、只有 `resolve` 的服务退化成未核验而不是崩溃）。
+- `npm run check`、`npm run check:js`、`node --check index.js`、`node scripts/check-keys.mjs`、`node scripts/render-check.mjs` 全绿（客户端未变）。
+- 属于 Host 半修复：装上新版本后需要**重启 DSH**（重载插件即可）才生效。
+
 ## [1.0.16] — 2026-11-21
 
 `tkt_f96ee85ca71d4577`：按 `docs/worker-profiles-spec.md` 落 **P2 派单层 + P3 面板 UI**。1.0.15 只交付了档位契约层与 DSH 参数，谁来选档位、选了之后记在哪、操作员怎么看和怎么换，都还缺。
