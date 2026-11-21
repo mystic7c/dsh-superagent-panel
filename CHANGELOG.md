@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.0.15] — 2026-11-21
+
+`tkt_2ee8c4b1fbf7429d`：按 `docs/worker-profiles-spec.md` 落 P0 契约层与 P1 DSH 参数。此前 worker 只有「后端 + preset」一层配置，没有可声明、可校验、可复现的档位（profile）概念。
+
+### 新增：档位数据模型、校验与状态目录存储
+
+- `lib/live/worker-profile.js`：档位 schema 常量与内置档位（`generalist` / `surgical` / `reviewer`）；`normalizeProfile(s)` 白名单归一（未知键只报告、数组去重/截断、id/backend/stages 小写）；`validateProfile` 输出 `PROFILE_*` 码（含 `PROFILE_REQUIRES_NOT_CAPABILITY`、`PROFILE_CAPABILITY_GAP`、`PROFILE_BACKEND_UNVERIFIED/STALE/DISABLED`、`PROFILE_PRESET_UNKNOWN`、`PROFILE_EFFORT_UNSUPPORTED`、`PROFILE_STAGES_INVALID`）；`capabilitiesOf` 只采信探针未标 unverified 的能力；`resolveProfile` 合并硬黑名单 + 档位 deny、预算与提示词；`synthesizeProfile` 生成确定性的 `adhoc:` 档位；`readProfiles/writeProfiles` 读写 `<stateDir>/worker-profiles.json`（0600、原子写，缺失即内置、损坏/未来版本拒绝而非静默回退）。
+- `lib/live/backend-capability.js`：能力探针与状态机。DSH 走进程内 `agentPresets.resolve` + 工具集映射（write/edit…→edit、bash→exec、web_search/web_fetch→web，并要求 `web.searchReady()/fetchReady()`），按 `(preset, host version)` 缓存；Claude/Codex 只认显式 smoke，证据记录在 `<stateDir>/backend-verify.json`，版本变化即 stale。
+
+### 新增：executor 配置与 Host 半接线
+
+- `lib/live/config.js`：`executor.profile`（默认 `generalist`）、`executor.profilesFile`（只允许 stateDir 下的裸文件名）、`executor.dispatch`（mode/adhoc/cacheSeconds/maxPerPoll/adhocOrder/rules）按白名单归一，非法值逐项丢弃且不影响其余配置；旧 `live.json` 的 `workerBackend/workerPreset/implementer/reviewer` 行为不变。
+- `lib/live/worker.js`：`runWorker` 接受 `reasoningEffort` / `denyTools` / `preset`，档位 deny 只能叠加在硬黑名单之上；`agentOptions` 在带模型时把 reasoning effort 一并传给宿主，`auto` 不下发。
+- `lib/live/worker-cli.js`：新增 `effortArgs(backend, effort)`（Claude `--effort`，DSH 透传，Codex 未验证前不加），由 `cliInvocation`/`runCliWorker` 统一使用。
+- `lib/live/executor.js`：执行前读取档位，把 preset/model/reasoningEffort/deny/budget/maxRepairRounds 传给 worker（staged 与单 worker 两条路径一致）；档位不存在时退回 1.0.14 的行为，不阻断运行。
+- `tsconfig.check.json`：两个新 Host 文件入档。
+
+### 未包含（后续工单）
+
+- P2 派单层（`lib/live/dispatch.js`：规则/决策模型/现拉档位、缓存与并发上限）与 `run.profile` 记账、P3 面板 UI（档位设置、换档重跑、trace 展示）、P4/P5 Claude/Codex 实跑与 C1–C10 进程契约。规范 §17 的 P0–P3 约 8–10 人日，本轮只交付 P0 契约层 + P1 DSH 参数。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **631 pass / 0 fail**（新增 `worker-profile.test.js` 18 条、`backend-capability.test.js` 9 条，并扩展 config / worker / worker-cli / executor 的档位与 effort 断言）。
+- `node scripts/render-check.mjs` → **263 checks / ok true**；`build-client --check` 24 modules / 504,910 bytes（客户端未变）；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
+- 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
+
 ## [1.0.14] — 2026-11-18
 
 `tkt_68e399abfed64ae6` 的 `run_fb00585a0b08484a`：worker 06:31:13 正常结束、四个闸门（standards / backend / frontend / uat-sql-smoke）06:31:46.792 全绿，06:31:46.799 却以 **`其他原因：Workflow evidence is missing or stale; rerun the workflow`** 失败 —— 19 个文件留在工作树里没提交，分支 0 提交；随后点「发布」也在同一处失败。
