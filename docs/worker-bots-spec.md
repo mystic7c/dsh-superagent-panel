@@ -114,7 +114,11 @@ ProbeResult = {
 **DSH：进程内探针，无外部调用**
 
 1. `preset` → `ctx.get('agentPresets').resolve(preset ?? config.executor.workerPreset)`；解析不到记 `BOT_PRESET_UNKNOWN`，结果按 fallback 处理。
-2. 工具面 → `ctx.get('tools').resolve(...)`（或该 preset 的 `definitions`）。映射必须显式、可测：
+2. 工具面 → 两个来源取并集，映射必须显式、可测：
+   - **preset 组成**（v1.0.20 起的主来源）：`ctx.get('agentPresets').inspectCompositions()`（或 `compositionInventory()`）里该 preset 的 `modules[].moduleName`。宿主全局 `tools` 注册表只列 MCP/team/workspace 工具，`write`/`edit`/`bash`/`web_*` 随 agent 注册，`agentPresets.resolve()` 又只返回 `{ id }` —— 只看工具名会把真机上所有 `dsh` 能力测成 `false`（1.0.18 的实测故障）。模块映射：`dsh-tool-fs`/`dsh-tool-apply-patch`/`dsh-tool-notebook` → `edit`；`dsh-tool-bash`/`dsh-tool-bash-persistent`/`dsh-terminal-bash` → `exec`；`dsh-tool-web` → `web`。`dsh-tool-fs-search` 只读搜索，**不算** `edit`。
+   - **工具名**：`ctx.get('tools').get(name)` / `definitions()` / `schemas()` 的枚举（绝不调 `tools.resolve(...)`，见 1.0.17 宿主崩溃）。
+
+   两者都拿不到 → `fallback`（全 `unverified`）。证据行记 `evidence.modules`（前 40 个）与 `evidence.tools`：
 
 | 工具名 | 能力 |
 | --- | --- |
@@ -137,7 +141,7 @@ ProbeResult = {
 
 | backend | 版本 | 能力 | 结论 | 证据 |
 | --- | --- | --- | --- | --- |
-| `dsh` | 运行中宿主 | `edit` / `exec` / `web` | **按预设探针**，无全局结论 | `host/Tool.listTools`：本会话工具面含 `bash`、`write`、`edit`、`web_search`、`web_fetch`；`web.searchReady()` 可查 |
+| `dsh` | 运行中宿主 | `edit` / `exec` / `web` | **按预设探针**，无全局结论 | `agentPresets.inspectCompositions()` 的 preset `modules`（`dsh-tool-fs`/`dsh-tool-bash`/`dsh-tool-web` 等）+ `tools` 服务工具名；`web.searchReady()` / `fetchReady()` 可查（v1.0.20 实测：`dsh` 三能力均 `true`） |
 | `claude` | `2.1.329`（`claude --version`） | `edit`、`exec` | 可声明，需 smoke 通过 | `claude --help`：`--tools <tools...>`（"Built-in tools … or tool names (e.g. \"Bash,Edit,Read\")"）、`--permission-mode <mode>`、`--effort <level>` |
 | `claude` | 同上 | `web` | **未核验** | help 提到 `WebFetch`，未提 `WebSearch`；MUST 先 smoke（`--tools "WebSearch"` 或 `WebFetch` 取一个 URL） |
 | `codex` | `0.171.0`（`codex --version`） | `edit`、`exec` | 可声明，需 smoke 通过 | `codex exec --help`：`-s/--sandbox {read-only,workspace-write,danger-full-access}`；`-a/--ask-for-approval never` |
@@ -203,7 +207,7 @@ capabilitiesOf(probeResult) -> Set<capability>
 
 **顺序**：`dsh` 先完整上线（P1–P3 全部按 dsh 落地、不依赖 CLI 任何开关）；`claude`、`codex` 各自独立上线，互不阻塞（P4、P5）。
 
-**版本从哪来**（v1.0.18 实现口径）：宿主不暴露版本服务，因此 `hostVersionOf(ctx)` 依次取 `ctx.hostVersion`（函数或字符串）、`process.env.DSH_VERSION`，都没有则 `undefined`。探针缓存键与证据行都用这个值；`undefined` 时不做版本比较（`stale` 不可达，只能靠 `unverified` 拦住未核验的后端）。CLI 事后端的证据取自 `<stateDir>/backend-verify.json` 的 smoke 账本，账本里记录的 CLI 版本与当前版本不同即 `stale`。
+**版本从哪来**（v1.0.18 实现口径）：宿主不暴露版本服务，因此 `hostVersionOf(ctx)` 依次取 `ctx.hostVersion`（函数或字符串）、`process.env.DSH_VERSION`，都没有则 `undefined`。注意 Cordis 的 Context 对未 `inject` 的属性**抛异常**而不是返回 `undefined`，所以注入读取与 `stateDir` 都必须走 try/catch 或显式参数（`probeBackend({ stateDir })` 是参数，不从 Context 上读）——否则一个设置页请求就是 500。探针缓存键与证据行都用这个值；`undefined` 时不做版本比较（`stale` 不可达，只能靠 `unverified` 拦住未核验的后端）。CLI 事后端的证据取自 `<stateDir>/backend-verify.json` 的 smoke 账本，账本里记录的 CLI 版本与当前版本不同即 `stale`。
 
 ## 4. Bot 数据模型
 

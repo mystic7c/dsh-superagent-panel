@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.20] — 2026-11-22
+
+用 dev 实例（`scripts/dev.mjs`，链接工作树、`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-dev-state`）在真实宿主 0.2.2-rc.5 上实测 Bot 页，桌面 profile 未动。三个问题：两个把设置页打成 500，一个是探针在真机上永远测不出能力。
+
+### 根因与修改
+
+- **Cordis 未声明属性会抛异常**：`hostVersionOf` 里 `ctx?.hostVersion`、`probeBackend` 里 `ctx?.stateDir` 在宿主上是 `cannot get property "hostVersion" without inject`（不是 undefined），`GET engine/bots` 直接 500（1.0.18 引入的回归）。改为：`hostVersionOf` 用 try/catch 包住注入读取；`probeBackend` 新增显式 `stateDir` 参数（JSDoc 写明不从宿主 Context 上读），`engine.backendStateOf` 传 `this.stateDir`，`executor.probesForRun` 透传 `engine.stateDir`。回归测试用 Proxy 模拟严格 Context（未知键抛错，仍能取到 `DSH_VERSION`）。
+- **真机探针三能力全 false**：宿主全局 `tools` 注册表只列 MCP/team/workspace 等 49 个工具，`write`/`edit`/`bash`/`web_*` 是随 agent 注册的；`agentPresets.resolve()` 只返回 `{ id }`，没有 `tools`。于是 `dsh` 探针「成功」却报 `{edit:false,exec:false,web:false}`，候选集恒空 —— 等于整个功能不可用。改为：新增 `compositionModulesOf(ctx, presetId)` 读 `agentPresets.inspectCompositions()`（或 `compositionInventory()`）里该 preset 的 `modules`，新增 `MODULE_CAPABILITIES`（`dsh-tool-fs`/`dsh-tool-apply-patch`/`dsh-tool-notebook` → edit；`dsh-tool-bash`/`dsh-tool-bash-persistent`/`dsh-terminal-bash` → exec；`dsh-tool-web` → web），能力 = 工具名命中 **或** preset 挂载了对应插件；`dsh-tool-fs-search` 不算 edit（只读搜索）。证据行新增 `evidence.modules`（前 40 个模块名），两边都读不到才退回 `fallback`（全未核验）。
+
+### 验证
+
+- dev 实例（端口 63419）：`GET engine/bots` → 200，`backends.dsh` = `state:"verified"`, `source:"probe"`, `{edit:true,exec:true,web:true}`；`claude`/`codex` = `unverified`（fallback），保存 claude Bot 仍被拒（`BOT_BACKEND_UNVERIFIED`）；保存 dsh Bot 成功，写入 `/tmp/sa-dev-state/worker-bots.json`（`version: 2`）。桌面 profile 未安装、未启动。
+- `node --test lib/live/*.test.js` → **664 pass / 0 fail**（新增两条：composition 作为证据、search-only fs 不给 edit）；`node scripts/build-client.mjs` 24 modules / 525702 bytes 且 `--check` up to date；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+- 文档：`docs/worker-bots-spec.md` §3.3 补「DSH 探针的证据来源」（工具名 ∪ preset 组成），§3.7 版本来源处补「`stateDir` 是参数，不从 Context 读」。
+
+### 升级提示
+
+- 1.0.18/1.0.19 若在真实宿主上打开 Bot 页报 `cannot get property … without inject`，升级到本版即可；无需改配置。
+- 能力表仍只用于拒绝：composition 是宿主运行时声明，`routing.js` 的静态表不授权任何能力。
+
 ## [1.0.19] — 2026-11-22
 
 把「档位（profile）」整套命名换成 **Bot（bot）**（`docs/worker-bots-spec.md` 附录 C）：用户定义、面向一类固定重复工作的执行者。行为不变，但对操作员可见的每一条路径都换了名字，旧配置与旧 Bot 文件需要按附录 C 迁移。
