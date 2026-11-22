@@ -2,7 +2,7 @@
 
 状态：**草案 v3**（评审用）。v3 只改「叫什么、怎么分层」：实体从「档位（profile）」改名为 **Bot（bot）**，随之改名的有字段、配置键、错误码、文件名与 UI 文案，迁移映射见附录 C；§3–§18 的规则不变。
 
-实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），代码里仍用 `profile` 命名；已知缺口（§12 增量事件、§10.2 阶段级 Bot、§3.7 版本线、§4.1 损坏拒绝）与切片顺序见 §17。
+实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），v1.0.18 补齐 §3.2/§3.5/§4.1/§9.3/§12 的四处断线与五处反向实现，v1.0.19 完成附录 C 的代码改名（代码、配置键、错误码、文件名、UI 文案、`run.bot`）。已知缺口：CLI 后端的增量事件与 §11 C1–C10（P4/P5）、§10.2 阶段级 Bot；`stale` 只在宿主提供版本时可达（§3.7 末段）。切片顺序见 §17。
 
 v2 重写了能力模型（§3）：能力必须带证据，不承认任何写死的后端能力表；后端拆成独立上线单元，`dsh` 先完整落地，`claude` / `codex` 各自后续上线（§3.7、§17）。
 
@@ -202,6 +202,8 @@ capabilitiesOf(probeResult) -> Set<capability>
 上线一个后端 MUST 同时满足：①§3.3 探针实现；②§3.4 证据行；③smoke 通过并落盘；④该后端专属验收（§15 的 AC-B\*）全绿；⑤`executor.workers.<backend>.enabled === true`。
 
 **顺序**：`dsh` 先完整上线（P1–P3 全部按 dsh 落地、不依赖 CLI 任何开关）；`claude`、`codex` 各自独立上线，互不阻塞（P4、P5）。
+
+**版本从哪来**（v1.0.18 实现口径）：宿主不暴露版本服务，因此 `hostVersionOf(ctx)` 依次取 `ctx.hostVersion`（函数或字符串）、`process.env.DSH_VERSION`，都没有则 `undefined`。探针缓存键与证据行都用这个值；`undefined` 时不做版本比较（`stale` 不可达，只能靠 `unverified` 拦住未核验的后端）。CLI 事后端的证据取自 `<stateDir>/backend-verify.json` 的 smoke 账本，账本里记录的 CLI 版本与当前版本不同即 `stale`。
 
 ## 4. Bot 数据模型
 
@@ -584,7 +586,7 @@ resolveBot(botId, context) -> {
 | `auto` / 缺省 | 不传 | 不传 | 不传 |
 | `low` / `medium` / `high` | 透传至 `AgentOptions` | `--effort <level>`（2.1.329 已核验存在；P4 上线前再用 smoke 确认一次真的生效） | **未核验**：`-c model_reasoning_effort=<值>` 未在本机 help 出现，P5 前必须实测；不成立则降级为不传并记 `effort-dropped` |
 
-保存期校验依赖宿主模型目录（`ctx.get('modelDirectories')`，与输入框模型选择器同源）；不支持的值 → `BOT_EFFORT_UNSUPPORTED`。
+保存期校验依赖宿主模型目录；不支持的值 → `BOT_EFFORT_UNSUPPORTED`。目录以宿主服务为准：`modelDirectories` 只注册在客户端 UI 插件里（宿主侧无此服务），因此实现读 `ctx.get('llm').resolveModel(provider, model)` 的 `reasoning.efforts`；模型目录查不到时不作结论（不阻断保存），只有在能确定「这个模型没有这档」时才拒绝。
 
 ### 9.4 Skill 与 MCP
 
@@ -828,7 +830,7 @@ AC1–AC14 与 AC-B1–AC-B3 的首版全部按 `dsh` 验收；每个新后端�
 
 | 规范条目 | 现有锚点 |
 | --- | --- |
-| 能力表（仅 fallback） | `lib/live/routing.js` `BACKEND_CAPABILITIES` |
+| 能力表（仅用于拒绝） | `lib/live/routing.js` `BACKEND_CAPABILITIES` |
 | 能力探针 | 宿主 `agentPresets.resolve` / `tools.resolve` / `web.searchReady` / `fetchReady`；CLI `subprocess.resolveExecutable` |
 | 阶段 | `lib/live/workflow.js:2` `STAGES` |
 | DSH 参数 | `lib/live/worker.js` `agentOptions`/`DENY_TOOLS`/`READ_ONLY_TOOLS` |
@@ -841,7 +843,7 @@ AC1–AC14 与 AC-B1–AC-B3 的首版全部按 `dsh` 验收；每个新后端�
 
 ## 附录 C：v2（档位 profile）→ v3（Bot bot）迁移对照
 
-v3 只改命名与分层表述，不改行为。代码改造按此表逐项替换；在此之前，代码里的 `profile` 与本文的 `bot` 指同一个实体。
+v3 只改命名与分层表述，不改行为。代码改造已按此表在 v1.0.19 完成：代码、`live.json` 键、`run.bot`、错误码前缀、文件名与 UI 文案现在都用 `bot`，仓库里不再有 `profile` 命名（本节留作从旧版本升级的对照）。
 
 | v2（旧） | v3（新） |
 | --- | --- |
@@ -855,7 +857,7 @@ v3 只改命名与分层表述，不改行为。代码改造按此表逐项替�
 | `repos[].profile` / `octo.chatRepos[].profile` | `repos[].bot` / `octo.chatRepos[].bot` |
 | `run.profile` / `run.profileId` | `run.bot` / `run.botId` |
 | `stages[].profile` | `stages[].bot` |
-| `lib/live/worker-profile.js` | `lib/live/worker-bot.js` |
+| `lib/live/worker-profile.js` | `lib/live/worker-bot.js`（已在 v1.0.19 落地） |
 | `readProfiles` / `writeProfiles` / `saveProfiles` / `normalizeProfiles` / `validateProfile` / `resolveProfile` / `synthesizeProfile` | `readBots` / `writeBots` / `saveBots` / `normalizeBots` / `validateBot` / `resolveBot` / `synthesizeBot` |
 | `BUILTIN_PROFILES` / `PROFILE_FILE_VERSION` | `BUILTIN_BOTS` / `BOT_FILE_VERSION` |
 | `profileSetDigest` / `profilesView` / `profileDrift` / `profileChoices` | `botSetDigest` / `botsView` / `botDrift` / `botChoices` |

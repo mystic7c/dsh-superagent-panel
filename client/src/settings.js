@@ -366,7 +366,7 @@ Object.assign(PAGE_TEXT, {
   'st.reviewEnabledHint': ['关闭后不再发确认消息，已经发出的确认仍可回复。', 'When off, no new prompts are posted; already-posted ones remain answerable.'],
   'st.reviewSenders': ['允许回复的操作人（Octo uid）', 'Operators allowed to answer (Octo uids)'],
   'st.reviewSendersHint': ['逗号或换行分隔；留空表示没有人能回复确认。uid 可从群成员资料或历史消息里查。',
-    'Comma or newline separated; empty means nobody can confirm. Find uids in member profiles or past messages.'],
+    'Comma or newline separated; empty means nobody can confirm. Find uids in member bots or past messages.'],
   'st.reviewExpire': ['回复有效期（小时）', 'Reply validity (hours)'],
   'st.reviewExpireHint': ['1–168 小时；过期的评估不再接受回复。', '1–168 hours; expired reviews no longer accept answers.'],
   'st.reviewExpireInvalid': ['回复有效期需为 1–168 之间的小时数。', 'Reply validity must be an integer between 1 and 168 hours.'],
@@ -544,7 +544,7 @@ export const SETTINGS_GROUPS = [
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
-  { id: 'profiles', labelKey: 'settingsGroup.profiles', icon: 'robot' },
+  { id: 'bots', labelKey: 'settingsGroup.bots', icon: 'robot' },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
@@ -1035,94 +1035,94 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 }
 
 Object.assign(PAGE_TEXT, {
-  'st.profilesTitle': ['档位', 'Worker profiles'],
-  'st.profilesHint': ['档位决定一次运行能用的后端、预设、模型、工具与阶段。内置三档不可编辑，可复制后改。',
-    'A profile decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
-  'st.profilesFile': ['档位文件', 'Profile file'],
-  'st.profilesBroken': ['档位文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
-    'The profile file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
-  'st.profilesDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
-    'Unknown fields were dropped: {keys}. The rest of the profile was kept.'],
-  'st.profilesRuleWarn': ['分派规则 #{index} 指向不存在的档位 {profile}，该条会被跳过。',
-    'Dispatch rule #{index} names a profile that does not exist ({profile}); the rule is skipped.'],
-  'st.profilesBuiltin': ['内置档位', 'Built-in profiles'],
-  'st.profilesBuiltinNote': ['内置三档始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
-  'st.profilesBuiltinTag': ['内置', 'built-in'],
-  'st.profilesCopy': ['复制为 JSON', 'Copy as JSON'],
-  'st.profilesDuplicate': ['复制内置', 'Copy built-in'],
-  'st.profilesDelete': ['删除', 'Delete'],
-  'st.profilesDeleteTitle': ['删除档位', 'Delete profile'],
-  'st.profilesDeleteMessage': ['删除档位 {id}？引用它的规则和显式指定会失效。', 'Delete profile {id}? Rules and explicit choices that name it will stop working.'],
-  'st.profilesDeleteConfirm': ['删除', 'Delete'],
-  'st.profilesNew': ['新建档位', 'New profile'],
-  'st.profilesBackends': ['后端核验状态', 'Backend verification'],
-  'st.profilesBackendsHint': ['未核验或版本变化的后端不能保存新档位，也不会进入分派候选集。',
-    'An unverified backend (or one whose version changed) cannot back a new profile and never enters the dispatch candidate set.'],
-  'st.profilesBackend.verified': ['已核验', 'verified'],
-  'st.profilesBackend.stale': ['版本已变，需要重新核验', 'version changed — verify again'],
-  'st.profilesBackend.unverified': ['未核验', 'unverified'],
-  'st.profilesBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
-  'st.profilesBackendNone': ['无', 'none'],
-  'st.profilesBackendVerify': ['重新核验', 'Verify'],
-  'st.profilesEditorTitle': ['编辑档位', 'Edit profile'],
-  'st.profilesEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
+  'st.botsTitle': ['Bot', 'Worker bots'],
+  'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型、工具与阶段。内置三个 Bot 不可编辑，可复制后改。',
+    'A bot decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
+  'st.botsFile': ['Bot 文件', 'Bot file'],
+  'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
+    'The bot file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
+  'st.botsDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
+    'Unknown fields were dropped: {keys}. The rest of the bot was kept.'],
+  'st.botsRuleWarn': ['分派规则 #{index} 指向不存在的 Bot {bot}，该条会被跳过。',
+    'Dispatch rule #{index} names a bot that does not exist ({bot}); the rule is skipped.'],
+  'st.botsBuiltin': ['内置 Bot', 'Built-in bots'],
+  'st.botsBuiltinNote': ['内置三个 Bot 始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
+  'st.botsBuiltinTag': ['内置', 'built-in'],
+  'st.botsCopy': ['复制为 JSON', 'Copy as JSON'],
+  'st.botsDuplicate': ['复制内置', 'Copy built-in'],
+  'st.botsDelete': ['删除', 'Delete'],
+  'st.botsDeleteTitle': ['删除 Bot', 'Delete bot'],
+  'st.botsDeleteMessage': ['删除 Bot {id}？引用它的规则和显式指定会失效。', 'Delete bot {id}? Rules and explicit choices that name it will stop working.'],
+  'st.botsDeleteConfirm': ['删除', 'Delete'],
+  'st.botsNew': ['新建 Bot', 'New bot'],
+  'st.botsBackends': ['后端核验状态', 'Backend verification'],
+  'st.botsBackendsHint': ['未核验或版本变化的后端不能保存新 Bot，也不会进入分派候选集。',
+    'An unverified backend (or one whose version changed) cannot back a new bot and never enters the dispatch candidate set.'],
+  'st.botsBackend.verified': ['已核验', 'verified'],
+  'st.botsBackend.stale': ['版本已变，需要重新核验', 'version changed — verify again'],
+  'st.botsBackend.unverified': ['未核验', 'unverified'],
+  'st.botsBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
+  'st.botsBackendNone': ['无', 'none'],
+  'st.botsBackendVerify': ['重新核验', 'Verify'],
+  'st.botsEditorTitle': ['编辑 Bot', 'Edit bot'],
+  'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
     'Saving validates against the backend evidence; error codes are shown right here.'],
-  'st.profilesFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
-  'st.profilesFieldName': ['名称', 'Name'],
-  'st.profilesFieldBackend': ['后端', 'Backend'],
-  'st.profilesFieldPreset': ['预设', 'Preset'],
-  'st.profilesFieldModelProvider': ['模型 provider', 'Model provider'],
-  'st.profilesFieldModel': ['模型', 'Model'],
-  'st.profilesFieldRequires': ['需要的能力', 'Required capabilities'],
-  'st.profilesFieldStages': ['阶段（有序，必须含 implement 与 gates）', 'Stages (ordered; must include implement and gates)'],
-  'st.profilesFieldDeny': ['额外禁止的工具（逗号分隔）', 'Extra denied tools (comma separated)'],
-  'st.profilesFieldAllowMcp': ['允许的 MCP 服务器（留空=不限制）', 'Allowed MCP servers (empty = no restriction)'],
-  'st.profilesFieldRole': ['角色提示词', 'Role prompt'],
-  'st.profilesFieldMust': ['必须遵守（每行一条）', 'Must rules (one per line)'],
-  'st.profilesFieldTimeout': ['超时毫秒', 'Timeout (ms)'],
-  'st.profilesFieldIdle': ['空闲超时毫秒', 'Idle timeout (ms)'],
-  'st.profilesFieldRepairs': ['修复轮数', 'Repair rounds'],
-  'st.profilesPreview': ['预览它能拿到什么', 'Preview what it gets'],
-  'st.profilesPreviewUnverified': ['后端 {backend} 未核验：这个档位只能预览，不能保存。',
-    'Backend {backend} is unverified: this profile can be previewed but not saved.'],
-  'st.profilesPreviewCaps': ['能力', 'Capabilities'],
-  'st.profilesPreviewDeny': ['禁止的工具', 'Denied tools'],
-  'st.profilesPreviewMcp': ['可用的 MCP', 'Allowed MCP'],
-  'st.profilesPreviewStages': ['阶段', 'Stages'],
-  'st.profilesPreviewEmpty': ['—', '—'],
-  'st.profilesStagesAll': ['全部内置阶段', 'all built-in stages'],
+  'st.botsFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
+  'st.botsFieldName': ['名称', 'Name'],
+  'st.botsFieldBackend': ['后端', 'Backend'],
+  'st.botsFieldPreset': ['预设', 'Preset'],
+  'st.botsFieldModelProvider': ['模型 provider', 'Model provider'],
+  'st.botsFieldModel': ['模型', 'Model'],
+  'st.botsFieldRequires': ['需要的能力', 'Required capabilities'],
+  'st.botsFieldStages': ['阶段（有序，必须含 implement 与 gates）', 'Stages (ordered; must include implement and gates)'],
+  'st.botsFieldDeny': ['额外禁止的工具（逗号分隔）', 'Extra denied tools (comma separated)'],
+  'st.botsFieldAllowMcp': ['允许的 MCP 服务器（留空=不限制）', 'Allowed MCP servers (empty = no restriction)'],
+  'st.botsFieldRole': ['角色提示词', 'Role prompt'],
+  'st.botsFieldMust': ['必须遵守（每行一条）', 'Must rules (one per line)'],
+  'st.botsFieldTimeout': ['超时毫秒', 'Timeout (ms)'],
+  'st.botsFieldIdle': ['空闲超时毫秒', 'Idle timeout (ms)'],
+  'st.botsFieldRepairs': ['修复轮数', 'Repair rounds'],
+  'st.botsPreview': ['预览它能拿到什么', 'Preview what it gets'],
+  'st.botsPreviewUnverified': ['后端 {backend} 未核验：这个 Bot 只能预览，不能保存。',
+    'Backend {backend} is unverified: this bot can be previewed but not saved.'],
+  'st.botsPreviewCaps': ['能力', 'Capabilities'],
+  'st.botsPreviewDeny': ['禁止的工具', 'Denied tools'],
+  'st.botsPreviewMcp': ['可用的 MCP', 'Allowed MCP'],
+  'st.botsPreviewStages': ['阶段', 'Stages'],
+  'st.botsPreviewEmpty': ['—', '—'],
+  'st.botsStagesAll': ['全部内置阶段', 'all built-in stages'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
-   Worker profiles (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
-   file the engine actually reads — a repository's own worker-profiles.json is ignored on purpose (§4.1).
+   Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
+   file the engine actually reads — a repository's own worker-bots.json is ignored on purpose (§4.1).
    --------------------------------------------------------------------------------------------------------------- */
 
-export const PROFILE_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
+export const BOT_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
 /** The three built-ins ship with the plugin (§4.5): always available, never editable, copy to change (§13.2). */
-export const PROFILE_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
-export const PROFILE_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
-export const PROFILE_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
+export const BOT_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
+export const BOT_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
+export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
 
-export const emptyProfileForm = () => ({
+export const emptyBotForm = () => ({
   id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
   reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
   role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [],
 })
 
 /** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
-export function profileToForm(profile) {
-  const model = profile?.model && typeof profile.model === 'object' ? profile.model : {}
-  const tools = profile?.tools && typeof profile.tools === 'object' ? profile.tools : {}
-  const skills = profile?.skills && typeof profile.skills === 'object' ? profile.skills : {}
-  const prompt = profile?.prompt && typeof profile.prompt === 'object' ? profile.prompt : {}
-  const budget = profile?.budget && typeof profile.budget === 'object' ? profile.budget : {}
+export function botToForm(bot) {
+  const model = bot?.model && typeof bot.model === 'object' ? bot.model : {}
+  const tools = bot?.tools && typeof bot.tools === 'object' ? bot.tools : {}
+  const skills = bot?.skills && typeof bot.skills === 'object' ? bot.skills : {}
+  const prompt = bot?.prompt && typeof bot.prompt === 'object' ? bot.prompt : {}
+  const budget = bot?.budget && typeof bot.budget === 'object' ? bot.budget : {}
   return {
-    ...emptyProfileForm(),
-    id: String(profile?.id ?? ''), name: String(profile?.name ?? ''), description: String(profile?.description ?? ''),
-    backend: String(profile?.backend ?? 'dsh'), preset: String(profile?.preset ?? ''),
+    ...emptyBotForm(),
+    id: String(bot?.id ?? ''), name: String(bot?.name ?? ''), description: String(bot?.description ?? ''),
+    backend: String(bot?.backend ?? 'dsh'), preset: String(bot?.preset ?? ''),
     modelProvider: String(model.provider ?? ''), modelModel: String(model.model ?? ''),
     reasoningEffort: String(model.reasoningEffort ?? 'auto'),
-    requires: Array.isArray(profile?.requires) ? profile.requires.filter(capability => PROFILE_CAPABILITY_OPTIONS.includes(capability)) : [],
+    requires: Array.isArray(bot?.requires) ? bot.requires.filter(capability => BOT_CAPABILITY_OPTIONS.includes(capability)) : [],
     deny: (Array.isArray(tools.deny) ? tools.deny : []).join(', '),
     allowMcp: (Array.isArray(tools.allowMcp) ? tools.allowMcp : []).join(', '),
     prefer: (Array.isArray(skills.prefer) ? skills.prefer : []).join(', '),
@@ -1131,53 +1131,53 @@ export function profileToForm(profile) {
     timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
     idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
     maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
-    stages: Array.isArray(profile?.stages) ? profile.stages.filter(stage => PROFILE_STAGE_OPTIONS.includes(stage)) : [],
+    stages: Array.isArray(bot?.stages) ? bot.stages.filter(stage => BOT_STAGE_OPTIONS.includes(stage)) : [],
   }
 }
 
 const listOf = value => String(value ?? '').split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
 const countOf = value => { const text = String(value ?? '').trim(); return text === '' ? undefined : Number(text) }
 
-/** Form → profile. Empty fields are omitted so the store only carries what the operator actually set. */
-export function formToProfile(form) {
-  const profile = { id: String(form.id ?? '').trim().toLowerCase(), name: String(form.name ?? '').trim(),
+/** Form → bot. Empty fields are omitted so the store only carries what the operator actually set. */
+export function formToBot(form) {
+  const bot = { id: String(form.id ?? '').trim().toLowerCase(), name: String(form.name ?? '').trim(),
     backend: String(form.backend ?? 'dsh') }
-  if (form.description) profile.description = form.description
-  if (form.preset) profile.preset = form.preset.trim()
+  if (form.description) bot.description = form.description
+  if (form.preset) bot.preset = form.preset.trim()
   const model = {}
   if (form.modelProvider) model.provider = form.modelProvider.trim()
   if (form.modelModel) model.model = form.modelModel.trim()
   if (form.reasoningEffort && form.reasoningEffort !== 'auto') model.reasoningEffort = form.reasoningEffort
-  if (model.provider && model.model) profile.model = model
-  if (form.requires.length) profile.requires = [...form.requires]
+  if (model.provider && model.model) bot.model = model
+  if (form.requires.length) bot.requires = [...form.requires]
   const tools = {}
   const deny = listOf(form.deny)
   if (deny.length) tools.deny = deny
   if (String(form.allowMcp ?? '').trim()) tools.allowMcp = listOf(form.allowMcp)
-  if (Object.keys(tools).length) profile.tools = tools
+  if (Object.keys(tools).length) bot.tools = tools
   const skills = {}
   const prefer = listOf(form.prefer)
   if (prefer.length) skills.prefer = prefer
   if (form.skillsPolicy && form.skillsPolicy !== 'prompt') skills.policy = form.skillsPolicy
-  if (Object.keys(skills).length) profile.skills = skills
+  if (Object.keys(skills).length) bot.skills = skills
   const prompt = {}
   if (form.role) prompt.role = form.role
   const must = listOf(form.must)
   if (must.length) prompt.must = must
-  if (Object.keys(prompt).length) profile.prompt = prompt
+  if (Object.keys(prompt).length) bot.prompt = prompt
   const budget = {}
   for (const [key, value] of [['timeoutMs', countOf(form.timeoutMs)], ['idleTimeoutMs', countOf(form.idleTimeoutMs)],
     ['maxRepairRounds', countOf(form.maxRepairRounds)]]) {
     if (Number.isFinite(value)) budget[key] = value
   }
-  if (Object.keys(budget).length) profile.budget = budget
-  if (form.stages.length) profile.stages = [...form.stages]
-  return profile
+  if (Object.keys(budget).length) bot.budget = budget
+  if (form.stages.length) bot.stages = [...form.stages]
+  return bot
 }
 
 /** §13.2 "预览它能拿到什么": the effective deny list, MCP prefixes, capability set and stages, computed client-side. */
-export function profilePreview(t, form, backendState) {
-  const capabilities = PROFILE_CAPABILITY_OPTIONS
+export function botPreview(t, form, backendState) {
+  const capabilities = BOT_CAPABILITY_OPTIONS
     .filter(capability => backendState?.capabilities?.[capability] === true && (form.requires.length === 0
       || form.requires.includes(capability)))
   const mcp = listOf(form.allowMcp).map(server => `mcp__${server}__*`)
@@ -1186,12 +1186,12 @@ export function profilePreview(t, form, backendState) {
     unverified: !backendState || (backendState.state !== 'verified' && backendState.source !== 'smoke'),
     deny: listOf(form.deny),
     mcp,
-    stages: form.stages.length ? form.stages : [pt(t, 'st.profilesStagesAll')],
+    stages: form.stages.length ? form.stages : [pt(t, 'st.botsStagesAll')],
   }
 }
 
 /** The store list, the backend evidence and the editor: one component so the group needs no live.json draft. */
-export function ProfilesCard() {
+export function BotsCard() {
   const { t } = usePanel()
   const { actions } = usePanelData()
   const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
@@ -1203,123 +1203,123 @@ export function ProfilesCard() {
   const load = async () => {
     const seqNow = ++seq.current
     try {
-      const data = await actions.profiles()
+      const data = await actions.bots()
       if (seq.current === seqNow) setState({ busy: false, data, error: undefined })
     } catch (failure) {
       if (seq.current === seqNow) setState({ busy: false, data: undefined, error: failure })
     }
   }
   useEffect(() => { void load() }, [])
-  // "存为档位" on the Ticket page hands its synthesised profile over through sessionStorage (§8.4): review, then save.
+  // "存为 Bot" on the Ticket page hands its synthesised bot over through sessionStorage (§8.4): review, then save.
   useEffect(() => {
     let draft
-    try { draft = window.sessionStorage.getItem('superagent-panel/profile-draft') } catch { draft = undefined }
+    try { draft = window.sessionStorage.getItem('superagent-panel/bot-draft') } catch { draft = undefined }
     if (!draft) return
     try {
       const parsed = JSON.parse(draft)
-      if (parsed && typeof parsed === 'object') setEditor({ form: profileToForm(parsed), id: parsed.id, resolved: parsed })
+      if (parsed && typeof parsed === 'object') setEditor({ form: botToForm(parsed), id: parsed.id, resolved: parsed })
     } catch { /* a corrupt draft is simply not preloaded */ }
-    try { window.sessionStorage.removeItem('superagent-panel/profile-draft') } catch { /* private mode */ }
+    try { window.sessionStorage.removeItem('superagent-panel/bot-draft') } catch { /* private mode */ }
   }, [])
   if (state.error) return <ErrorState error={state.error} onRetry={() => { void load() }} />
   if (!state.data) return <Skeleton rows={4} />
   const view = state.data
-  const profiles = Array.isArray(view.profiles) ? view.profiles : []
+  const bots = Array.isArray(view.bots) ? view.bots : []
   const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
-  const builtinOf = profile => PROFILE_BUILTIN_IDS.includes(profile?.id)
+  const builtinOf = bot => BOT_BUILTIN_IDS.includes(bot?.id)
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
-  const openEditor = profile => { setSaveError(undefined); setEditor({ form: profileToForm(profile), id: profile?.id }) }
+  const openEditor = bot => { setSaveError(undefined); setEditor({ form: botToForm(bot), id: bot?.id }) }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
     if (!editor) return
     setSaving(true)
     setSaveError(undefined)
     try {
-      const profile = formToProfile(editor.form)
-      const others = profiles.filter(item => item.id !== profile.id).map(item => stripProfileForSave(item))
-      const saved = await actions.saveProfiles([...others, profile])
-      if (saved?.profiles) setState({ busy: false, data: saved, error: undefined })
+      const bot = formToBot(editor.form)
+      const others = bots.filter(item => item.id !== bot.id).map(item => stripBotForSave(item))
+      const saved = await actions.saveBots([...others, bot])
+      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
       setEditor(undefined)
     } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
   }
-  const remove = async profile => {
+  const remove = async bot => {
     try {
-      const saved = await actions.saveProfiles(profiles.filter(item => item.id !== profile.id).map(stripProfileForSave))
-      if (saved?.profiles) setState({ busy: false, data: saved, error: undefined })
+      const saved = await actions.saveBots(bots.filter(item => item.id !== bot.id).map(stripBotForSave))
+      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
     } catch (failure) { setSaveError(failure) }
   }
   const verify = async backend => {
     setVerifying(backend)
     try {
-      await actions.verifyProfileBackend(backend)
+      await actions.verifyBotBackend(backend)
       await load()
     } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
   }
-  const capabilityOf = profile => capabilitiesOfForm(profile, backends[profile.backend])
-  const preview = editor ? profilePreview(t, editor.form, backends[editor.form.backend]) : undefined
+  const capabilityOf = bot => capabilitiesOfForm(bot, backends[bot.backend])
+  const preview = editor ? botPreview(t, editor.form, backends[editor.form.backend]) : undefined
   const problem = saveError
   return <>
-    <Section title={pt(t, 'st.profilesTitle')} hint={pt(t, 'st.profilesHint')}>
+    <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
       <div className="sa-settings-stack">
-        <KeyValues rows={[[pt(t, 'st.profilesFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
-          [pt(t, 'st.profilesBuiltin'), pt(t, 'st.profilesBuiltinNote')]]} />
+        <KeyValues rows={[[pt(t, 'st.botsFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
+          [pt(t, 'st.botsBuiltin'), pt(t, 'st.botsBuiltinNote')]]} />
         {view.code
           ? <p className="sa-hint sa-info-warn">
-            {pt(t, 'st.profilesBroken', { code: String(view.code), message: String(view.error ?? '') })}
+            {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
           </p>
           : null}
         {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
-          ? <p className="sa-hint sa-info-warn">{pt(t, 'st.profilesDropped', { keys: view.droppedKeys.join(', ') })}</p>
+          ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
           : null}
         {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
-          <p key={`${warning.index}-${warning.profile}`} className="sa-hint sa-info-warn">
-            {pt(t, 'st.profilesRuleWarn', { index: warning.index, profile: warning.profile })}
+          <p key={`${warning.index}-${warning.bot}`} className="sa-hint sa-info-warn">
+            {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
           </p>
         ))}
-        {profiles.map(profile => <div key={profile.id} className="sa-profile-row">
+        {bots.map(bot => <div key={bot.id} className="sa-bot-row">
           <div className="sa-row-main">
             <div className="sa-row-title">
-              <span>{profile.name ?? profile.id}</span>
-              <span className="sa-mono sa-hint">{profile.id}</span>
-              <Tag tone="outline">{profile.backend}</Tag>
-              {builtinOf(profile) ? <Tag tone="quiet">{pt(t, 'st.profilesBuiltinTag')}</Tag> : null}
-              {capabilityOf(profile).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
+              <span>{bot.name ?? bot.id}</span>
+              <span className="sa-mono sa-hint">{bot.id}</span>
+              <Tag tone="outline">{bot.backend}</Tag>
+              {builtinOf(bot) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
+              {capabilityOf(bot).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
             </div>
-            {profile.description ? <p className="sa-hint">{profile.description}</p> : null}
+            {bot.description ? <p className="sa-hint">{bot.description}</p> : null}
           </div>
           <div className="sa-row-meta">
-            {builtinOf(profile) ? null
-              : <Button size="sm" variant="ghost" onClick={() => openEditor(profile)}>{t('edit')}</Button>}
-            <CopyButton value={JSON.stringify(stripProfileForSave(profile), null, 2)} label={pt(t, 'st.profilesCopy')} />
-            {builtinOf(profile)
-              ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...profile, id: `${profile.id}-copy`,
-                name: `${profile.name ?? profile.id} 副本` })}>{pt(t, 'st.profilesDuplicate')}</Button>
-              : <ConfirmButton label={pt(t, 'st.profilesDelete')} title={pt(t, 'st.profilesDeleteTitle')}
-                message={pt(t, 'st.profilesDeleteMessage', { id: profile.id })} confirmLabel={pt(t, 'st.profilesDeleteConfirm')}
-                onConfirm={async () => { await remove(profile) }} />}
+            {builtinOf(bot) ? null
+              : <Button size="sm" variant="ghost" onClick={() => openEditor(bot)}>{t('edit')}</Button>}
+            <CopyButton value={JSON.stringify(stripBotForSave(bot), null, 2)} label={pt(t, 'st.botsCopy')} />
+            {builtinOf(bot)
+              ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...bot, id: `${bot.id}-copy`,
+                name: `${bot.name ?? bot.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
+              : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
+                message={pt(t, 'st.botsDeleteMessage', { id: bot.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
+                onConfirm={async () => { await remove(bot) }} />}
           </div>
         </div>)}
-        <Button size="sm" variant="outline" onClick={() => openEditor(undefined)}>{pt(t, 'st.profilesNew')}</Button>
+        <Button size="sm" variant="outline" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
       </div>
     </Section>
-    <Section title={pt(t, 'st.profilesBackends')} hint={pt(t, 'st.profilesBackendsHint')}>
+    <Section title={pt(t, 'st.botsBackends')} hint={pt(t, 'st.botsBackendsHint')}>
       <div className="sa-settings-stack">
-        {PROFILE_BACKEND_OPTIONS.map(backend => {
+        {BOT_BACKEND_OPTIONS.map(backend => {
           const evidence = backends[backend] ?? { state: 'unverified' }
           const verified = evidence.state === 'verified' || evidence.source === 'smoke'
           return <div key={backend} className="sa-row">
             <div className="sa-row-main">
               <div className="sa-row-title">
                 <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
-                <span>{pt(t, `st.profilesBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
+                <span>{pt(t, `st.botsBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
                 {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
               </div>
-              <p className="sa-hint">{pt(t, 'st.profilesBackendCap', {
-                caps: PROFILE_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
-                  || pt(t, 'st.profilesBackendNone') })}</p>
+              <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
+                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
+                  || pt(t, 'st.botsBackendNone') })}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={verifying === backend}
-              onClick={() => { void verify(backend) }}>{pt(t, 'st.profilesBackendVerify')}</Button>
+              onClick={() => { void verify(backend) }}>{pt(t, 'st.botsBackendVerify')}</Button>
           </div>
         })}
       </div>
@@ -1330,89 +1330,89 @@ export function ProfilesCard() {
           ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
           : null}</p>
       : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
-    {editor ? <Modal open={true} onClose={closeEditor} title={pt(t, 'st.profilesEditorTitle')} closeLabel={t('close')}
-      className="sa-profile-modal"
+    {editor ? <Modal open={true} onClose={closeEditor} title={pt(t, 'st.botsEditorTitle')} closeLabel={t('close')}
+      className="sa-bot-modal"
       footer={<>
         <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
         <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
       </>}>
-      <p className="sa-hint">{pt(t, 'st.profilesEditorHint')}</p>
+      <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
       <div className="sa-field-grid">
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldId')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldId')}</span>
           <Input value={editor.form.id} onChange={event => editField('id', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldName')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
           <Input value={editor.form.name} onChange={event => editField('name', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldBackend')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
           <Select value={editor.form.backend} onChange={value => editField('backend', value)}
-            options={PROFILE_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldPreset')}</span>
+            options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
           <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldModelProvider')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
           <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldModel')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
           <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
       </div>
-      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRequires')}</span>
-        {PROFILE_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
+      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
+        {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
           <Switch checked={editor.form.requires.includes(capability)}
             onChange={next => editField('requires', next
               ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
           {capability}</label>)}
       </div>
-      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldStages')}</span>
-        {PROFILE_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
+      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldStages')}</span>
+        {BOT_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
           <Switch checked={editor.form.stages.includes(stage)}
             onChange={next => editField('stages', next
-              ? PROFILE_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
+              ? BOT_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
               : editor.form.stages.filter(item => item !== stage))} />
           {stage}</label>)}
       </div>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldDeny')}</span>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
         <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldAllowMcp')}</span>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
         <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRole')}</span>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
         <Input value={editor.form.role} onChange={event => editField('role', event.target.value)} /></label>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldMust')}</span>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldMust')}</span>
         <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
       <div className="sa-field-grid">
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldTimeout')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldTimeout')}</span>
           <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldIdle')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldIdle')}</span>
           <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.profilesFieldRepairs')}</span>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRepairs')}</span>
           <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
       </div>
-      {preview ? <div className="sa-field" data-testid="sa-profile-preview">
-        <span className="sa-field-head">{pt(t, 'st.profilesPreview')}</span>
+      {preview ? <div className="sa-field" data-testid="sa-bot-preview">
+        <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
         {preview.unverified
           ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
-            {pt(t, 'st.profilesPreviewUnverified', { backend: editor.form.backend })}</p>
+            {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
           : null}
-        <KeyValues rows={[[pt(t, 'st.profilesPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.profilesBackendNone')],
-          [pt(t, 'st.profilesPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.profilesPreviewEmpty')],
-          [pt(t, 'st.profilesPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.profilesPreviewEmpty')],
-          [pt(t, 'st.profilesPreviewStages'), preview.stages.join(' → ')]]} />
+        <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],
+          [pt(t, 'st.botsPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.botsPreviewEmpty')],
+          [pt(t, 'st.botsPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.botsPreviewEmpty')],
+          [pt(t, 'st.botsPreviewStages'), preview.stages.join(' → ')]]} />
       </div> : null}
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
     </Modal> : null}
-    {/* A synthesised profile is review-only input: saving always goes through the button above (§8.4). */}
+    {/* A synthesised bot is review-only input: saving always goes through the button above (§8.4). */}
     {editor?.resolved ? null : null}
   </>
 }
 
-/** Strip host-added keys before re-saving a listed profile: only the store's own fields may round-trip. */
-function stripProfileForSave(profile) {
+/** Strip host-added keys before re-saving a listed bot: only the store's own fields may round-trip. */
+function stripBotForSave(bot) {
   const keys = ['id', 'name', 'description', 'backend', 'model', 'preset', 'requires', 'edit', 'exec', 'web', 'tools',
     'skills', 'prompt', 'budget', 'stages']
   const out = {}
-  for (const key of keys) if (profile?.[key] !== undefined) out[key] = profile[key]
+  for (const key of keys) if (bot?.[key] !== undefined) out[key] = bot[key]
   return out
 }
 
-const capabilitiesOfForm = (profile, backendState) => PROFILE_CAPABILITY_OPTIONS
-  .filter(capability => (profile?.requires ?? []).includes(capability) && backendState?.capabilities?.[capability] === true)
+const capabilitiesOfForm = (bot, backendState) => BOT_CAPABILITY_OPTIONS
+  .filter(capability => (bot?.requires ?? []).includes(capability) && backendState?.capabilities?.[capability] === true)
 
 export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
@@ -2625,7 +2625,7 @@ export function LiveSettingsPage({ route }) {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()
-    if (active === 'profiles') return <ProfilesCard />
+    if (active === 'bots') return <BotsCard />
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()

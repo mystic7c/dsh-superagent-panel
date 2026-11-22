@@ -31,7 +31,7 @@ export async function apiCall(t, path, method, body) {
       : !text && response.status === 404 ? t('hostNotRunning')
       : response.status >= 500 ? t('serverError', { status: response.status })
       : t('requestFailed', { status: response.status })
-    // The host puts a machine-readable `code` (and profile `problems`) beside `error`; keep them for callers that must
+    // The host puts a machine-readable `code` (and bot `problems`) beside `error`; keep them for callers that must
     // show the error code next to the human sentence (worker-bots spec §13.2).
     throw new ApiError(message, response.status, { ...failure, issues, ...text ? {} : { unreachable: true } })
   }

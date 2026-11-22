@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.19] — 2026-11-22
+
+把「档位（profile）」整套命名换成 **Bot（bot）**（`docs/worker-bots-spec.md` 附录 C）：用户定义、面向一类固定重复工作的执行者。行为不变，但对操作员可见的每一条路径都换了名字，旧配置与旧 Bot 文件需要按附录 C 迁移。
+
+### 改名：代码、配置、文件、UI
+
+- `lib/live/worker-profile.js` → `lib/live/worker-bot.js`（测试同 ren 名）；`readProfiles`/`writeProfiles`/`saveProfiles`/`normalizeProfiles`/`normalizeProfile`/`validateProfile`/`resolveProfile`/`synthesizeProfile`/`parseProfilesDocument` → `readBots`/`writeBots`/`saveBots`/`normalizeBots`/`normalizeBot`/`validateBot`/`resolveBot`/`synthesizeBot`/`parseBotsDocument`；`BUILTIN_PROFILES`/`BUILTIN_PROFILE_IDS`/`DEFAULT_PROFILE_ID` → `BUILTIN_BOTS`/`BUILTIN_BOT_IDS`/`DEFAULT_BOT_ID`；`profilesView`/`profileDrift`/`profileChoices`/`profileSetDigest`/`profilesDigest`/`profilesPath`/`profilePromptSections` → `botsView`/`botDrift`/`botChoices`/`botSetDigest`/`botsDigest`/`botsPath`/`botPromptSections`。
+- 错误码前缀 `PROFILE_*` → `BOT_*`（含 `BOT_FILE_CORRUPT`、`BOT_FILE_VERSION_UNSUPPORTED`、`BOT_BACKEND_*`、`BOT_CAPABILITY_GAP`、`DISPATCH_RULE_BOT_UNKNOWN` 等，见附录 A）。
+- `live.json`：`executor.profile` → `executor.bot`、`executor.profilesFile` → `executor.botsFile`、`dispatch.rules[].profile` → `.bot`、`repos[].profile` / `octo.chatRepos[].profile` → `.bot`；工单字段 `profileOverride` → `botOverride`；运行记录 `run.profile` / `run.profileId` → `run.bot` / `run.botId`；阶段配置 `stages[].profile` → `stages[].bot`。
+- Bot 文件：`<stateDir>/worker-profiles.json` → `<stateDir>/worker-bots.json`，文档 `version` 1 → **2**；读到旧 `version: 1` 直接拒绝（`BOT_FILE_VERSION_UNSUPPORTED`）并提示「旧版档位文件（version 1）…重命名并改 version 后重试」，不猜键名、不静默退回内置（§4.1/§4.6）。
+- 面板：设置页「档位」组 → 「Bot」，页内文案（内置三个 Bot、换 Bot 重跑、存为 Bot、Bot 文件、后端核验）、`st.profiles*` → `st.bots*`、详情页 `detail.profile*` → `detail.bot*`、`sa-run-profile` → `sa-run-bot`；API `GET/POST engine/profiles`、`POST engine/profiles/verify` → `engine/bots`、`engine/bots/verify`。
+- 保留不动：`execProfile` / `ROUTE_PROFILES` / `routeProfile`（都是 routing 的只读·可写判定，与 Bot 无关）；DSH 安装 profile（`--profile desktop`）同理。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **662 pass / 0 fail**（新增一条：旧 `version: 1` Bot 文件被拒并给出改名提示；`version: 9` 仍是「请升级插件」）。
+- `node scripts/build-client.mjs` → 24 modules / 525702 bytes，`--check` up to date；`node scripts/check-keys.mjs` → 1051 / 530 / 1496；`npm run types`、`npm run check:js`（`tsconfig.check.json` 的文件清单同步改名）、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+- 文档：`docs/worker-bots-spec.md` 头部实现进度与附录 C 标注「已在 v1.0.19 落地」，§3.7 补版本来源口径，§9.3 改按宿主 `llm.resolveModel` 取目录（`modelDirectories` 只在客户端注册）。
+
+### 升级提示
+
+- 自定义 Bot 需从 `worker-profiles.json`（`version: 1`）改名为 `worker-bots.json` 并把 `version` 改成 `2`；字段名不变，仅文件与版本号变化。
+- `live.json` 里旧的 `executor.profile` / `profilesFile` / `dispatch.rules[].profile` / `repos[].profile` 现在会被忽略（键不存在），请在设置页重新指认，或按附录 C 手改。
+
 ## [1.0.18] — 2026-11-22
 
 按 `docs/worker-bots-spec.md`（v3，即 1.0.15–1.0.17 期间评审过的 v2 规则，只改了「档位 → Bot」命名）做了一轮契约合规修复：1.0.17 的测试全绿，但闸门绿不等于契约符合 —— 对照 §3.2/§3.5/§3.7/§4.1/§9.3/§12 逐条核对后，有五处实现与规范相反，另有四处根本没接上。

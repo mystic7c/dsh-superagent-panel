@@ -128,7 +128,7 @@ Object.assign(PAGE_TEXT, {
 export const OV_LAST_SEEN_KEY = 'superagent-panel/lastSeen'
 export const OV_DAY_MS = 86_400_000
 
-/** The previous visit's wall clock, kept local to this profile; a private-mode failure just hides the line. */
+/** The previous visit's wall clock, kept local to this bot; a private-mode failure just hides the line. */
 export function ovReadLastSeen() {
   try {
     const value = Number(JSON.parse(localStorage.getItem(OV_LAST_SEEN_KEY) ?? 'null'))
