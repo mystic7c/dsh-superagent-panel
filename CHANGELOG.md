@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.0.18] — 2026-11-22
+
+按 `docs/worker-bots-spec.md`（v3，即 1.0.15–1.0.17 期间评审过的 v2 规则，只改了「档位 → Bot」命名）做了一轮契约合规修复：1.0.17 的测试全绿，但闸门绿不等于契约符合 —— 对照 §3.2/§3.5/§3.7/§4.1/§9.3/§12 逐条核对后，有五处实现与规范相反，另有四处根本没接上。
+
+### 修复 1：能力表只用于拒绝，未核验的后端不再靠它放行（§3.5 / §3.2 / I3）
+
+- 根因：`dispatch.js` 的默认层有一条 `unverifiable()` 分支，后端探针是 `fallback`（即直接读 `BACKEND_CAPABILITIES` 静态表）时，只要表里写着这个工单要的能力就照派；现拉档位同理。这张表按 §3.2 只能解释拒绝，不能授权执行，而且它本身就是错的（下一段）。
+- 修改点：删掉该分支与 `fallbackCapabilities` 导出，默认层只在候选集里找 `executor.profile`；现拉档位的后端能力一律取探针。`capabilitiesOf()` 增加 `observed = source !== 'fallback'`，静态表推不出任何能力。`executor.probesForRun` 改为对每个已启用后端各取一次探针（CLI 后端读 smoke 账本），不再只探 dsh。
+- 顺带修正静态表（§3.5 点名的两条 + report 不是能力）：`claude.exec` 改 `true`、`codex.web` 改 `true`，`CAPABILITIES` 收为 `['edit','exec','web']`，`REQUIRED_CAPABILITY` 删掉 `interactive:'report'`。`claude.web` 保持 `false`：CLI help 只提到 WebFetch，没有 smoke 证据（§3.4 / Q6）。
+
+### 修复 2：版本线接上，`stale` 不再不可达（§3.7 / AC-B2）
+
+- 根因：`capabilityStateOf(probe, { version })` 的版本从来没人传 —— 调用方只传 probe，宿主也不暴露版本服务，于是「后端版本变了 → 重新核验」这条状态机永远是死代码。
+- 修改点：新增 `hostVersionOf(ctx)`（`ctx.hostVersion` 函数/字符串 → `process.env.DSH_VERSION` → `undefined`）；`probeBackend` 的缓存键与证据行都用它，`engine.backendStateOf` 把它传给 `capabilityStateOf`。CLI 后端的探针现在直接读 `<stateDir>/backend-verify.json`（1.0.15 写了账本，但 `probeBackend` 从来不看它，等于白记）。
+
+### 修复 3：保存期查宿主目录，`PROFILE_PRESET_UNKNOWN` / `PROFILE_EFFORT_UNSUPPORTED` 真的会报（§9.3 / §3.6）
+
+- 根因：`engine.saveProfiles` 给 `validateProfile` 的环境只有能力与后端状态，`presetKnown` / `effortSupported` 从没被算过，两条错误码只在单测里存在。
+- 修改点：保存前用宿主服务取目录 —— `agentPresets.list()` 得 preset 名单、`llm.resolveModel(provider, model)` 的 `reasoning.efforts` 得该模型支持的思考档；`writeProfiles` 把它们并进每个 bot 的校验环境。模型目录查不到时不作结论（不阻断保存），只报「确实不存在」的。
+- 说明：规范原文写的是 `ctx.get('modelDirectories')`，该服务只注册在客户端 UI 插件里，宿主侧没有，因此改用 `llm`。
+
+### 修复 4：Bot 文件读不出来就拒单，不再静默退回内置（§4.1）
+
+- 根因：`executor` 读到 `readProfiles().code`（JSON 损坏、version 不匹配）只 `log()` 一行，接着派单 —— 现拉档位开着时还能凭空合成一个跑起来。
+- 修改点：在派单结果落盘后、开工作树之前直接 `fail(PROFILE_FILE_CORRUPT 或 PROFILE_FILE_VERSION_UNSUPPORTED, 文件名与原因)`。面板设置页同时补上两处提示：文件读不出来（错误码 + 人话 + 修好后重试）与被忽略的未知字段（`droppedKeys`，§4.3 的非致命归一化结果此前没渲染，AC3 的 UI 半边）。
+
+### 修复 5：运行中的 trace 边跑边落盘（§12 E1/E3/E4/E5 / AC11）
+
+- 根因：DSH worker 的 events 只在 `await invokeWorker()` 返回后才写进 `run.trace`，运行期间面板空白，被停/超时的轮次也没有 trace。
+- 修改点：`worker.js` 的 `record()` 每记一条就回调 `onTrace`（消费方抛错不影响 worker）；`executor.js` 新增 `liveTraceSink`，按 §12 归一化后进 80 条环，500ms 或积攒 8 条就 `persist()`（E4），停止/超时/worker_lost 的终止事件照常留在末尾（E5）；worker 返回后仍用 `traceOf(worker.events)` 覆盖为权威终值。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **662 pass / 0 fail**（新增 5 条：损坏 Bot 文件拒单、停止的轮次保留流式 trace、worker 每条事件都到达 `onTrace`、保存期 preset/effort 目录校验、smoke 账本使 CLI 后端可核验且换版本即 stale）。
+- `node scripts/build-client.mjs` → 24 modules / 526599 bytes，`--check` up to date；`node scripts/check-keys.mjs` → 1051 / 530 / 1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+
+### 行为变化（升级前请看一眼）
+
+- **未核验的后端不再能派单**：旧 `executor.workerBackend: 'codex'`（或 `claude`）配置现在需要先有一条 Bot + smoke 账本证据，否则拒绝并说明「没有可用 Bot」/「后端尚未核验」。这是 §3.7 的本意，但确实是行为变化。
+- 默认层/现拉层不再用静态能力表兜底；宿主 `agentPresets` 不可用时，DSH 后端同样按未核验处理。
+- 已知遗留：宿主不暴露版本，`stale` 只在设置了 `DSH_VERSION` 或注入 resolver 时可达；CLI 的增量事件（`onLine`）与 C1–C10 仍属于 P4/P5；阶段级 Bot（§10.2）未实现。
+
 ## [1.0.17] — 2026-11-21
 
 1.0.16 打开「设置 → 档位」直接把宿主打崩（`应用无法启动或已意外停止`，`dsh: fatal load failure`），1.0.15 的档位契约层因此完全不可用。

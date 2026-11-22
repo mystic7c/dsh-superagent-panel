@@ -67,7 +67,7 @@ export function useEngineActions(call) {
     // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
     createTicket: ({ title, body, repoId, route }) => call('POST engine/ticket',
       { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
-    // `profile` is the one-run override from the detail page (worker-profiles spec §7.6): it never changes the Ticket.
+    // `profile` is the one-run override from the detail page (worker-bots spec §7.6): it never changes the Ticket.
     /** @type {(id: string, options?: {dryRun?: boolean, wait?: boolean, profile?: string}) => Promise<any>} */
     runTicket: (id, { dryRun = true, wait = false, profile } = {}) => call('POST engine/ticket/:id/run',
       { id, body: { dryRun, wait, ...(profile ? { profile } : {}) } }),

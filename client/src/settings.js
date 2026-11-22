@@ -1039,6 +1039,10 @@ Object.assign(PAGE_TEXT, {
   'st.profilesHint': ['档位决定一次运行能用的后端、预设、模型、工具与阶段。内置三档不可编辑，可复制后改。',
     'A profile decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
   'st.profilesFile': ['档位文件', 'Profile file'],
+  'st.profilesBroken': ['档位文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
+    'The profile file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
+  'st.profilesDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
+    'Unknown fields were dropped: {keys}. The rest of the profile was kept.'],
   'st.profilesRuleWarn': ['分派规则 #{index} 指向不存在的档位 {profile}，该条会被跳过。',
     'Dispatch rule #{index} names a profile that does not exist ({profile}); the rule is skipped.'],
   'st.profilesBuiltin': ['内置档位', 'Built-in profiles'],
@@ -1089,7 +1093,7 @@ Object.assign(PAGE_TEXT, {
   'st.profilesStagesAll': ['全部内置阶段', 'all built-in stages'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
-   Worker profiles (worker-profiles spec §4, §13.2). The store lives under the state dir, so this group edits the
+   Worker profiles (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
    file the engine actually reads — a repository's own worker-profiles.json is ignored on purpose (§4.1).
    --------------------------------------------------------------------------------------------------------------- */
 
@@ -1259,6 +1263,14 @@ export function ProfilesCard() {
       <div className="sa-settings-stack">
         <KeyValues rows={[[pt(t, 'st.profilesFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
           [pt(t, 'st.profilesBuiltin'), pt(t, 'st.profilesBuiltinNote')]]} />
+        {view.code
+          ? <p className="sa-hint sa-info-warn">
+            {pt(t, 'st.profilesBroken', { code: String(view.code), message: String(view.error ?? '') })}
+          </p>
+          : null}
+        {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
+          ? <p className="sa-hint sa-info-warn">{pt(t, 'st.profilesDropped', { keys: view.droppedKeys.join(', ') })}</p>
+          : null}
         {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
           <p key={`${warning.index}-${warning.profile}`} className="sa-hint sa-info-warn">
             {pt(t, 'st.profilesRuleWarn', { index: warning.index, profile: warning.profile })}
