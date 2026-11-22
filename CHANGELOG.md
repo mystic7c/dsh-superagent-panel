@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.21] — 2026-11-22
+
+`docs/worker-bots-spec.md` §10.2（阶段级 Bot 与阶段级预算）落地。此前 `stages` 只能写阶段名，一个 Bot 的所有阶段共用同一后端/模型/预算；现在某个阶段可以指定**另一个 Bot** 和它自己的预算，没指定的阶段继续用整单 Bot。
+
+### 根因与修改
+
+- **数据通路**：`lib/live/worker-bot.js` 的 `stages` 条目接受 `"implement"` 或 `{ "stage": "review", "bot": "rechecker", "budget": { "timeoutMs": 600000 } }`；新增 `stageNamesOf()`（取名字，给工作流用）与 `stageBotOf()`，`normalizeStages()` 保留对象形态并按 stage 名去重，`sortBot` 让阶段对象的键序稳定（文件与 digest 可复现）。
+- **保存期校验**：阶段名仍必须是有序子序列且含 implement+gates；阶段对象额外要求 `stage` 合法、`bot` 匹配 Bot id 且（`environment.botIds` 给出时）确实存在、不得引用自身、`budget` 各键在 §6 区间 —— 分别报 `BOT_STAGES_INVALID` / `BOT_BUDGET_INVALID`。`engine.saveBots` 现在把「内置 Bot + 本次提交的 Bot」的 id 列表一并交给校验，所以引用不存在的 Bot 存不进去。
+- **派单期**：`executor` 在整单 Bot 解析后构造 `stageBots`，用与候选完全相同的判定（`dispatch.environmentOf`：同一个探针、同一个版本/启用规则）校验阶段 Bot；不通过就按该 Bot 的错误码拒单（例如阶段 Bot 后端未核验 → `BOT_BACKEND_UNVERIFIED`，消息带「阶段 review 的 Bot xxx」）。阶段 Bot 的后端可以与整单不同，只看它自己是否核验通过。
+- **生效**：被指定 Bot 的那个阶段用阶段 Bot 的 backend/model/preset/effort/deny/allowMcp；预算按「阶段 budget > 阶段 Bot 预算 > 整单 Bot 预算 > executor 默认」，`timeoutMs`/`idleTimeoutMs` 都按这条链取。`stages` 传给工作流时用 `stageNamesOf()`，避免对象形态破坏阶段判定。
+- **面板**：设置页的 Bot 表单仍只编辑阶段勾选（阶段 Bot 选择器属 P6），但 `botToForm`/`formToBot` 会把 `{bot, budget}` 原样带过保存，不会静默丢字段。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **666 pass / 0 fail**。新增：`executor.test.js` 两条（阶段 Bot 用 claude + sonnet-4 + 600000ms 跑 review、其余阶段仍走 dsh；阶段 Bot 未核验时拒单且不执行命令）；`worker-bot.test.js` 两条（阶段对象归一化与键序；未知 Bot/自引用/越界预算/非法阶段名的错误码）。修复过程中发现：阶段 Bot 的 claude 模型是 `{provider, model}` 对象，CLI 只吃 model id，已在 workflow-worker 的 cli 分支取 `model?.model`。
+- `node scripts/build-client.mjs` 24 modules / 526072 bytes 且 `--check` up to date；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+
+### 升级提示
+
+- 现有 Bot 文件无需迁移：`stages: ["implement","gates"]` 仍有效。阶段级写法是新增能力，不写就等于整单 Bot。
+- 阶段 Bot 必须自己核验通过（dsh 走探针，claude/codex 需要 `<stateDir>/backend-verify.json` 里的 smoke 证据），否则整个 run 拒单，不会悄悄退回整单 Bot。
+
 ## [1.0.20] — 2026-11-22
 
 用 dev 实例（`scripts/dev.mjs`，链接工作树、`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-dev-state`）在真实宿主 0.2.2-rc.5 上实测 Bot 页，桌面 profile 未动。三个问题：两个把设置页打成 500，一个是探针在真机上永远测不出能力。

@@ -1106,8 +1106,12 @@ export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
 export const emptyBotForm = () => ({
   id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
   reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
-  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [],
+  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [], stageSpecs: {},
 })
+
+/** A stage entry is either a name or a §10.2 object; the form edits the name, the spec rides along untouched. */
+const stageNameOf = entry => (typeof entry === 'string' ? entry : entry?.stage)
+const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
 export function botToForm(bot) {
@@ -1131,7 +1135,10 @@ export function botToForm(bot) {
     timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
     idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
     maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
-    stages: Array.isArray(bot?.stages) ? bot.stages.filter(stage => BOT_STAGE_OPTIONS.includes(stage)) : [],
+    stages: Array.isArray(bot?.stages) ? bot.stages.map(stageNameOf).filter(stage => BOT_STAGE_OPTIONS.includes(stage)) : [],
+    stageSpecs: Object.fromEntries((Array.isArray(bot?.stages) ? bot.stages : [])
+      .filter(entry => entry && typeof entry === 'object' && (entry.bot || entry.budget))
+      .map(entry => [entry.stage, { ...(entry.bot ? { bot: entry.bot } : {}), ...(entry.budget ? { budget: entry.budget } : {}) }])),
   }
 }
 
@@ -1171,7 +1178,13 @@ export function formToBot(form) {
     if (Number.isFinite(value)) budget[key] = value
   }
   if (Object.keys(budget).length) bot.budget = budget
-  if (form.stages.length) bot.stages = [...form.stages]
+  if (form.stages.length) {
+    // Keep a stage-level bot/budget this form cannot edit, so saving a Bot never silently drops §10.2 settings.
+    bot.stages = form.stages.map(name => {
+      const spec = isPlainObject(form.stageSpecs)?.[name]
+      return spec ? { stage: name, ...spec } : name
+    })
+  }
   return bot
 }
 
