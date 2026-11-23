@@ -317,6 +317,12 @@ window.fetch = global.fetch = async (input, init = {}) => {
   calls.push(`${method} ${url.pathname}${url.search}`)
   const json = value => new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } })
   const p = url.pathname.replace('/superagent/api/', '')
+  // A route that never answers: the transport must give up on abort instead of hanging the polling queue forever.
+  if (p === 'hang') {
+    return new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted.')))
+    })
+  }
   if (method === 'GET' && p === 'engine/status') return json(fixtures.status)
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
   if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
@@ -470,7 +476,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
   ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
-  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail,
   botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
@@ -519,6 +525,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   formToBot: 'settings.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
+  apiCall: 'api.js',
+  ThreadDetail: 'thread-detail.js',
   clampEvalOffset: 'eval.js',
   Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
@@ -2381,6 +2389,28 @@ console.log('STEP pure projections')
     check('a save sends the store without host-added keys (§4.2)',
       afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
       JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))
+    // Renaming a Bot edits the row it opened: excluding only the *new* id left the old one in the store, so one
+    // save turned one Bot into two.
+    ;[...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
+      ?.querySelectorAll('button') && [...([...host.querySelectorAll('.sa-bot-row')]
+        .find(node => /我的 Bot/.test(node.textContent ?? ''))?.querySelectorAll('button') ?? [])]
+        .find(node => (node.textContent ?? '').trim() === '编辑')
+        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const renameInput = [...host.querySelectorAll('.sa-bot-modal input')].find(node => node.value === 'mine')
+    const renameKey = renameInput ? Object.keys(renameInput).find(key => key.startsWith('__reactProps$')) : undefined
+    if (!renameKey) skip('renaming a Bot replaces it instead of adding a second one', 'the id input was not found')
+    else {
+      renameInput[renameKey].onChange?.({ target: { value: 'mine2' } })
+      await sleep(120)
+      ;[...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '保存')
+        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      await sleep(160)
+      const renamed = lists.at(-1) ?? []
+      check('renaming a Bot replaces it instead of adding a second one (P2)',
+        renamed.some(bot => bot.id === 'mine2') && !renamed.some(bot => bot.id === 'mine'),
+        JSON.stringify(renamed.map(bot => bot.id)))
+    }
     // A verified backend accepts the same store: remount so the group loads the verified evidence.
     root.unmount()
     const verifiedRoot = ReactDOM.createRoot(host)
@@ -2531,6 +2561,37 @@ console.log('STEP pure projections')
     String(confirmButton?.className ?? 'no confirm button'))
   confirmRoot.unmount()
   confirmHost.remove()
+}
+
+// A request that never answers used to leave the polling queue pending forever: no error, no next attempt.
+{
+  // Raced against a 2s stop so a transport that really hangs fails this check instead of stalling the whole run.
+  const settled = await Promise.race([
+    apiCall(t, 'hang', 'GET', undefined, { timeoutMs: 40 }).then(() => 'resolved', failure => failure),
+    sleep(2000).then(() => 'still pending'),
+  ])
+  check('a request that never answers times out instead of freezing the poller (P2)',
+    settled !== 'still pending' && settled !== 'resolved' && settled?.status === 0
+      && settled?.details?.timeout === true && settled?.details?.unreachable === true,
+    typeof settled === 'string' ? settled : JSON.stringify({ status: settled?.status, details: settled?.details, message: settled?.message }))
+}
+{
+  // No thread selected means no request: the route used to encode `undefined` and poll `engine/thread/undefined`.
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = ReactDOM.createRoot(host)
+  const before = calls.length
+  root.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, backLabel: '' } },
+    React.createElement(PanelState.Provider,
+      { value: { data: fixtures.status, error: undefined, reload: async () => {}, actions: {} } },
+      React.createElement(ThreadDetail, {}))))
+  await sleep(300)
+  const asked = calls.slice(before)
+  check('a thread detail without a selection asks for nothing (P2)',
+    !asked.some(call => call.includes('thread/undefined')), JSON.stringify(asked.slice(0, 4)))
+  root.unmount()
+  host.remove()
 }
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))

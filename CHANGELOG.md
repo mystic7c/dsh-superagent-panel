@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.1.5] — 2026-11-23
+
+整体审查后的第四批修复（P2，客户端优先）：一次没回音的请求会把轮询队列永久卡住、等回答的工单在两个分组里各算一半、Bot 改名会留下一份旧副本、没选线程时每 30 秒请求一次 `thread/undefined`。
+
+### 根因与修改
+
+- **一次挂起的请求冻结整个面板**：`apiCall` 用裸 `fetch`，没有超时也没有 `AbortSignal`；`usePoll` 的队列是 `queue = queue.then(once)`，`once` 只有 `fetch` 返回才会结束——连接半开时队列永远 pending，错误不出现、下一次轮询也不排期，页面停在上一份文档或骨架屏。现在读请求 20 秒、写请求 2 分钟超时（`AbortController`），超时抛 `ApiError`（`status 0`、`details.timeout`）并提示「服务可能仍在处理」；跑闸门/等待式运行这两条本来就以分钟计的路线传 `timeoutMs: 0`，不会被切断在半次提交中间。
+- **等回答的工单在芯片与行之间错位**：Host 的 `STAGE_OF_STATUS`（`lib/live/engine.js`）缺 `awaiting-answer`，落回 `working`；而面板的 `TICKET_VIEW` 把它归在 `waiting`。于是「等你处理」芯片少一张、`working` 多一张，点进去的行数与芯片不符。Host 补 `'awaiting-answer': 'waiting'`，两侧同一口径。
+- **Bot 改名保存出两个 Bot**：`save` 用 `bots.filter(item => item.id !== bot.id)` 排除被编辑的那一行，而 `bot.id` 取自**表单**；把 id 从 `mine` 改成 `mine2` 时旧 id 不在排除列表里，旧 Bot 原样留在 store。现在同时排除 `editor.id`（打开编辑器时的 id）。
+- **没选线程也在轮询 `thread/undefined`**：`ThreadDetail` 调 `useLiveResource('engine/thread/:key', { key: threadKey }, 30000)` 时没传 `{ enabled }`，`threadKey` 为空时路由把 `undefined` 编进路径，每 30 秒一个 404。现在传 `{ enabled: Boolean(threadKey) }`。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 689 pass / 0 fail（新增一条：`awaiting-answer` 的工单进 `waiting` 分组、不进 `working`，且芯片计数与行数一致）。
+- `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip（新增三条：改名只留一份、请求超时而不是永久挂起、无线程时不发请求）。
+- 负向验证：把 `timeoutMs` 改回 0 → 超时检查报 `still pending` 且整轮 exit 1；把排除条件改回只看 `bot.id` → 改名检查报 `["generalist","surgical","reviewer","mine","mine2"]`。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+
 ## [1.1.4] — 2026-11-23
 
 整体审查后的第三批修复：全部落在界面契约上——弹窗不说明它要做什么、整行点击靠一层伪元素、页标题与「需求」各说一遍、路由切换把键盘用户丢在 `<body>`、品牌色铺到开关和设置左栏、以及十一条细则（字号、禁用态、术语表、时长与失败原因的读法）。

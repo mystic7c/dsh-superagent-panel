@@ -1272,7 +1272,8 @@ export function BotsCard() {
     setSaveError(undefined)
     try {
       const bot = formToBot(editor.form)
-      const others = bots.filter(item => item.id !== bot.id).map(item => stripBotForSave(item))
+      // Exclude both the saved id and the one this editor opened: renaming a Bot must not leave the old one behind.
+      const others = bots.filter(item => item.id !== bot.id && item.id !== editor.id).map(item => stripBotForSave(item))
       const saved = await actions.saveBots([...others, bot])
       if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
       setEditor(undefined)

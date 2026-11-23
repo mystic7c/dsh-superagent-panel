@@ -12,14 +12,29 @@ export class ApiError extends Error {
   get missing() { return this.status === 404 && !this.details.unreachable }
 }
 
+/* A request that never answers used to hang the polling queue forever: no error, no next attempt, the page frozen on
+   the last document. Reads give up after 20s, writes after 2 minutes; a route that legitimately runs for minutes
+   (running gates, a waited-for run) passes `timeoutMs: 0` instead of being cut off mid-commit. */
+const READ_TIMEOUT_MS = 20000
+const WRITE_TIMEOUT_MS = 120000
+
 /** Call one management endpoint; every request is marked so the host can refuse cross-site posts. */
-export async function apiCall(t, path, method, body) {
+export async function apiCall(t, path, method, body, options = {}) {
+  const timeoutMs = options.timeoutMs ?? (method === 'GET' ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS)
+  const controller = timeoutMs > 0 && typeof AbortController === 'function' ? new AbortController() : undefined
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined
   let response
   try {
     response = await fetch(`${API}/${path}`, { method, headers: { 'x-superagent-request': '1', ...body === undefined ? {} : { 'content-type': 'application/json' } },
+      ...controller ? { signal: controller.signal } : {},
       body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
+    if (controller?.signal.aborted) {
+      throw new ApiError(t('requestTimeout', { seconds: Math.round(timeoutMs / 1000) }), 0, { unreachable: true, timeout: true })
+    }
     throw new ApiError(t('offline'), 0, { unreachable: true })
+  } finally {
+    clearTimeout(timer)
   }
   const text = await response.text()
   let value
@@ -46,7 +61,7 @@ export function caller(t) {
     const path = pattern.replace(/:(\w+)/g, (_match, name) => encodeURIComponent(String(request[name])))
     const query = Object.entries(request.query ?? {}).filter(([, value]) => value !== undefined && value !== '')
       .map(([name, value]) => `${name}=${encodeURIComponent(String(value))}`).join('&')
-    return apiCall(t, query ? `${path}?${query}` : path, method, request.body)
+    return apiCall(t, query ? `${path}?${query}` : path, method, request.body, { timeoutMs: request.timeoutMs })
   }
 }
 

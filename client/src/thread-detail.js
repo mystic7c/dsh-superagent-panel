@@ -261,7 +261,9 @@ export function ThreadDetail(props) {
   const { t } = usePanel()
   const model = usePanelData()
   const threadKey = props?.threadKey ?? props?.id
-  const { data, error, loading, reload } = useLiveResource('engine/thread/:key', { key: threadKey }, 30000)
+  // Without a key the route would encode `undefined` and poll `engine/thread/undefined` every 30s for a 404.
+  const { data, error, loading, reload } = useLiveResource('engine/thread/:key', { key: threadKey }, 30000,
+    { enabled: Boolean(threadKey) })
   if (!threadKey) return h(EmptyState, { icon: 'inbox', title: pt(t, 'thread.noSelection'), hint: pt(t, 'thread.noSelectionHint') })
   if (error && !data) return h(ErrorState, { error, onRetry: reload })
   if (loading) return h(Skeleton, { rows: 4 })

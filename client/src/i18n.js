@@ -52,6 +52,7 @@ export const TEXT = {
   lang: ['zh', 'en'],
   offline: ['无法连接到 Superagent 管理服务。请确认插件已启用后重试。', 'Cannot reach the Superagent management service. Check that the plugin is enabled, then retry.'],
   hostNotRunning: ['Superagent 管理服务未运行（插件可能已停用或正在重启）。', 'The Superagent management service is not running (the plugin may be disabled or restarting).'],
+  requestTimeout: ['请求超时（{seconds} 秒无响应），已放弃这次请求；服务可能仍在处理，稍后用「刷新状态」确认结果。', 'Timed out after {seconds}s, so the panel gave up on this request. The service may still be working; check 刷新状态 before retrying.'],
   serverError: ['服务内部错误（{status}），请查看运行日志后重试。', 'Service error ({status}). Check the log, then retry.'],
   requestFailed: ['请求失败（{status}）。', 'Request failed ({status}).'],
   demoBadge: ['演示数据', 'Demo data'],
