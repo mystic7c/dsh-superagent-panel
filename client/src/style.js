@@ -510,6 +510,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- repository add form ---------- */
+.sa-bot-modal { width: min(720px, 100%); }
 .sa-repo-modal { width: min(760px, 100%); }
 .sa-repo-modal .sa-modal-body { max-height: 62vh; overflow-y: auto; }
 .sa-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-16); }
@@ -534,6 +535,12 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); font-size: var(--sa-fs-body); line-height: 1.5; min-width: 0; }
 .sa-field-head { display: inline-flex; align-items: center; gap: var(--sa-sp-4); color: var(--dsw-alias-label-secondary); }
 .sa-field small { color: var(--sa-label-tertiary); font-size: var(--sa-fs-meta); }
+/* Two-column field grid for the bot editor. The class existed in the markup with no rule behind it, so the editor
+   stacked every field full width — one reason the form read as a wall of inputs. */
+.sa-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sa-sp-12); align-items: start; }
+.sa-field-grid .sa-field-wide { grid-column: 1 / -1; }
+@container (max-width: 620px) { .sa-field-grid { grid-template-columns: minmax(0, 1fr); } }
+.sa-settings-stack { display: flex; flex-direction: column; gap: var(--sa-sp-8); min-width: 0; }
 .sa-route-controls { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); }
 /* Each manual-route choice is a labelled field (U-04): the visible text sits above its select, not only in aria-label. */
 .sa-route-field { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 0; flex: 1 1 160px; }

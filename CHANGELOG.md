@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.24] — 2026-11-23
+
+Bot 编辑器的首次使用体验：20 个字段一次平铺，第一次用根本不知道该填什么，而且没有样式——`sa-bot-modal` / `sa-field-grid` 这些类名在 `style.js` 里根本没有规则，于是每个输入框占满整行。数据模型与契约不变，只动 `client/src/settings.js` 与 `client/src/style.js`。
+
+### 根因与修改
+
+- **20 个字段平铺**：身份、后端、模型、能力、工具、阶段、预算全在同一屏。编辑器现在只留第一屏四件事——名称、标识、一句话说明、后端——加上角色提示词（改成 4 行 textarea，带占位说明「留空跟随工作流默认」）；其余字段原样搬进 `DisclosureRow`「高级设置」，折叠时在标题旁显示「已设置 N 项」，值不丢、可回改，`stageSpecs` 等未渲染字段照旧静默往返。
+- **补了缺失的样式**：`style.js` 新增 `.sa-field-grid`（两列、容器 <620px 退单列）、`.sa-field-wide`（整行）、`.sa-bot-modal`（720px）、`.sa-settings-stack`；Bot 列表行改用已有的 `sa-row` 类，不再是一堆挤在一起的裸文本。
+- **`description` 一直没有输入框**：`emptyBotForm`/`botToForm`/`formToBot` 都带着它，列表也读它，但编辑器不渲染——现在它是第一屏的「一句话说明」。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：672 pass / 0 fail。
+- `node scripts/render-check.mjs`：282 checks / 0 fail（新增一条——打开编辑器时阶段行位于折叠区、未展开则不渲染；预览区改在展开后断言）。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1504 page-local；`node scripts/build-client.mjs`：24 modules / 529570 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+
+---
+
 ## [1.0.23] — 2026-11-23
 
 P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但面板上既选不了阶段 Bot，也看不到某个阶段跑了谁。这一版只动 UI 与 `botsView` 的返回体，契约不变。
