@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.0.22] — 2026-11-23
+
+`docs/worker-bots-spec.md` §18 的八个未决问题定下六条（D1–D5、D8），两条属于 CLI 后端的问题（D6 claude 联网、D7 codex 思考深度）推迟到 P4/P5。D6/D7 之外真正要改代码的只有三处，其余是把已经长成的行为写进契约。
+
+### 根因与修改
+
+- **`requires` 为空的 Bot 会被整单分派选中（D8）**：`reviewer` 的 `requires: []` 让 `(bot.requires ?? []).every(...)` 恒真，于是只读复核器能当整单执行者被自动选中。`lib/live/dispatch.js` 现在把自动层（决策模型候选、`executor.bot` 默认层）限制在 `requires` 非空的 Bot 上；显式层（`ticket.botOverride`、`backendOverride`、`repo.bot`、规则点名）仍可选中——那是人的显式决定，`covers()` 照旧校验能力。不加 `stageOnly` 字段。
+- **`run.bot.capability` 与阶段 Bot 的关系（D1）**：不记能力并集。整单快照保持原样，阶段级信息记在阶段条目上——`stages[].backend`（1.0.21 已有）之外补 `stages[].bot`（`lib/live/workflow-worker.js`），面板据此能说清"这一单用了哪两个 Bot"。
+- **决策模型的工单节选要自报（D3）**：`dispatchRequestOf` 一直把 `title` 截 400、`body` 截 4000，但模型看不出这是节选；现在被截断时请求里带 `truncated: true`。
+- **ad-hoc 的角色不再依赖 plan（D4）**：`role` 用工单标题（≤500 字符），标题为空时回退「按 `<workType>` 处理这件事」，避免 simple 模式下空提示词。
+- **契约文档**：§18 从"未决问题"改为"已定问题与推迟项"（D1–D8，逐条给依据与落地版本）；§3.4 写明 claude 的 `web` 是被我们自己的 `--disallowedTools` 关掉的、`codex` 的 effort 在 P5 前不生效；§4.5/§7.1 写死"`requires` 为空不进自动候选"；§7.2 加 `truncated`；§8.2 改角色的真实来源；§10.2 写记录口径。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **672 pass / 0 fail**。新增 `dispatch.test.js` 四条：`reviewer` 当 `executor.bot` 时不会被整单选中（显式仍可用）、决策模型候选里看不到它且选它只降级不采纳、超长 body 带 `truncated: true` 且短 body 不带、空标题的 ad-hoc Bot 拿到备用角色。`executor.test.js` 两处补断言：阶段条目记 `bot`（`review` 是 `rechecker`、`implement` 没有），以及整单 Bot 必须声明 `requires`（否则按 D8 不会被自动选中）。
+- `node scripts/build-client.mjs --check` 24 modules / 526072 bytes（无客户端改动，产物未变）；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+
+### 升级提示
+
+- 自查：如果你有**只当执行器用**的自建 Bot 却没写 `requires`，它现在不会被自动选中（规则点名或手动指定仍可以）。给它补上真实需要的 `edit`/`exec`/`web` 即可。
+- `reviewer` 依旧只能当阶段 Bot；`executor.bot: "reviewer"` 不再让整单跑在它上面。
+- 代码没有改名，文件仍是 `worker-bots.json` `version: 2`。
+
 ## [1.0.21] — 2026-11-22
 
 `docs/worker-bots-spec.md` §10.2（阶段级 Bot 与阶段级预算）落地。此前 `stages` 只能写阶段名，一个 Bot 的所有阶段共用同一后端/模型/预算；现在某个阶段可以指定**另一个 Bot** 和它自己的预算，没指定的阶段继续用整单 Bot。
@@ -14,7 +37,7 @@
 
 ### 验证
 
-- `node --test lib/live/*.test.js` → **666 pass / 0 fail**。新增：`executor.test.js` 两条（阶段 Bot 用 claude + sonnet-4 + 600000ms 跑 review、其余阶段仍走 dsh；阶段 Bot 未核验时拒单且不执行命令）；`worker-bot.test.js` 两条（阶段对象归一化与键序；未知 Bot/自引用/越界预算/非法阶段名的错误码）。修复过程中发现：阶段 Bot 的 claude 模型是 `{provider, model}` 对象，CLI 只吃 model id，已在 workflow-worker 的 cli 分支取 `model?.model`。
+- `node --test lib/live/*.test.js` → **668 pass / 0 fail**。新增：`executor.test.js` 两条（阶段 Bot 用 claude + sonnet-4 + 600000ms 跑 review、其余阶段仍走 dsh；阶段 Bot 未核验时拒单且不执行命令）；`worker-bot.test.js` 两条（阶段对象归一化与键序；未知 Bot/自引用/越界预算/非法阶段名的错误码）。修复过程中发现：阶段 Bot 的 claude 模型是 `{provider, model}` 对象，CLI 只吃 model id，已在 workflow-worker 的 cli 分支取 `model?.model`。
 - `node scripts/build-client.mjs` 24 modules / 526072 bytes 且 `--check` up to date；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
 
 ### 升级提示

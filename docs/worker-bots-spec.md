@@ -2,7 +2,7 @@
 
 状态：**草案 v3**（评审用）。v3 只改「叫什么、怎么分层」：实体从「档位（profile）」改名为 **Bot（bot）**，随之改名的有字段、配置键、错误码、文件名与 UI 文案，迁移映射见附录 C；§3–§18 的规则不变。
 
-实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），v1.0.18 补齐 §3.2/§3.5/§4.1/§9.3/§12 的四处断线与五处反向实现，v1.0.19 完成附录 C 的代码改名（代码、配置键、错误码、文件名、UI 文案、`run.bot`），v1.0.20 让探针在真实宿主上可用（§3.3），v1.0.21 落地 §10.2 阶段级 Bot 与阶段级预算。已知缺口：CLI 后端的增量事件与 §11 C1–C10（P4/P5）、阶段 Bot 的选择器 UI（P6）；`stale` 只在宿主提供版本时可达（§3.7 末段）。切片顺序见 §17。
+实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），v1.0.18 补齐 §3.2/§3.5/§4.1/§9.3/§12 的四处断线与五处反向实现，v1.0.19 完成附录 C 的代码改名（代码、配置键、错误码、文件名、UI 文案、`run.bot`），v1.0.20 让探针在真实宿主上可用（§3.3），v1.0.21 落地 §10.2 阶段级 Bot 与阶段级预算，v1.0.22 按 §18 的结论收敛分派口径（不自动选 `requires` 为空的 Bot、决策模型看到的工单带 `truncated`、阶段条目记 Bot）。已知缺口：CLI 后端的增量事件与 §11 C1–C10（P4/P5）、阶段 Bot 的选择器 UI（P6）；`stale` 只在宿主提供版本时可达（§3.7 末段）。切片顺序见 §17。
 
 v2 重写了能力模型（§3）：能力必须带证据，不承认任何写死的后端能力表；后端拆成独立上线单元，`dsh` 先完整落地，`claude` / `codex` 各自后续上线（§3.7、§17）。
 
@@ -143,10 +143,10 @@ ProbeResult = {
 | --- | --- | --- | --- | --- |
 | `dsh` | 运行中宿主 | `edit` / `exec` / `web` | **按预设探针**，无全局结论 | `agentPresets.inspectCompositions()` 的 preset `modules`（`dsh-tool-fs`/`dsh-tool-bash`/`dsh-tool-web` 等）+ `tools` 服务工具名；`web.searchReady()` / `fetchReady()` 可查（v1.0.20 实测：`dsh` 三能力均 `true`） |
 | `claude` | `2.1.329`（`claude --version`） | `edit`、`exec` | 可声明，需 smoke 通过 | `claude --help`：`--tools <tools...>`（"Built-in tools … or tool names (e.g. \"Bash,Edit,Read\")"）、`--permission-mode <mode>`、`--effort <level>` |
-| `claude` | 同上 | `web` | **未核验** | help 提到 `WebFetch`，未提 `WebSearch`；MUST 先 smoke（`--tools "WebSearch"` 或 `WebFetch` 取一个 URL） |
+| `claude` | 同上 | `web` | **未核验，P4 开工时定**（§18 D6） | help 提到 `WebFetch`，未提 `WebSearch`；而且本插件给 claude 的 `--disallowedTools` 里就写着 `WebFetch,WebSearch`（`worker-cli.js:59`），所以「工具名对不对」之前先要决定「给不给联网」。在 P4 打开 C4 白名单并 smoke 之前，claude 的 `web` 恒为 `false` |
 | `codex` | `0.171.0`（`codex --version`） | `edit`、`exec` | 可声明，需 smoke 通过 | `codex exec --help`：`-s/--sandbox {read-only,workspace-write,danger-full-access}`；`-a/--ask-for-approval never` |
 | `codex` | 同上 | `web` | 可声明，需 smoke 通过 | 顶层 `--search`（"Enable live web search … native Responses `web_search` tool"） |
-| `codex` | 同上 | 思考深度 | **未核验** | `model_reasoning_effort` 键未在本机 help 中出现 |
+| `codex` | 同上 | 思考深度 | **未核验，P5 开工时定**（§18 D7） | `model_reasoning_effort` 键未在本机 help 中出现；P5 定之前 codex Bot 的 `reasoningEffort` 不生效（现状是静默不传，P5 要么证明能传、要么改成保存期拒绝） |
 
 > 设计稿 `docs/worker-bots.md` 里的 `claude 2.1.316` / `codex 0.169.1` 已过期，以本表为准。
 
@@ -341,7 +341,7 @@ Schema 是契约；实现 MUST 在保存期跑它，并把 `schema` 报错翻译
 
 `surgical` 与今天的 simple 模式等价（`workflow.js` 中 `plan` 为空即 `ready` 的分支）。内置 Bot 的 `backend` 一律 `dsh`（P1–P3 只上线 dsh，内置 Bot 不应因为配置里写了别的后端就跳到未核验的后端上）；用户自建 Bot 才能指向其他后端，且该后端必须先满足 §3.7。
 
-`reviewer` 是**阶段级**Bot，设计上只该出现在 `stages[].bot`。注意它 `requires` 为空，按 §7.1 的候选过滤会覆盖任何工单——这条矛盾见 §18 Q8，落地前不得把 `reviewer` 配成整单默认 Bot。
+`reviewer` 是**阶段级**Bot，设计上只该出现在 `stages[].bot`。它 `requires` 为空，所以在 §7.1 的**自动**候选里永远不出现（这条规则由 v1.0.22 落实，见 §18 D8）：`executor.bot` 指向它不会让它跑整单，决策模型也看不到它；只有显式层（`ticket.botOverride`、规则里点名）才能选中它。
 
 ### 4.6 版本
 
@@ -441,6 +441,8 @@ resolveDispatch(ticket, config, bots, ctx) -> {
 
 候选集 = 所有 `validateBot()` 通过且 `requires ⊆ capabilitiesOf()` 的 Bot；候选为空时直接进入第 4 层，不调模型。
 
+**`requires` 为空且没有声明整单用途的 Bot 不进「自动」候选**（`source ∈ {'model','default','adhoc'}` 之外的规则层是配置作者的显式意图，仍可点名）。`reviewer` 就是这种 Bot：它的空 `requires` 如果参与过滤会"覆盖任何工单"，等于把只读复核器派成唯一执行者。自动层跳过它，显式层（`ticket.botOverride`、`backendOverride`、`repo.bot`、规则点名）仍可选中——选错了是人的显式决定，`covers()` 仍会校验能力。
+
 ### 7.2 决策模型契约
 
 复用 `eval.decision` 的 `endpoint` / `model` / `tokenFile` / `timeoutMs`（不新增凭据），独立提示词，结构化输出，**不复用** `judgeQuestionPayload`。
@@ -449,12 +451,14 @@ resolveDispatch(ticket, config, bots, ctx) -> {
 
 ```json
 {
-  "ticket": { "title": "…", "body": "…", "repo": "dsh-plugins", "workType": "dev", "deliverable": "change" },
+  "ticket": { "title": "…", "body": "…", "truncated": true, "repo": "dsh-plugins", "workType": "dev", "deliverable": "change" },
   "candidates": [
     { "id": "dsh-plugin-dev", "name": "DSH 插件开发员", "capabilities": ["edit","exec"], "notes": "…", "cost": "medium" }
   ]
 }
 ```
+
+`title` 截 400 字符、`body` 截 4000 字符；任一被截断时请求里带 `truncated: true`（§18 D3），让模型知道自己看的是节选，不要假装读过全文。节选上限是有意的成本与隐私边界，不随工单变长。
 
 响应体（严格校验）：
 
@@ -535,7 +539,7 @@ synthesizeBot(ticket, plan, config) -> { bot, synthesizedFrom }
 2. backend = dispatch.adhocOrder 中第一个 capability 覆盖 requires 的后端
 3. model = 该后端缺省模型（dsh: agentDefaultModel / CLI: 后端缺省）
 4. preset = 宿主默认 preset（仅 dsh）
-5. prompt.role = plan 摘要生成的一段角色说明（≤500 字）
+5. prompt.role = 工单标题（≤500 字符）；标题为空时回退成「按 `<workType>` 处理这件事」——不依赖 plan 摘要（simple 模式下 plan 为空；§18 D4）
 6. budget = executor.*（不放大）
 7. id = 'adhoc:' + sha256(canonicalJson({requires, backend, model, preset, rolePrefix, deliverable}))[0..8]
 ```
@@ -588,7 +592,7 @@ resolveBot(botId, context) -> {
 | Bot effort | DSH | Claude Code | Codex |
 | --- | --- | --- | --- |
 | `auto` / 缺省 | 不传 | 不传 | 不传 |
-| `low` / `medium` / `high` | 透传至 `AgentOptions` | `--effort <level>`（2.1.329 已核验存在；P4 上线前再用 smoke 确认一次真的生效） | **未核验**：`-c model_reasoning_effort=<值>` 未在本机 help 出现，P5 前必须实测；不成立则降级为不传并记 `effort-dropped` |
+| `low` / `medium` / `high` | 透传至 `AgentOptions` | `--effort <level>`（2.1.329 已核验存在；P4 上线前再用 smoke 确认一次真的生效） | **未核验，P5 定**（§18 D7）：`-c model_reasoning_effort=<值>` 未在本机 help 出现；P5 要么实测通过，要么改成保存期 `BOT_EFFORT_UNSUPPORTED` |
 
 保存期校验依赖宿主模型目录；不支持的值 → `BOT_EFFORT_UNSUPPORTED`。目录以宿主服务为准：`modelDirectories` 只注册在客户端 UI 插件里（宿主侧无此服务），因此实现读 `ctx.get('llm').resolveModel(provider, model)` 的 `reasoning.efforts`；模型目录查不到时不作结论（不阻断保存），只有在能确定「这个模型没有这档」时才拒绝。
 
@@ -640,6 +644,8 @@ resolveBot(botId, context) -> {
 ```
 
 语义：未给 `bot` 的阶段用整单 Bot；阶段 `budget` 覆盖 §6 的解析结果；阶段 Bot 的 `backend` 可以与整单不同（例如整单 dsh、review 用 codex）——但只在 `executor.reviewer` 允许的后端里选，且必须 `validateBot()` 通过。
+
+记录口径（§18 D1）：`run.bot.capability` 只记**整单 Bot** 的能力快照（回答"这单是谁干的"）；阶段 Bot 记在阶段条目上——`stages[].backend`（v1.0.21 起）与 `stages[].bot`（v1.0.22 起）。不做能力并集：`gates` 阶段由执行器直接跑命令、不经任何 Bot，把能力并到整单快照只会让审计记录失真。
 
 ### 10.3 禁止
 
@@ -792,18 +798,22 @@ AC1–AC14 与 AC-B1–AC-B3 的首版全部按 `dsh` 验收；每个新后端�
 
 ---
 
-## 18. 未决问题
+## 18. 已定问题与推迟项
 
-| # | 问题 | 影响 | 建议 |
+v3 评审时列了八个未决问题（原 Q1–Q8）。2026-11-23 定下六条、推迟两条：**推迟的两条都属于 CLI 后端（claude/codex），P4/P5 开工前不拍**——现在只有 `dsh` 上线，先把它跑顺。
+
+| # | 问题 | 结论 | 落地 |
 | --- | --- | --- | --- |
-| Q1 | 阶段 Bot 允许换后端时，若整单是 `claude`（无 exec）而 `gates` 阶段需要 exec，是否允许「整单 Bot + 阶段覆盖」拼出组合能力？ | §10.2 | 建议允许，但必须在 `run.bot.capability` 里按**并集**记录，并在详情页标「阶段混用后端」 |
-| Q2 | `skills.policy='preset'` 是否要求 preset 由 Bot 自己创建（P4 的预设发现器之前，用户只能手填 id） | §9.4 | P3 先在编辑器里列出现有 preset（只读下拉），减少填错 |
-| Q3 | 决策模型看到工单全文，是否要截断（正文可能很长，成本与隐私） | §7.2 | 建议截断到 8k 字符并在请求里标注 `truncated: true` |
-| Q4 | ad-hoc 的 `prompt.role` 由 plan 摘要生成，但 plan 可能为空（simple 模式） | §8.2 | 回退到「按 workType 的一句话角色」，不要空提示词 |
-| Q5 | DSH 的 `tools.resolve()` 入参形态（scope/toolSet）随宿主升级可能变，而探针依赖它 | §3.3 | 探针里对 `resolve` 失败降级到 preset 自带的 tools，并把分辨率写进 `evidence` |
-| Q6 | claude 的联网工具名是 `WebSearch` 还是只能 `WebFetch`（help 只出现后者） | §3.4 | P4 用 smoke 定名；不通过就让 claude 的 `web` 保持 `unverified`，禁止 `requires:['web']` 的 Bot |
-| Q7 | codex 的思考深度开关（`model_reasoning_effort`）未在 0.171.0 help 出现 | §9.3 | P5 实测；不成立则 codex Bot 的 `reasoningEffort` 一律 `BOT_EFFORT_UNSUPPORTED` |
-| Q8 | stage-only Bot（`reviewer`）`requires` 为空，整单分派时是合法候选，与「只能当阶段 Bot」矛盾 | §4.5、§7.1 | 二选一：加 `stageOnly: true` 让整单候选排除它；或规定 `requires` 为空且声明了 `stages` 的 Bot 不进整单候选。P3 前定 |
+| D1 | 阶段 Bot 换后端时，能力要不要按并集记录？ | **不记并集**。`run.bot.capability` 只记整单 Bot 的快照；阶段 Bot 记在阶段条目上（`stages[].backend` / `stages[].bot`）。`gates` 由执行器跑命令、不经 Bot，"gates 需要 exec" 是伪问题。 | v1.0.21 记 `backend`，v1.0.22 记 `bot`（`workflow-worker.js`） |
+| D2 | `skills.policy='preset'` 要求用户自己创建 preset？ | **不是契约问题**。契约只要求 `policy=preset` 时必须显式给 `preset`（`BOT_SKILLS_PRESET_MISSING`），保存期用宿主 preset 列表校验存在性（`BOT_PRESET_UNKNOWN`）。剩下的只是编辑器没有下拉框。 | 已有（v1.0.18）；P6 加只读下拉，数据源 `hostPresetIds` |
+| D3 | 决策模型看全文还是要截断？ | **截断且明示**：`title` 400 / `body` 4000 字符，被截断时请求带 `truncated: true`。不放大到 8k——成本与隐私是边界，不是可调参数。 | v1.0.22（`dispatch.js` 的 `dispatchRequestOf`） |
+| D4 | ad-hoc 的 `prompt.role` 来自 plan，但 plan 可能为空？ | **不用 plan**：role = 工单标题（≤500），标题为空时回退「按 `<workType>` 处理这件事」。 | v1.0.22（`dispatch.js` 的 ad-hoc 分支） |
+| D5 | 探针依赖 `tools.resolve()`，入参会随宿主变？ | **问题已消失**：`tools.resolve` 在 v1.0.17 移除（它会把宿主打挂），现在探针 = `agentPresets.resolve` + `inspectCompositions` + 工具名；任一步失败就 `fallbackProbe` → 未核验 → 拒绝派单（安全方向是拒绝而不是放行）。 | 已有（v1.0.20） |
+| D6 | claude 的联网工具名是 `WebSearch` 还是 `WebFetch`？ | **推迟到 P4**。事实补充：本插件给 claude 的 `--disallowedTools` 里就写着 `WebFetch,WebSearch`，所以先要决定"给不给联网"，再谈名字。定之前 claude 的 `web` 恒 `false`，`requires:['web']` 的 claude Bot 保存期就报 `BOT_CAPABILITY_GAP`。 | P4 |
+| D7 | codex 的 `model_reasoning_effort` 键存不存在？ | **推迟到 P5**。定之前 codex Bot 的 `reasoningEffort` 不生效（现状静默不传）；P5 要么证明能传，要么改成保存期 `BOT_EFFORT_UNSUPPORTED`——不允许长期静默丢弃声明。 | P5 |
+| D8 | `reviewer` 这种 `requires` 为空的 Bot 会被整单分派选中 | **自动候选排除它**：`requires` 为空的 Bot 不进 `source ∈ {model, default, adhoc}` 的自动候选；显式层（`ticket.botOverride`、`backendOverride`、`repo.bot`、规则点名）仍可选中，`covers()` 照旧校验能力。**不加 `stageOnly` 字段**。 | v1.0.22（`dispatch.js`） |
+
+D8 的代价（明写）：一个纯「写报告 Bot」如果也把 `requires` 留空，就不会被自动选中，需要规则点名或手动指定。要自动复用就给它一个非空 `requires`（报告交付本可以写 `[]`，所以这是取舍而不是能力缺失）。
 
 ---
 
