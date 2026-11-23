@@ -1049,20 +1049,20 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
   // other pages hide it via CSS and keep the flex row.
   const evidence = ticketEvidence(t, ticket, view, now)
   return <li>
-    {/* The row div is not the click target any more: the title is a real button carrying `.sa-open`, whose stretched
-        `::after` covers the whole row, so the row's primary action is one keyboard-reachable button (WIG: div click). */}
+    {/* The row is not clickable: its main column IS one real button (`.sa-row-open`), so the hit area, the focus ring
+        and the announced control are the same element — no stretched `::after` overlay (DESIGN.md §Rows). */}
     <div className="sa-row sa-row-openable">
       <StatusIcon state={rowIconState} size={16} />
-      <div className="sa-row-main">
-        <div className="sa-row-title">
-          <button type="button" className="sa-row-open sa-open"
-            aria-label={`${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`}
-            onClick={open}>
+      <button type="button" className="sa-row-open sa-open"
+        aria-label={`${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`}
+        onClick={open}>
+        <div className="sa-row-main">
+          <div className="sa-row-title">
             <span className="sa-ellipsis">{ticket.title || pt(t, 'row.untitled')}</span>
-          </button>
+          </div>
+          <div className="sa-row-meta">{chips}</div>
         </div>
-        <div className="sa-row-meta">{chips}</div>
-      </div>
+      </button>
       <span className="sa-row-evidence">{evidence}</span>
       <div className="sa-row-actions" {...stopInner}>
         {publishUnavailableTip}
@@ -1086,7 +1086,7 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
         branch: ticket.links?.branch || '（无）', worktree: ticket.links?.worktree || '（无）' })}
       footer={<>
         <Button variant="ghost" onClick={() => setDismissOpen(false)}>{t('cancel')}</Button>
-        <Button variant="primary" disabled={dismiss.busy}
+        <Button variant="danger" disabled={dismiss.busy}
           onClick={async () => { if (await dismiss.run()) setDismissOpen(false) }}>{pt(t, 'detail.dismiss')}</Button>
       </>} />
   </li>

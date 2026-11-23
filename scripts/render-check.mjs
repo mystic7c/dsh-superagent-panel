@@ -176,6 +176,8 @@ engine.state.tickets[demoReadyId] = {
 engine.state.state.ticketOrder.push(demoReadyId)
 engine.state.runs.unshift({ id: 'run_demo_ready', ticketId: demoReadyId, status: 'dry-run', dryRun: true,
   startedAt: nowIso, completedAt: nowIso,
+  // A finished dry run normally has a patch; without one the detail has no changes form to type a revision into.
+  changedPaths: ['demo/ready/File.java'],
   steps: [{ name: 'prepare-worktree', state: 'ok', at: nowIso }, { name: 'worker', state: 'ok', at: nowIso },
     { name: 'changed-paths', state: 'ok', at: nowIso }, { name: 'gate:standards', state: 'ok', at: nowIso },
     { name: 'finish', state: 'ok', at: nowIso }] })
@@ -305,6 +307,8 @@ let lastCreateRequest = null
 let lastStopId = null
 // U-06 (N3): the confirmation must send the draft it re-reads, so the check asserts the patch body itself.
 let lastSettingsBody = null
+// C-13: the UAT check is per repository, so both the request body and the answer are asserted.
+let lastUatBody = null
 // AC-07 deep-link probe: set just before the source-page remount so earlier checks still see the real (empty) log.
 let signalFixture
 window.fetch = global.fetch = async (input, init = {}) => {
@@ -313,6 +317,12 @@ window.fetch = global.fetch = async (input, init = {}) => {
   calls.push(`${method} ${url.pathname}${url.search}`)
   const json = value => new Response(JSON.stringify(value), { status: 200, headers: { 'content-type': 'application/json' } })
   const p = url.pathname.replace('/superagent/api/', '')
+  // A route that never answers: the transport must give up on abort instead of hanging the polling queue forever.
+  if (p === 'hang') {
+    return new Promise((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted.')))
+    })
+  }
   if (method === 'GET' && p === 'engine/status') return json(fixtures.status)
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
   if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
@@ -332,6 +342,11 @@ window.fetch = global.fetch = async (input, init = {}) => {
     signals: { total: 0, processed: 0, ignored: 0, skipped: 0, failed: 0, labels: { correct: 0, false_wake: 0, missed_wake: 0, cleared: 0 } },
     cost: { available: false, note: 'not available in this check' },
   })
+  if (method === 'POST' && p === 'engine/uat-check') {
+    lastUatBody = init.body ? JSON.parse(String(init.body)) : null
+    // A status nobody else can produce: whichever card shows "299" is the card that was actually checked.
+    return json({ uat: { ok: true, status: 299, checkedAt: new Date().toISOString() } })
+  }
   const readItem = /^engine\/inbox\/([^/]+)\/read$/.exec(p)
   if (method === 'POST' && readItem) {
     const item = fixtures.inbox.items.find(candidate => candidate.id === decodeURIComponent(readItem[1]))
@@ -460,8 +475,9 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
-  ticketDismissable, HistoryChanges,
-  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError,
+  ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
+  PanelProvider,
   botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
@@ -481,6 +497,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   prunePageQuery: 'router.js',
   RawSignalRows: 'source.js',
   Panel: 'api.js',
+  usePanel: 'api.js',
+  PanelProvider: 'api.js',
   signalReasonText: 'source.js',
   failureLabel: 'live-ui.js',
   workflowBlockedDetail: 'live-ui.js',
@@ -495,6 +513,11 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   primaryActionOf: 'live-ui.js',
   ticketStatus: 'live-ui.js',
   ticketDismissable: 'ticket-detail.js',
+  requestIsTitle: 'ticket-detail.js',
+  ticketVisibleJumps: 'ticket-detail.js',
+  durationText: 'overview.js',
+  ConfirmButton: 'widgets.js',
+  Modal: 'controls.js',
   HistoryChanges: 'settings.js',
   AutomationBar: 'live-ui.js',
   failureReasonTextOf: 'overview.js',
@@ -505,6 +528,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   formToBot: 'settings.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
+  apiCall: 'api.js',
+  ThreadDetail: 'thread-detail.js',
   clampEvalOffset: 'eval.js',
   Menu: 'controls.js',
   openLinkedPanel: 'apply.js',
@@ -1111,6 +1136,13 @@ check('acceptance posts to engine/ticket/:id/accept', Boolean(acceptCall), Strin
 const back = rootElement.querySelector('.sa-page-head button')
 back?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
+// The desk is read from the list route explicitly: the head's first button is not guaranteed to be the back link on a
+// detail page, and this check is about what the desk derives, not about the affordance.
+if (rootElement.querySelector('#sa-ticket-changes')) {
+  window.location.hash = `#sa=${encodeURIComponent(JSON.stringify({ page: 'execution' }))}`
+  window.dispatchEvent(new window.HashChangeEvent('hashchange'))
+  await sleep(800)
+}
 const deskText = text()
 // Other tickets (e.g. the two failed ones in real state) stay in "needs you", so count the accept actions rather than
 // assuming an empty desk after one acceptance.
@@ -1135,6 +1167,29 @@ if (sourcePageReady) {
   check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('代码仓库'), sourceText.slice(0, 260))
   check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
     String(rootElement.querySelectorAll('.sa-cards-2').length))
+  // C-13: one repository's check used to be rendered on every repository card and asked the host for "whatever repo has
+  // a UAT url". The clicked card must carry the answer, and no other card may.
+  const sourceCards = () => [...rootElement.querySelectorAll('.sa-main .sa-cards-2 .sa-card')]
+  // The card to check is whichever execution card actually offers the action (a `manual` repository has no UAT).
+  const uatButtonOf = (card) => [...card.querySelectorAll('button')]
+    .find(node => (node.textContent ?? '').trim() === '检查 UAT')
+  const checkedCard = sourceCards().find(card => { const button = uatButtonOf(card); return Boolean(button) && !button.disabled })
+  const checkedRepo = checkedCard
+    ? liveRepos.find(repo => (checkedCard.textContent ?? '').includes(repo.gitlab.project || repo.id)) : undefined
+  const cardUat = checkedCard ? uatButtonOf(checkedCard) : undefined
+  if (!checkedCard || !checkedRepo) skip('the UAT answer lands on the repository that was checked', 'no repository card offers an enabled UAT check')
+  else {
+    const lastRepo = checkedRepo
+    const lastCard = checkedCard
+    cardUat.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(500)
+    check('the UAT request names the clicked repository', lastUatBody?.repoId === lastRepo.id,
+      `${JSON.stringify(lastUatBody)} disabled=${cardUat.disabled} uat=${calls.filter(call => call.includes('uat')).join(',')}`)
+    check('the UAT answer lands on the repository that was checked',
+      (lastCard.textContent ?? '').includes('299') && sourceCards()
+        .filter(card => card !== lastCard).every(card => !(card.textContent ?? '').includes('299')),
+      sourceCards().map(card => (card.textContent ?? '').slice(0, 90)).join(' | '))
+  }
 } else {
   for (const name of ['source page shows both repositories', 'source page groups IM and code repositories', 'source cards use the two-up grid']) {
     skip(name, 'octo is not configured on this machine, so the source page renders its empty state')
@@ -1462,12 +1517,54 @@ check('done group states its accepted/dismissed split', /已验收.*已忽略/.t
 // A finished dry run publishes from the primary slot; the rerun it used to lead with stays in the ⋯ menu.
 const readyRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
   .find(row => (row.textContent ?? '').includes('演示：干跑完成待发布'))
+check('the execution row is opened by a button that holds its main column (U-02)',
+  Boolean(readyRow?.querySelector('button.sa-row-open > .sa-row-main .sa-row-title')),
+  readyRow?.querySelector('.sa-row-open')?.outerHTML?.slice(0, 240) ?? 'no row')
 check('the execution queue lists the finished dry run', Boolean(readyRow),
   [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
 readyRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
 const readyPrimary = [...rootElement.querySelectorAll('.sa-page-head-actions .sa-btn-primary')].map(node => (node.textContent ?? '').trim())
 check('a finished dry run makes 发布 MR the primary action', readyPrimary.includes('发布 MR'), JSON.stringify(readyPrimary))
+// C-14: the detail page is keyed by the Ticket id. Opening another Ticket in place used to reuse the same mounted
+// detail, so the previous Ticket's drafts came back on a Ticket they were never written for.
+{
+  const openRow = async (title) => {
+    const row = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
+      .find(node => (node.textContent ?? '').includes(title))
+    row?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(1200)
+  }
+  const leaveDetail = async () => {
+    rootElement.querySelector('.sa-page-head button')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(1200)
+  }
+  const draftOf = () => rootElement.querySelector('#sa-ticket-changes .sa-revision-input')
+  const draft = draftOf()
+  if (!draft) skip('a detail draft does not come back with the previous Ticket', 'the fixture Ticket has no changes form')
+  else {
+    const propsKey = Object.keys(draft).find(key => key.startsWith('__reactProps$'))
+    propsKey ? draft[propsKey].onChange?.({ target: { value: '草稿：只属于 tkt_demo_ready' } }) : undefined
+    await sleep(120)
+    check('a detail draft is accepted on the current Ticket', (draftOf()?.value ?? '') !== '', draftOf()?.value ?? 'no value')
+    await leaveDetail()
+    await openRow('演示：正在执行的工单')
+    await leaveDetail()
+    await openRow('演示：干跑完成待发布')
+    const focused = document.activeElement
+    check('a route change moves focus to the new page title (U-04)',
+      Boolean(focused?.classList?.contains('sa-page-head-title') || focused?.classList?.contains('sa-scroll')),
+      String(focused?.className ?? focused?.tagName ?? 'none'))
+    check('a detail page keeps the panel h1 as the only h1 (U-03)',
+      rootElement.querySelectorAll('h1').length === 1
+        && Boolean(rootElement.querySelector('.sa-head h1.sa-title'))
+        && Boolean(rootElement.querySelector('.sa-page-head h2.sa-page-head-title')),
+      `h1 count=${rootElement.querySelectorAll('h1').length}`)
+    const carried = draftOf()?.value ?? ''
+    check('a detail draft does not come back with the previous Ticket', carried === '', JSON.stringify(carried))
+  }
+}
+
 rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
 const readyMenu = rootElement.querySelector('[role="menu"]')?.textContent ?? ''
@@ -1480,6 +1577,15 @@ await sleep(1000)
 clickByText('手工建单')
 await sleep(800)
 const manualModal = rootElement.querySelector('.sa-modal')
+{
+  const described = manualModal?.getAttribute('aria-describedby')
+  const sentence = described ? rootElement.querySelector(`#${described}`) : null
+  check('a dialog announces its consequence sentence (U-01)',
+    Boolean(described) && Boolean(sentence) && (sentence.textContent ?? '').trim().length > 0,
+    JSON.stringify({ described, sentence: sentence?.textContent?.slice(0, 80) ?? null }))
+  check('an open dialog locks the page scroll behind it (U-01)', document.body.style.overflow === 'hidden',
+    `overflow=${document.body.style.overflow}`)
+}
 check('manual Ticket opens in place, without leaving Execution', Boolean(manualModal)
   && Boolean(manualModal.querySelector('input')) && /建单/.test(manualModal.textContent ?? ''), (manualModal?.textContent ?? '').slice(0, 160))
 // AC-01: the form previews the automatic judgement and saves a manual override; the two dimensions are separate.
@@ -1537,6 +1643,8 @@ if (!rootElement.querySelector('.sa-modal')) { clickByText('手工建单'); awai
 rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 await sleep(500)
 check('manual Ticket modal closes with Escape', !rootElement.querySelector('.sa-modal'), 'modal still open')
+check('closing the last dialog releases the page scroll (U-01)', document.body.style.overflow === '',
+  `overflow=${document.body.style.overflow}`)
 
 // AC-03: while a run is active the stop entry sits in the header, states "正在停止" only after the request is recorded,
 // and never pretends the worker has already finished.
@@ -2066,6 +2174,28 @@ console.log('STEP pure projections')
   barRoot.unmount()
   barHost.remove()
 
+  // P3: notify(text, 'error') used to drop the second argument, so a failed save and a saved save looked identical.
+  const toastHost = document.createElement('div')
+  document.body.appendChild(toastHost)
+  const toastRoot = ReactDOM.createRoot(toastHost)
+  const Notifier = ({ tone }) => {
+    const { notify } = usePanel()
+    React.useEffect(() => { notify('保存失败：服务不可用', tone) }, [tone])
+    return null
+  }
+  toastRoot.render(React.createElement(PanelProvider,
+    { t, call: async () => ({}), navigate() {}, back() {}, openSession: async () => {} },
+    React.createElement(Notifier, { tone: 'error' })))
+  await sleep(120)
+  const failedToast = toastHost.querySelector('.sa-toast')
+  check('a failed action is announced as an alert, not as a status line (P3)',
+    failedToast?.className === 'sa-toast sa-toast-error' && failedToast?.getAttribute('role') === 'alert',
+    `${failedToast?.className} role=${failedToast?.getAttribute('role')}`)
+  toastRoot.unmount()
+  toastHost.remove()
+  check('the error toast has its own rule so the colour is not a class with no style (P3)',
+    /\.sa-toast-error\s*\{[^}]*--sa-danger-text/.test(PANEL_CSS), PANEL_CSS.includes('.sa-toast-error'))
+
   // R2-12: credentials are 令牌/未配置, chats are 群 ID — one vocabulary across settings, sources and tickets.
   check('credentials and chats use one vocabulary (R2-12)',
     t('st.octoToken') === 'Octo 令牌' && t('st.tokenMissing') === '令牌未配置'
@@ -2284,6 +2414,28 @@ console.log('STEP pure projections')
     check('a save sends the store without host-added keys (§4.2)',
       afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
       JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))
+    // Renaming a Bot edits the row it opened: excluding only the *new* id left the old one in the store, so one
+    // save turned one Bot into two.
+    ;[...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
+      ?.querySelectorAll('button') && [...([...host.querySelectorAll('.sa-bot-row')]
+        .find(node => /我的 Bot/.test(node.textContent ?? ''))?.querySelectorAll('button') ?? [])]
+        .find(node => (node.textContent ?? '').trim() === '编辑')
+        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const renameInput = [...host.querySelectorAll('.sa-bot-modal input')].find(node => node.value === 'mine')
+    const renameKey = renameInput ? Object.keys(renameInput).find(key => key.startsWith('__reactProps$')) : undefined
+    if (!renameKey) skip('renaming a Bot replaces it instead of adding a second one', 'the id input was not found')
+    else {
+      renameInput[renameKey].onChange?.({ target: { value: 'mine2' } })
+      await sleep(120)
+      ;[...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '保存')
+        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      await sleep(160)
+      const renamed = lists.at(-1) ?? []
+      check('renaming a Bot replaces it instead of adding a second one (P2)',
+        renamed.some(bot => bot.id === 'mine2') && !renamed.some(bot => bot.id === 'mine'),
+        JSON.stringify(renamed.map(bot => bot.id)))
+    }
     // A verified backend accepts the same store: remount so the group loads the verified evidence.
     root.unmount()
     const verifiedRoot = ReactDOM.createRoot(host)
@@ -2371,6 +2523,100 @@ console.log('STEP pure projections')
     JSON.stringify({ previewWhileClosed, previewWhileOpen, titleWhileOpen: openTitle?.textContent ?? null }))
   signalRoot.unmount()
   signalHost.remove()
+}
+
+// ---- batch 3 (U-01…U-06): the contract the checks above cannot see in a DOM diff -------------------------------
+{
+  // U-02: DESIGN.md §Rows forbids a stretched ::after hit area; the row's own button carries the main column instead.
+  check('no stretched row overlay is left in the stylesheet (U-02)',
+    !/\.sa-open::after/.test(PANEL_CSS) && !/\.sa-open:focus-visible\s*\{[^}]*outline:\s*none/.test(PANEL_CSS)
+      && /\.sa-row-open\s*\{[^}]*align-items:\s*stretch/.test(PANEL_CSS),
+    'sa-open::after / focus outline:none / align-items still shipped')
+  // U-05: brand colour is the tab underline's alone — the switch and the settings rail use a neutral active fill.
+  const switchRule = PANEL_CSS.match(/\.sa-switch-input:checked \+ \.sa-switch-track \{[^}]*\}/)?.[0] ?? ''
+  const railRule = PANEL_CSS.match(/\.sa-settings-nav \.sa-settings-group\[aria-current='true'\]\s*\{[^}]*\}/)?.[0] ?? ''
+  check('the brand colour only marks the current tab (U-05)',
+    Boolean(switchRule) && Boolean(railRule) && !/brand-primary/.test(switchRule) && !/brand-primary/.test(railRule),
+    JSON.stringify({ switchRule, railRule }))
+  check('disabled controls share one opacity (U-06)',
+    !/opacity:\s*0\.(55|72)/.test(PANEL_CSS) && /\.sa-btn:disabled \{[^}]*opacity: 0\.4/.test(PANEL_CSS),
+    'more than one disabled opacity still shipped')
+  check('the signal disclosure trigger reads as a control (U-06)',
+    /\.sa-signal-toggle \{[^}]*cursor: pointer/.test(PANEL_CSS) && /\.sa-signal-toggle:focus-visible/.test(PANEL_CSS),
+    'no cursor/focus ring for .sa-signal-toggle')
+  check('the patch body keeps the 12px mono floor (U-06)',
+    /\.sa-diff pre \{[^}]*--sa-fs-meta/.test(PANEL_CSS), 'diff body still at the 11px caption size')
+  // U-03: a Ticket whose body only repeats its title must not print the same paragraph twice.
+  check('a Ticket whose body is its title does not repeat it (U-03)',
+    requestIsTitle({ title: '修一下登录', body: '修一下登录 ' }) === true
+      && requestIsTitle({ title: '修一下登录', body: '修一下登录，并补一条断言。' }) === false,
+    'requestIsTitle does not separate the repeated case')
+  // U-03: the section jump disappears with the section it scrolls to.
+  const repeatedJumps = ticketVisibleJumps({ title: '修一下登录', body: '修一下登录' }, false)
+  const distinctJumps = ticketVisibleJumps({ title: '修一下登录', body: '补一条断言' }, false)
+  check('the request jump disappears with the request section (U-03)',
+    !repeatedJumps.some(jump => jump.id === 'sa-ticket-request')
+      && distinctJumps.some(jump => jump.id === 'sa-ticket-request'),
+    JSON.stringify(repeatedJumps.map(jump => jump.id)))
+  // U-06: 659.9s is a number, not a duration; an old run's already-labelled cause must not be labelled twice.
+  check('a long average run time reads as a duration (U-06)',
+    durationText(659900) === '11m' && durationText(45000) === '45s' && durationText(90000) === '1m 30s',
+    JSON.stringify([durationText(659900), durationText(45000), durationText(90000)]))
+  const repeated = failureReasonTextOf(t, '其他原因：没有可用档位：没有可用档位：没有已保存的档位覆盖 edit')
+  check('a cause stored with a repeated segment is collapsed before it is labelled (U-06)',
+    (repeated.match(/没有可用档位/g) ?? []).length === 1 && (repeated.match(/其他原因/g) ?? []).length === 1,
+    repeated)
+}
+{
+  // U-05: the destructive confirmations all pass `variant="danger"`; ConfirmButton is what turns that into the tone.
+  const confirmHost = document.createElement('div')
+  document.body.appendChild(confirmHost)
+  const confirmRoot = ReactDOM.createRoot(confirmHost)
+  confirmRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(ConfirmButton, { label: '打回', title: '打回这张工单？', message: '会记录打回原因',
+      confirmLabel: '确认打回', variant: 'danger', onConfirm: async () => true })))
+  await sleep(150)
+  confirmHost.querySelector('button')?.click()
+  await sleep(150)
+  const confirmButton = [...confirmHost.querySelectorAll('.sa-modal button')]
+    .find(button => (button.textContent ?? '').trim() === '确认打回')
+  check('a destructive confirmation confirms in the danger tone (U-05)',
+    Boolean(confirmButton?.classList.contains('sa-btn-danger')),
+    String(confirmButton?.className ?? 'no confirm button'))
+  confirmRoot.unmount()
+  confirmHost.remove()
+}
+
+// A request that never answers used to leave the polling queue pending forever: no error, no next attempt.
+{
+  // Raced against a 2s stop so a transport that really hangs fails this check instead of stalling the whole run.
+  const settled = await Promise.race([
+    apiCall(t, 'hang', 'GET', undefined, { timeoutMs: 40 }).then(() => 'resolved', failure => failure),
+    sleep(2000).then(() => 'still pending'),
+  ])
+  check('a request that never answers times out instead of freezing the poller (P2)',
+    settled !== 'still pending' && settled !== 'resolved' && settled?.status === 0
+      && settled?.details?.timeout === true && settled?.details?.unreachable === true,
+    typeof settled === 'string' ? settled : JSON.stringify({ status: settled?.status, details: settled?.details, message: settled?.message }))
+}
+{
+  // No thread selected means no request: the route used to encode `undefined` and poll `engine/thread/undefined`.
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const root = ReactDOM.createRoot(host)
+  const before = calls.length
+  root.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, backLabel: '' } },
+    React.createElement(PanelState.Provider,
+      { value: { data: fixtures.status, error: undefined, reload: async () => {}, actions: {} } },
+      React.createElement(ThreadDetail, {}))))
+  await sleep(300)
+  const asked = calls.slice(before)
+  check('a thread detail without a selection asks for nothing (P2)',
+    !asked.some(call => call.includes('thread/undefined')), JSON.stringify(asked.slice(0, 4)))
+  root.unmount()
+  host.remove()
 }
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))

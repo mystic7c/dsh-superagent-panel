@@ -155,7 +155,9 @@ export function PageHead({ title, meta, actions, showBack = true, headRef }) {
       <Button variant="ghost" size="sm" icon={<Icon name="chevron-left" size={14} />} onClick={back}>{backLabel || t('back')}</Button>
     </div> : null}
     <div className="sa-page-head-main">
-      <h2 className="sa-page-head-title">{title}</h2>
+      {/* The panel's own 「超级智能体」 is the page's single h1; a detail page is one level below it, so this head is h2
+          and the sections keep the same level. Does not collide with the sections because that head is not a section. */}
+      <h2 className="sa-page-head-title" title={typeof title === 'string' ? title : undefined}>{title}</h2>
       {actions ? <div className="sa-page-head-actions">{actions}</div> : null}
     </div>
     {meta ? <div className="sa-page-head-meta">{meta}</div> : null}

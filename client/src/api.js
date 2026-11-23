@@ -12,14 +12,29 @@ export class ApiError extends Error {
   get missing() { return this.status === 404 && !this.details.unreachable }
 }
 
+/* A request that never answers used to hang the polling queue forever: no error, no next attempt, the page frozen on
+   the last document. Reads give up after 20s, writes after 2 minutes; a route that legitimately runs for minutes
+   (running gates, a waited-for run) passes `timeoutMs: 0` instead of being cut off mid-commit. */
+const READ_TIMEOUT_MS = 20000
+const WRITE_TIMEOUT_MS = 120000
+
 /** Call one management endpoint; every request is marked so the host can refuse cross-site posts. */
-export async function apiCall(t, path, method, body) {
+export async function apiCall(t, path, method, body, options = {}) {
+  const timeoutMs = options.timeoutMs ?? (method === 'GET' ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS)
+  const controller = timeoutMs > 0 && typeof AbortController === 'function' ? new AbortController() : undefined
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined
   let response
   try {
     response = await fetch(`${API}/${path}`, { method, headers: { 'x-superagent-request': '1', ...body === undefined ? {} : { 'content-type': 'application/json' } },
+      ...controller ? { signal: controller.signal } : {},
       body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
+    if (controller?.signal.aborted) {
+      throw new ApiError(t('requestTimeout', { seconds: Math.round(timeoutMs / 1000) }), 0, { unreachable: true, timeout: true })
+    }
     throw new ApiError(t('offline'), 0, { unreachable: true })
+  } finally {
+    clearTimeout(timer)
   }
   const text = await response.text()
   let value
@@ -46,7 +61,7 @@ export function caller(t) {
     const path = pattern.replace(/:(\w+)/g, (_match, name) => encodeURIComponent(String(request[name])))
     const query = Object.entries(request.query ?? {}).filter(([, value]) => value !== undefined && value !== '')
       .map(([name, value]) => `${name}=${encodeURIComponent(String(value))}`).join('&')
-    return apiCall(t, query ? `${path}?${query}` : path, method, request.body)
+    return apiCall(t, query ? `${path}?${query}` : path, method, request.body, { timeoutMs: request.timeoutMs })
   }
 }
 
@@ -62,6 +77,9 @@ export function usePoll(load, deps, intervalMs = 5000) {
     let active = true
     let timer
     let queue = Promise.resolve()
+    // New deps mean "different page of data": the previous document must not stay on screen while the new one loads
+    // (it also kept the old error alive, so a working id could open showing the last id's failure).
+    setState(previous => (previous.data === undefined && previous.error === undefined ? previous : {}))
     const once = async () => {
       clearTimeout(timer)
       try {
@@ -113,11 +131,12 @@ export function useAction(action, options = {}) {
   return { run, busy }
 }
 
-export function Toast({ text, toastKey, onDone, holdMs = 4000 }) {
+export function Toast({ text, tone, toastKey, onDone, holdMs = 4000 }) {
   const done = useRef(onDone)
   done.current = onDone
   useEffect(() => { const timer = setTimeout(() => done.current(), holdMs + 1000); return () => clearTimeout(timer) }, [toastKey, holdMs])
-  return h('div', { className: 'sa-toast', role: 'status' }, text)
+  const failed = tone === 'error'
+  return h('div', { className: failed ? 'sa-toast sa-toast-error' : 'sa-toast', role: failed ? 'alert' : 'status' }, text)
 }
 
 export const stay = () => {}
@@ -131,11 +150,14 @@ export function PanelProvider({ t, openSession = noSession, navigate = stay, bac
   copy.current = t
   const call = useMemo(() => caller(key => copy.current(key)), [])
   const [toast, setToast] = useState()
-  const notify = useCallback(text => setToast({ text, id: Date.now() }), [])
+  // `tone` was accepted and dropped by callers (`notify(errorText(failure), 'error')`), so a failed save and a saved
+  // save looked the same. A failure now keeps the message on screen as an alert with the danger colour.
+  const notify = useCallback((text, tone) => setToast({ text, tone, id: Date.now() }), [])
   const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route }),
     [t, call, navigate, back, backLabel, openSession, notify, route])
   return h(Panel.Provider, { value: context },
     h('style', null, PANEL_CSS),
     children,
-    toast && h(Toast, { key: toast.id, toastKey: toast.id, text: toast.text, onDone: () => setToast(undefined) }))
+    toast && h(Toast, { key: toast.id, toastKey: toast.id, text: toast.text, tone: toast.tone,
+      onDone: () => setToast(undefined) }))
 }

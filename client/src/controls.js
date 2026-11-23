@@ -150,11 +150,19 @@ export function Switch({ checked, onChange, label, className, disabled, inputRef
   </span>
 }
 
+/** Module counter behind the dialog description ids (React's `useId` is not re-exported by the panel's runtime shim). */
+let MODAL_SEQ = 0
+
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
 /** @param {{ open?: any, onClose?: () => void, title?: any, closeLabel?: any, description?: any, footer?: any, className?: any, restoreTo?: any, children?: any }} props */
 export function Modal({ open, onClose, title, closeLabel, description, footer, className, restoreTo, children }) {
   const dialog = useRef(null)
   const close = useRef(onClose)
+  // A dialog's consequence sentence must be announced with the dialog: `role=dialog` only carries the title, so the
+  // description needs an id the dialog can point at (stop / dismiss / publish all carry a consequence line).
+  const descSeq = useRef(0)
+  if (!descSeq.current) descSeq.current = ++MODAL_SEQ
+  const descId = `sa-modal-desc-${descSeq.current}`
   close.current = onClose
   // Where focus goes on close. The opener is right for a click-opened dialog; a dialog opened by a keyboard shortcut
   // (Ctrl+K) has no opener, so search points this at its own header button instead of leaving focus on <body>.
@@ -164,6 +172,9 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
     if (!open) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
     dialog.current?.focus()
+    // The mask covers the page but the wheel still scrolls it underneath: lock the body for as long as a dialog is up.
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const onKeyDown = (event) => {
       if (event.key === 'Escape') { event.stopPropagation(); close.current() }
       else if (event.key === 'Tab' && dialog.current) {
@@ -179,6 +190,7 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
     document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
       // Focus goes back to whatever opened the dialog. A keyboard-opened dialog has no usable opener (the active
       // element was <body>), so it falls back to the explicit target the caller names — the search trigger for Ctrl+K.
       const fallback = typeof restore.current === 'function' ? restore.current() : restore.current
@@ -189,12 +201,13 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
   if (!open) return null
   return <div className="sa-modal-root" role="presentation">
     <div className="sa-modal-mask" aria-hidden="true" onClick={onClose} />
-    <div ref={dialog} className={cx('sa-modal', className)} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+    <div ref={dialog} className={cx('sa-modal', className)} role="dialog" aria-modal="true" aria-label={title}
+      aria-describedby={description ? descId : undefined} tabIndex={-1}>
       <div className="sa-modal-header">
         <h2>{title}</h2>
         <button type="button" className="sa-modal-close" aria-label={closeLabel} onClick={onClose}><Icon name="close" size={14} /></button>
       </div>
-      {description ? <p className="sa-modal-description">{description}</p> : null}
+      {description ? <p id={descId} className="sa-modal-description">{description}</p> : null}
       {children !== undefined ? <div className="sa-modal-body">{children}</div> : null}
       {footer !== undefined ? <div className="sa-modal-footer">{footer}</div> : null}
     </div>

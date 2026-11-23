@@ -66,6 +66,13 @@ function requireExecutor(engine, { dryRun = false } = {}) {
  * stays in the worktree, so the operator can enable push in Settings or dismiss the Ticket instead of retrying a
  * button that cannot work.
  */
+/** A dry run writes nothing, so the executor switch never blocks it. The Ticket's last run decides, exactly like
+ *  `/run` decides from its own `dryRun` body: a dry-run Ticket parked on a question or a gate stays answerable with
+ *  the executor off instead of telling the operator to turn on a switch that would not change anything. */
+function ticketDryRun(engine, ticketId) {
+  return engine.ticketView?.(ticketId)?.runs?.[0]?.dryRun === true
+}
+
 function requirePush(engine) {
   if (engine.configView().executor.allowPush === true) return
   throw new ActionError(409, '未允许推送：这次发布需要推送远端，而「设置 → 执行器」里「允许推送」是关闭的。'
@@ -327,8 +334,12 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'uat-check') {
           const config = engine.readConfig().config
           const repoId = body?.repoId ?? url.searchParams.get('repo')
-          const repo = (repoId ? config.repos.find(item => item.id === repoId) : undefined)
-            ?? config.repos.find(item => item.verifyMode === 'web-uat') ?? config.repos[0]
+          // An explicit id has to resolve: falling back to "some repository that has a UAT url" answered with another
+          // repository's build for the card the operator actually clicked (review C-13).
+          const repo = repoId
+            ? config.repos.find(item => item.id === repoId)
+            : config.repos.find(item => item.verifyMode === 'web-uat') ?? config.repos[0]
+          if (repoId && !repo) throw new ActionError(404, `仓库不存在：${repoId}`)
           if (!repo?.gitlab.uatUrl) throw new ActionError(400, `${repo?.name ?? '该仓库'} 没有配置 UAT 地址`)
           send(res, 200, { uat: await checkUat(repo.gitlab.uatUrl) })
           return
@@ -381,10 +392,14 @@ export function apply(ctx, config = {}) {
           }
         }
         if (method === 'POST' && second === 'repo' && third && segments[3] === 'token') {
+          // A non-string value used to be taken as '' by saveTokenFile, which deletes the token file: a malformed
+          // request silently wiped a working credential (the panel then showed "not configured" as if nobody had
+          // filled it in). Refuse it like the octo/eval token routes do.
+          if (typeof body?.token !== 'string') throw new ActionError(400, 'token 必须是字符串')
           const config = engine.readConfig().config
           const repo = config.repos.find(item => item.id === third)
           if (!repo) throw new ActionError(404, `未知仓库：${third}`)
-          const saved = await saveRepoToken(repo, body?.token)
+          const saved = await saveRepoToken(repo, body.token)
           send(res, 200, { repo: { id: repo.id, tokenConfigured: saved.configured } })
           return
         }
@@ -480,16 +495,30 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, 'action 必须是 release / retry / stop')
           }
           const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
+          // `release` finalizes the run, which can push and open an MR: the executor switch has to apply here too,
+          // or turning the executor off still delivered code (see resumeTicketInner for the same check).
+          requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
           assertTicketFree(third)
-          const result = /** @type {any} */ (await resumeTicket({ engine, ticketId: third, action, note,
-            log: line => ctx.logger?.info?.('superagent gate: %s', line) }))
-          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
-          if (result?.invalid) throw new ActionError(409, result.invalid)
-          send(res, 200, { run: result.run, ticket: result.ticket })
+          // Same answer as `/run` and `/publish`: `release` runs the whole post-gate delivery (gates, commit, push, MR)
+          // and can take minutes, so the request must not be the thing that waits for it. The refusals that used to be
+          // discovered inside the call are checked here first — a 202 for a Ticket that is not parked would be a lie.
+          // `wait:true` keeps the synchronous form for the contract tests and for operators driving the API by hand.
+          const view = engine.ticketView(third)
+          if (!view) throw new ActionError(404, `未知工单：${third}`)
+          if (view.ticket.status !== 'gate-blocked') {
+            throw new ActionError(409, `ticket ${third} is not waiting for a gate decision`)
+          }
+          const work = resumeTicket({ engine, ticketId: third, action, note,
+            log: line => ctx.logger?.info?.('superagent gate: %s', line) })
+            .catch(error => ({ status: 'failed', error: error instanceof Error ? error.message : String(error) }))
+          if (body?.wait === true) { send(res, 200, await work); return }
+          void work
+          send(res, 202, { started: true, ticketId: third, action })
           return
         }
         // P1-5: continue an interrupted run from its checkpoint (gates/commit/push/MR phase) or re-run the whole Ticket.
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'resume') {
+          requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
           assertTicketFree(third)
           const result = await resumeInterruptedTicket({ engine, ticketId: third,
             log: line => ctx.logger?.info?.('superagent resume: %s', line) })
@@ -512,6 +541,7 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'answer') {
           const answer = typeof body?.answer === 'string' ? body.answer.trim().slice(0, 4000) : ''
           if (!answer) throw new ActionError(400, 'answer 不能为空')
+          requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
           assertTicketFree(third)
           const result = /** @type {any} */ (await answerTicket({ engine, ticketId: third, answer,
             log: line => ctx.logger?.info?.('superagent answer: %s', line) }))

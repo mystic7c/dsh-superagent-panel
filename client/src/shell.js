@@ -3,7 +3,7 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
-import { Icon, hhmm } from "./util.js"
+import { Icon, hhmm, scrollPanelTo } from "./util.js"
 import { errorText, fullTime, when } from "./i18n.js"
 import { Button, IconButton, Input, Menu, Modal, SegmentedTabs, StatusIcon, Tag } from "./controls.js"
 import { Panel, PanelProvider, PanelState, same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -285,7 +285,7 @@ export function pageView(page) {
 }
 
 export function Pages({ route }) {
-  useEffect(() => { document.getElementById(`sa-tab-${route.page}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [route.page])
+  useEffect(() => { scrollPanelTo(document.getElementById(`sa-tab-${route.page}`), { behavior: 'auto', gap: 0 }) }, [route.page])
   const Page = pageView(route.page)
   return <div className="sa-main" id="sa-page" role="tabpanel" aria-labelledby={`sa-tab-${route.page}`}>
     <Page route={route} />
@@ -318,9 +318,22 @@ export function PanelShell({ location, openTab }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const scroller = useRef(null)
   // A route change starts the new page at its top: the body scroll must never inherit the previous page's offset
-  // (tab-hopping from a 3-screen Ticket back to Overview used to land mid-page).
+  // (tab-hopping from a 3-screen Ticket back to Overview used to land mid-page). Focus follows the same move: the row
+  // that opened the page is unmounted, so the browser would strand a keyboard user on <body> with nothing announced.
+  // The search palette already does this on a result pick; the router now does it for every navigation.
+  const previousRoute = useRef(undefined)
   useLayoutEffect(() => {
     if (scroller.current) scroller.current.scrollTop = 0
+    const key = `${location.route.page}:${location.route.id ?? ''}`
+    const previous = previousRoute.current
+    previousRoute.current = key
+    if (previous === undefined || previous === key) return
+    const active = document.activeElement
+    if (active && active !== document.body) return
+    const head = document.querySelector('.sa-page-head-title') ?? scroller.current
+    if (!(head instanceof HTMLElement)) return
+    if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1')
+    head.focus()
   }, [location.route.page, location.route.id])
   // Ctrl/Cmd+K opens the search palette; `/` does too when the user is not typing in a field.
   useEffect(() => {

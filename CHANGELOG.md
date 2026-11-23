@@ -1,5 +1,137 @@
 # Changelog
 
+## [1.1.7] — 2026-11-23
+
+整体审查后的第六批修复（P3 批量）：一次 429/5xx 就让整次执行变红、GitLab 的登录页被报成「JSON 无效」、流水线第二页的失败 job 看不见、超长 job 日志整份读进内存、判定模型的输入没有上限，以及面板侧「失败和成功长得一样」的六处细节。
+
+### 根因与修改
+
+- **一次 429/5xx 让整次执行失败**：`gitlab.js` / `github.js` 的请求层没有重试，GitLab 侧抖一下就是一张红工单等人工重跑。现在只有幂等读（GET）会重试，默认三次、指数退避（500ms 起）、尊重 `Retry-After`（上限 5 秒）；写请求（建 MR、合并、发 note）一次都不重试，避免重复建单。
+- **登录页被读成「JSON 无效」**：token/SSO 过期时 GitLab 回 200 + HTML 登录页，旧代码把它报成 invalid JSON，看的人以为是响应格式问题。现在按 `content-type`（或正文以 `<` 开头）识别为「返回了 HTML 页面，令牌或 SSO 会话可能已过期，请重新登录」。
+- **流水线第二页的失败 job 看不见**：`listPipelineJobs` 只取首页 100 条，矩阵构建超过 100 个 job 时，第二页的失败被 `summarizeJobs` 判成绿、执行器照常放行。现在按页读到不满一页为止（上限 10 页）。
+- **job 日志整份进内存**：`getJobTrace` 先 `response.text()` 再截尾，几十 MB 的 trace 全量进了内存和事件循环。现在优先流式读取、只保留尾部窗口；注入的 fetch 没有可读流时回退到原路径。
+- **判定模型的输入没有上限**：`judge` 把整条消息原样作为 `state` 发给 provider，长消息既可能被截断也可能超时。现在 `clampJudgeState()` 在 8000 字符处从中间省略（保留开头 6000 + 结尾 2000 并写明省略了多少）。
+- **失败提示和成功提示一样**：`notify(text, 'error')` 的第二参被 `notify` 丢掉，保存失败与保存成功同色同语气。现在 toast 接收 `tone`，失败渲染为 `.sa-toast-error` + `role="alert"`（新增 CSS 规则）。
+- **删除失败但对话框关掉**：Bot 删除（`settings.js`）与收件箱「忽略并清理」（`overview.js`）都吞掉异常后正常返回，`ConfirmButton` 判成功、对话框关闭，而对象还在。现在抛出错误，对话框保留并显示原因。
+- **`tone="warn"` 是没有的档位**：Tag 只有 `warning`，`tone="warn"` 让降级提示退化无警示色。
+- **`scrollIntoView` 又回来了**：设置页跳组、跳段与外壳页签滚动都用它，会把宿主外框一起带动（正是之前移除它的原因）。现在统一走 `scrollPanelTo`。
+- **快速切文件看到旧 diff**：`loadDiff` 无序列号，慢的旧响应会覆盖新选择。现在只有最新一次请求能写状态。
+- **`i18n.js` 的三个未用 import**（`Input`、`same`/`stay`、`apply`）顺手删掉，也解开了 i18n↔controls↔api↔apply 的循环依赖。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 703 pass / 0 fail（新增 7 条：读请求重试而写请求不重试、200 HTML 登录页的提示、流水线第二页的失败 job、流式 trace 只留尾部、GitHub 503 重试与 HTML 提示、超长消息中间省略）。
+- `node scripts/render-check.mjs` → 311 checks / ok:true / 0 fail / 0 skip（新增两条：失败动作是 `role="alert"` 的 `.sa-toast-error`、该规则真的写在 CSS 里）。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 负向验证：去掉 `tone` 透传后 toast 检查拿到 `sa-toast role=status`；GitLab 写请求的 503 计数为 1（重试会重复建 MR）。
+
+## [1.1.6] — 2026-11-23
+
+整体审查后的第五批修复（P2，Host 侧十二条）：并发写丢更新、孤儿工单每两分钟撞一次平台 API、信号日志只增不减、机器人自己的回复回流成候选、重放被双击成两张工单、UUID 事件永久重取、`tkt_1` 的工作树被当成 `tkt_10` 的、没有 base 时推送守卫不扫已提交的密钥、旧 MR 状态盖住新 MR、远端删掉分支后跳过 push、MR 建失败读成已交付、`/gate` 同步等到分钟级操作跑完。
+
+### 根因与修改
+
+- **设置自动化丢掉一次执行**：`setTicketAutomation` 在临界区外以 `this.state.tickets[id]` 快照做 `normalizeAutomation`，再进 `atomic` 写回；调度 tick（`executions+1`、写 `nextAt`）插在中间时被整块覆盖，并可能把 `nextAt` 退回已触发的档位再派一次。现在 normalize 与合并都在同一个 `atomic` 里、读 `doc.tickets[id]`。
+- **孤儿工单每 `verifySeconds` 撞一次平台 API**：`failed|pushed` 且有分支、没有 MR 的工单几乎每张都算孤儿，`reconcileTicketFromGitlab` 在 `no-mr` 时直接返回且不记尝试数，于是永久 120 秒一次。现在 `links.reconcile` 记 `attempts`/`nextAt`（10 分钟起、指数退避到 12 小时、8 次后 `exhausted`），`reconcileDue()` 决定这一轮要不要问，成功路径清掉它。
+- **信号日志的回收豁免让上限失效**：`sweepPayloads`/`sweepScope` 对所有带 `decisionId|triggerId` 的行永久跳过，而每条被处理的消息都会被盖上这两个字段——2000/scope 只约束被过滤掉的行，`candidate.text` 永久保留，每次 commit 整份 `JSON.stringify`。现在豁免有 30 天时限，过期后正文照常清掉。
+- **events 入口的过滤器比 sync 少五条**：`candidateOf(event)` 只查 channel 与监听群，`allowAnyHuman` 开启时机器人自己的回复会回流成新候选（自触发循环）。现在两条入口共用 `messageSkipReason()`：channel、监听群、系统消息、非文本、bot 自己、bot 发送者、回复前缀。
+- **双击重放会建两张工单**：幂等检查在 `atomic` 外，两次并发都读不到对方的 replay decision。现在写库的同一个 `atomic` 里再查一次，命中就返回已存的那条（不 absorb）。
+- **UUID 事件永久重取**：非数字 cursor 被刻意不写回，`failed` 时 `nextCursor` 退回原值，于是同一事件每次重取、每次失败。现在 `live-state.json` 记最近 500 个 `handledEvents`，处理过的事件直接 `already-handled` 跳过并 ack。
+- **`tkt_1` 命中 `tkt_10` 的工作树**：`git worktree list` 的解析用 `block.startsWith('worktree ' + path)` 做前缀匹配，短 id 读到长 id 的块 → 分支不符 → `worktree-conflict`。现在按整行精确比较。
+- **没有 base commit 时推送守卫不扫已提交文件**：`changedPaths` 的 `git diff base...HEAD` 失败被静默吞掉，publish 的 `baseSha` 是 `.catch(() => undefined)`，于是只剩 `git status`，已提交的 `.env` 之类不会被发现。现在 base 缺失或 diff 失败时用 `git log --name-only HEAD --not --remotes` 兜底，兜底也失败则报错；publish 把取不到路径的原因写进日志而不是静默空列表。
+- **旧 MR 状态盖住新 MR**：发布收尾用 `['merged','deployed'].includes(ticket.status)` 无条件保留 merged，而验证已被清空、链上的是新开的 MR。现在只在本次真的合并（`mergedNow`）时写 merged。
+- **远端分支被删后跳过 push**：publish 的 `reusePushed` 只信本地 `links.push.sha`，不读远端。现在复用前用 `remoteBranchSha()` 校验（`checked` 且 sha 相等才复用），远端没了就重推。
+- **MR 建失败被读成已交付**：api 模式下非 `mr_lookup_failed` 的 MR 创建失败只写 `run.errorCode`，随后 `run.status = ticket.status`（`pushed`），证据按成功写。现在记 `run.mergeRequestUnconfirmed`、工单链 `mergeRequest.pending/unverified/error`，`run.status` 保持 `failed`。
+- **`/gate` 同步等到分钟级操作跑完**：`release` 会跑闸门、commit、push、开 MR（可能含数分钟的 `postGatesCommand`），却和 `/publish`（202）不同步。现在默认 202 + 后台执行，`wait: true` 保留同步形式；`未知工单→404`、`不处于 gate-blocked→409` 这两类拒绝提到启动之前，不会出现「202 之后才发现工单不在等闸门」。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 696 pass / 0 fail（新增 7 条：自动化合并在文档上而非快照、复用的远端分支被删后重推、UUID 事件不重复处理且 `handledEvents` 有界、`tkt_1`/`tkt_10` 工作树互不干扰、base 缺失仍能扫到已提交的 `Secrets/key.pem`、evidence 超过 30 天后正文清掉、`/gate` 默认 202）。
+- `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 负向验证：改动前 `setTicketAutomation` 的旧实现会让新断言读到 `intervalMinutes: 15`（排队中的 tick 写的 45 被覆盖）；移除 `handledEvents` 后第二次 poll 会重新记一条信号而不是 `already-handled`。
+
+## [1.1.5] — 2026-11-23
+
+整体审查后的第四批修复（P2，客户端优先）：一次没回音的请求会把轮询队列永久卡住、等回答的工单在两个分组里各算一半、Bot 改名会留下一份旧副本、没选线程时每 30 秒请求一次 `thread/undefined`。
+
+### 根因与修改
+
+- **一次挂起的请求冻结整个面板**：`apiCall` 用裸 `fetch`，没有超时也没有 `AbortSignal`；`usePoll` 的队列是 `queue = queue.then(once)`，`once` 只有 `fetch` 返回才会结束——连接半开时队列永远 pending，错误不出现、下一次轮询也不排期，页面停在上一份文档或骨架屏。现在读请求 20 秒、写请求 2 分钟超时（`AbortController`），超时抛 `ApiError`（`status 0`、`details.timeout`）并提示「服务可能仍在处理」；跑闸门/等待式运行这两条本来就以分钟计的路线传 `timeoutMs: 0`，不会被切断在半次提交中间。
+- **等回答的工单在芯片与行之间错位**：Host 的 `STAGE_OF_STATUS`（`lib/live/engine.js`）缺 `awaiting-answer`，落回 `working`；而面板的 `TICKET_VIEW` 把它归在 `waiting`。于是「等你处理」芯片少一张、`working` 多一张，点进去的行数与芯片不符。Host 补 `'awaiting-answer': 'waiting'`，两侧同一口径。
+- **Bot 改名保存出两个 Bot**：`save` 用 `bots.filter(item => item.id !== bot.id)` 排除被编辑的那一行，而 `bot.id` 取自**表单**；把 id 从 `mine` 改成 `mine2` 时旧 id 不在排除列表里，旧 Bot 原样留在 store。现在同时排除 `editor.id`（打开编辑器时的 id）。
+- **没选线程也在轮询 `thread/undefined`**：`ThreadDetail` 调 `useLiveResource('engine/thread/:key', { key: threadKey }, 30000)` 时没传 `{ enabled }`，`threadKey` 为空时路由把 `undefined` 编进路径，每 30 秒一个 404。现在传 `{ enabled: Boolean(threadKey) }`。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 689 pass / 0 fail（新增一条：`awaiting-answer` 的工单进 `waiting` 分组、不进 `working`，且芯片计数与行数一致）。
+- `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip（新增三条：改名只留一份、请求超时而不是永久挂起、无线程时不发请求）。
+- 负向验证：把 `timeoutMs` 改回 0 → 超时检查报 `still pending` 且整轮 exit 1；把排除条件改回只看 `bot.id` → 改名检查报 `["generalist","surgical","reviewer","mine","mine2"]`。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+
+## [1.1.4] — 2026-11-23
+
+整体审查后的第三批修复：全部落在界面契约上——弹窗不说明它要做什么、整行点击靠一层伪元素、页标题与「需求」各说一遍、路由切换把键盘用户丢在 `<body>`、品牌色铺到开关和设置左栏、以及十一条细则（字号、禁用态、术语表、时长与失败原因的读法）。
+
+### 根因与修改
+
+- **弹窗只报名字，不报后果**：`Modal` 的 `description` 渲染成裸 `<p>`，`role="dialog"` 只有 `aria-label`，读屏只会念标题；打开时也不锁页面滚动，背后的长页面还能滚。现在每个弹窗用自己的 `aria-describedby` 指向那句后果说明（`sa-modal-desc-N`），打开时 `body.overflow = hidden` 并在关闭/卸载时还原。
+- **整行可点靠 `::after` 覆盖层**：行内主按钮只有标题那么大，点击区由 `.sa-open::after { inset: 0 }` 撑出来，还带 `outline: none` + 只画伪元素的焦点环。DESIGN.md §Rows 明文禁止这条路，而且覆盖层会吃掉 chips 的命中/hover 语义。现在主列就是真按钮（`button.sa-row-open > .sa-row-main`，`align-items: stretch`），删掉 `::after` 与 `outline: none`，焦点环回到按钮本身；执行台的栅格列也改由按钮持有（`.sa-exec-queue .sa-row .sa-row-open { grid-column: 2 }`）。
+- **页标题与「需求」重复**：工单标题本身常常就是需求原文，下面「需求」段把同一段再印一遍，页头又折成两三行。现在 `requestIsTitle()` 判断「正文与标题同一段」时不再渲染需求段、对应的跳转项也一并收起，页头两行截断、全文进 `title`。审查里「页标题应为 h1」这条经实测不成立——外壳已经有页面唯一的 `h1.sa-title`「超级智能体」（`client/src/shell.js`），页头再出一个 h1 就是两个；页头保持 `h2`，DESIGN.md 已写清这条层级。
+- **路由切换丢焦点**：`PanelShell` 只重置滚动，点进去的那一行按钮随即卸载，焦点落到 `<body>`。现在路由变化（且焦点本来不在别处）时把焦点交给新页面的 `.sa-page-head-title`（必要时补 `tabindex="-1"`），与搜索面板原有的做法一致。
+- **品牌色超量**：开关选中态挂 `brand-primary` 底色、设置左栏当前项挂品牌色左边框，同屏出现三处品牌色。现在两处改用 `--dsw-alias-interactive-bg-active` 中性底色（带回退），品牌色只留当前页签下划线；危险动作统一 `variant="danger"`（忽略/停止确认、打回验收，原来是 `primary` 与 `outline`）。
+- **十一条细则**：warning 内联色改 `--sa-warn-text`；输入框 hover 改底色而非换边框色；禁用态 opacity 统一 0.4（原来 0.55/0.72/0.4 三种）；裸 `gap: 2px|1px` 改 `var(--sa-sp-2)`；开关圆点 50% → `var(--sa-r-pill)`；diff 正文 11px → 12px；补 `.sa-signal-toggle/.sa-signal-text/.sa-signal-full` 样式（原来 role=button 的信号预览没有 cursor、没有焦点环、命中区只有 12px 高）；术语表补「验收/在飞/干跑/接单/发布」五条。
+- **概览的可读性**：平均耗时原来直接印 `659.9s`，现在 `durationText()` 输出 `11m`／`1m 30s`（整分省秒）；旧数据里已带标签的失败原因会二次包裹成「其他原因：其他原因：…」，`collapseRepeats()` 先收起连续重复段，`failureReasonTextOf()` 再检测已有前缀，不再叠加。
+
+### 验证
+
+- `node scripts/render-check.mjs` → 305 checks / ok:true / 0 fail / 0 skip（新增 15 条：行按钮持有主列、路由切换焦点、单 h1、弹窗 `aria-describedby` 与滚动锁、滚动释放、品牌色只在下划线、禁用态单一 opacity、信号触发器 cursor/焦点环、diff 字号、`requestIsTitle`、`durationText`、失败原因去重、危险确认语气）。
+- `node --test lib/live/*.test.js` → 688 pass / 0 fail；`npm run types`、`npm run check:js`、`node scripts/check-keys.mjs`、`node scripts/build-client.mjs --check` 全绿。
+- `DESIGN.md` 同步两处：Page 标题是每页唯一的 `h1` 且两行截断；One Accent Rule 明确开关与设置左栏的选中态用中性底色，品牌色留给页签下划线。
+
+## [1.1.3] — 2026-11-23
+
+整体审查后的第二批修复：全部是「记录的数据与实际发生的事对不上」——轮询丢了消息还说同步完成、轮询链每保存一次设置就翻一倍、关掉的收件箱项再也不回来、停机时把没落盘的游标 ack 掉、后台批次失败无人接收、UAT 结果落在别的仓库卡上、详情页草稿跟着路由跑到别的工单。
+
+### 根因与修改
+
+- **停机后的消息缺口被静默吞掉**：`pollSync` 用 `syncMessages({ limit: 100 })`（`--start-message-seq/--end-message-seq` 恒为 0），只拿最新一窗，然后把 cursor 无条件推到批内 maxSeq。停机超过 100 条时中间的缺口永远不会被读，且 `lastStatus` 说同步成功。现在 `syncMessages({ fromSeq, toSeq })` 传真实窗口，新增 `fillSyncGap()`：满批且 `oldest-1 >= baseline+1` 时按区间补拉一次；补拉后仍有缺口就把 `{ chatId, from, to }` 记录进 `result.gaps` / `lastStatus.gaps` 并写日志，剩余缺口不再当作已同步。
+- **轮询链倍增**：`schedule()` / `scheduleVerify()` / `scheduleAutomation()` 的 `setTimeout` 回调跑完会无条件重新排期，`refresh()` 之后新旧两条链同时自续，每保存一次设置 poll 频率就翻一倍。三条链各用一个世代令牌（`pollGeneration` / `verifyGeneration` / `automationGeneration`），旧链在回调里发现世代已变就直接退出。
+- **收件箱项解决后永不回来**：`applyDesiredInbox` 的 upsert 保留 `resolvedAt`，而 dedupeKey 是稳定的（`engine:last`、`source:<id>`、`accept:<ticketId>`），所以同一个错误手动 resolve 一次，90 天内同样的错误再现也不会进收件箱，也没有任何「重新打开」入口。现在条件复发时重开：自动解决（`resolvedAction === 'auto'`）后再现同文即重开；手动解决后需要内容或时间真的变了（`changedSinceResolve()` 比对 kind/title/summary 与 `refs.at|updatedAt|lastAt`）才重开，重开时清掉 `resolvedAt`/`resolvedAction`/`readAt` 并计入 `result.reopened`。
+- **停机时 ack 掉没落盘的事件**：`pollEvents` 先 `state.save()` 再 ack，但 `stop()` 先 `state.close()`，此后 `save()` 是 no-op，ack 却照发——游标都没落盘就把服务端事件标成已读。现在 `state.closed` 时不 ack，并记一条 `ack skipped: engine stopped before N recorded events were persisted`。
+- **自动批次失败无人接收**：`pollSync` 末尾 `this.dispatchQueue = this.autoExecute(ids)` 没有 catch，`autoExecute` 抛错就是 unhandled rejection（Node 下会打挂 host 进程）。现在 `.catch()` 记日志 `auto-run batch failed: …`。
+- **UAT 结果落在别的仓库卡上**：客户端 `checkUat()` 不带参数、结果只存一份，`uatResult(source)` 又对每张执行仓库卡渲染同一份结果；host 侧找不到指定仓库时还会回落 `web-uat` 或 `repos[0]`。现在 `checkUat(repoId)` 带仓库、结果按 `repoId` 分组渲染，host 对「指定了不存在的仓库」答 404，只有完全没指定时才按 `web-uat` 挑默认。
+- **详情页草稿跟着路由跑到别的工单**：`TicketDetail` 的两个挂载点（执行页、概览深链）没有 `key`，换 id 时 React 复用同一个组件实例，上一张工单的追加需求、回答框与 待确认状态 都会留在新工单上；`usePoll` 换 deps 也不清旧 `data`。现在两个挂载点都写 `key={route.id}`，`usePoll` 在 deps 变化时先清空上一份数据。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：688 pass / 0 fail（新增 7 条：满批补拉用真实 `fromSeq/toSeq` 且补拉消息被处理；超大缺口记进 `result.gaps` 与 `lastStatus.gaps` 且 cursor 仍前进；补拉抛错时记 `range read failed` 且最新窗仍处理；`schedule()` 跑三次 tick 只有一条链；`state.closed` 后 `pollEvents` 不 ack；`autoExecute` 抛错被 `.catch` 记日志；收件箱自动/手动解决后的重开口径）。
+- `node scripts/render-check.mjs`：290 checks / 0 fail（新增 4 条：UAT 请求带上被点的仓库且只有那张卡显示结果；换工单后详情草稿不残留）。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs`：24 modules / 529880 bytes（`--check` up to date）；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+
+---
+
+## [1.1.2] — 2026-11-23
+
+整体审查后的第一批修复，全部是「开关与守卫被绕过」这一类：执行器关着仍能交付、token 被静默删除、推送守卫漏大小写、并发保存丢配置、Bot 文件可覆盖 live.json、群消息可重复发送。
+
+### 根因与修改
+
+- **群消息重试没有幂等键（P0）**：`lib/live/octo.js` 的 `run(argv)` 对任意命令在 stderr 命中 `TRANSIENT_RE` 时都重试一次，`sendText` 正是走它。消息已入库但返回时超时/断开就会发两遍。现在 `run(argv, { retry = true })`，`sendText` 传 `{ retry: false }`：只有 poll/ack/sync/list 这类幂等调用还会重试。
+- **执行器总开关可被绕过**：`/gate`、`/resume`、`/answer` 三个路由没有 `requireExecutor`（`/run`、`/publish` 有），且 `resumeTicketInner` 只算 `allowPush`、不查 `executor.enabled`。关闭执行器后点「放行」照样 commit + push + 开 MR。现在三个路由补 `requireExecutor(engine, { dryRun: false })`，`resumeTicketInner`/`answerTicketInner` 各自加 `if (!dryRun && !config.executor.enabled) return { invalid }`；`action==='stop'` 仍然允许（它只结束一次运行），`answerTicketInner` 的检查在写入 Q/A 之前，被拒的回答不会把工单推到 `ready`。路由层用新助手 `ticketDryRun()` 取该工单上一次运行的 `dryRun`，与 `/run` 的口径一致——干跑不写任何东西，执行器关着也能回答/放行。
+- **仓库 token 被静默删除**：`POST engine/repo/:id/token` 把 `body?.token` 直接交给 `saveRepoToken`，非字符串被 `saveTokenFile` 当成 `''`（= 断开连接）→ 已存 token 被 `rm`。现在与 octo/eval token 路由一致，非字符串答 400。
+- **推送守卫漏大小写**：`lib/live/repo.js` 的 `FORBIDDEN_PATH_PATTERNS` 没有 `i` 标志（同文件 `SECRET_PATH_PATTERNS` 有）。在大小写不敏感的 APFS/Windows 上 worker 建 `.ENV` 就是 `.env`，守卫放行。九个模式统一补 `i`。
+- **live.json 三个写入口绕过串行队列**：只有 `updateLiveConfig` 在 `configWrites` 队列里；`addRepoDefinition` / `updateRepoDefinition` / `restoreLiveConfig` 是裸 read-modify-write，且临时名 `${pid}.${Date.now()}.tmp` 同毫秒不唯一。现在四个入口共用同一队列，临时名统一走 `tmpPath()`（带 6 字节随机后缀）。
+- **Bot 文件可覆盖 live.json**：`executor.botsFile` 只校验「裸文件名」，写成 `live.json` 就能让每次保存 Bot 把配置与工单整份覆盖。`botsFileOf` 现在拒绝 stateDir 保留名（`live.json` / `live-state.json` / `operations.json` / `shadow-samples.json` / `backend-verify.json` / 各 `*.token` / `live-history` `runs` `evidence` `worktrees` 目录），它自己的默认名 `worker-bots.json` 仍是唯一合法占用者。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：681 pass / 0 fail（新增 6 条：`sendText` 遇到 socket hang up 只调用一次；仓库加库与保存设置并发时两者都落盘、无 tmp 残留、两份快照完整；`.ENV`/`Secrets/`/`Node_Modules/` 被判为禁止路径；`botsFile` 拒绝 live.json/LIVE.JSON/live-state.json/gitlab.token/octo.token 且接受 worker-bots.json；执行器关闭时 release+retry 均被拒、stop 仍生效、无任何 git 命令；执行器关闭时 answerTicket 不写 Q/A 且工单留在 `awaiting-answer`，打开后同一回答可通过；路由级：非字符串 token 答 400 且已存 token 仍在，`/gate` `/resume` `/answer` 在关闭执行器时答 403）。
+- `node scripts/render-check.mjs`：286 checks / 0 fail。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs --check`：24 modules / 529684 bytes up to date（本次无客户端改动）；`npm run types`、`npm run check:js`、`node --check index.js`、`npm ci` 全绿。
+
+---
+
 ## [1.1.1] — 2026-11-23
 
 交付之后才失败（MR 流水线红了、dev 部署 job 红了、MR 被关掉）的工单，在面板里点不动：行内只有「查看原因」，菜单里的「发布 MR」被状态白名单挡住，而「重试」即便跑起来也会复用那张**已经合并**的 MR，于是永远盯着旧 merge commit 的流水线。

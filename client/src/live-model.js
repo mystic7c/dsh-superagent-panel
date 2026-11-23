@@ -13,7 +13,7 @@ import { React, h, useCallback, useMemo } from "./react.js"
  * @typedef {{
  *   poll: (options?: any) => Promise<any>,
  *   reloadConfig: () => Promise<any>,
- *   checkUat: () => Promise<any>,
+ *   checkUat: (repoId?: string) => Promise<any>,
  *   previewRoute: (options?: any) => Promise<any>,
  *   createTicket: (options: any) => Promise<any>,
  *   runTicket: (id: string, options?: any) => Promise<any>,
@@ -59,7 +59,9 @@ export function useEngineActions(call) {
   return useMemo(() => ({
     poll: ({ dryRun = true } = /** @type {any} */ ({})) => call('POST engine/poll', { body: { dryRun } }),
     reloadConfig: () => call('POST engine/reload'),
-    checkUat: async () => (await call('POST engine/uat-check')).uat,
+    // `repoId` is required in spirit: without it the host falls back to "the repository that has a UAT url", which is
+    // how one repository's answer used to be shown on another repository's card.
+    checkUat: async (repoId) => (await call('POST engine/uat-check', { body: repoId ? { repoId } : {} })).uat,
     // Draft routing preview (AC-01): same resolver as execution, no Ticket/run/write side effects.
     previewRoute: ({ title, body, selection } = /** @type {any} */ ({})) => call('POST engine/route',
       { body: { title, body, ...(selection ? { selection } : {}) } }),
@@ -69,8 +71,9 @@ export function useEngineActions(call) {
       { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
     // `bot` is the one-run override from the detail page (worker-bots spec §7.6): it never changes the Ticket.
     /** @type {(id: string, options?: {dryRun?: boolean, wait?: boolean, bot?: string}) => Promise<any>} */
+    // `wait` means the host answers only after the run ends, so the request must not be cut off by the write timeout.
     runTicket: (id, { dryRun = true, wait = false, bot } = {}) => call('POST engine/ticket/:id/run',
-      { id, body: { dryRun, wait, ...(bot ? { bot } : {}) } }),
+      { id, body: { dryRun, wait, ...(bot ? { bot } : {}) }, ...wait ? { timeoutMs: 0 } : {} }),
     // Worker bots live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
     bots: () => call('GET engine/bots'),
     saveBots: bots => call('POST engine/bots', { body: { bots } }),
@@ -109,8 +112,9 @@ export function useEngineActions(call) {
     loadInbox: () => call('GET engine/inbox'),
     // The three human decisions on a parked gate (P0-3): release skips the gate and delivers, retry re-runs the
     // gates, stop fails the Ticket. The host answers { run, ticket }.
+    // Release runs the gates, the commit, the push and the MR in one request — minutes, not seconds.
     gateAction: (id, action, note) => call('POST engine/ticket/:id/gate',
-      { id, body: { action, ...(note === undefined ? {} : { note }) } }),
+      { id, body: { action, ...(note === undefined ? {} : { note }) }, timeoutMs: 0 }),
     // Hide a failed/unused Ticket and clean its local worktree + branch (host does the cleanup before dismissing).
     dismissTicket: (id, note) => call('POST engine/ticket/:id/dismiss', { id, body: note ? { note } : {} }),
     patchSettings: (patch) => call('POST engine/settings', { body: patch }),

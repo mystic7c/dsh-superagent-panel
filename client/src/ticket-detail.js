@@ -892,7 +892,7 @@ export function RunBot({ run, choices = [], onRerun }) {
       <Tag tone="outline">{pt(t, 'detail.botLabel')}</Tag>
       <span>{adhoc ? pt(t, 'detail.botAdhoc', { id }) : id}</span>
       <span className="sa-hint">{`${source} · ${String(bot.reason ?? '')}`}</span>
-      {degraded ? <Tag tone="warn" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
+      {degraded ? <Tag tone="warning" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
     </p>
     <p className="sa-hint">
       {capabilities.length
@@ -901,7 +901,7 @@ export function RunBot({ run, choices = [], onRerun }) {
         : pt(t, 'detail.botCapabilityNone')}
     </p>
     {unverified
-      ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
+      ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
         {pt(t, 'detail.botUnverified', { backend: String(bot.backend ?? bot.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
       : null}
     <p className="sa-row-meta">
@@ -1377,7 +1377,9 @@ export const DETAIL_JUMPS = [
 export function ticketVisibleJumps(ticket, hasGateResults) {
   const status = typeof ticket?.status === 'string' ? ticket.status : ''
   return DETAIL_JUMPS.filter(jump => {
-    if (jump.id === 'sa-ticket-request') return Boolean(ticket?.body)
+    // The request section is also hidden when the body only repeats the title (the head shows it), so the jump for it
+    // must disappear with the section: a jump that scrolls to nothing reads as a broken link.
+    if (jump.id === 'sa-ticket-request') return !requestIsTitle(ticket)
     if (jump.id === 'sa-automation') return !['dismissed', 'closed'].includes(status)
     if (jump.id === 'sa-ticket-gates') return Boolean(hasGateResults)
     return true
@@ -1467,6 +1469,16 @@ export function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
   </div>
 }
 
+/** Whitespace-insensitive comparison for "the body is just the title": both come from the same message text. */
+function normalized(value) {
+  return String(value ?? '').replace(/\s+/g, ' ').trim()
+}
+
+/** A Ticket whose body only repeats its title renders the head alone; printing 「需求」 again would say it twice. */
+export function requestIsTitle(ticket) {
+  return !ticket?.body || normalized(ticket.body) === normalized(ticket.title)
+}
+
 export function TicketDetail({ id, page = 'execution', focusRun }) {
   const { t, navigate, notify, back } = usePanel()
   const model = usePanelData()
@@ -1528,14 +1540,18 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const act = model?.actions
   const refreshAll = useCallback(async () => { await Promise.all([model?.reload?.(), reload()]) }, [model, reload])
   // The diff dialog fetches once, on first open; a retry button re-issues the same read.
+  // Clicking through files quickly used to leave the slowest (oldest) read on screen: only the newest request may write.
+  const diffSeq = useRef(0)
   const loadDiff = useCallback(async (path) => {
     if (!act?.ticketDiff) return
+    const seq = (diffSeq.current = (diffSeq.current ?? 0) + 1)
     setDiff({ loading: true, path })
     try {
       const data = await act.ticketDiff(id, { path })
+      if (seq !== diffSeq.current) return
       setDiff(data === undefined ? { path, gone: true } : { path, data })
     }
-    catch (error) { setDiff({ error, path }) }
+    catch (error) { if (seq === diffSeq.current) setDiff({ error, path }) }
   }, [act, id])
   // One file at a time: the row the operator clicked is the only thing the dialog fetches and shows.
   const openDiff = (path) => {
@@ -2110,12 +2126,13 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     </Section> : null}
 
     {/* R2-09: the request is read first, expanded by default; it used to be folded inside "what changed", which hid
-        the one thing a Ticket is about behind a disclosure on the far side of the grid. */}
-    {ticket.body
-      ? <Section id="sa-ticket-request" title={pt(t, 'ticket.request')}>
+        the one thing a Ticket is about behind a disclosure on the far side of the grid. A Ticket whose body is just
+        its title printed the same paragraph twice (the head already shows it), so that case renders the head alone. */}
+    {requestIsTitle(ticket)
+      ? null
+      : <Section id="sa-ticket-request" title={pt(t, 'ticket.request')}>
         <div className="sa-ticket-request"><MarkdownLite text={ticket.body} /></div>
-      </Section>
-      : null}
+      </Section>}
 
     {/* 1. What changed: repository, changed files and the worker's summary — gates stay in their section. */}
     <Section id="sa-ticket-changes" title={pt(t, 'ticket.changes')}>
@@ -2266,7 +2283,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
             <ConfirmButton label={pt(t, 'ticket.acceptFail')} title={pt(t, 'ticket.acceptFailTitle')}
               message={pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id })}
               confirmLabel={pt(t, 'detail.confirmAcceptFail')}
-              variant="outline" icon="blocked" onConfirm={async () => { await acceptFail.run(rejectIntents) }} />
+              variant="danger" icon="blocked" onConfirm={async () => { await acceptFail.run(rejectIntents) }} />
           </div>
         </>
         : !canAccept && !accepted && hasAcceptanceEvidence
