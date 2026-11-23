@@ -808,6 +808,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-modal-description { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--dsw-alias-label-secondary); }
 .sa-modal-body { margin-top: 0; }
 .sa-modal-footer { margin-top: 0; display: flex; justify-content: flex-end; gap: var(--sa-sp-8); flex-wrap: wrap; }
+.sa-toast-error { color: var(--sa-danger-text, var(--dsw-alias-state-error-primary)); }
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);
   border-radius: var(--sa-r-md, 8px); background: var(--dsw-alias-toast-bg, var(--dsw-alias-bg-overlay));

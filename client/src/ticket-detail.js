@@ -892,7 +892,7 @@ export function RunBot({ run, choices = [], onRerun }) {
       <Tag tone="outline">{pt(t, 'detail.botLabel')}</Tag>
       <span>{adhoc ? pt(t, 'detail.botAdhoc', { id }) : id}</span>
       <span className="sa-hint">{`${source} · ${String(bot.reason ?? '')}`}</span>
-      {degraded ? <Tag tone="warn" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
+      {degraded ? <Tag tone="warning" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
     </p>
     <p className="sa-hint">
       {capabilities.length
@@ -1540,14 +1540,18 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const act = model?.actions
   const refreshAll = useCallback(async () => { await Promise.all([model?.reload?.(), reload()]) }, [model, reload])
   // The diff dialog fetches once, on first open; a retry button re-issues the same read.
+  // Clicking through files quickly used to leave the slowest (oldest) read on screen: only the newest request may write.
+  const diffSeq = useRef(0)
   const loadDiff = useCallback(async (path) => {
     if (!act?.ticketDiff) return
+    const seq = (diffSeq.current = (diffSeq.current ?? 0) + 1)
     setDiff({ loading: true, path })
     try {
       const data = await act.ticketDiff(id, { path })
+      if (seq !== diffSeq.current) return
       setDiff(data === undefined ? { path, gone: true } : { path, data })
     }
-    catch (error) { setDiff({ error, path }) }
+    catch (error) { if (seq === diffSeq.current) setDiff({ error, path }) }
   }, [act, id])
   // One file at a time: the row the operator clicked is the only thing the dialog fetches and shows.
   const openDiff = (path) => {

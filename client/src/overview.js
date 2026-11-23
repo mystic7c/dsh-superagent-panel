@@ -413,7 +413,7 @@ export function LiveOverviewPage({ route }) {
     try {
       await actions.dismissTicket(ticketId)
       notify(pt(t, 'ov.inboxDismissDone'))
-    } catch (failure) { notify(errorText(failure)) } finally {
+    } catch (failure) { notify(errorText(failure), 'error'); throw failure } finally {
       await inbox.reload?.()
       await reload()
     }

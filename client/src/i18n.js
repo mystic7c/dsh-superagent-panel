@@ -2,9 +2,7 @@
    object. The panel follows the Harness locale service (`locale.getSnapshot().active`) and falls back to the browser
    language when the service is absent, so it never needs the host's dictionary registry to render. */
 
-import { Input } from "./controls.js"
-import { same, stay } from "./api.js"
-import { apply } from "./apply.js"
+// No imports from controls/api/apply here: nothing in this file used them, and they formed a require cycle.
 import { React, h, useEffect, useMemo, useState } from "./react.js"
 export const TEXT = {
   title: ['超级智能体', 'Superagent'],

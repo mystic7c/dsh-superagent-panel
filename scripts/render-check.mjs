@@ -476,7 +476,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
   ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
-  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
+  PanelProvider,
   botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
@@ -496,6 +497,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   prunePageQuery: 'router.js',
   RawSignalRows: 'source.js',
   Panel: 'api.js',
+  usePanel: 'api.js',
+  PanelProvider: 'api.js',
   signalReasonText: 'source.js',
   failureLabel: 'live-ui.js',
   workflowBlockedDetail: 'live-ui.js',
@@ -2170,6 +2173,28 @@ console.log('STEP pure projections')
     !/项待配置/.test(barHost.textContent ?? ''), (barHost.textContent ?? '').slice(0, 160))
   barRoot.unmount()
   barHost.remove()
+
+  // P3: notify(text, 'error') used to drop the second argument, so a failed save and a saved save looked identical.
+  const toastHost = document.createElement('div')
+  document.body.appendChild(toastHost)
+  const toastRoot = ReactDOM.createRoot(toastHost)
+  const Notifier = ({ tone }) => {
+    const { notify } = usePanel()
+    React.useEffect(() => { notify('保存失败：服务不可用', tone) }, [tone])
+    return null
+  }
+  toastRoot.render(React.createElement(PanelProvider,
+    { t, call: async () => ({}), navigate() {}, back() {}, openSession: async () => {} },
+    React.createElement(Notifier, { tone: 'error' })))
+  await sleep(120)
+  const failedToast = toastHost.querySelector('.sa-toast')
+  check('a failed action is announced as an alert, not as a status line (P3)',
+    failedToast?.className === 'sa-toast sa-toast-error' && failedToast?.getAttribute('role') === 'alert',
+    `${failedToast?.className} role=${failedToast?.getAttribute('role')}`)
+  toastRoot.unmount()
+  toastHost.remove()
+  check('the error toast has its own rule so the colour is not a class with no style (P3)',
+    /\.sa-toast-error\s*\{[^}]*--sa-danger-text/.test(PANEL_CSS), PANEL_CSS.includes('.sa-toast-error'))
 
   // R2-12: credentials are 令牌/未配置, chats are 群 ID — one vocabulary across settings, sources and tickets.
   check('credentials and chats use one vocabulary (R2-12)',

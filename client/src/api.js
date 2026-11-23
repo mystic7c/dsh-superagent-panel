@@ -131,11 +131,12 @@ export function useAction(action, options = {}) {
   return { run, busy }
 }
 
-export function Toast({ text, toastKey, onDone, holdMs = 4000 }) {
+export function Toast({ text, tone, toastKey, onDone, holdMs = 4000 }) {
   const done = useRef(onDone)
   done.current = onDone
   useEffect(() => { const timer = setTimeout(() => done.current(), holdMs + 1000); return () => clearTimeout(timer) }, [toastKey, holdMs])
-  return h('div', { className: 'sa-toast', role: 'status' }, text)
+  const failed = tone === 'error'
+  return h('div', { className: failed ? 'sa-toast sa-toast-error' : 'sa-toast', role: failed ? 'alert' : 'status' }, text)
 }
 
 export const stay = () => {}
@@ -149,11 +150,14 @@ export function PanelProvider({ t, openSession = noSession, navigate = stay, bac
   copy.current = t
   const call = useMemo(() => caller(key => copy.current(key)), [])
   const [toast, setToast] = useState()
-  const notify = useCallback(text => setToast({ text, id: Date.now() }), [])
+  // `tone` was accepted and dropped by callers (`notify(errorText(failure), 'error')`), so a failed save and a saved
+  // save looked the same. A failure now keeps the message on screen as an alert with the danger colour.
+  const notify = useCallback((text, tone) => setToast({ text, tone, id: Date.now() }), [])
   const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route }),
     [t, call, navigate, back, backLabel, openSession, notify, route])
   return h(Panel.Provider, { value: context },
     h('style', null, PANEL_CSS),
     children,
-    toast && h(Toast, { key: toast.id, toastKey: toast.id, text: toast.text, onDone: () => setToast(undefined) }))
+    toast && h(Toast, { key: toast.id, toastKey: toast.id, text: toast.text, tone: toast.tone,
+      onDone: () => setToast(undefined) }))
 }

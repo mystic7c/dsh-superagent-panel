@@ -3,7 +3,7 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
-import { Icon, hhmm } from "./util.js"
+import { Icon, hhmm, scrollPanelTo } from "./util.js"
 import { errorText, fullTime, when } from "./i18n.js"
 import { Button, IconButton, Input, Menu, Modal, SegmentedTabs, StatusIcon, Tag } from "./controls.js"
 import { Panel, PanelProvider, PanelState, same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -285,7 +285,7 @@ export function pageView(page) {
 }
 
 export function Pages({ route }) {
-  useEffect(() => { document.getElementById(`sa-tab-${route.page}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }) }, [route.page])
+  useEffect(() => { scrollPanelTo(document.getElementById(`sa-tab-${route.page}`), { behavior: 'auto', gap: 0 }) }, [route.page])
   const Page = pageView(route.page)
   return <div className="sa-main" id="sa-page" role="tabpanel" aria-labelledby={`sa-tab-${route.page}`}>
     <Page route={route} />

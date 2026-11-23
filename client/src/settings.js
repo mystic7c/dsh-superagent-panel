@@ -1,4 +1,4 @@
-import { API, Icon, hhmmss, hostName, hostOfUrl } from "./util.js"
+import { API, Icon, hhmmss, hostName, hostOfUrl, scrollPanelTo } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
 import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
@@ -587,9 +587,9 @@ export const settingsOmit = (object, key) => {
   return next
 }
 
-/** Scroll a node into view where the DOM supports it; test DOMs may not implement scrollIntoView. */
+/** Scroll a node into view inside the panel, never by moving the host window (scrollIntoView drags the outer frame). */
 export const revealNode = node => {
-  if (node && typeof node.scrollIntoView === 'function') node.scrollIntoView({ block: 'center' })
+  scrollPanelTo(node, { align: 'center' })
 }
 
 /** Draft comparison: booleans by value, numbers/strings by their text form (the number input holds a string). */
@@ -1280,10 +1280,12 @@ export function BotsCard() {
     } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
   }
   const remove = async bot => {
+    // Swallowing the failure made ConfirmButton treat the delete as done and close the dialog while the Bot was still
+    // there. Re-throw so the dialog stays open with the reason next to it.
     try {
       const saved = await actions.saveBots(bots.filter(item => item.id !== bot.id).map(stripBotForSave))
       if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
-    } catch (failure) { setSaveError(failure) }
+    } catch (failure) { setSaveError(failure); throw failure }
   }
   const verify = async backend => {
     setVerifying(backend)
@@ -2720,11 +2722,8 @@ export function LiveSettingsPage({ route }) {
     if (id === active) return
     setActive(id)
     navigate({ page: 'settings', group: id }, true)
-    // Defer past the render, and stay defensive: scrollIntoView is not implemented in every test DOM.
-    setTimeout(() => {
-      const body = bodyRef.current
-      if (body && typeof body.scrollIntoView === 'function') body.scrollIntoView({ block: 'start' })
-    }, 0)
+    // Defer past the render; scroll the panel, not the host frame (scrollIntoView moves the outer window too).
+    setTimeout(() => { scrollPanelTo(bodyRef.current, { behavior: 'auto' }) }, 0)
   }
   const settingsNavButton = group => <button key={group.id} type="button"
     className="sa-settings-group" aria-current={active === group.id ? 'true' : undefined}

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.1.7] — 2026-11-23
+
+整体审查后的第六批修复（P3 批量）：一次 429/5xx 就让整次执行变红、GitLab 的登录页被报成「JSON 无效」、流水线第二页的失败 job 看不见、超长 job 日志整份读进内存、判定模型的输入没有上限，以及面板侧「失败和成功长得一样」的六处细节。
+
+### 根因与修改
+
+- **一次 429/5xx 让整次执行失败**：`gitlab.js` / `github.js` 的请求层没有重试，GitLab 侧抖一下就是一张红工单等人工重跑。现在只有幂等读（GET）会重试，默认三次、指数退避（500ms 起）、尊重 `Retry-After`（上限 5 秒）；写请求（建 MR、合并、发 note）一次都不重试，避免重复建单。
+- **登录页被读成「JSON 无效」**：token/SSO 过期时 GitLab 回 200 + HTML 登录页，旧代码把它报成 invalid JSON，看的人以为是响应格式问题。现在按 `content-type`（或正文以 `<` 开头）识别为「返回了 HTML 页面，令牌或 SSO 会话可能已过期，请重新登录」。
+- **流水线第二页的失败 job 看不见**：`listPipelineJobs` 只取首页 100 条，矩阵构建超过 100 个 job 时，第二页的失败被 `summarizeJobs` 判成绿、执行器照常放行。现在按页读到不满一页为止（上限 10 页）。
+- **job 日志整份进内存**：`getJobTrace` 先 `response.text()` 再截尾，几十 MB 的 trace 全量进了内存和事件循环。现在优先流式读取、只保留尾部窗口；注入的 fetch 没有可读流时回退到原路径。
+- **判定模型的输入没有上限**：`judge` 把整条消息原样作为 `state` 发给 provider，长消息既可能被截断也可能超时。现在 `clampJudgeState()` 在 8000 字符处从中间省略（保留开头 6000 + 结尾 2000 并写明省略了多少）。
+- **失败提示和成功提示一样**：`notify(text, 'error')` 的第二参被 `notify` 丢掉，保存失败与保存成功同色同语气。现在 toast 接收 `tone`，失败渲染为 `.sa-toast-error` + `role="alert"`（新增 CSS 规则）。
+- **删除失败但对话框关掉**：Bot 删除（`settings.js`）与收件箱「忽略并清理」（`overview.js`）都吞掉异常后正常返回，`ConfirmButton` 判成功、对话框关闭，而对象还在。现在抛出错误，对话框保留并显示原因。
+- **`tone="warn"` 是没有的档位**：Tag 只有 `warning`，`tone="warn"` 让降级提示退化无警示色。
+- **`scrollIntoView` 又回来了**：设置页跳组、跳段与外壳页签滚动都用它，会把宿主外框一起带动（正是之前移除它的原因）。现在统一走 `scrollPanelTo`。
+- **快速切文件看到旧 diff**：`loadDiff` 无序列号，慢的旧响应会覆盖新选择。现在只有最新一次请求能写状态。
+- **`i18n.js` 的三个未用 import**（`Input`、`same`/`stay`、`apply`）顺手删掉，也解开了 i18n↔controls↔api↔apply 的循环依赖。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 703 pass / 0 fail（新增 7 条：读请求重试而写请求不重试、200 HTML 登录页的提示、流水线第二页的失败 job、流式 trace 只留尾部、GitHub 503 重试与 HTML 提示、超长消息中间省略）。
+- `node scripts/render-check.mjs` → 311 checks / ok:true / 0 fail / 0 skip（新增两条：失败动作是 `role="alert"` 的 `.sa-toast-error`、该规则真的写在 CSS 里）。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 负向验证：去掉 `tone` 透传后 toast 检查拿到 `sa-toast role=status`；GitLab 写请求的 503 计数为 1（重试会重复建 MR）。
+
 ## [1.1.6] — 2026-11-23
 
 整体审查后的第五批修复（P2，Host 侧十二条）：并发写丢更新、孤儿工单每两分钟撞一次平台 API、信号日志只增不减、机器人自己的回复回流成候选、重放被双击成两张工单、UUID 事件永久重取、`tkt_1` 的工作树被当成 `tkt_10` 的、没有 base 时推送守卫不扫已提交的密钥、旧 MR 状态盖住新 MR、远端删掉分支后跳过 push、MR 建失败读成已交付、`/gate` 同步等到分钟级操作跑完。
