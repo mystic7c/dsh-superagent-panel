@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.3] — 2026-11-23
+
+整体审查后的第二批修复：全部是「记录的数据与实际发生的事对不上」——轮询丢了消息还说同步完成、轮询链每保存一次设置就翻一倍、关掉的收件箱项再也不回来、停机时把没落盘的游标 ack 掉、后台批次失败无人接收、UAT 结果落在别的仓库卡上、详情页草稿跟着路由跑到别的工单。
+
+### 根因与修改
+
+- **停机后的消息缺口被静默吞掉**：`pollSync` 用 `syncMessages({ limit: 100 })`（`--start-message-seq/--end-message-seq` 恒为 0），只拿最新一窗，然后把 cursor 无条件推到批内 maxSeq。停机超过 100 条时中间的缺口永远不会被读，且 `lastStatus` 说同步成功。现在 `syncMessages({ fromSeq, toSeq })` 传真实窗口，新增 `fillSyncGap()`：满批且 `oldest-1 >= baseline+1` 时按区间补拉一次；补拉后仍有缺口就把 `{ chatId, from, to }` 记录进 `result.gaps` / `lastStatus.gaps` 并写日志，剩余缺口不再当作已同步。
+- **轮询链倍增**：`schedule()` / `scheduleVerify()` / `scheduleAutomation()` 的 `setTimeout` 回调跑完会无条件重新排期，`refresh()` 之后新旧两条链同时自续，每保存一次设置 poll 频率就翻一倍。三条链各用一个世代令牌（`pollGeneration` / `verifyGeneration` / `automationGeneration`），旧链在回调里发现世代已变就直接退出。
+- **收件箱项解决后永不回来**：`applyDesiredInbox` 的 upsert 保留 `resolvedAt`，而 dedupeKey 是稳定的（`engine:last`、`source:<id>`、`accept:<ticketId>`），所以同一个错误手动 resolve 一次，90 天内同样的错误再现也不会进收件箱，也没有任何「重新打开」入口。现在条件复发时重开：自动解决（`resolvedAction === 'auto'`）后再现同文即重开；手动解决后需要内容或时间真的变了（`changedSinceResolve()` 比对 kind/title/summary 与 `refs.at|updatedAt|lastAt`）才重开，重开时清掉 `resolvedAt`/`resolvedAction`/`readAt` 并计入 `result.reopened`。
+- **停机时 ack 掉没落盘的事件**：`pollEvents` 先 `state.save()` 再 ack，但 `stop()` 先 `state.close()`，此后 `save()` 是 no-op，ack 却照发——游标都没落盘就把服务端事件标成已读。现在 `state.closed` 时不 ack，并记一条 `ack skipped: engine stopped before N recorded events were persisted`。
+- **自动批次失败无人接收**：`pollSync` 末尾 `this.dispatchQueue = this.autoExecute(ids)` 没有 catch，`autoExecute` 抛错就是 unhandled rejection（Node 下会打挂 host 进程）。现在 `.catch()` 记日志 `auto-run batch failed: …`。
+- **UAT 结果落在别的仓库卡上**：客户端 `checkUat()` 不带参数、结果只存一份，`uatResult(source)` 又对每张执行仓库卡渲染同一份结果；host 侧找不到指定仓库时还会回落 `web-uat` 或 `repos[0]`。现在 `checkUat(repoId)` 带仓库、结果按 `repoId` 分组渲染，host 对「指定了不存在的仓库」答 404，只有完全没指定时才按 `web-uat` 挑默认。
+- **详情页草稿跟着路由跑到别的工单**：`TicketDetail` 的两个挂载点（执行页、概览深链）没有 `key`，换 id 时 React 复用同一个组件实例，上一张工单的追加需求、回答框与 待确认状态 都会留在新工单上；`usePoll` 换 deps 也不清旧 `data`。现在两个挂载点都写 `key={route.id}`，`usePoll` 在 deps 变化时先清空上一份数据。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：688 pass / 0 fail（新增 7 条：满批补拉用真实 `fromSeq/toSeq` 且补拉消息被处理；超大缺口记进 `result.gaps` 与 `lastStatus.gaps` 且 cursor 仍前进；补拉抛错时记 `range read failed` 且最新窗仍处理；`schedule()` 跑三次 tick 只有一条链；`state.closed` 后 `pollEvents` 不 ack；`autoExecute` 抛错被 `.catch` 记日志；收件箱自动/手动解决后的重开口径）。
+- `node scripts/render-check.mjs`：290 checks / 0 fail（新增 4 条：UAT 请求带上被点的仓库且只有那张卡显示结果；换工单后详情草稿不残留）。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs`：24 modules / 529880 bytes（`--check` up to date）；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+
+---
+
 ## [1.1.2] — 2026-11-23
 
 整体审查后的第一批修复，全部是「开关与守卫被绕过」这一类：执行器关着仍能交付、token 被静默删除、推送守卫漏大小写、并发保存丢配置、Bot 文件可覆盖 live.json、群消息可重复发送。

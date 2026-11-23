@@ -402,7 +402,8 @@ export function LiveSourcePage({ route }) {
   const { t, navigate, notify } = usePanel()
   const focusId = typeof route?.id === 'string' && route.id.trim() ? route.id.trim() : ''
   const { data, error, reload, actions } = usePanelData()
-  const [uat, setUat] = useState()
+  // Keyed by repo id: one shared slot meant a UAT check started on one repository card answered for all of them.
+  const [uat, setUat] = useState({})
   const [uatBusy, setUatBusy] = useState(false)
   const filteredRef = useRef(null)
   const poll = useAction(() => actions.poll({ dryRun: true }), { reload })
@@ -410,10 +411,11 @@ export function LiveSourcePage({ route }) {
     await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
     notify(pt(t, 'automation.started'))
   }, { reload })
-  const checkUat = async () => {
+  const checkUat = async (repoId) => {
+    if (!repoId) return
     setUatBusy(true)
-    try { setUat(await actions.checkUat()) }
-    catch (failure) { setUat({ ok: false, error: errorText(failure) }) }
+    try { const result = await actions.checkUat(repoId); setUat(previous => ({ ...previous, [repoId]: result })) }
+    catch (failure) { setUat(previous => ({ ...previous, [repoId]: { ok: false, error: errorText(failure) } })) }
     finally { setUatBusy(false) }
   }
   const focusFiltered = () => scrollPanelTo(filteredRef.current)
@@ -593,18 +595,20 @@ export function LiveSourcePage({ route }) {
       // A `manual` repository has no UAT to check (contract §12.3); keep the project link as its one action.
       isManual(source) ? null
         : h(Button, { key: 'uat', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-          disabled: uatBusy, onClick: () => { void checkUat() } }, pt(t, 'src.action.uat')),
+          disabled: uatBusy || !source.repoId, onClick: () => { void checkUat(source.repoId) } },
+          pt(t, 'src.action.uat')),
       projectUrl ? h(ExternalLink, { key: 'project', href: projectUrl }, pt(t, 'src.action.project')) : null,
     ]
   }
   const uatResult = (source) => {
-    if (!isExecutionSource(source) || isManual(source) || !uat) return null
-    const label = uat.ok
-      ? pt(t, 'src.uatOk', { status: uat.status ?? '—' })
-      : pt(t, 'src.uatFail', { error: uat.error ?? uat.status ?? '—' })
+    const checked = uat[source.repoId]
+    if (!isExecutionSource(source) || isManual(source) || !checked) return null
+    const label = checked.ok
+      ? pt(t, 'src.uatOk', { status: checked.status ?? '—' })
+      : pt(t, 'src.uatFail', { error: checked.error ?? checked.status ?? '—' })
     return h('div', { className: 'sa-actions' },
-      h(StatusText, { state: uat.ok ? 'done' : 'error' }, label),
-      uat.checkedAt ? h('span', { className: 'sa-row-meta' }, h(When, { at: uat.checkedAt })) : null)
+      h(StatusText, { state: checked.ok ? 'done' : 'error' }, label),
+      checked.checkedAt ? h('span', { className: 'sa-row-meta' }, h(When, { at: checked.checkedAt })) : null)
   }
   const renderCard = (source) => {
     const view = sourceStateView(source)

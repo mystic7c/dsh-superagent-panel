@@ -2070,7 +2070,9 @@ export function LiveSettingsPage({ route }) {
     if (uatState.busy) return
     setUatState({ busy: true })
     try {
-      const uat = await actions.checkUat()
+      // Ask for the default repository explicitly: the host's "any repository with a UAT url" fallback made this line
+      // the answer for a card that was never checked.
+      const uat = await actions.checkUat(defaultRepoId)
       setUatState({ busy: false, view: settingsUatView(t, uat) })
     } catch (failure) {
       setUatState({ busy: false, view: { state: 'error', text: pt(t, 'st.uatFail'), raw: errorText(failure) } })

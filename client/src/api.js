@@ -62,6 +62,9 @@ export function usePoll(load, deps, intervalMs = 5000) {
     let active = true
     let timer
     let queue = Promise.resolve()
+    // New deps mean "different page of data": the previous document must not stay on screen while the new one loads
+    // (it also kept the old error alive, so a working id could open showing the last id's failure).
+    setState(previous => (previous.data === undefined && previous.error === undefined ? previous : {}))
     const once = async () => {
       clearTimeout(timer)
       try {

@@ -351,7 +351,7 @@ export function LiveOverviewPage({ route }) {
   const metricsResource = useLiveResource('engine/metrics', { window: '24h' }, 30000, { enabled: Boolean(data) })
 
   // A ticket id on the overview route is a deep link: the full detail replaces the desk, as on every other tab.
-  if (route?.id) return h(TicketDetail, { id: route.id, page: 'overview' })
+  if (route?.id) return h(TicketDetail, { key: route.id, id: route.id, page: 'overview' })
   // First paint only; a failed poll keeps the last good document on screen (§7: polling never flashes a skeleton).
   if (!data) return error ? h(ErrorState, { error, onRetry: () => { void reload() } }) : h(Skeleton, { rows: 4 })
 

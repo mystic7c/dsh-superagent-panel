@@ -388,5 +388,9 @@ export function ExecutionQueuePage({ route }) {
 /** A deep-linked Ticket renders the full detail on this tab; otherwise the stage-grouped queue (a `stage` route
     arrives from the Overview's watch items, which deep-link the dismissed slice). */
 export function LiveExecutionPage({ route }) {
-  return route?.id ? h(TicketDetail, { id: route.id, page: 'execution', focusRun: route.run }) : h(ExecutionQueuePage, { route })
+  // `key` is the id: without it React kept one mounted detail across two ids, so the previous ticket's draft
+  // requirement text, answer box and pending state survived the jump (review C-14).
+  return route?.id
+    ? h(TicketDetail, { key: route.id, id: route.id, page: 'execution', focusRun: route.run })
+    : h(ExecutionQueuePage, { route })
 }

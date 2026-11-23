@@ -334,8 +334,12 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'uat-check') {
           const config = engine.readConfig().config
           const repoId = body?.repoId ?? url.searchParams.get('repo')
-          const repo = (repoId ? config.repos.find(item => item.id === repoId) : undefined)
-            ?? config.repos.find(item => item.verifyMode === 'web-uat') ?? config.repos[0]
+          // An explicit id has to resolve: falling back to "some repository that has a UAT url" answered with another
+          // repository's build for the card the operator actually clicked (review C-13).
+          const repo = repoId
+            ? config.repos.find(item => item.id === repoId)
+            : config.repos.find(item => item.verifyMode === 'web-uat') ?? config.repos[0]
+          if (repoId && !repo) throw new ActionError(404, `仓库不存在：${repoId}`)
           if (!repo?.gitlab.uatUrl) throw new ActionError(400, `${repo?.name ?? '该仓库'} 没有配置 UAT 地址`)
           send(res, 200, { uat: await checkUat(repo.gitlab.uatUrl) })
           return

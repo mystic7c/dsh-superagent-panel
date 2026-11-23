@@ -176,6 +176,8 @@ engine.state.tickets[demoReadyId] = {
 engine.state.state.ticketOrder.push(demoReadyId)
 engine.state.runs.unshift({ id: 'run_demo_ready', ticketId: demoReadyId, status: 'dry-run', dryRun: true,
   startedAt: nowIso, completedAt: nowIso,
+  // A finished dry run normally has a patch; without one the detail has no changes form to type a revision into.
+  changedPaths: ['demo/ready/File.java'],
   steps: [{ name: 'prepare-worktree', state: 'ok', at: nowIso }, { name: 'worker', state: 'ok', at: nowIso },
     { name: 'changed-paths', state: 'ok', at: nowIso }, { name: 'gate:standards', state: 'ok', at: nowIso },
     { name: 'finish', state: 'ok', at: nowIso }] })
@@ -305,6 +307,8 @@ let lastCreateRequest = null
 let lastStopId = null
 // U-06 (N3): the confirmation must send the draft it re-reads, so the check asserts the patch body itself.
 let lastSettingsBody = null
+// C-13: the UAT check is per repository, so both the request body and the answer are asserted.
+let lastUatBody = null
 // AC-07 deep-link probe: set just before the source-page remount so earlier checks still see the real (empty) log.
 let signalFixture
 window.fetch = global.fetch = async (input, init = {}) => {
@@ -332,6 +336,11 @@ window.fetch = global.fetch = async (input, init = {}) => {
     signals: { total: 0, processed: 0, ignored: 0, skipped: 0, failed: 0, labels: { correct: 0, false_wake: 0, missed_wake: 0, cleared: 0 } },
     cost: { available: false, note: 'not available in this check' },
   })
+  if (method === 'POST' && p === 'engine/uat-check') {
+    lastUatBody = init.body ? JSON.parse(String(init.body)) : null
+    // A status nobody else can produce: whichever card shows "299" is the card that was actually checked.
+    return json({ uat: { ok: true, status: 299, checkedAt: new Date().toISOString() } })
+  }
   const readItem = /^engine\/inbox\/([^/]+)\/read$/.exec(p)
   if (method === 'POST' && readItem) {
     const item = fixtures.inbox.items.find(candidate => candidate.id === decodeURIComponent(readItem[1]))
@@ -1111,6 +1120,13 @@ check('acceptance posts to engine/ticket/:id/accept', Boolean(acceptCall), Strin
 const back = rootElement.querySelector('.sa-page-head button')
 back?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(1200)
+// The desk is read from the list route explicitly: the head's first button is not guaranteed to be the back link on a
+// detail page, and this check is about what the desk derives, not about the affordance.
+if (rootElement.querySelector('#sa-ticket-changes')) {
+  window.location.hash = `#sa=${encodeURIComponent(JSON.stringify({ page: 'execution' }))}`
+  window.dispatchEvent(new window.HashChangeEvent('hashchange'))
+  await sleep(800)
+}
 const deskText = text()
 // Other tickets (e.g. the two failed ones in real state) stay in "needs you", so count the accept actions rather than
 // assuming an empty desk after one acceptance.
@@ -1135,6 +1151,29 @@ if (sourcePageReady) {
   check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('代码仓库'), sourceText.slice(0, 260))
   check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
     String(rootElement.querySelectorAll('.sa-cards-2').length))
+  // C-13: one repository's check used to be rendered on every repository card and asked the host for "whatever repo has
+  // a UAT url". The clicked card must carry the answer, and no other card may.
+  const sourceCards = () => [...rootElement.querySelectorAll('.sa-main .sa-cards-2 .sa-card')]
+  // The card to check is whichever execution card actually offers the action (a `manual` repository has no UAT).
+  const uatButtonOf = (card) => [...card.querySelectorAll('button')]
+    .find(node => (node.textContent ?? '').trim() === '检查 UAT')
+  const checkedCard = sourceCards().find(card => { const button = uatButtonOf(card); return Boolean(button) && !button.disabled })
+  const checkedRepo = checkedCard
+    ? liveRepos.find(repo => (checkedCard.textContent ?? '').includes(repo.gitlab.project || repo.id)) : undefined
+  const cardUat = checkedCard ? uatButtonOf(checkedCard) : undefined
+  if (!checkedCard || !checkedRepo) skip('the UAT answer lands on the repository that was checked', 'no repository card offers an enabled UAT check')
+  else {
+    const lastRepo = checkedRepo
+    const lastCard = checkedCard
+    cardUat.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(500)
+    check('the UAT request names the clicked repository', lastUatBody?.repoId === lastRepo.id,
+      `${JSON.stringify(lastUatBody)} disabled=${cardUat.disabled} uat=${calls.filter(call => call.includes('uat')).join(',')}`)
+    check('the UAT answer lands on the repository that was checked',
+      (lastCard.textContent ?? '').includes('299') && sourceCards()
+        .filter(card => card !== lastCard).every(card => !(card.textContent ?? '').includes('299')),
+      sourceCards().map(card => (card.textContent ?? '').slice(0, 90)).join(' | '))
+  }
 } else {
   for (const name of ['source page shows both repositories', 'source page groups IM and code repositories', 'source cards use the two-up grid']) {
     skip(name, 'octo is not configured on this machine, so the source page renders its empty state')
@@ -1468,6 +1507,36 @@ readyRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('cl
 await sleep(1200)
 const readyPrimary = [...rootElement.querySelectorAll('.sa-page-head-actions .sa-btn-primary')].map(node => (node.textContent ?? '').trim())
 check('a finished dry run makes 发布 MR the primary action', readyPrimary.includes('发布 MR'), JSON.stringify(readyPrimary))
+// C-14: the detail page is keyed by the Ticket id. Opening another Ticket in place used to reuse the same mounted
+// detail, so the previous Ticket's drafts came back on a Ticket they were never written for.
+{
+  const openRow = async (title) => {
+    const row = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
+      .find(node => (node.textContent ?? '').includes(title))
+    row?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(1200)
+  }
+  const leaveDetail = async () => {
+    rootElement.querySelector('.sa-page-head button')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(1200)
+  }
+  const draftOf = () => rootElement.querySelector('#sa-ticket-changes .sa-revision-input')
+  const draft = draftOf()
+  if (!draft) skip('a detail draft does not come back with the previous Ticket', 'the fixture Ticket has no changes form')
+  else {
+    const propsKey = Object.keys(draft).find(key => key.startsWith('__reactProps$'))
+    propsKey ? draft[propsKey].onChange?.({ target: { value: '草稿：只属于 tkt_demo_ready' } }) : undefined
+    await sleep(120)
+    check('a detail draft is accepted on the current Ticket', (draftOf()?.value ?? '') !== '', draftOf()?.value ?? 'no value')
+    await leaveDetail()
+    await openRow('演示：正在执行的工单')
+    await leaveDetail()
+    await openRow('演示：干跑完成待发布')
+    const carried = draftOf()?.value ?? ''
+    check('a detail draft does not come back with the previous Ticket', carried === '', JSON.stringify(carried))
+  }
+}
+
 rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
 const readyMenu = rootElement.querySelector('[role="menu"]')?.textContent ?? ''
