@@ -1,5 +1,113 @@
 # Changelog
 
+## [1.0.21] — 2026-11-22
+
+`docs/worker-bots-spec.md` §10.2（阶段级 Bot 与阶段级预算）落地。此前 `stages` 只能写阶段名，一个 Bot 的所有阶段共用同一后端/模型/预算；现在某个阶段可以指定**另一个 Bot** 和它自己的预算，没指定的阶段继续用整单 Bot。
+
+### 根因与修改
+
+- **数据通路**：`lib/live/worker-bot.js` 的 `stages` 条目接受 `"implement"` 或 `{ "stage": "review", "bot": "rechecker", "budget": { "timeoutMs": 600000 } }`；新增 `stageNamesOf()`（取名字，给工作流用）与 `stageBotOf()`，`normalizeStages()` 保留对象形态并按 stage 名去重，`sortBot` 让阶段对象的键序稳定（文件与 digest 可复现）。
+- **保存期校验**：阶段名仍必须是有序子序列且含 implement+gates；阶段对象额外要求 `stage` 合法、`bot` 匹配 Bot id 且（`environment.botIds` 给出时）确实存在、不得引用自身、`budget` 各键在 §6 区间 —— 分别报 `BOT_STAGES_INVALID` / `BOT_BUDGET_INVALID`。`engine.saveBots` 现在把「内置 Bot + 本次提交的 Bot」的 id 列表一并交给校验，所以引用不存在的 Bot 存不进去。
+- **派单期**：`executor` 在整单 Bot 解析后构造 `stageBots`，用与候选完全相同的判定（`dispatch.environmentOf`：同一个探针、同一个版本/启用规则）校验阶段 Bot；不通过就按该 Bot 的错误码拒单（例如阶段 Bot 后端未核验 → `BOT_BACKEND_UNVERIFIED`，消息带「阶段 review 的 Bot xxx」）。阶段 Bot 的后端可以与整单不同，只看它自己是否核验通过。
+- **生效**：被指定 Bot 的那个阶段用阶段 Bot 的 backend/model/preset/effort/deny/allowMcp；预算按「阶段 budget > 阶段 Bot 预算 > 整单 Bot 预算 > executor 默认」，`timeoutMs`/`idleTimeoutMs` 都按这条链取。`stages` 传给工作流时用 `stageNamesOf()`，避免对象形态破坏阶段判定。
+- **面板**：设置页的 Bot 表单仍只编辑阶段勾选（阶段 Bot 选择器属 P6），但 `botToForm`/`formToBot` 会把 `{bot, budget}` 原样带过保存，不会静默丢字段。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **666 pass / 0 fail**。新增：`executor.test.js` 两条（阶段 Bot 用 claude + sonnet-4 + 600000ms 跑 review、其余阶段仍走 dsh；阶段 Bot 未核验时拒单且不执行命令）；`worker-bot.test.js` 两条（阶段对象归一化与键序；未知 Bot/自引用/越界预算/非法阶段名的错误码）。修复过程中发现：阶段 Bot 的 claude 模型是 `{provider, model}` 对象，CLI 只吃 model id，已在 workflow-worker 的 cli 分支取 `model?.model`。
+- `node scripts/build-client.mjs` 24 modules / 526072 bytes 且 `--check` up to date；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+
+### 升级提示
+
+- 现有 Bot 文件无需迁移：`stages: ["implement","gates"]` 仍有效。阶段级写法是新增能力，不写就等于整单 Bot。
+- 阶段 Bot 必须自己核验通过（dsh 走探针，claude/codex 需要 `<stateDir>/backend-verify.json` 里的 smoke 证据），否则整个 run 拒单，不会悄悄退回整单 Bot。
+
+## [1.0.20] — 2026-11-22
+
+用 dev 实例（`scripts/dev.mjs`，链接工作树、`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-dev-state`）在真实宿主 0.2.2-rc.5 上实测 Bot 页，桌面 profile 未动。三个问题：两个把设置页打成 500，一个是探针在真机上永远测不出能力。
+
+### 根因与修改
+
+- **Cordis 未声明属性会抛异常**：`hostVersionOf` 里 `ctx?.hostVersion`、`probeBackend` 里 `ctx?.stateDir` 在宿主上是 `cannot get property "hostVersion" without inject`（不是 undefined），`GET engine/bots` 直接 500（1.0.18 引入的回归）。改为：`hostVersionOf` 用 try/catch 包住注入读取；`probeBackend` 新增显式 `stateDir` 参数（JSDoc 写明不从宿主 Context 上读），`engine.backendStateOf` 传 `this.stateDir`，`executor.probesForRun` 透传 `engine.stateDir`。回归测试用 Proxy 模拟严格 Context（未知键抛错，仍能取到 `DSH_VERSION`）。
+- **真机探针三能力全 false**：宿主全局 `tools` 注册表只列 MCP/team/workspace 等 49 个工具，`write`/`edit`/`bash`/`web_*` 是随 agent 注册的；`agentPresets.resolve()` 只返回 `{ id }`，没有 `tools`。于是 `dsh` 探针「成功」却报 `{edit:false,exec:false,web:false}`，候选集恒空 —— 等于整个功能不可用。改为：新增 `compositionModulesOf(ctx, presetId)` 读 `agentPresets.inspectCompositions()`（或 `compositionInventory()`）里该 preset 的 `modules`，新增 `MODULE_CAPABILITIES`（`dsh-tool-fs`/`dsh-tool-apply-patch`/`dsh-tool-notebook` → edit；`dsh-tool-bash`/`dsh-tool-bash-persistent`/`dsh-terminal-bash` → exec；`dsh-tool-web` → web），能力 = 工具名命中 **或** preset 挂载了对应插件；`dsh-tool-fs-search` 不算 edit（只读搜索）。证据行新增 `evidence.modules`（前 40 个模块名），两边都读不到才退回 `fallback`（全未核验）。
+
+### 验证
+
+- dev 实例（端口 63419）：`GET engine/bots` → 200，`backends.dsh` = `state:"verified"`, `source:"probe"`, `{edit:true,exec:true,web:true}`；`claude`/`codex` = `unverified`（fallback），保存 claude Bot 仍被拒（`BOT_BACKEND_UNVERIFIED`）；保存 dsh Bot 成功，写入 `/tmp/sa-dev-state/worker-bots.json`（`version: 2`）。桌面 profile 未安装、未启动。
+- `node --test lib/live/*.test.js` → **664 pass / 0 fail**（新增两条：composition 作为证据、search-only fs 不给 edit）；`node scripts/build-client.mjs` 24 modules / 525702 bytes 且 `--check` up to date；`check-keys` 1051/530/1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+- 文档：`docs/worker-bots-spec.md` §3.3 补「DSH 探针的证据来源」（工具名 ∪ preset 组成），§3.7 版本来源处补「`stateDir` 是参数，不从 Context 读」。
+
+### 升级提示
+
+- 1.0.18/1.0.19 若在真实宿主上打开 Bot 页报 `cannot get property … without inject`，升级到本版即可；无需改配置。
+- 能力表仍只用于拒绝：composition 是宿主运行时声明，`routing.js` 的静态表不授权任何能力。
+
+## [1.0.19] — 2026-11-22
+
+把「档位（profile）」整套命名换成 **Bot（bot）**（`docs/worker-bots-spec.md` 附录 C）：用户定义、面向一类固定重复工作的执行者。行为不变，但对操作员可见的每一条路径都换了名字，旧配置与旧 Bot 文件需要按附录 C 迁移。
+
+### 改名：代码、配置、文件、UI
+
+- `lib/live/worker-profile.js` → `lib/live/worker-bot.js`（测试同 ren 名）；`readProfiles`/`writeProfiles`/`saveProfiles`/`normalizeProfiles`/`normalizeProfile`/`validateProfile`/`resolveProfile`/`synthesizeProfile`/`parseProfilesDocument` → `readBots`/`writeBots`/`saveBots`/`normalizeBots`/`normalizeBot`/`validateBot`/`resolveBot`/`synthesizeBot`/`parseBotsDocument`；`BUILTIN_PROFILES`/`BUILTIN_PROFILE_IDS`/`DEFAULT_PROFILE_ID` → `BUILTIN_BOTS`/`BUILTIN_BOT_IDS`/`DEFAULT_BOT_ID`；`profilesView`/`profileDrift`/`profileChoices`/`profileSetDigest`/`profilesDigest`/`profilesPath`/`profilePromptSections` → `botsView`/`botDrift`/`botChoices`/`botSetDigest`/`botsDigest`/`botsPath`/`botPromptSections`。
+- 错误码前缀 `PROFILE_*` → `BOT_*`（含 `BOT_FILE_CORRUPT`、`BOT_FILE_VERSION_UNSUPPORTED`、`BOT_BACKEND_*`、`BOT_CAPABILITY_GAP`、`DISPATCH_RULE_BOT_UNKNOWN` 等，见附录 A）。
+- `live.json`：`executor.profile` → `executor.bot`、`executor.profilesFile` → `executor.botsFile`、`dispatch.rules[].profile` → `.bot`、`repos[].profile` / `octo.chatRepos[].profile` → `.bot`；工单字段 `profileOverride` → `botOverride`；运行记录 `run.profile` / `run.profileId` → `run.bot` / `run.botId`；阶段配置 `stages[].profile` → `stages[].bot`。
+- Bot 文件：`<stateDir>/worker-profiles.json` → `<stateDir>/worker-bots.json`，文档 `version` 1 → **2**；读到旧 `version: 1` 直接拒绝（`BOT_FILE_VERSION_UNSUPPORTED`）并提示「旧版档位文件（version 1）…重命名并改 version 后重试」，不猜键名、不静默退回内置（§4.1/§4.6）。
+- 面板：设置页「档位」组 → 「Bot」，页内文案（内置三个 Bot、换 Bot 重跑、存为 Bot、Bot 文件、后端核验）、`st.profiles*` → `st.bots*`、详情页 `detail.profile*` → `detail.bot*`、`sa-run-profile` → `sa-run-bot`；API `GET/POST engine/profiles`、`POST engine/profiles/verify` → `engine/bots`、`engine/bots/verify`。
+- 保留不动：`execProfile` / `ROUTE_PROFILES` / `routeProfile`（都是 routing 的只读·可写判定，与 Bot 无关）；DSH 安装 profile（`--profile desktop`）同理。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **662 pass / 0 fail**（新增一条：旧 `version: 1` Bot 文件被拒并给出改名提示；`version: 9` 仍是「请升级插件」）。
+- `node scripts/build-client.mjs` → 24 modules / 525702 bytes，`--check` up to date；`node scripts/check-keys.mjs` → 1051 / 530 / 1496；`npm run types`、`npm run check:js`（`tsconfig.check.json` 的文件清单同步改名）、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+- 文档：`docs/worker-bots-spec.md` 头部实现进度与附录 C 标注「已在 v1.0.19 落地」，§3.7 补版本来源口径，§9.3 改按宿主 `llm.resolveModel` 取目录（`modelDirectories` 只在客户端注册）。
+
+### 升级提示
+
+- 自定义 Bot 需从 `worker-profiles.json`（`version: 1`）改名为 `worker-bots.json` 并把 `version` 改成 `2`；字段名不变，仅文件与版本号变化。
+- `live.json` 里旧的 `executor.profile` / `profilesFile` / `dispatch.rules[].profile` / `repos[].profile` 现在会被忽略（键不存在），请在设置页重新指认，或按附录 C 手改。
+
+## [1.0.18] — 2026-11-22
+
+按 `docs/worker-bots-spec.md`（v3，即 1.0.15–1.0.17 期间评审过的 v2 规则，只改了「档位 → Bot」命名）做了一轮契约合规修复：1.0.17 的测试全绿，但闸门绿不等于契约符合 —— 对照 §3.2/§3.5/§3.7/§4.1/§9.3/§12 逐条核对后，有五处实现与规范相反，另有四处根本没接上。
+
+### 修复 1：能力表只用于拒绝，未核验的后端不再靠它放行（§3.5 / §3.2 / I3）
+
+- 根因：`dispatch.js` 的默认层有一条 `unverifiable()` 分支，后端探针是 `fallback`（即直接读 `BACKEND_CAPABILITIES` 静态表）时，只要表里写着这个工单要的能力就照派；现拉档位同理。这张表按 §3.2 只能解释拒绝，不能授权执行，而且它本身就是错的（下一段）。
+- 修改点：删掉该分支与 `fallbackCapabilities` 导出，默认层只在候选集里找 `executor.profile`；现拉档位的后端能力一律取探针。`capabilitiesOf()` 增加 `observed = source !== 'fallback'`，静态表推不出任何能力。`executor.probesForRun` 改为对每个已启用后端各取一次探针（CLI 后端读 smoke 账本），不再只探 dsh。
+- 顺带修正静态表（§3.5 点名的两条 + report 不是能力）：`claude.exec` 改 `true`、`codex.web` 改 `true`，`CAPABILITIES` 收为 `['edit','exec','web']`，`REQUIRED_CAPABILITY` 删掉 `interactive:'report'`。`claude.web` 保持 `false`：CLI help 只提到 WebFetch，没有 smoke 证据（§3.4 / Q6）。
+
+### 修复 2：版本线接上，`stale` 不再不可达（§3.7 / AC-B2）
+
+- 根因：`capabilityStateOf(probe, { version })` 的版本从来没人传 —— 调用方只传 probe，宿主也不暴露版本服务，于是「后端版本变了 → 重新核验」这条状态机永远是死代码。
+- 修改点：新增 `hostVersionOf(ctx)`（`ctx.hostVersion` 函数/字符串 → `process.env.DSH_VERSION` → `undefined`）；`probeBackend` 的缓存键与证据行都用它，`engine.backendStateOf` 把它传给 `capabilityStateOf`。CLI 后端的探针现在直接读 `<stateDir>/backend-verify.json`（1.0.15 写了账本，但 `probeBackend` 从来不看它，等于白记）。
+
+### 修复 3：保存期查宿主目录，`PROFILE_PRESET_UNKNOWN` / `PROFILE_EFFORT_UNSUPPORTED` 真的会报（§9.3 / §3.6）
+
+- 根因：`engine.saveProfiles` 给 `validateProfile` 的环境只有能力与后端状态，`presetKnown` / `effortSupported` 从没被算过，两条错误码只在单测里存在。
+- 修改点：保存前用宿主服务取目录 —— `agentPresets.list()` 得 preset 名单、`llm.resolveModel(provider, model)` 的 `reasoning.efforts` 得该模型支持的思考档；`writeProfiles` 把它们并进每个 bot 的校验环境。模型目录查不到时不作结论（不阻断保存），只报「确实不存在」的。
+- 说明：规范原文写的是 `ctx.get('modelDirectories')`，该服务只注册在客户端 UI 插件里，宿主侧没有，因此改用 `llm`。
+
+### 修复 4：Bot 文件读不出来就拒单，不再静默退回内置（§4.1）
+
+- 根因：`executor` 读到 `readProfiles().code`（JSON 损坏、version 不匹配）只 `log()` 一行，接着派单 —— 现拉档位开着时还能凭空合成一个跑起来。
+- 修改点：在派单结果落盘后、开工作树之前直接 `fail(PROFILE_FILE_CORRUPT 或 PROFILE_FILE_VERSION_UNSUPPORTED, 文件名与原因)`。面板设置页同时补上两处提示：文件读不出来（错误码 + 人话 + 修好后重试）与被忽略的未知字段（`droppedKeys`，§4.3 的非致命归一化结果此前没渲染，AC3 的 UI 半边）。
+
+### 修复 5：运行中的 trace 边跑边落盘（§12 E1/E3/E4/E5 / AC11）
+
+- 根因：DSH worker 的 events 只在 `await invokeWorker()` 返回后才写进 `run.trace`，运行期间面板空白，被停/超时的轮次也没有 trace。
+- 修改点：`worker.js` 的 `record()` 每记一条就回调 `onTrace`（消费方抛错不影响 worker）；`executor.js` 新增 `liveTraceSink`，按 §12 归一化后进 80 条环，500ms 或积攒 8 条就 `persist()`（E4），停止/超时/worker_lost 的终止事件照常留在末尾（E5）；worker 返回后仍用 `traceOf(worker.events)` 覆盖为权威终值。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **662 pass / 0 fail**（新增 5 条：损坏 Bot 文件拒单、停止的轮次保留流式 trace、worker 每条事件都到达 `onTrace`、保存期 preset/effort 目录校验、smoke 账本使 CLI 后端可核验且换版本即 stale）。
+- `node scripts/build-client.mjs` → 24 modules / 526599 bytes，`--check` up to date；`node scripts/check-keys.mjs` → 1051 / 530 / 1496；`npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/render-check.mjs`（exit 0）全绿。
+
+### 行为变化（升级前请看一眼）
+
+- **未核验的后端不再能派单**：旧 `executor.workerBackend: 'codex'`（或 `claude`）配置现在需要先有一条 Bot + smoke 账本证据，否则拒绝并说明「没有可用 Bot」/「后端尚未核验」。这是 §3.7 的本意，但确实是行为变化。
+- 默认层/现拉层不再用静态能力表兜底；宿主 `agentPresets` 不可用时，DSH 后端同样按未核验处理。
+- 已知遗留：宿主不暴露版本，`stale` 只在设置了 `DSH_VERSION` 或注入 resolver 时可达；CLI 的增量事件（`onLine`）与 C1–C10 仍属于 P4/P5；阶段级 Bot（§10.2）未实现。
+
 ## [1.0.17] — 2026-11-21
 
 1.0.16 打开「设置 → 档位」直接把宿主打崩（`应用无法启动或已意外停止`，`dsh: fatal load failure`），1.0.15 的档位契约层因此完全不可用。

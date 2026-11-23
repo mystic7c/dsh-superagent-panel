@@ -32,7 +32,7 @@ worker task 按序携带最近 10 条修订，保留上一轮 worktree 改动）
 - 任务类型由关键词分类为 analysis / review / test / dev / docs / research / interactive；硬约束优先——联网调研与需提问只能 DSH，测试验证不能 Claude；
 - 多后端时默认 `suggest`：只把「建议谁执行」写进运行记录，仍用默认后端执行；切到 `auto` 才真正按路由运行（设置→Worker 可切，或直接改 live.json）；
 - 每张工单的 `run.route` / `ticket.route` 记录 workType、backend、profile、reason（preference/default/fallback/manual）；运行记录显示「后端 · 类型」标签，建议模式同时给出本次实际后端；
-- 只读档位按适配器收紧：Codex `-s read-only`、Claude `--permission-mode plan`、DSH 工具 guard 禁止写文件；analysis/review/research/interactive 无文件改动时交付报告并结束为 `closed`，不提交、不推送；
+- 只读 Bot 按适配器收紧：Codex `-s read-only`、Claude `--permission-mode plan`、DSH 工具 guard 禁止写文件；analysis/review/research/interactive 无文件改动时交付报告并结束为 `closed`，不提交、不推送；
 - 手动改派：`POST engine/ticket/:id/run` 的 body 可带 `backend: "dsh"|"codex"|"claude"`，覆盖路由并记为 manual。
 - **worker 对自己发起的 run 负责**：worker 可以起 subagent 做独立复核；harness 的 `agent/turn-stopping` 边界
   （在 `turn/end` 提交前 await）会用 `subagents.listDescendants + waitForChildren` join 仍在运行的子代理，
