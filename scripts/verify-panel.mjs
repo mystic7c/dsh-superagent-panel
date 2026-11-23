@@ -417,8 +417,8 @@ async function commandInteract() {
       return { tabs: tabs.length, selected: tabs.filter(tab => tab.getAttribute('aria-selected') === 'true').length,
         tabindex: tabs.filter(tab => tab.getAttribute('tabindex') === '0').length, hasList: Boolean(list) }
     })()`)
-    push('tablist exposes six tabs with roving tabindex',
-      tablist.tabs === 6 && tablist.selected === 1 && tablist.tabindex === 1 && tablist.hasList, JSON.stringify(tablist))
+    push('tablist exposes seven tabs with roving tabindex',
+      tablist.tabs === 7 && tablist.selected === 1 && tablist.tabindex === 1 && tablist.hasList, JSON.stringify(tablist))
     await cdp.eval(`(() => { const tab = document.querySelector('[role="tab"][aria-selected="true"]'); tab?.focus() })()`)
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
     await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
@@ -622,7 +622,7 @@ async function commandWide() {
 }
 
 /**
- * Round-6 acceptance: header + six tabs are permanent chrome and only `.sa-scroll` moves; a route change resets the
+ * Round-6 acceptance: header + the tabs are permanent chrome and only `.sa-scroll` moves; a route change resets the
  * body scroll; the Ticket jump nav pins flush under the topbar; the narrow ledger keeps its cause/MR as a third line.
  */
 async function commandSticky() {
@@ -650,7 +650,7 @@ async function commandSticky() {
     shotPath = await shot(cdp, '76-sticky-scrolled.png')
     checks.push({ name: 'topbar stays fixed while the body scrolls', ok: before.bar?.top === 0 && after.bar?.top === 0
       && after.bar.bottom === before.bar.bottom, detail: JSON.stringify({ before: before.bar, after: after.bar }) })
-    checks.push({ name: 'six tabs stay in the fixed topbar', ok: after.tabCount === 6 && after.tabs?.top === before.tabs?.top,
+    checks.push({ name: 'seven tabs stay in the fixed topbar', ok: after.tabCount === 7 && after.tabs?.top === before.tabs?.top,
       detail: JSON.stringify(after.tabs) })
     checks.push({ name: 'the body actually scrolled', ok: after.scroll.top > 0, detail: String(after.scroll.top) })
     await clickText(cdp, '评估', { exact: true, selector: '[role="tab"]' })
