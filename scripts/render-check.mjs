@@ -2214,6 +2214,15 @@ console.log('STEP pure projections')
     const editMine = [...(mineRow?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
     editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
+    // The first screen stays small: stage/budget/tool fields sit behind 高级设置 and are not even mounted until it opens.
+    check('the bot editor keeps advanced fields behind a disclosure (§13.2)',
+      !host.querySelector('[data-testid="sa-bot-stage-review"]')
+        && /高级设置/.test(host.querySelector('.sa-bot-modal')?.textContent ?? ''),
+      host.querySelector('.sa-bot-modal')?.textContent?.slice(0, 200) ?? 'no modal')
+    const advancedToggle = [...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+      .find(node => /高级设置/.test(node.textContent ?? ''))
+    advancedToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(120)
     const reviewRow = host.querySelector('[data-testid="sa-bot-stage-review"]')
     const reviewSelect = reviewRow?.querySelector('select')
     const reviewInput = reviewRow?.querySelector('input')
@@ -2228,6 +2237,10 @@ console.log('STEP pure projections')
     newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
     const modalText = () => [...host.querySelectorAll('.sa-bot-modal')].map(node => node.textContent).join('')
+    ;[...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+      .find(node => /高级设置/.test(node.textContent ?? ''))
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(120)
     check('the editor previews what the bot would get (§13.2)',
       /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
     check('the editor warns that an unverified backend cannot be saved (AC-B1)',

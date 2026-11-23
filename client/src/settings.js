@@ -1,6 +1,6 @@
 import { API, Icon, hhmmss, hostName, hostOfUrl } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
-import { Button, CopyButton, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
+import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
 import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
@@ -1067,8 +1067,13 @@ Object.assign(PAGE_TEXT, {
   'st.botsEditorTitle': ['编辑 Bot', 'Edit bot'],
   'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
     'Saving validates against the backend evidence; error codes are shown right here.'],
+  'st.botsAdvanced': ['高级设置', 'Advanced'],
+  'st.botsAdvancedHint': ['模型 · 能力 · 工具 · 阶段 · 预算（默认都不填）', 'Model, capabilities, tools, stages, budget (empty by default)'],
+  'st.botsAdvancedSet': ['已设置 {count} 项', '{count} set'],
   'st.botsFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
   'st.botsFieldName': ['名称', 'Name'],
+  'st.botsFieldDescription': ['一句话说明（它接什么活）', 'One line: what it takes on'],
+  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随工作流默认。', 'The bot works to this prompt; empty follows the workflow default.'],
   'st.botsFieldBackend': ['后端', 'Backend'],
   'st.botsFieldPreset': ['预设', 'Preset'],
   'st.botsFieldModelProvider': ['模型 provider', 'Model provider'],
@@ -1212,6 +1217,8 @@ export function BotsCard() {
   const { actions } = usePanelData()
   const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
   const [editor, setEditor] = useState(undefined)
+  // The editor opens on identity + prompt only; the rest is one disclosure away (§13.2 keeps every field reachable).
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
@@ -1258,7 +1265,7 @@ export function BotsCard() {
     else delete specs[stage]
     editField('stageSpecs', specs)
   }
-  const openEditor = bot => { setSaveError(undefined); setEditor({ form: botToForm(bot), id: bot?.id }) }
+  const openEditor = bot => { setSaveError(undefined); setAdvancedOpen(false); setEditor({ form: botToForm(bot), id: bot?.id }) }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
     if (!editor) return
@@ -1287,6 +1294,11 @@ export function BotsCard() {
   }
   const capabilityOf = bot => capabilitiesOfForm(bot, backends[bot.backend])
   const preview = editor ? botPreview(t, editor.form, backends[editor.form.backend]) : undefined
+  // What the collapsed row advertises: fields that moved off the first screen and already carry a value.
+  const advancedCount = editor ? [editor.form.preset, editor.form.modelProvider && editor.form.modelModel,
+    editor.form.requires.length, editor.form.stages.length, editor.form.deny, editor.form.allowMcp, editor.form.must,
+    editor.form.timeoutMs, editor.form.idleTimeoutMs, editor.form.maxRepairRounds,
+    Object.keys(editor.form.stageSpecs ?? {}).length].filter(Boolean).length : 0
   const problem = saveError
   return <>
     <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
@@ -1306,7 +1318,7 @@ export function BotsCard() {
             {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
           </p>
         ))}
-        {bots.map(bot => <div key={bot.id} className="sa-bot-row">
+        {bots.map(bot => <div key={bot.id} className="sa-row sa-bot-row">
           <div className="sa-row-main">
             <div className="sa-row-title">
               <span>{bot.name ?? bot.id}</span>
@@ -1367,84 +1379,100 @@ export function BotsCard() {
         <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
       </>}>
       <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
+      {/* First-run surface: who the bot is, which backend runs it, what it takes on. Every other field keeps its
+          store default and lives behind 「高级设置」 — same fields, one disclosure away, so nothing is lost. */}
       <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
+          <Input value={editor.form.name}
+            onChange={event => editField('name', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldId')}</span>
           <Input value={editor.form.id} onChange={event => editField('id', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
-          <Input value={editor.form.name} onChange={event => editField('name', event.target.value)} /></label>
+        <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
+          <Input value={editor.form.description} onChange={event => editField('description', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
           <Select value={editor.form.backend} onChange={value => editField('backend', value)}
             options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
-          {presetIds.length
-            ? <Select value={editor.form.preset} onChange={value => editField('preset', value)}
-              options={[{ value: '', label: pt(t, 'st.botsPresetDefault') },
-                ...presetIds.map(id => ({ value: id, label: id }))]} />
-            : <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} />}</label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
-          <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-          <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
       </div>
-      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
-        {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
-          <Switch checked={editor.form.requires.includes(capability)}
-            onChange={next => editField('requires', next
-              ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
-          {capability}</label>)}
-      </div>
-      <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldStages')}</span>
-        {BOT_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
-          <Switch checked={editor.form.stages.includes(stage)}
-            onChange={next => editField('stages', next
-              ? BOT_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
-              : editor.form.stages.filter(item => item !== stage))} />
-          {stage}</label>)}
-      </div>
-      {/* §10.2: which bot runs which stage, and that stage's own timeout. `gates` has no row: the executor runs it. */}
-      {editor.form.stages.filter(stage => stage !== 'gates').map(stage => {
-        const spec = isPlainObject(editor.form.stageSpecs?.[stage]) ? editor.form.stageSpecs[stage] : {}
-        const budget = isPlainObject(spec.budget) ? spec.budget : {}
-        return <div className="sa-field-grid" key={`stage-${stage}`} data-testid={`sa-bot-stage-${stage}`}>
-          <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBot')} · ${stage}`}</span>
-            <Select value={String(spec.bot ?? '')} options={[{ value: '', label: pt(t, 'st.botsPreviewEmpty') },
-              ...botIds.map(id => ({ value: id, label: id }))]}
-              onChange={value => setStageSpec(stage, { bot: value || undefined })} /></label>
-          <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBudget')} · ${stage}`}</span>
-            <Input value={budget.timeoutMs === undefined ? '' : String(budget.timeoutMs)}
-              onChange={event => {
-                const text = String(event.target.value).trim()
-                setStageSpec(stage, { budget: text === '' ? undefined : { ...budget, timeoutMs: Number(text) } })
-              }} /></label>
-        </div>
-      })}
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
-        <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
-        <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
-        <Input value={editor.form.role} onChange={event => editField('role', event.target.value)} /></label>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldMust')}</span>
-        <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
-      <div className="sa-field-grid">
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldTimeout')}</span>
-          <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldIdle')}</span>
-          <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRepairs')}</span>
-          <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
-      </div>
-      {preview ? <div className="sa-field" data-testid="sa-bot-preview">
-        <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
-        {preview.unverified
-          ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
-            {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
-          : null}
-        <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],
-          [pt(t, 'st.botsPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-          [pt(t, 'st.botsPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-          [pt(t, 'st.botsPreviewStages'), preview.stages.join(' → ')]]} />
-      </div> : null}
+        <textarea className="sa-textarea" rows={4} value={editor.form.role}
+          aria-label={pt(t, 'st.botsFieldRole')} placeholder={pt(t, 'st.botsFieldRoleHint')}
+          onChange={event => editField('role', event.target.value)} /></label>
+      <DisclosureRow open={advancedOpen} onToggle={() => setAdvancedOpen(current => !current)}
+        title={pt(t, 'st.botsAdvanced')}
+        collapsedContent={advancedCount
+          ? pt(t, 'st.botsAdvancedSet', { count: advancedCount }) : pt(t, 'st.botsAdvancedHint')}>
+        <div className="sa-disclosure-body">
+          <div className="sa-field-grid">
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
+              {presetIds.length
+                ? <Select value={editor.form.preset} onChange={value => editField('preset', value)}
+                  options={[{ value: '', label: pt(t, 'st.botsPresetDefault') },
+                    ...presetIds.map(id => ({ value: id, label: id }))]} />
+                : <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} />}</label>
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
+              <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+              <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
+          </div>
+          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
+            {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
+              <Switch checked={editor.form.requires.includes(capability)}
+                onChange={next => editField('requires', next
+                  ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
+              {capability}</label>)}
+          </div>
+          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldStages')}</span>
+            {BOT_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
+              <Switch checked={editor.form.stages.includes(stage)}
+                onChange={next => editField('stages', next
+                  ? BOT_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
+                  : editor.form.stages.filter(item => item !== stage))} />
+              {stage}</label>)}
+          </div>
+          {/* §10.2: which bot runs which stage, and that stage's own timeout. `gates` has no row: the executor runs it. */}
+          {editor.form.stages.filter(stage => stage !== 'gates').map(stage => {
+            const spec = isPlainObject(editor.form.stageSpecs?.[stage]) ? editor.form.stageSpecs[stage] : {}
+            const budget = isPlainObject(spec.budget) ? spec.budget : {}
+            return <div className="sa-field-grid" key={`stage-${stage}`} data-testid={`sa-bot-stage-${stage}`}>
+              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBot')} · ${stage}`}</span>
+                <Select value={String(spec.bot ?? '')} options={[{ value: '', label: pt(t, 'st.botsPreviewEmpty') },
+                  ...botIds.map(id => ({ value: id, label: id }))]}
+                  onChange={value => setStageSpec(stage, { bot: value || undefined })} /></label>
+              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBudget')} · ${stage}`}</span>
+                <Input value={budget.timeoutMs === undefined ? '' : String(budget.timeoutMs)}
+                  onChange={event => {
+                    const text = String(event.target.value).trim()
+                    setStageSpec(stage, { budget: text === '' ? undefined : { ...budget, timeoutMs: Number(text) } })
+                  }} /></label>
+            </div>
+          })}
+          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
+            <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
+          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
+            <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
+          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldMust')}</span>
+            <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
+          <div className="sa-field-grid">
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldTimeout')}</span>
+              <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldIdle')}</span>
+              <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRepairs')}</span>
+              <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
+          </div>
+          {preview ? <div className="sa-field" data-testid="sa-bot-preview">
+            <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
+            {preview.unverified
+              ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
+                {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
+              : null}
+            <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],
+              [pt(t, 'st.botsPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.botsPreviewEmpty')],
+              [pt(t, 'st.botsPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.botsPreviewEmpty')],
+              [pt(t, 'st.botsPreviewStages'), preview.stages.join(' → ')]]} />
+          </div> : null}
+        </div>
+      </DisclosureRow>
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
     </Modal> : null}
