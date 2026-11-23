@@ -65,6 +65,7 @@ export const TEXT = {
     source: ['来源', 'Source'],
     trigger: ['触发', 'Trigger'],
     eval: ['评估', 'Eval'],
+    bots: ['Bot', 'Bots'],
     execution: ['执行', 'Execution'],
     pilot: ['试运行', 'Pilot'],
     settings: ['设置', 'Settings'],
@@ -256,7 +257,7 @@ export const TEXT = {
   // Settings
   settingsIntro: ['按概念分组的配置。每个分组只在有改动时显示保存条；保存使用版本号，冲突时提示重新载入。', 'Configuration grouped by concept. Each group shows a save bar only while changes exist; saves use a revision and ask you to reload on a conflict.'],
   settingsGroup: { source: ['来源', 'Sources'], eval: ['评估', 'Eval'], repos: ['仓库', 'Repositories'],
-    prompts: ['提示词', 'Prompts'], bots: ['Bot', 'Bots'] },
+    prompts: ['提示词', 'Prompts'] },
   settingsSaved: ['已保存（修订 {revision}）', 'Saved (revision {revision})'],
   settingsConflict: ['设置已变化，请重新载入后再保存。', 'Settings changed. Reload before saving.'],
   restartRequired: ['保存已生效；来源账号变更在重新检查后完全生效。', 'Saved; Source account changes fully apply after the next check.'],

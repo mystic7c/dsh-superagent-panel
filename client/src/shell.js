@@ -18,7 +18,7 @@ import { LiveSourcePage } from "./source.js"
 import { LiveTriggerPage } from "./trigger.js"
 import { LiveEvalPage } from "./eval.js"
 import { LiveExecutionPage } from "./execution.js"
-import { LiveSettingsPage } from "./settings.js"
+import { BotsCard, LiveSettingsPage } from "./settings.js"
 import { React, h, useCallback, useEffect, useLayoutEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'search.title': ['搜索', 'Search'],
@@ -277,6 +277,7 @@ export function pageView(page) {
     case 'source': return LiveSourcePage
     case 'trigger': return LiveTriggerPage
     case 'eval': return LiveEvalPage
+    case 'bots': return BotsCard
     case 'execution': return LiveExecutionPage
     case 'settings': return LiveSettingsPage
     case 'overview': default: return LiveOverviewPage

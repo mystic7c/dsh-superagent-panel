@@ -13,8 +13,9 @@ Superagent 的循环（读消息 → 判是否接单 → 开 worktree 干活 →
 
 ## 功能
 
-- **六个页签**：概览（待办 / 系统问题 / 24 小时漏斗 / 运行质量）、来源（消息与原始信号）、触发（评估过程）、
-  评估（决定与规则命中）、执行（队列与工单详情）、设置。逐页说明见 [docs/pages.md](docs/pages.md)。
+- **七个页签**：概览（待办 / 系统问题 / 24 小时漏斗 / 运行质量）、来源（消息与原始信号）、触发（评估过程）、
+  评估（决定与规则命中）、Bot（Bot 定义、编辑器与后端核验）、执行（队列与工单详情）、设置。
+  逐页说明见 [docs/pages.md](docs/pages.md)。
 - **可回放**：每条群消息的判定都留在台账里，可重放、可人工标注正确/误报/漏报。
 - **可干预**：闸门失败停在「等人放行」，运行中可停止，中断可继续，worker 提问可回答。
 - **可配置**：来源、执行器、多后端 worker 路由、写权限、仓库与闸门，全部在设置页里改，保存前看差异，自动留快照。
@@ -71,7 +72,7 @@ node scripts/render-check.mjs          # jsdom 渲染回归
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/pages.md](docs/pages.md) | 六个页签分别能看什么、改什么 |
+| [docs/pages.md](docs/pages.md) | 七个页签分别能看什么、改什么 |
 | [docs/architecture.md](docs/architecture.md) | 分层架构、superagent / router / worker 三个概念，以及一份工单从到达、评估、执行、闸门到验收的完整阶段 |
 | [docs/quickstart.md](docs/quickstart.md) | 从空状态到接单的完整配置、状态文件与排障 |
 | [docs/intake-and-eval.md](docs/intake-and-eval.md) | 评估模式、阈值、预算与 shadow 配置 |

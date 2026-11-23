@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.0] — 2026-11-23
+
+Bot 从「设置里的一个分组」升级成顶层页签，位置在「执行」左边：先把「谁来做」定下来，再看队列。设置页回到只配置工作流本身，Bot 的定义、查看、编辑、核验全部集中在 Bot 页签。
+
+### 根因与修改
+
+- **Bot 藏在设置里**：`SETTINGS_GROUPS` 的 `bots` 分组默认不在首屏，第一次用的人要先找设置、再找分组才看得到"这类活由谁做"。现在 `client/src/router.js` 的 `TABS` 在 `eval` 与 `execution` 之间插入 `bots`（Alt+5 直达），`shell.js` 的 `pageView` 直接渲染 `BotsCard`；设置页的 `bots` 分组与 `settingsGroup.bots` 标签随之删除，rail 上不再有它。
+- **入口都跟着走**：工单详情「存为 Bot」原本 `navigate({page:'settings',group:'bots'})`，现在送到 `{page:'bots'}`；`BotsCard` 挂载时消费 `superagent-panel/bot-draft` 的行为不变，草稿仍然落到新页签的编辑器里。
+- **标题不再重复**：`st.botsTitle` 从「Bot」改为「Bot 列表」，避免页签与区块标题都叫 Bot 时读起来像重复渲染。
+- **文档与验收同步**：`README.md`、`docs/pages.md`（新增 Bot 章节）、`docs/ui-workflow.md` 由六个页签改为七个；`scripts/verify-panel.mjs` 的 tablist 计数 6→7；`render-check` 新增两条断言——Bot 页签紧邻「执行」左侧、Bot 页签带着文件/内置/后端核验/新建 Bot 四块且设置页不再有 Bot 分组。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：672 pass / 0 fail。
+- `node scripts/render-check.mjs`：285 checks / 0 fail。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1504 page-local；`node scripts/build-client.mjs`：24 modules / 529511 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+- 独立端口 + 独立状态目录（`DSH_SUPERAGENT_STATE_DIR=/tmp/...`）起实例，页面 200 且插件加载，无 Host 报错；测完已关闭。
+
+---
+
 ## [1.0.24] — 2026-11-23
 
 Bot 编辑器的首次使用体验：20 个字段一次平铺，第一次用根本不知道该填什么，而且没有样式——`sa-bot-modal` / `sa-field-grid` 这些类名在 `style.js` 里根本没有规则，于是每个输入框占满整行。数据模型与契约不变，只动 `client/src/settings.js` 与 `client/src/style.js`。

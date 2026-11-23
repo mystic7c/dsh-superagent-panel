@@ -544,7 +544,6 @@ export const SETTINGS_GROUPS = [
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
-  { id: 'bots', labelKey: 'settingsGroup.bots', icon: 'robot' },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
@@ -1035,7 +1034,7 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 }
 
 Object.assign(PAGE_TEXT, {
-  'st.botsTitle': ['Bot', 'Worker bots'],
+  'st.botsTitle': ['Bot 列表', 'Worker bots'],
   'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型、工具与阶段。内置三个 Bot 不可编辑，可复制后改。',
     'A bot decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
   'st.botsFile': ['Bot 文件', 'Bot file'],
@@ -2704,7 +2703,6 @@ export function LiveSettingsPage({ route }) {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()
-    if (active === 'bots') return <BotsCard />
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()
