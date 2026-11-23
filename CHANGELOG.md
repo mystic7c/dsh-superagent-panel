@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.2] — 2026-11-23
+
+整体审查后的第一批修复，全部是「开关与守卫被绕过」这一类：执行器关着仍能交付、token 被静默删除、推送守卫漏大小写、并发保存丢配置、Bot 文件可覆盖 live.json、群消息可重复发送。
+
+### 根因与修改
+
+- **群消息重试没有幂等键（P0）**：`lib/live/octo.js` 的 `run(argv)` 对任意命令在 stderr 命中 `TRANSIENT_RE` 时都重试一次，`sendText` 正是走它。消息已入库但返回时超时/断开就会发两遍。现在 `run(argv, { retry = true })`，`sendText` 传 `{ retry: false }`：只有 poll/ack/sync/list 这类幂等调用还会重试。
+- **执行器总开关可被绕过**：`/gate`、`/resume`、`/answer` 三个路由没有 `requireExecutor`（`/run`、`/publish` 有），且 `resumeTicketInner` 只算 `allowPush`、不查 `executor.enabled`。关闭执行器后点「放行」照样 commit + push + 开 MR。现在三个路由补 `requireExecutor(engine, { dryRun: false })`，`resumeTicketInner`/`answerTicketInner` 各自加 `if (!dryRun && !config.executor.enabled) return { invalid }`；`action==='stop'` 仍然允许（它只结束一次运行），`answerTicketInner` 的检查在写入 Q/A 之前，被拒的回答不会把工单推到 `ready`。路由层用新助手 `ticketDryRun()` 取该工单上一次运行的 `dryRun`，与 `/run` 的口径一致——干跑不写任何东西，执行器关着也能回答/放行。
+- **仓库 token 被静默删除**：`POST engine/repo/:id/token` 把 `body?.token` 直接交给 `saveRepoToken`，非字符串被 `saveTokenFile` 当成 `''`（= 断开连接）→ 已存 token 被 `rm`。现在与 octo/eval token 路由一致，非字符串答 400。
+- **推送守卫漏大小写**：`lib/live/repo.js` 的 `FORBIDDEN_PATH_PATTERNS` 没有 `i` 标志（同文件 `SECRET_PATH_PATTERNS` 有）。在大小写不敏感的 APFS/Windows 上 worker 建 `.ENV` 就是 `.env`，守卫放行。九个模式统一补 `i`。
+- **live.json 三个写入口绕过串行队列**：只有 `updateLiveConfig` 在 `configWrites` 队列里；`addRepoDefinition` / `updateRepoDefinition` / `restoreLiveConfig` 是裸 read-modify-write，且临时名 `${pid}.${Date.now()}.tmp` 同毫秒不唯一。现在四个入口共用同一队列，临时名统一走 `tmpPath()`（带 6 字节随机后缀）。
+- **Bot 文件可覆盖 live.json**：`executor.botsFile` 只校验「裸文件名」，写成 `live.json` 就能让每次保存 Bot 把配置与工单整份覆盖。`botsFileOf` 现在拒绝 stateDir 保留名（`live.json` / `live-state.json` / `operations.json` / `shadow-samples.json` / `backend-verify.json` / 各 `*.token` / `live-history` `runs` `evidence` `worktrees` 目录），它自己的默认名 `worker-bots.json` 仍是唯一合法占用者。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：681 pass / 0 fail（新增 6 条：`sendText` 遇到 socket hang up 只调用一次；仓库加库与保存设置并发时两者都落盘、无 tmp 残留、两份快照完整；`.ENV`/`Secrets/`/`Node_Modules/` 被判为禁止路径；`botsFile` 拒绝 live.json/LIVE.JSON/live-state.json/gitlab.token/octo.token 且接受 worker-bots.json；执行器关闭时 release+retry 均被拒、stop 仍生效、无任何 git 命令；执行器关闭时 answerTicket 不写 Q/A 且工单留在 `awaiting-answer`，打开后同一回答可通过；路由级：非字符串 token 答 400 且已存 token 仍在，`/gate` `/resume` `/answer` 在关闭执行器时答 403）。
+- `node scripts/render-check.mjs`：286 checks / 0 fail。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs --check`：24 modules / 529684 bytes up to date（本次无客户端改动）；`npm run types`、`npm run check:js`、`node --check index.js`、`npm ci` 全绿。
+
+---
+
 ## [1.1.1] — 2026-11-23
 
 交付之后才失败（MR 流水线红了、dev 部署 job 红了、MR 被关掉）的工单，在面板里点不动：行内只有「查看原因」，菜单里的「发布 MR」被状态白名单挡住，而「重试」即便跑起来也会复用那张**已经合并**的 MR，于是永远盯着旧 merge commit 的流水线。
