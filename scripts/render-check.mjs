@@ -70,9 +70,9 @@ function prepareFixtureState () {
   // the U-06 two-step confirmation checks on a clean clone — a coverage hole that had nothing to do with credentials.
   writeFileSync(join(dir, 'gitlab.token'), 'fixture-gitlab-token\n')
   writeFileSync(join(dir, 'octo.token'), 'fixture-octo-token\n')
-  // A repository may carry its own worker-profiles.json; the engine must ignore it (§4.1) and the detail page must say so.
+  // A repository may carry its own worker-bots.json; the engine must ignore it (§4.1) and the detail page must say so.
   mkdirSync(join(dir, 'worktree-demo'), { recursive: true })
-  writeFileSync(join(dir, 'worktree-demo', 'worker-profiles.json'), JSON.stringify({ version: 1, profiles: [] }))
+  writeFileSync(join(dir, 'worktree-demo', 'worker-bots.json'), JSON.stringify({ version: 2, bots: [] }))
   console.log(`STATE fixture ${dir}`)
   return dir
 }
@@ -118,6 +118,12 @@ const nowIso = new Date().toISOString()
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
       mergeRequest: { iid: 1, webUrl: 'https://example.test/mr/1', state: 'merged' },
       deployment: { status: 'success', deployJob: { name: 'deploy_dev', status: 'success' } } },
+    workflow: { status: 'completed', stages: [
+      { key: 'wf-1', role: 'assess', status: 'completed', backend: 'dsh', result: {} },
+      { key: 'wf-2', role: 'implement', status: 'completed', backend: 'dsh', result: {} },
+      { key: 'wf-3', role: 'gates', status: 'completed', backend: 'host', result: {} },
+      { key: 'wf-4', role: 'review', status: 'completed', backend: 'claude', bot: 'rechecker', result: {} },
+    ] },
   }
   engine.state.state.ticketOrder.push(demoId)
   const stepNames = ['prepare-worktree', 'worker', 'changed-paths', 'bootstrap:pnpm', 'gate:standards', 'gate:backend',
@@ -128,7 +134,7 @@ const nowIso = new Date().toISOString()
   // merge and deploy. Its row must read that phase as history, never as a live CI spinner.
   engine.state.runs.unshift({ id: 'run_demo', ticketId: demoId, status: 'ci-pending', stopReason: 'done', startedAt: nowIso,
     completedAt: nowIso, endedAt: nowIso,
-    profile: { id: 'generalist', source: 'default', reason: '默认档位 generalist（executor.profile）',
+    bot: { id: 'generalist', source: 'default', reason: '默认 Bot generalist（executor.bot）',
       candidates: ['generalist'], capability: ['edit', 'exec'], capabilitySource: 'probe', verifiedAt: nowIso,
       configDigest: 'digest-demo', resolvedAt: nowIso },
     steps, worker: { text: '## 改动内容\n\n1、修复验收流程。\n2、补充演示列表。', backend: 'dsh',
@@ -138,7 +144,7 @@ const nowIso = new Date().toISOString()
   // which leaves a thread id of its own — the run row must not offer to open that as a Harness Session.
   engine.state.runs.push({ id: 'run_demo_old', ticketId: demoId, status: 'dry-run', dryRun: true,
     startedAt: new Date(Date.now() - 30 * 60_000).toISOString(), completedAt: new Date(Date.now() - 29 * 60_000).toISOString(),
-    profile: { id: 'surgical', source: 'rule', reason: '规则 #1 命中（workTypes=dev）', degraded: 'model',
+    bot: { id: 'surgical', source: 'rule', reason: '规则 #1 命中（workTypes=dev）', degraded: 'model',
       candidates: ['surgical'], capability: ['edit'], capabilitySource: 'fallback', configDigest: 'digest-demo',
       resolvedAt: nowIso },
     steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
@@ -421,12 +427,12 @@ window.fetch = global.fetch = async (input, init = {}) => {
     const backend = selection.backend ?? 'dsh'
     return json({
       route: { workType: deliverable === 'report' ? 'analysis' : 'dev',
-        profile: deliverable === 'report' ? 'read-only' : 'write', deliverable,
+        bot: deliverable === 'report' ? 'read-only' : 'write', deliverable,
         capabilities: deliverable === 'report' ? ['exec'] : ['edit', 'exec'], backend,
         reason: { code: selection.backend || selection.deliverable ? 'manual' : 'default' },
         mode: selection.backend || selection.deliverable ? 'manual' : 'single',
         applied: Boolean(selection.backend || selection.deliverable), execBackend: backend,
-        execProfile: deliverable === 'report' ? 'read-only' : 'write' },
+        execBot: deliverable === 'report' ? 'read-only' : 'write' },
       options: { backends: ['dsh', 'codex'], deliverables: ['change', 'report'] },
     })
   }
@@ -454,8 +460,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
-  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, ProfilesCard, ApiError,
-  profilePreview, profileToForm, formToProfile,
+  AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError,
+  botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -490,10 +496,10 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar: 'live-ui.js',
   failureReasonTextOf: 'overview.js',
   LiveSettingsPage: 'settings.js',
-  ProfilesCard: 'settings.js',
-  profilePreview: 'settings.js',
-  profileToForm: 'settings.js',
-  formToProfile: 'settings.js',
+  BotsCard: 'settings.js',
+  botPreview: 'settings.js',
+  botToForm: 'settings.js',
+  formToBot: 'settings.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
   clampEvalOffset: 'eval.js',
@@ -695,23 +701,23 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
   check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
     && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
-  // §7.5/§13.1: the row says which profile ran, who chose it, and what evidence backs its capabilities.
-  const profileRow = rootElement.querySelector('#sa-run-run_demo .sa-run-profile')
-  check('a run names the profile that ran it and why (§7.5)',
-    Boolean(profileRow) && /generalist/.test(profileRow.textContent ?? '') && /默认档位/.test(profileRow.textContent ?? ''),
-    profileRow?.textContent?.slice(0, 160) ?? 'no profile row')
+  // §7.5/§13.1: the row says which bot ran, who chose it, and what evidence backs its capabilities.
+  const botRow = rootElement.querySelector('#sa-run-run_demo .sa-run-bot')
+  check('a run names the bot that ran it and why (§7.5)',
+    Boolean(botRow) && /generalist/.test(botRow.textContent ?? '') && /默认 Bot/.test(botRow.textContent ?? ''),
+    botRow?.textContent?.slice(0, 160) ?? 'no bot row')
   check('the capability line names its source and when it was verified (§13.1)',
-    /能力：edit, exec（探针/.test(profileRow?.textContent ?? ''), profileRow?.textContent?.slice(0, 200) ?? 'no profile row')
+    /能力：edit, exec（探针/.test(botRow?.textContent ?? ''), botRow?.textContent?.slice(0, 200) ?? 'no bot row')
   check('a synthesised or degraded dispatch is marked and never folded away (§13.1)',
-    /降级/.test(cliRunRow?.textContent ?? '') && /指定的档位不可用|本次分派预算|决策模型/.test(cliRunRow?.textContent ?? '')
+    /降级/.test(cliRunRow?.textContent ?? '') && /指定的 Bot 不可用|本次分派预算|决策模型/.test(cliRunRow?.textContent ?? '')
       || /降级/.test(cliRunRow?.textContent ?? ''),
     cliRunRow?.textContent?.slice(0, 200) ?? 'no run row')
   check('an unverified capability source is flagged on the row (§13.1)',
     /未核验/.test(cliRunRow?.textContent ?? ''), cliRunRow?.textContent?.slice(0, 200) ?? 'no run row')
-  check('a repository profile file is reported as ignored, with both paths (§4.1/AC12)',
-    /仓库里的档位文件已忽略/.test(detailText) && /worktree-demo\/worker-profiles\.json/.test(detailText), detailText.slice(0, 600))
+  check('a repository bot file is reported as ignored, with both paths (§4.1/AC12)',
+    /仓库里的 Bot 文件已忽略/.test(detailText) && /worktree-demo\/worker-bots\.json/.test(detailText), detailText.slice(0, 600))
   const rerunPick = rootElement.querySelector('#sa-run-run_demo select[aria-label]')
-  check('the detail page offers a rerun under another profile (§7.6)',
+  check('the detail page offers a rerun under another bot (§7.6)',
     Boolean(rerunPick) && [...rerunPick.options].some(option => option.value === 'surgical'),
     [...(rerunPick?.options ?? [])].map(option => option.value).join(','))
   sessionLink?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
@@ -962,6 +968,12 @@ check('a truncated patch is visible on the evidence card',
 check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
+// §10.2 record: a stage that ran on another bot names that bot in its row, so a mixed-backend ticket is readable
+// without opening the store.
+check('a stage that ran on another bot names it (§10.2)',
+  /claude \(rechecker\)/.test(rootElement.textContent ?? '')
+    && (rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.length === 1,
+  String((rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.join(' | ') ?? 'no stage bot'))
 {
   // R2-09: the request is promoted to its own expanded section above the changes, instead of a disclosure folded
   // into the right-hand column of "what changed".
@@ -1192,7 +1204,7 @@ check('the merge permission is marked as high risk', writeText.includes('高危'
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
-  navLabels.slice(0, 7).join('/') === '来源/评估确认/运行/Worker/档位/写权限/仓库'
+  navLabels.slice(0, 7).join('/') === '来源/评估确认/运行/Worker/Bot/写权限/仓库'
     && navLabels.slice(7).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
 
@@ -2156,13 +2168,14 @@ console.log('STEP pure projections')
   coldRoot.unmount()
   coldHost.remove()
 
-  // §13.2/AC-B1: the profiles group lists the store, keeps the built-ins on top and refuses to save against an
+  // §13.2/AC-B1: the bots group lists the store, keeps the built-ins on top and refuses to save against an
   // unverified backend — the error code is shown in place, next to the sentence, never swallowed.
   {
     const builtin = (id, name) => ({ id, name, description: '', backend: 'dsh', requires: [], stages: ['implement', 'gates'] })
     const stored = [builtin('generalist', '通用'), builtin('surgical', '小修'), builtin('reviewer', '审阅者'),
-      { id: 'mine', name: '我的档位', backend: 'dsh', requires: ['edit'], tools: { deny: ['write'] },
-        skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' }, stages: ['implement', 'gates'] }]
+      { id: 'mine', name: '我的 Bot', backend: 'dsh', requires: ['edit'], tools: { deny: ['write'] },
+        skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' },
+        stages: ['implement', 'gates', { stage: 'review', bot: 'reviewer', budget: { timeoutMs: 600000 } }] }]
     const backendsOf = state => ({ dsh: { backend: 'dsh', state, source: state === 'unverified' ? 'fallback' : 'probe',
       capabilities: { edit: true, exec: true, web: false }, verifiedAt: state === 'verified' ? nowIso : undefined },
     claude: { backend: 'claude', state: 'unverified', source: 'fallback', capabilities: { edit: true, exec: false, web: false } },
@@ -2172,58 +2185,77 @@ console.log('STEP pure projections')
     const root = ReactDOM.createRoot(host)
     const lists = []
     const panel = { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, openSession() {}, backLabel: '' }
-    const renderProfiles = (state, actions) => root.render(React.createElement(Panel.Provider, { value: panel },
+    const renderBots = (state, actions) => root.render(React.createElement(Panel.Provider, { value: panel },
       React.createElement(PanelState.Provider, { value: { data: fixtures.status, error: undefined, reload: async () => {}, actions } },
-        React.createElement(ProfilesCard))))
-    const store = state => ({ file: join(stateDir, 'worker-profiles.json'), exists: true, builtin: false, version: 1,
-      profiles: stored, backends: backendsOf(state), enabledBackends: ['dsh'],
-      ruleWarnings: [{ code: 'DISPATCH_RULE_PROFILE_UNKNOWN', index: 1, profile: 'ghost' }] })
-    renderProfiles('unverified', { profiles: async () => store('unverified'),
-      saveProfiles: async list => { lists.push(list); throw new ApiError('后端 dsh 未核验', 400,
-        { code: 'PROFILE_BACKEND_UNVERIFIED', problems: ['profile mine: backend dsh is unverified'] }) },
-      verifyProfileBackend: async () => ({}) })
+        React.createElement(BotsCard))))
+    const store = state => ({ file: join(stateDir, 'worker-bots.json'), exists: true, builtin: false, version: 2,
+      bots: stored, backends: backendsOf(state), enabledBackends: ['dsh'],
+      ruleWarnings: [{ code: 'DISPATCH_RULE_BOT_UNKNOWN', index: 1, bot: 'ghost' }] })
+    renderBots('unverified', { bots: async () => store('unverified'),
+      saveBots: async list => { lists.push(list); throw new ApiError('后端 dsh 未核验', 400,
+        { code: 'BOT_BACKEND_UNVERIFIED', problems: ['bot mine: backend dsh is unverified'] }) },
+      verifyBotBackend: async () => ({}) })
     await sleep(160)
-    const profilesText = () => host.textContent ?? ''
-    check('the profiles group lists the store and marks the built-ins (§13.2)',
-      /通用/.test(profilesText()) && /我的档位/.test(profilesText()) && /内置/.test(profilesText()), profilesText().slice(0, 200))
+    const botsText = () => host.textContent ?? ''
+    check('the bots group lists the store and marks the built-ins (§13.2)',
+      /通用/.test(botsText()) && /我的 Bot/.test(botsText()) && /内置/.test(botsText()), botsText().slice(0, 200))
     check('an unverified backend is shown as unverified, not as ready (AC-B1)',
-      /未核验/.test(profilesText()) && /dsh/.test(profilesText()), profilesText().slice(0, 240))
-    const firstRow = host.querySelector('.sa-profile-row')
-    check('a built-in profile offers copy but not edit or delete (§4.5/§13.2)',
+      /未核验/.test(botsText()) && /dsh/.test(botsText()), botsText().slice(0, 240))
+    const firstRow = host.querySelector('.sa-bot-row')
+    check('a built-in bot offers copy but not edit or delete (§4.5/§13.2)',
       /内置/.test(firstRow?.textContent ?? '') && /复制内置/.test(firstRow?.textContent ?? '')
         && !/删除/.test(firstRow?.textContent ?? '') && [...firstRow.querySelectorAll('button')]
           .every(node => (node.textContent ?? '').trim() !== '编辑'),
       firstRow?.textContent?.slice(0, 160) ?? 'no row')
-    check('a dispatch rule pointing at a missing profile is reported (§5.1)',
-      /分派规则 #1/.test(profilesText()) && /ghost/.test(profilesText()), profilesText().slice(0, 300))
-    const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建档位')
+    check('a dispatch rule pointing at a missing bot is reported (§5.1)',
+      /分派规则 #1/.test(botsText()) && /ghost/.test(botsText()), botsText().slice(0, 300))
+    // §10.2/P6: a stored stage-level bot and budget are editable per stage; `gates` has no row (the executor runs it).
+    const mineRow = [...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
+    const editMine = [...(mineRow?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
+    editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const reviewRow = host.querySelector('[data-testid="sa-bot-stage-review"]')
+    const reviewSelect = reviewRow?.querySelector('select')
+    const reviewInput = reviewRow?.querySelector('input')
+    check('the bot editor edits a stage-level bot and its budget (§10.2)',
+      reviewSelect?.value === 'reviewer' && reviewInput?.value === '600000'
+        && !host.querySelector('[data-testid="sa-bot-stage-gates"]'),
+      `select=${reviewSelect?.value ?? 'none'} budget=${reviewInput?.value ?? 'none'} row=${reviewRow?.textContent?.slice(0, 80) ?? 'none'}`)
+    const cancelEdit = [...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '取消')
+    cancelEdit?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(100)
+    const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建 Bot')
     newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
-    const modalText = () => [...host.querySelectorAll('.sa-profile-modal')].map(node => node.textContent).join('')
-    check('the editor previews what the profile would get (§13.2)',
+    const modalText = () => [...host.querySelectorAll('.sa-bot-modal')].map(node => node.textContent).join('')
+    check('the editor previews what the bot would get (§13.2)',
       /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
     check('the editor warns that an unverified backend cannot be saved (AC-B1)',
       /未核验/.test(modalText()), modalText().slice(0, 240))
-    const saveButton = [...host.querySelectorAll('.sa-profile-modal button')]
+    const saveButton = [...host.querySelectorAll('.sa-bot-modal button')]
       .find(node => (node.textContent ?? '').trim() === '保存')
     saveButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(160)
     check('a rejected save shows the host error code in place (§13.2)',
-      /PROFILE_BACKEND_UNVERIFIED/.test(profilesText()), profilesText().slice(0, 300))
+      /BOT_BACKEND_UNVERIFIED/.test(botsText()), botsText().slice(0, 300))
     const afterReject = lists.at(-1) ?? []
+    check('a stage-level bot and budget round-trip through the editor (§10.2)',
+      afterReject.some(bot => Array.isArray(bot.stages) && bot.stages.some(entry =>
+        entry.stage === 'review' && entry.bot === 'reviewer' && entry.budget?.timeoutMs === 600000)),
+      JSON.stringify(afterReject.map(bot => bot.stages)).slice(0, 240))
     check('a save sends the store without host-added keys (§4.2)',
-      afterReject.every(profile => !('capabilities' in profile) && !('environment' in profile)),
-      JSON.stringify(afterReject.map(profile => Object.keys(profile))).slice(0, 200))
+      afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
+      JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))
     // A verified backend accepts the same store: remount so the group loads the verified evidence.
     root.unmount()
     const verifiedRoot = ReactDOM.createRoot(host)
     verifiedRoot.render(React.createElement(Panel.Provider, { value: panel },
       React.createElement(PanelState.Provider, { value: { data: fixtures.status, error: undefined, reload: async () => {},
-        actions: { profiles: async () => store('verified'), saveProfiles: async list => ({ ...store('verified'), profiles: list }),
-          verifyProfileBackend: async () => ({}) } } },
-        React.createElement(ProfilesCard))))
+        actions: { bots: async () => store('verified'), saveBots: async list => ({ ...store('verified'), bots: list }),
+          verifyBotBackend: async () => ({}) } } },
+        React.createElement(BotsCard))))
     await sleep(160)
-    check('a verified backend renders as verified (§13.2)', /已核验/.test(profilesText()), profilesText().slice(0, 240))
+    check('a verified backend renders as verified (§13.2)', /已核验/.test(botsText()), botsText().slice(0, 240))
     verifiedRoot.unmount()
     host.remove()
   }

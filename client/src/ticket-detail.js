@@ -26,34 +26,34 @@ Object.assign(PAGE_TEXT, {
   'wf.stageBlocked': ['已阻塞', 'Blocked'],
 })
 Object.assign(PAGE_TEXT, {
-  // §13.1: a run says which profile ran it, who chose it and what the choice was based on.
-  'detail.profileLabel': ['档位', 'Profile'],
-  'detail.profileAdhoc': ['现拉（{id}）', 'Synthesised ({id})'],
-  'detail.profileSource.explicit': ['手动指定', 'Manual'],
-  'detail.profileSource.rule': ['规则', 'Rule'],
-  'detail.profileSource.model': ['决策模型', 'Judge model'],
-  'detail.profileSource.default': ['默认', 'Default'],
-  'detail.profileSource.adhoc': ['现拉', 'Synthesised'],
-  'detail.profileDegraded.explicit': ['指定的档位不可用', 'The requested profile is unusable'],
-  'detail.profileDegraded.model': ['决策模型回答无效，已回退', 'The judge answered invalidly; fell back'],
-  'detail.profileDegraded.null': ['决策模型没有选出档位', 'The judge chose none'],
-  'detail.profileDegraded.budget': ['本轮回合的分派预算已用完', 'Dispatch budget for this poll is spent'],
-  'detail.profileDegraded.other': ['降级：{code}', 'Degraded: {code}'],
-  'detail.profileDegradedHint': ['这次运行用的不是首选档位，原因见右侧说明。', 'This run did not use its first-choice profile; the reason is beside it.'],
-  'detail.profileCapability': ['能力：{caps}（{source}{at}）', 'Capabilities: {caps} ({source}{at})'],
-  'detail.profileCapabilityNone': ['能力：无（后端未核验）', 'Capabilities: none (backend unverified)'],
-  'detail.profileCapabilitySource.probe': ['探针', 'probe'],
-  'detail.profileCapabilitySource.smoke': ['冒烟核验', 'smoke check'],
-  'detail.profileCapabilitySource.fallback': ['降级默认表，未核验', 'conservative default, unverified'],
-  'detail.profileUnverified': ['后端 {backend} 未核验，需先 smoke 核验。', 'Backend {backend} is unverified; run a smoke check first.'],
-  'detail.profileSave': ['存为档位', 'Save as profile'],
-  'detail.profileSaveReady': ['已填入「设置 → 档位」的编辑器，确认后手动保存。', 'Loaded into Settings → Profiles; review and save it yourself.'],
-  'detail.profileRerun': ['换档重跑', 'Rerun with profile'],
-  'detail.profileRerunPick': ['选择档位…', 'Pick a profile…'],
-  'detail.profileRerunDone': ['已用档位 {id} 重新开始一次运行。', 'Started a new run with profile {id}.'],
-  'detail.profileDriftLabel': ['档位文件', 'Profile file'],
-  'detail.profileDrift': ['仓库里的档位文件已忽略（档位只从 stateDir 读）：{path}；实际读取 {store}',
-    'The repository profile file is ignored (profiles come from the state dir only): {path}; reading {store}'],
+  // §13.1: a run says which bot ran it, who chose it and what the choice was based on.
+  'detail.botLabel': ['Bot', 'Bot'],
+  'detail.botAdhoc': ['现拉（{id}）', 'Synthesised ({id})'],
+  'detail.botSource.explicit': ['手动指定', 'Manual'],
+  'detail.botSource.rule': ['规则', 'Rule'],
+  'detail.botSource.model': ['决策模型', 'Judge model'],
+  'detail.botSource.default': ['默认', 'Default'],
+  'detail.botSource.adhoc': ['现拉', 'Synthesised'],
+  'detail.botDegraded.explicit': ['指定的 Bot 不可用', 'The requested bot is unusable'],
+  'detail.botDegraded.model': ['决策模型回答无效，已回退', 'The judge answered invalidly; fell back'],
+  'detail.botDegraded.null': ['决策模型没有选出 Bot', 'The judge chose none'],
+  'detail.botDegraded.budget': ['本轮回合的分派预算已用完', 'Dispatch budget for this poll is spent'],
+  'detail.botDegraded.other': ['降级：{code}', 'Degraded: {code}'],
+  'detail.botDegradedHint': ['这次运行用的不是首选 Bot，原因见右侧说明。', 'This run did not use its first-choice bot; the reason is beside it.'],
+  'detail.botCapability': ['能力：{caps}（{source}{at}）', 'Capabilities: {caps} ({source}{at})'],
+  'detail.botCapabilityNone': ['能力：无（后端未核验）', 'Capabilities: none (backend unverified)'],
+  'detail.botCapabilitySource.probe': ['探针', 'probe'],
+  'detail.botCapabilitySource.smoke': ['冒烟核验', 'smoke check'],
+  'detail.botCapabilitySource.fallback': ['降级默认表，未核验', 'conservative default, unverified'],
+  'detail.botUnverified': ['后端 {backend} 未核验，需先 smoke 核验。', 'Backend {backend} is unverified; run a smoke check first.'],
+  'detail.botSave': ['存为 Bot', 'Save as bot'],
+  'detail.botSaveReady': ['已填入「设置 → Bot」的编辑器，确认后手动保存。', 'Loaded into Settings → Bots; review and save it yourself.'],
+  'detail.botRerun': ['换 Bot 重跑', 'Rerun with bot'],
+  'detail.botRerunPick': ['选择 Bot…', 'Pick a bot…'],
+  'detail.botRerunDone': ['已用 Bot {id} 重新开始一次运行。', 'Started a new run with bot {id}.'],
+  'detail.botDriftLabel': ['Bot 文件', 'Bot file'],
+  'detail.botDrift': ['仓库里的 Bot 文件已忽略（Bot 只从 stateDir 读）：{path}；实际读取 {store}',
+    'The repository bot file is ignored (bots come from the state dir only): {path}; reading {store}'],
 })
 
 /* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
@@ -859,62 +859,62 @@ export function TicketActivities({ activities }) {
 }
 
 /** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§13.1 item 5). */
-export const PROFILE_DEGRADED = { 'explicit-unusable': 'detail.profileDegraded.explicit', model: 'detail.profileDegraded.model',
-  'model-null': 'detail.profileDegraded.null', 'model-budget': 'detail.profileDegraded.budget' }
+export const BOT_DEGRADED = { 'explicit-unusable': 'detail.botDegraded.explicit', model: 'detail.botDegraded.model',
+  'model-null': 'detail.botDegraded.null', 'model-budget': 'detail.botDegraded.budget' }
 
-/** One run's dispatch record (§7.5): which profile, who chose it and why, and the capability evidence behind it. */
-export function RunProfile({ run, choices = [], onRerun }) {
+/** One run's dispatch record (§7.5): which bot, who chose it and why, and the capability evidence behind it. */
+export function RunBot({ run, choices = [], onRerun }) {
   const { t, navigate, notify } = usePanel()
   const [choice, setChoice] = useState('')
-  const profile = run?.profile && typeof run.profile === 'object' ? run.profile : undefined
-  if (!profile || !profile.id) return null
-  const id = String(profile.id)
-  const adhoc = String(profile.source ?? '') === 'adhoc' || id.startsWith('adhoc:')
-  const source = pt(t, `detail.profileSource.${String(profile.source ?? 'default')}`)
-  const degraded = typeof profile.degraded === 'string' && profile.degraded
-    ? pt(t, PROFILE_DEGRADED[profile.degraded] ?? 'detail.profileDegraded.other', { code: profile.degraded })
+  const bot = run?.bot && typeof run.bot === 'object' ? run.bot : undefined
+  if (!bot || !bot.id) return null
+  const id = String(bot.id)
+  const adhoc = String(bot.source ?? '') === 'adhoc' || id.startsWith('adhoc:')
+  const source = pt(t, `detail.botSource.${String(bot.source ?? 'default')}`)
+  const degraded = typeof bot.degraded === 'string' && bot.degraded
+    ? pt(t, BOT_DEGRADED[bot.degraded] ?? 'detail.botDegraded.other', { code: bot.degraded })
     : ''
-  const capabilities = Array.isArray(profile.capability) ? profile.capability : []
-  const capabilitySource = pt(t, `detail.profileCapabilitySource.${String(profile.capabilitySource ?? 'fallback')}`)
+  const capabilities = Array.isArray(bot.capability) ? bot.capability : []
+  const capabilitySource = pt(t, `detail.botCapabilitySource.${String(bot.capabilitySource ?? 'fallback')}`)
   // The capability line names when the evidence was taken; an absent or unparseable stamp simply renders none.
-  const verifiedAt = typeof profile.verifiedAt === 'string' && Number.isFinite(Date.parse(profile.verifiedAt))
-    ? fullTime(profile.verifiedAt, timeLocale(t.lang)) : ''
-  const unverified = profile.capabilitySource !== 'probe' && profile.capabilitySource !== 'smoke'
+  const verifiedAt = typeof bot.verifiedAt === 'string' && Number.isFinite(Date.parse(bot.verifiedAt))
+    ? fullTime(bot.verifiedAt, timeLocale(t.lang)) : ''
+  const unverified = bot.capabilitySource !== 'probe' && bot.capabilitySource !== 'smoke'
   const options = choices.filter(item => typeof item === 'string' && item !== id)
   const save = () => {
-    if (!profile.resolved) return
-    try { window.sessionStorage.setItem('superagent-panel/profile-draft', JSON.stringify(profile.resolved)) } catch { /* private mode */ }
-    notify(pt(t, 'detail.profileSaveReady'))
-    navigate({ page: 'settings', group: 'profiles' })
+    if (!bot.resolved) return
+    try { window.sessionStorage.setItem('superagent-panel/bot-draft', JSON.stringify(bot.resolved)) } catch { /* private mode */ }
+    notify(pt(t, 'detail.botSaveReady'))
+    navigate({ page: 'settings', group: 'bots' })
   }
-  return <div className="sa-run-profile" data-degraded={degraded ? 'true' : undefined}>
+  return <div className="sa-run-bot" data-degraded={degraded ? 'true' : undefined}>
     <p className="sa-row-meta">
-      <Tag tone="outline">{pt(t, 'detail.profileLabel')}</Tag>
-      <span>{adhoc ? pt(t, 'detail.profileAdhoc', { id }) : id}</span>
-      <span className="sa-hint">{`${source} · ${String(profile.reason ?? '')}`}</span>
-      {degraded ? <Tag tone="warn" title={pt(t, 'detail.profileDegradedHint')}>{degraded}</Tag> : null}
+      <Tag tone="outline">{pt(t, 'detail.botLabel')}</Tag>
+      <span>{adhoc ? pt(t, 'detail.botAdhoc', { id }) : id}</span>
+      <span className="sa-hint">{`${source} · ${String(bot.reason ?? '')}`}</span>
+      {degraded ? <Tag tone="warn" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
     </p>
     <p className="sa-hint">
       {capabilities.length
-        ? pt(t, 'detail.profileCapability', { caps: capabilities.join(', '), source: capabilitySource,
+        ? pt(t, 'detail.botCapability', { caps: capabilities.join(', '), source: capabilitySource,
           at: verifiedAt ? ` / ${verifiedAt}` : '' })
-        : pt(t, 'detail.profileCapabilityNone')}
+        : pt(t, 'detail.botCapabilityNone')}
     </p>
     {unverified
       ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
-        {pt(t, 'detail.profileUnverified', { backend: String(profile.backend ?? profile.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
+        {pt(t, 'detail.botUnverified', { backend: String(bot.backend ?? bot.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
       : null}
     <p className="sa-row-meta">
       {onRerun
         ? <>
-          <Select label={pt(t, 'detail.profileRerunPick')} value={choice} onChange={setChoice}
-            options={[{ value: '', label: pt(t, 'detail.profileRerunPick') },
+          <Select label={pt(t, 'detail.botRerunPick')} value={choice} onChange={setChoice}
+            options={[{ value: '', label: pt(t, 'detail.botRerunPick') },
               ...options.map(item => ({ value: item, label: item }))]} />
           <Button size="sm" disabled={!choice} onClick={() => { const picked = choice; setChoice(''); void onRerun(picked) }}>
-            {pt(t, 'detail.profileRerun')}</Button>
+            {pt(t, 'detail.botRerun')}</Button>
         </>
         : null}
-      {profile.resolved ? <Button size="sm" variant="ghost" onClick={save}>{pt(t, 'detail.profileSave')}</Button> : null}
+      {bot.resolved ? <Button size="sm" variant="ghost" onClick={save}>{pt(t, 'detail.botSave')}</Button> : null}
     </p>
   </div>
 }
@@ -929,7 +929,7 @@ export function runRouteTag(t, run) {
     ? pt(t, 'detail.routeApplied', { backend, workType })
     : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
   return <Tag tone={route.applied ? 'outline' : 'info'}
-    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.profile ?? ''}`}>{text}</Tag>
+    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>{text}</Tag>
 }
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
@@ -977,7 +977,7 @@ export function TicketRunRows({ runs, choices = [], onRerun }) {
           : null}
         <RunHandoff run={run} />
         <RunReport run={run} />
-        <RunProfile run={run} choices={choices} onRerun={onRerun} />
+        <RunBot run={run} choices={choices} onRerun={onRerun} />
         {/* §13.1: a failed, refused or timed-out run shows its trace directly instead of behind a fold. */}
         <RunTrace run={run} open={run.status === 'failed' || Boolean(run.stopReason)} />
       </div>
@@ -1590,10 +1590,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     { reload: refreshAll })
   // P1-5: resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
   const resume = useAction(async () => { await act.resumeTicket(id); notify(pt(t, 'detail.resumed')) }, { reload: refreshAll })
-  // §7.6: rerun under another profile is a new run with an explicit override; the Ticket keeps its own fields.
-  const rerunProfile = useAction(async profile => {
-    await act.runTicket(id, { dryRun: false, wait: false, profile })
-    notify(pt(t, 'detail.profileRerunDone', { id: profile }))
+  // §7.6: rerun under another bot is a new run with an explicit override; the Ticket keeps its own fields.
+  const rerunBot = useAction(async bot => {
+    await act.runTicket(id, { dryRun: false, wait: false, bot })
+    notify(pt(t, 'detail.botRerunDone', { id: bot }))
   }, { reload: refreshAll })
   const stopRun = useAction(async () => { await act.stopTicket(id); notify(pt(t, 'ticket.stopDone')) }, { reload: refreshAll })
   // P1-4: the answer buffer stays local until submitted; answering re-runs the Ticket as a new run.
@@ -1731,12 +1731,12 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     onClick={() => navigate({ page: 'trigger', id: thread.key })}>{thread.title ?? liveShortId(thread.key)}</Button>])
   // P1 routing: before the next run show who routing suggests (and whether it will be applied).
   const routePreview = data?.routePreview && typeof data.routePreview === 'object' ? data.routePreview : null
-  // §4.1/AC12: a repository's own profile file never takes effect, and the page says so whether or not a route preview
+  // §4.1/AC12: a repository's own bot file never takes effect, and the page says so whether or not a route preview
   // exists (a terminal Ticket has none, and that is when believing the repository's file took effect is most costly).
-  const drift = data?.profileDrift && typeof data.profileDrift === 'object' ? data.profileDrift : undefined
+  const drift = data?.botDrift && typeof data.botDrift === 'object' ? data.botDrift : undefined
   if (drift?.ignored) {
-    authRows.push([pt(t, 'detail.profileDriftLabel'),
-      <span>{pt(t, 'detail.profileDrift', { path: String(drift.worktreeFile ?? ''),
+    authRows.push([pt(t, 'detail.botDriftLabel'),
+      <span>{pt(t, 'detail.botDrift', { path: String(drift.worktreeFile ?? ''),
         store: String(drift.storeFile ?? '') })}</span>])
   }
   if (routePreview) {
@@ -2102,7 +2102,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       <p>{ticketWorkflowStateLabel(t, ticket.workflow.status)}
         {ticket.workflow.detail ? <span className="sa-hint">{` · ${ticket.workflow.detail}`}</span> : null}</p>
       {(ticket.workflow.stages ?? []).map((stage, index) => <Folded
-        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
+        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'}${stage.bot ? ` (${stage.bot})` : ''} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
         <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {stage.error ?? JSON.stringify(stage.result ?? {}, null, 2)}
         </pre>
@@ -2288,8 +2288,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       : null}
     <Section id="sa-ticket-runs" title={pt(t, 'ticket.runs')} count={runs.length}>
       {runs.length
-        ? <TicketRunRows runs={runs} choices={Array.isArray(data?.profileChoices) ? data.profileChoices : []}
-          onRerun={rerunProfile.run} />
+        ? <TicketRunRows runs={runs} choices={Array.isArray(data?.botChoices) ? data.botChoices : []}
+          onRerun={rerunBot.run} />
         : <Hint>{pt(t, 'ticket.noRuns')}</Hint>}
     </Section>
     {/* P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
