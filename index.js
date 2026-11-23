@@ -12,7 +12,8 @@ import { createEngine } from './lib/live/engine.js'
 import { updateLiveConfig, saveRepoToken, saveTokenFile } from './lib/live/live-json.js'
 import { DELIVERABLES, enabledBackends } from './lib/live/routing.js'
 import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, verifyTicket, resumeTicket,
-  resumeInterruptedTicket, answerTicket, ticketBusyAction, ticketBusyMessage } from './lib/live/executor.js'
+  resumeInterruptedTicket, answerTicket, ticketBusyAction, ticketBusyMessage,
+  PUBLISHABLE_STATUSES } from './lib/live/executor.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
@@ -44,9 +45,6 @@ function assertTicketFree(ticketId) {
   const running = ticketBusyAction(ticketId)
   if (running) throw new ActionError(409, ticketBusyMessage(ticketId, running))
 }
-
-/** Ticket states `publishTicket` accepts; anything else is refused up front instead of failing after a 202. */
-const PUBLISHABLE_STATUSES = ['ready', 'failed', 'pushed']
 
 /**
  * Preflight shared by the routes that start an executor run. Without it the request answered 202 and the refusal
@@ -539,7 +537,7 @@ export function apply(ctx, config = {}) {
           const view = engine.ticketView(third)
           if (!view) throw new ActionError(404, `未知工单：${third}`)
           if (!PUBLISHABLE_STATUSES.includes(view.ticket.status)) {
-            throw new ActionError(409, `工单当前状态为 ${view.ticket.status}，只有待执行、失败或已推送的工单可以发布 MR。`)
+            throw new ActionError(409, `工单当前状态为 ${view.ticket.status}，只有待执行、交付失败或已推送的工单可以发布 MR。`)
           }
           requireExecutor(engine, { dryRun: false })
           requirePush(engine)

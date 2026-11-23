@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.1.1] — 2026-11-23
+
+交付之后才失败（MR 流水线红了、dev 部署 job 红了、MR 被关掉）的工单，在面板里点不动：行内只有「查看原因」，菜单里的「发布 MR」被状态白名单挡住，而「重试」即便跑起来也会复用那张**已经合并**的 MR，于是永远盯着旧 merge commit 的流水线。
+
+### 根因与修改
+
+- **合并后的 MR 被当成「这次交付」反复复用**：`lib/live/executor.js` 的 `openOrAdoptMergeRequest` 先找 `state==='merged'`、再找 `opened`，且不比对 head。现在 `opened` 优先，`merged` 只有在仍指向当前 HEAD 时才采纳（新增 `headSha` 入参，取 `item.sha ?? item.diffRefs?.headSha`），否则新建 MR；两条调用（`executeTicket` 与 `publishTicketInner`）都传 `headSha`。
+- **推送证据被复用时直接沿用旧 MR**：`executeTicket` 的 `reusePush` 分支原本无条件 `mr = ticket.links.mergeRequest` 并打印 "already opened"。现在 stored MR 只有在 `opened`、或 `merged` 且仍指向 HEAD、或没有 `state`（旧工单）时才复用，否则落到 API 分支重新开 MR。
+- **新 MR 背着旧交付的账**：`linkMergeRequest` 在 MR `iid` 变化时丢弃 `deployment` / `autoMerge` / `pipeline` / `verification`。否则旧的 `autoMerge.state='merged'` 会让自动合并守卫直接拒绝新 MR，旧的 `verification.merged=true` 会让新交付在落地前就被判成已合并。
+- **失败态不可发布**：`PUBLISHABLE_STATUSES` 从 `lib/live/executor.js` 导出（`ready`/`failed`/`pushed`/`ci-failed`/`deploy-failed`/`closed`），`index.js` 与 `client/src/live-ui.js` 的 `publishableStatusOf` 共用同一份口径；409 文案改为「只有待执行、交付失败或已推送的工单可以发布 MR」。
+- **行内主按钮给出口**：`ci-failed` / `deploy-failed` 的 primary 从 `diagnose` 改为 `redeliver`（文案「重新交付」/「Re-deliver」），`primaryActionOf` 映射到已有的 `publish` 通道（重跑闸门 → 提交 → 推送 → 开新 MR），执行器未启用或不允许推送时该按钮禁用。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：675 pass / 0 fail（新增 3 条：合并 MR 的 head 落后于 HEAD 时新开 MR 且清掉旧交付账；head 未变时仍采纳已合并 MR；`deploy-failed` 可发布、`merged` 不可发布）。
+- `node scripts/render-check.mjs`：286 checks / 0 fail（R2-10 扩到失败态，新增「失败交付在行内可重新交付」）。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs`：24 modules / 529684 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+- 真实工单 `tkt_67d46ecb809d4ce4` 复现的链路：MR !70 在修复提交前自动合并，dev 流水线 533268 的 `agent-package` 因 skill/CLI 版本不一致失败，之后的 job 全 skipped；修复提交合入（MR !71，merge commit `31b3ba6`）后 dev 流水线 533279 的 `agent-package` 转绿。
+
+---
+
 ## [1.1.0] — 2026-11-23
 
 Bot 从「设置里的一个分组」升级成顶层页签，位置在「执行」左边：先把「谁来做」定下来，再看队列。设置页回到只配置工作流本身，Bot 的定义、查看、编辑、核验全部集中在 Bot 页签。

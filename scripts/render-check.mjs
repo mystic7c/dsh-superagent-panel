@@ -459,7 +459,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   // row component, the reason/failure vocabulary and the source/repo label projections.
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
-  hostOfUrl, hostName, reasonLabel, publishableStatusOf, clampEvalOffset, Menu, ticketDismissable, HistoryChanges,
+  hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
+  ticketDismissable, HistoryChanges,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError,
   botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
@@ -491,6 +492,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   hostName: 'util.js',
   reasonLabel: 'i18n.js',
   publishableStatusOf: 'live-ui.js',
+  primaryActionOf: 'live-ui.js',
+  ticketStatus: 'live-ui.js',
   ticketDismissable: 'ticket-detail.js',
   HistoryChanges: 'settings.js',
   AutomationBar: 'live-ui.js',
@@ -2075,9 +2078,20 @@ console.log('STEP pure projections')
   check('the publish entry waits for a publishable Ticket status (R2-10)',
     publishableStatusOf({ status: 'ready' }) && publishableStatusOf({ status: 'failed' })
       && publishableStatusOf({ status: 'pushed' }) && !publishableStatusOf({ status: 'queued' })
+      // A delivery that failed after the push is exactly what a person has to publish again.
+      && publishableStatusOf({ status: 'ci-failed' }) && publishableStatusOf({ status: 'deploy-failed' })
+      && publishableStatusOf({ status: 'closed' })
       && !publishableStatusOf({ status: 'ci-pending' }) && !publishableStatusOf({}),
-    JSON.stringify(['ready', 'failed', 'pushed', 'queued', 'ci-pending', undefined]
-      .map(status => [status ?? 'none', publishableStatusOf({ status })])))
+    JSON.stringify(['ready', 'failed', 'pushed', 'ci-failed', 'deploy-failed', 'closed', 'queued', 'ci-pending',
+      undefined].map(status => [status ?? 'none', publishableStatusOf({ status })])))
+
+  // A failed delivery's row offers re-delivery: publish (gates, commit, push, fresh MR) is the whole recovery, so the
+  // row must not send the operator to a diagnosis page with no way out.
+  check('a failed delivery re-delivers from the row (redeliver -> publish)',
+    primaryActionOf({ status: 'deploy-failed', links: {} }, ticketStatus({ status: 'deploy-failed' }))?.kind === 'publish'
+      && primaryActionOf({ status: 'ci-failed', links: {} }, ticketStatus({ status: 'ci-failed' }))?.kind === 'publish',
+    JSON.stringify(['deploy-failed', 'ci-failed'].map(status =>
+      [status, primaryActionOf({ status, links: {} }, ticketStatus({ status }))?.labelKey])))
 
   // R2-14: an offset past the end is a page problem, not an empty filter; the helper keeps the last real page.
   check('an out-of-range eval offset clamps to the last page (R2-14)',

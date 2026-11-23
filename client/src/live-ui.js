@@ -54,7 +54,8 @@ Object.assign(PAGE_TEXT, {
     failed: ['失败', 'Failed'], done: ['已结束', 'Ended'] },
   primary: { accept: ['去验收', 'Review UAT'], merge: ['去合并 MR', 'Merge MR'], deploy: ['刷新部署', 'Refresh deploy'],
     diagnose: ['查看原因', 'See what failed'], progress: ['干跑执行', 'Dry run'], openMr: ['打开 MR', 'Open MR'],
-    gate: ['去处理闸门', 'Handle the gate'], answer: ['去回答', 'Answer the question'] },
+    gate: ['去处理闸门', 'Handle the gate'], answer: ['去回答', 'Answer the question'],
+    redeliver: ['重新交付', 'Re-deliver'] },
   disposition: { queued: ['排队', 'Queued'], evaluating: ['评估中', 'Evaluating'], delivered: ['已送达', 'Delivered'],
     fanout: ['扇出', 'Fanned out'], filtered: ['被过滤', 'Filtered'] },
   rail: { trigger: ['触发', 'Trigger'], eval: ['评估', 'Eval'], ticket: ['工单', 'Ticket'], execution: ['执行', 'Execution'],
@@ -468,8 +469,10 @@ export const TICKET_VIEW = {
   waiting_for_human: { state: 'warning', tone: 'warning', group: 'working', needsHuman: false, primary: 'none' },
   interrupted: { state: 'warning', tone: 'warning', group: 'failed', needsHuman: false, primary: 'none' },
   failed: { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
-  'ci-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
-  'deploy-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'diagnose' },
+  // A delivery that failed after the branch left the panel is fixable in place: re-delivery pushes the worktree and
+  // opens a fresh MR, so the row offers that instead of only the diagnosis.
+  'ci-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'redeliver' },
+  'deploy-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'redeliver' },
 }
 
 /**
@@ -809,6 +812,8 @@ export function primaryActionOf(ticket, view) {
       return external ? { labelKey: 'primary.merge', kind: 'external', href: external } : { labelKey: 'primary.merge', kind: 'detail' }
     case 'openMr': return external ? { labelKey: 'primary.openMr', kind: 'external', href: external } : { labelKey: 'primary.openMr', kind: 'detail' }
     case 'deploy': return { labelKey: 'primary.deploy', kind: 'refreshCi' }
+    // Re-delivery is publish (gates on this worktree, commit, push, new MR) — it must not need a separate pipeline.
+    case 'redeliver': return { labelKey: 'primary.redeliver', kind: 'publish' }
     case 'diagnose': return { labelKey: 'primary.diagnose', kind: 'detail' }
     // A parked gate needs the three-way human decision that only the detail can state; the row opens it. A parked
     // question is the same contract: the answer form lives in the detail banner.
@@ -916,9 +921,10 @@ export function ticketEvidence(t, ticket, view, now = Date.now()) {
  * The core ticket row (spec 7.3): status shape + title + at most three tags, one primary action and a ⋯ menu.
  * The whole row opens the detail route; inner controls stop propagation. Height is never below 44px (CSS).
  */
-/** R2-10: the server only publishes ready/failed/pushed Tickets; the menu must not offer the entry before that. */
+/** R2-10: the server publishes ready/failed/pushed and the failed-delivery states (`ci-failed`, `deploy-failed`,
+ *  `closed`); the menu must not offer the entry before that. Keep in step with PUBLISHABLE_STATUSES in the executor. */
 export function publishableStatusOf(ticket) {
-  return ['ready', 'failed', 'pushed'].includes(String(ticket?.status ?? ''))
+  return ['ready', 'failed', 'pushed', 'ci-failed', 'deploy-failed', 'closed'].includes(String(ticket?.status ?? ''))
 }
 /** @param {{ ticket: any, page?: string, actions?: any, reload?: any, compact?: boolean, extra?: any, now?: any }} props */
 export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
@@ -977,7 +983,8 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
         // An unsafe URL never becomes a link; the same action degrades to opening the detail.
         : <Button variant="primary" size="sm"
           onClick={event => { event.stopPropagation(); open() }}>{pt(t, primary.labelKey)}</Button>
-      : <Button variant="primary" size="sm" disabled={Boolean(busyOf[primary.kind])}
+      : <Button variant="primary" size="sm"
+        disabled={Boolean(busyOf[primary.kind]) || (primary.kind === 'publish' && !canPublish)}
         onClick={event => { event.stopPropagation(); branches[primary.kind]() }}>{pt(t, primary.labelKey)}</Button>
   const allItems = [
     { key: 'dryRun', label: pt(t, 'menu.dryRun'), onSelect: () => { void dryRun.run() }, disabled: dryRun.busy },
