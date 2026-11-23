@@ -885,7 +885,7 @@ export function RunBot({ run, choices = [], onRerun }) {
     if (!bot.resolved) return
     try { window.sessionStorage.setItem('superagent-panel/bot-draft', JSON.stringify(bot.resolved)) } catch { /* private mode */ }
     notify(pt(t, 'detail.botSaveReady'))
-    navigate({ page: 'settings', group: 'bots' })
+    navigate({ page: 'bots' })
   }
   return <div className="sa-run-bot" data-degraded={degraded ? 'true' : undefined}>
     <p className="sa-row-meta">

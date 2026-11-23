@@ -1204,8 +1204,8 @@ check('the merge permission is marked as high risk', writeText.includes('高危'
 const navLabels = [...rootElement.querySelectorAll('.sa-settings-nav .sa-settings-group')]
   .map(node => (node.textContent ?? '').trim()).filter(Boolean)
 check('settings rail separates writable groups from reference groups',
-  navLabels.slice(0, 7).join('/') === '来源/评估确认/运行/Worker/Bot/写权限/仓库'
-    && navLabels.slice(7).join('/') === '评估/提示词'
+  navLabels.slice(0, 6).join('/') === '来源/评估确认/运行/Worker/写权限/仓库'
+    && navLabels.slice(6).join('/') === '评估/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
 
 // U-06: turning on a permission is not a one-step save. The save bar expands a plain-language change list first and
@@ -1632,7 +1632,18 @@ rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { ke
 await sleep(400)
 check('Escape closes the search palette', !rootElement.querySelector('.sa-modal'), 'modal still open')
 
-// Keyboard shortcut: Alt+3 jumps to Eval, Alt+1 returns to the desk.
+// Bots moved out of Settings into their own tab: the tab order is the promise that it sits just left of 执行.
+const tabLabels = [...rootElement.querySelectorAll('.sa-topbar [role="tab"]')].map(node => (node.textContent ?? '').trim())
+check('the Bot tab sits immediately left of the execution tab', tabLabels.indexOf('Bot') === tabLabels.indexOf('执行') - 1, tabLabels.join('|'))
+clickByText('Bot', '.sa-topbar [role="tab"]')
+await sleep(700)
+const botsTabText = rootElement.querySelector('.sa-main')?.textContent ?? ''
+check('the Bot tab carries the bot surface: store file, built-ins, backends, new-bot action',
+  /Bot 列表/.test(botsTabText) && /文件/.test(botsTabText) && /内置 Bot/.test(botsTabText)
+    && /后端核验状态/.test(botsTabText) && /新建 Bot/.test(botsTabText), botsTabText.slice(0, 240))
+check('Settings no longer carries a Bot group', ![...rootElement.querySelectorAll('.sa-settings-nav button')]
+  .some(node => (node.textContent ?? '').trim() === 'Bot'))
+// Keyboard shortcut: Alt+4 jumps to Eval, Alt+1 returns to the desk.
 window.dispatchEvent(new window.KeyboardEvent('keydown', { key: '4', altKey: true, bubbles: true }))
 await sleep(700)
 const shortcutTab = [...rootElement.querySelectorAll('[role="tab"]')].find(node => node.getAttribute('aria-selected') === 'true')?.textContent?.trim()
@@ -1642,8 +1653,8 @@ await sleep(700)
 const shortcutBack = [...rootElement.querySelectorAll('[role="tab"]')].find(node => node.getAttribute('aria-selected') === 'true')?.textContent?.trim()
 check('Alt+1 returns to the Overview tab', shortcutBack === '概览', String(shortcutBack))
 
-// Sticky chrome: header + six tabs are outside the body scroller, and a route change starts at the top.
-check('header and six tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 6
+// Sticky chrome: header + seven tabs are outside the body scroller, and a route change starts at the top.
+check('header and seven tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 7
   && Boolean(rootElement.querySelector('.sa-topbar .sa-head')), String(rootElement.querySelectorAll('.sa-topbar [role="tab"]').length))
 check('page body is the only scrolling container', Boolean(rootElement.querySelector('.sa-scroll > .sa-main')),
   'missing .sa-scroll > .sa-main')
@@ -2214,6 +2225,15 @@ console.log('STEP pure projections')
     const editMine = [...(mineRow?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
     editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
+    // The first screen stays small: stage/budget/tool fields sit behind 高级设置 and are not even mounted until it opens.
+    check('the bot editor keeps advanced fields behind a disclosure (§13.2)',
+      !host.querySelector('[data-testid="sa-bot-stage-review"]')
+        && /高级设置/.test(host.querySelector('.sa-bot-modal')?.textContent ?? ''),
+      host.querySelector('.sa-bot-modal')?.textContent?.slice(0, 200) ?? 'no modal')
+    const advancedToggle = [...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+      .find(node => /高级设置/.test(node.textContent ?? ''))
+    advancedToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(120)
     const reviewRow = host.querySelector('[data-testid="sa-bot-stage-review"]')
     const reviewSelect = reviewRow?.querySelector('select')
     const reviewInput = reviewRow?.querySelector('input')
@@ -2228,6 +2248,10 @@ console.log('STEP pure projections')
     newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
     const modalText = () => [...host.querySelectorAll('.sa-bot-modal')].map(node => node.textContent).join('')
+    ;[...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+      .find(node => /高级设置/.test(node.textContent ?? ''))
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(120)
     check('the editor previews what the bot would get (§13.2)',
       /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
     check('the editor warns that an unverified backend cannot be saved (AC-B1)',

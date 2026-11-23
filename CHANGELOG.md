@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.1.0] — 2026-11-23
+
+Bot 从「设置里的一个分组」升级成顶层页签，位置在「执行」左边：先把「谁来做」定下来，再看队列。设置页回到只配置工作流本身，Bot 的定义、查看、编辑、核验全部集中在 Bot 页签。
+
+### 根因与修改
+
+- **Bot 藏在设置里**：`SETTINGS_GROUPS` 的 `bots` 分组默认不在首屏，第一次用的人要先找设置、再找分组才看得到"这类活由谁做"。现在 `client/src/router.js` 的 `TABS` 在 `eval` 与 `execution` 之间插入 `bots`（Alt+5 直达），`shell.js` 的 `pageView` 直接渲染 `BotsCard`；设置页的 `bots` 分组与 `settingsGroup.bots` 标签随之删除，rail 上不再有它。
+- **入口都跟着走**：工单详情「存为 Bot」原本 `navigate({page:'settings',group:'bots'})`，现在送到 `{page:'bots'}`；`BotsCard` 挂载时消费 `superagent-panel/bot-draft` 的行为不变，草稿仍然落到新页签的编辑器里。
+- **标题不再重复**：`st.botsTitle` 从「Bot」改为「Bot 列表」，避免页签与区块标题都叫 Bot 时读起来像重复渲染。
+- **文档与验收同步**：`README.md`、`docs/pages.md`（新增 Bot 章节）、`docs/ui-workflow.md` 由六个页签改为七个；`scripts/verify-panel.mjs` 的 tablist 计数 6→7；`render-check` 新增两条断言——Bot 页签紧邻「执行」左侧、Bot 页签带着文件/内置/后端核验/新建 Bot 四块且设置页不再有 Bot 分组。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：672 pass / 0 fail。
+- `node scripts/render-check.mjs`：285 checks / 0 fail。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1504 page-local；`node scripts/build-client.mjs`：24 modules / 529511 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+- 独立端口 + 独立状态目录（`DSH_SUPERAGENT_STATE_DIR=/tmp/...`）起实例，页面 200 且插件加载，无 Host 报错；测完已关闭。
+
+---
+
+## [1.0.24] — 2026-11-23
+
+Bot 编辑器的首次使用体验：20 个字段一次平铺，第一次用根本不知道该填什么，而且没有样式——`sa-bot-modal` / `sa-field-grid` 这些类名在 `style.js` 里根本没有规则，于是每个输入框占满整行。数据模型与契约不变，只动 `client/src/settings.js` 与 `client/src/style.js`。
+
+### 根因与修改
+
+- **20 个字段平铺**：身份、后端、模型、能力、工具、阶段、预算全在同一屏。编辑器现在只留第一屏四件事——名称、标识、一句话说明、后端——加上角色提示词（改成 4 行 textarea，带占位说明「留空跟随工作流默认」）；其余字段原样搬进 `DisclosureRow`「高级设置」，折叠时在标题旁显示「已设置 N 项」，值不丢、可回改，`stageSpecs` 等未渲染字段照旧静默往返。
+- **补了缺失的样式**：`style.js` 新增 `.sa-field-grid`（两列、容器 <620px 退单列）、`.sa-field-wide`（整行）、`.sa-bot-modal`（720px）、`.sa-settings-stack`；Bot 列表行改用已有的 `sa-row` 类，不再是一堆挤在一起的裸文本。
+- **`description` 一直没有输入框**：`emptyBotForm`/`botToForm`/`formToBot` 都带着它，列表也读它，但编辑器不渲染——现在它是第一屏的「一句话说明」。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：672 pass / 0 fail。
+- `node scripts/render-check.mjs`：282 checks / 0 fail（新增一条——打开编辑器时阶段行位于折叠区、未展开则不渲染；预览区改在展开后断言）。
+- `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1504 page-local；`node scripts/build-client.mjs`：24 modules / 529570 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+
+---
+
 ## [1.0.23] — 2026-11-23
 
 P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但面板上既选不了阶段 Bot，也看不到某个阶段跑了谁。这一版只动 UI 与 `botsView` 的返回体，契约不变。

@@ -17,7 +17,7 @@
 | `client/src/controls.js` | 原子控件：按钮、输入框、开关、分段控件、菜单、弹窗、复制按钮 |
 | `client/src/widgets.js` | 组合件：区块、键值表、空态/错误态、骨架、保存条、Markdown 渲染、术语弹层 |
 | `client/src/style.js` | 全部 CSS（一个模板字符串）+ `Panel` 样式注入 |
-| `client/src/shell.js` | 外壳：页头、六个页签、面包屑、错误边界 |
+| `client/src/shell.js` | 外壳：页头、七个页签、面包屑、错误边界 |
 | `client/src/live-ui.js` / `live-model.js` | 工单列表、运行行、引擎动作（`useEngineActions`） |
 | `client/src/overview.js` `source.js` `trigger.js` `eval.js` `execution.js` `ticket-detail.js` `thread-detail.js` `settings.js` `setup.js` | 各页面 |
 | `client/src/apply.js` | 入口：注册侧栏图标、`main` 槽位、locale |
