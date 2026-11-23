@@ -499,11 +499,21 @@ export function apply(ctx, config = {}) {
           // or turning the executor off still delivered code (see resumeTicketInner for the same check).
           requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
           assertTicketFree(third)
-          const result = /** @type {any} */ (await resumeTicket({ engine, ticketId: third, action, note,
-            log: line => ctx.logger?.info?.('superagent gate: %s', line) }))
-          if (result?.missing) throw new ActionError(404, `未知工单：${third}`)
-          if (result?.invalid) throw new ActionError(409, result.invalid)
-          send(res, 200, { run: result.run, ticket: result.ticket })
+          // Same answer as `/run` and `/publish`: `release` runs the whole post-gate delivery (gates, commit, push, MR)
+          // and can take minutes, so the request must not be the thing that waits for it. The refusals that used to be
+          // discovered inside the call are checked here first — a 202 for a Ticket that is not parked would be a lie.
+          // `wait:true` keeps the synchronous form for the contract tests and for operators driving the API by hand.
+          const view = engine.ticketView(third)
+          if (!view) throw new ActionError(404, `未知工单：${third}`)
+          if (view.ticket.status !== 'gate-blocked') {
+            throw new ActionError(409, `ticket ${third} is not waiting for a gate decision`)
+          }
+          const work = resumeTicket({ engine, ticketId: third, action, note,
+            log: line => ctx.logger?.info?.('superagent gate: %s', line) })
+            .catch(error => ({ status: 'failed', error: error instanceof Error ? error.message : String(error) }))
+          if (body?.wait === true) { send(res, 200, await work); return }
+          void work
+          send(res, 202, { started: true, ticketId: third, action })
           return
         }
         // P1-5: continue an interrupted run from its checkpoint (gates/commit/push/MR phase) or re-run the whole Ticket.

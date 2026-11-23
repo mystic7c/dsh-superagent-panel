@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.6] — 2026-11-23
+
+整体审查后的第五批修复（P2，Host 侧十二条）：并发写丢更新、孤儿工单每两分钟撞一次平台 API、信号日志只增不减、机器人自己的回复回流成候选、重放被双击成两张工单、UUID 事件永久重取、`tkt_1` 的工作树被当成 `tkt_10` 的、没有 base 时推送守卫不扫已提交的密钥、旧 MR 状态盖住新 MR、远端删掉分支后跳过 push、MR 建失败读成已交付、`/gate` 同步等到分钟级操作跑完。
+
+### 根因与修改
+
+- **设置自动化丢掉一次执行**：`setTicketAutomation` 在临界区外以 `this.state.tickets[id]` 快照做 `normalizeAutomation`，再进 `atomic` 写回；调度 tick（`executions+1`、写 `nextAt`）插在中间时被整块覆盖，并可能把 `nextAt` 退回已触发的档位再派一次。现在 normalize 与合并都在同一个 `atomic` 里、读 `doc.tickets[id]`。
+- **孤儿工单每 `verifySeconds` 撞一次平台 API**：`failed|pushed` 且有分支、没有 MR 的工单几乎每张都算孤儿，`reconcileTicketFromGitlab` 在 `no-mr` 时直接返回且不记尝试数，于是永久 120 秒一次。现在 `links.reconcile` 记 `attempts`/`nextAt`（10 分钟起、指数退避到 12 小时、8 次后 `exhausted`），`reconcileDue()` 决定这一轮要不要问，成功路径清掉它。
+- **信号日志的回收豁免让上限失效**：`sweepPayloads`/`sweepScope` 对所有带 `decisionId|triggerId` 的行永久跳过，而每条被处理的消息都会被盖上这两个字段——2000/scope 只约束被过滤掉的行，`candidate.text` 永久保留，每次 commit 整份 `JSON.stringify`。现在豁免有 30 天时限，过期后正文照常清掉。
+- **events 入口的过滤器比 sync 少五条**：`candidateOf(event)` 只查 channel 与监听群，`allowAnyHuman` 开启时机器人自己的回复会回流成新候选（自触发循环）。现在两条入口共用 `messageSkipReason()`：channel、监听群、系统消息、非文本、bot 自己、bot 发送者、回复前缀。
+- **双击重放会建两张工单**：幂等检查在 `atomic` 外，两次并发都读不到对方的 replay decision。现在写库的同一个 `atomic` 里再查一次，命中就返回已存的那条（不 absorb）。
+- **UUID 事件永久重取**：非数字 cursor 被刻意不写回，`failed` 时 `nextCursor` 退回原值，于是同一事件每次重取、每次失败。现在 `live-state.json` 记最近 500 个 `handledEvents`，处理过的事件直接 `already-handled` 跳过并 ack。
+- **`tkt_1` 命中 `tkt_10` 的工作树**：`git worktree list` 的解析用 `block.startsWith('worktree ' + path)` 做前缀匹配，短 id 读到长 id 的块 → 分支不符 → `worktree-conflict`。现在按整行精确比较。
+- **没有 base commit 时推送守卫不扫已提交文件**：`changedPaths` 的 `git diff base...HEAD` 失败被静默吞掉，publish 的 `baseSha` 是 `.catch(() => undefined)`，于是只剩 `git status`，已提交的 `.env` 之类不会被发现。现在 base 缺失或 diff 失败时用 `git log --name-only HEAD --not --remotes` 兜底，兜底也失败则报错；publish 把取不到路径的原因写进日志而不是静默空列表。
+- **旧 MR 状态盖住新 MR**：发布收尾用 `['merged','deployed'].includes(ticket.status)` 无条件保留 merged，而验证已被清空、链上的是新开的 MR。现在只在本次真的合并（`mergedNow`）时写 merged。
+- **远端分支被删后跳过 push**：publish 的 `reusePushed` 只信本地 `links.push.sha`，不读远端。现在复用前用 `remoteBranchSha()` 校验（`checked` 且 sha 相等才复用），远端没了就重推。
+- **MR 建失败被读成已交付**：api 模式下非 `mr_lookup_failed` 的 MR 创建失败只写 `run.errorCode`，随后 `run.status = ticket.status`（`pushed`），证据按成功写。现在记 `run.mergeRequestUnconfirmed`、工单链 `mergeRequest.pending/unverified/error`，`run.status` 保持 `failed`。
+- **`/gate` 同步等到分钟级操作跑完**：`release` 会跑闸门、commit、push、开 MR（可能含数分钟的 `postGatesCommand`），却和 `/publish`（202）不同步。现在默认 202 + 后台执行，`wait: true` 保留同步形式；`未知工单→404`、`不处于 gate-blocked→409` 这两类拒绝提到启动之前，不会出现「202 之后才发现工单不在等闸门」。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → 696 pass / 0 fail（新增 7 条：自动化合并在文档上而非快照、复用的远端分支被删后重推、UUID 事件不重复处理且 `handledEvents` 有界、`tkt_1`/`tkt_10` 工作树互不干扰、base 缺失仍能扫到已提交的 `Secrets/key.pem`、evidence 超过 30 天后正文清掉、`/gate` 默认 202）。
+- `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 负向验证：改动前 `setTicketAutomation` 的旧实现会让新断言读到 `intervalMinutes: 15`（排队中的 tick 写的 45 被覆盖）；移除 `handledEvents` 后第二次 poll 会重新记一条信号而不是 `already-handled`。
+
 ## [1.1.5] — 2026-11-23
 
 整体审查后的第四批修复（P2，客户端优先）：一次没回音的请求会把轮询队列永久卡住、等回答的工单在两个分组里各算一半、Bot 改名会留下一份旧副本、没选线程时每 30 秒请求一次 `thread/undefined`。
