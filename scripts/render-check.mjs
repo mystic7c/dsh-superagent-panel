@@ -118,6 +118,12 @@ const nowIso = new Date().toISOString()
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
       mergeRequest: { iid: 1, webUrl: 'https://example.test/mr/1', state: 'merged' },
       deployment: { status: 'success', deployJob: { name: 'deploy_dev', status: 'success' } } },
+    workflow: { status: 'completed', stages: [
+      { key: 'wf-1', role: 'assess', status: 'completed', backend: 'dsh', result: {} },
+      { key: 'wf-2', role: 'implement', status: 'completed', backend: 'dsh', result: {} },
+      { key: 'wf-3', role: 'gates', status: 'completed', backend: 'host', result: {} },
+      { key: 'wf-4', role: 'review', status: 'completed', backend: 'claude', bot: 'rechecker', result: {} },
+    ] },
   }
   engine.state.state.ticketOrder.push(demoId)
   const stepNames = ['prepare-worktree', 'worker', 'changed-paths', 'bootstrap:pnpm', 'gate:standards', 'gate:backend',
@@ -962,6 +968,12 @@ check('a truncated patch is visible on the evidence card',
 check('stage rail prints results, not truncated ids',
   !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
   rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
+// §10.2 record: a stage that ran on another bot names that bot in its row, so a mixed-backend ticket is readable
+// without opening the store.
+check('a stage that ran on another bot names it (§10.2)',
+  /claude \(rechecker\)/.test(rootElement.textContent ?? '')
+    && (rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.length === 1,
+  String((rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.join(' | ') ?? 'no stage bot'))
 {
   // R2-09: the request is promoted to its own expanded section above the changes, instead of a disclosure folded
   // into the right-hand column of "what changed".
@@ -2162,7 +2174,8 @@ console.log('STEP pure projections')
     const builtin = (id, name) => ({ id, name, description: '', backend: 'dsh', requires: [], stages: ['implement', 'gates'] })
     const stored = [builtin('generalist', '通用'), builtin('surgical', '小修'), builtin('reviewer', '审阅者'),
       { id: 'mine', name: '我的 Bot', backend: 'dsh', requires: ['edit'], tools: { deny: ['write'] },
-        skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' }, stages: ['implement', 'gates'] }]
+        skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' },
+        stages: ['implement', 'gates', { stage: 'review', bot: 'reviewer', budget: { timeoutMs: 600000 } }] }]
     const backendsOf = state => ({ dsh: { backend: 'dsh', state, source: state === 'unverified' ? 'fallback' : 'probe',
       capabilities: { edit: true, exec: true, web: false }, verifiedAt: state === 'verified' ? nowIso : undefined },
     claude: { backend: 'claude', state: 'unverified', source: 'fallback', capabilities: { edit: true, exec: false, web: false } },
@@ -2196,6 +2209,21 @@ console.log('STEP pure projections')
       firstRow?.textContent?.slice(0, 160) ?? 'no row')
     check('a dispatch rule pointing at a missing bot is reported (§5.1)',
       /分派规则 #1/.test(botsText()) && /ghost/.test(botsText()), botsText().slice(0, 300))
+    // §10.2/P6: a stored stage-level bot and budget are editable per stage; `gates` has no row (the executor runs it).
+    const mineRow = [...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
+    const editMine = [...(mineRow?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
+    editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const reviewRow = host.querySelector('[data-testid="sa-bot-stage-review"]')
+    const reviewSelect = reviewRow?.querySelector('select')
+    const reviewInput = reviewRow?.querySelector('input')
+    check('the bot editor edits a stage-level bot and its budget (§10.2)',
+      reviewSelect?.value === 'reviewer' && reviewInput?.value === '600000'
+        && !host.querySelector('[data-testid="sa-bot-stage-gates"]'),
+      `select=${reviewSelect?.value ?? 'none'} budget=${reviewInput?.value ?? 'none'} row=${reviewRow?.textContent?.slice(0, 80) ?? 'none'}`)
+    const cancelEdit = [...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '取消')
+    cancelEdit?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(100)
     const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建 Bot')
     newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
@@ -2211,6 +2239,10 @@ console.log('STEP pure projections')
     check('a rejected save shows the host error code in place (§13.2)',
       /BOT_BACKEND_UNVERIFIED/.test(botsText()), botsText().slice(0, 300))
     const afterReject = lists.at(-1) ?? []
+    check('a stage-level bot and budget round-trip through the editor (§10.2)',
+      afterReject.some(bot => Array.isArray(bot.stages) && bot.stages.some(entry =>
+        entry.stage === 'review' && entry.bot === 'reviewer' && entry.budget?.timeoutMs === 600000)),
+      JSON.stringify(afterReject.map(bot => bot.stages)).slice(0, 240))
     check('a save sends the store without host-added keys (§4.2)',
       afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
       JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))

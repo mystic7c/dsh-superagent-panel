@@ -2,7 +2,7 @@
 
 状态：**草案 v3**（评审用）。v3 只改「叫什么、怎么分层」：实体从「档位（profile）」改名为 **Bot（bot）**，随之改名的有字段、配置键、错误码、文件名与 UI 文案，迁移映射见附录 C；§3–§18 的规则不变。
 
-实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），v1.0.18 补齐 §3.2/§3.5/§4.1/§9.3/§12 的四处断线与五处反向实现，v1.0.19 完成附录 C 的代码改名（代码、配置键、错误码、文件名、UI 文案、`run.bot`），v1.0.20 让探针在真实宿主上可用（§3.3），v1.0.21 落地 §10.2 阶段级 Bot 与阶段级预算，v1.0.22 按 §18 的结论收敛分派口径（不自动选 `requires` 为空的 Bot、决策模型看到的工单带 `truncated`、阶段条目记 Bot）。已知缺口：CLI 后端的增量事件与 §11 C1–C10（P4/P5）、阶段 Bot 的选择器 UI（P6）；`stale` 只在宿主提供版本时可达（§3.7 末段）。切片顺序见 §17。
+实现进度：P0–P3 已按 v2 落地（v1.0.15–v1.0.17），v1.0.18 补齐 §3.2/§3.5/§4.1/§9.3/§12 的四处断线与五处反向实现，v1.0.19 完成附录 C 的代码改名（代码、配置键、错误码、文件名、UI 文案、`run.bot`），v1.0.20 让探针在真实宿主上可用（§3.3），v1.0.21 落地 §10.2 阶段级 Bot 与阶段级预算，v1.0.22 按 §18 的结论收敛分派口径（不自动选 `requires` 为空的 Bot、决策模型看到的工单带 `truncated`、阶段条目记 Bot），v1.0.23 补上 P6 的阶段编排 UI（逐阶段 Bot 与预算、preset 只读下拉、详情页显示阶段 Bot）。已知缺口：CLI 后端的增量事件与 §11 C1–C10（P4/P5）；`stale` 只在宿主提供版本时可达（§3.7 末段）。切片顺序见 §17。
 
 v2 重写了能力模型（§3）：能力必须带证据，不承认任何写死的后端能力表；后端拆成独立上线单元，`dsh` 先完整落地，`claude` / `codex` 各自后续上线（§3.7、§17）。
 
@@ -701,11 +701,14 @@ MUST NOT 允许：自定义阶段名（破 `validate()` 与续跑 key）、跳�
 4. worktree 里存在 Bot 文件时的提示：`仓库里的 Bot 文件已忽略（Bot 只从 stateDir 读）`，附路径。
 5. `degraded` 可见：模型降级、显式 Bot 不可用时用警示色，不折叠。
 6. 能力来源与核验状态：`能力：edit, exec（探针 / 2026-11-21）`；后端 `unverified`/`stale` 时用警示色，并给一句「后端 <b> 未核验，需先 smoke 核验」（§3.7）。
+7. 分阶段流程的每行 MUST 显示该阶段实际使用的后端与 Bot（`stages[].backend` / `stages[].bot`，§10.2 记录口径）：混用后端的工单不用打开 Bot 文件就能读出来。
 
 ### 13.2 设置页 MUST 提供
 
 - Bot 列表（内置三个 Bot 置顶、标「内置」且不可删）。
 - 编辑器：字段按 §4.3；保存期校验错误就地显示（错误码 + 人话）。
+- 编辑器 MUST 提供逐阶段 Bot 与阶段预算（§10.2）：勾选阶段后每阶段一行，可选 Bot（留空 = 整单 Bot）与 `budget.timeoutMs`；`gates` 不出现（由执行器跑）。数据源是 `GET engine/bots` 的 `bots[].id`。
+- `preset` 字段在宿主给出 preset 列表（`GET engine/bots` 的 `presets`）时是只读下拉，宿主不答时退回自由文本（§18 D2）。
 - 「预览它能拿到什么」：合并后的 deny 列表、MCP 前缀、能力集合、阶段集合。
 - 复制内置 Bot 为自定义；删除需二次确认；导入/导出（P4）。
 
@@ -792,7 +795,7 @@ AC1–AC14 与 AC-B1–AC-B3 的首版全部按 `dsh` 验收；每个新后端�
 | **P3 UI**（~2–3d） | 设置页 Bot 分组 + 后端核验状态、详情页 §13.1 六项、i18n、render-check | AC12、AC14、AC-B1 的 UI 断言绿 |
 | **P4 `claude` 上线**（~2d） | claude 探针（版本清单 + smoke；`web` 需先核验）、C1–C10 全量、`--effort` 映射 | 对 claude 跑 AC-B1–AC-B4 全绿 + 一条真实 claude run |
 | **P5 `codex` 上线**（~2d） | codex 探针、`exec resume`、思考深度键实测、`--search` smoke | 对 codex 跑 AC-B\* 全绿 + 一条真实 codex run |
-| **P6 可选** | 阶段编排 UI、逐阶段闸门集合、导入导出、preset 发现器 | 各自独立评审 |
+| **P6 可选** | 阶段编排 UI（v1.0.23 已落地：逐阶段 Bot/预算、preset 只读下拉、详情页显示阶段 Bot）、逐阶段闸门集合、导入导出、preset 发现器 | 各自独立评审 |
 
 主要成本在 render-check 的 fixture 与两套 locale，不在功能本身。
 
@@ -805,7 +808,7 @@ v3 评审时列了八个未决问题（原 Q1–Q8）。2026-11-23 定下六条�
 | # | 问题 | 结论 | 落地 |
 | --- | --- | --- | --- |
 | D1 | 阶段 Bot 换后端时，能力要不要按并集记录？ | **不记并集**。`run.bot.capability` 只记整单 Bot 的快照；阶段 Bot 记在阶段条目上（`stages[].backend` / `stages[].bot`）。`gates` 由执行器跑命令、不经 Bot，"gates 需要 exec" 是伪问题。 | v1.0.21 记 `backend`，v1.0.22 记 `bot`（`workflow-worker.js`） |
-| D2 | `skills.policy='preset'` 要求用户自己创建 preset？ | **不是契约问题**。契约只要求 `policy=preset` 时必须显式给 `preset`（`BOT_SKILLS_PRESET_MISSING`），保存期用宿主 preset 列表校验存在性（`BOT_PRESET_UNKNOWN`）。剩下的只是编辑器没有下拉框。 | 已有（v1.0.18）；P6 加只读下拉，数据源 `hostPresetIds` |
+| D2 | `skills.policy='preset'` 要求用户自己创建 preset？ | **不是契约问题**。契约只要求 `policy=preset` 时必须显式给 `preset`（`BOT_SKILLS_PRESET_MISSING`），保存期用宿主 preset 列表校验存在性（`BOT_PRESET_UNKNOWN`）。 | 已有（v1.0.18）；v1.0.23 起 `GET engine/bots` 带 `presets`，编辑器是只读下拉 |
 | D3 | 决策模型看全文还是要截断？ | **截断且明示**：`title` 400 / `body` 4000 字符，被截断时请求带 `truncated: true`。不放大到 8k——成本与隐私是边界，不是可调参数。 | v1.0.22（`dispatch.js` 的 `dispatchRequestOf`） |
 | D4 | ad-hoc 的 `prompt.role` 来自 plan，但 plan 可能为空？ | **不用 plan**：role = 工单标题（≤500），标题为空时回退「按 `<workType>` 处理这件事」。 | v1.0.22（`dispatch.js` 的 ad-hoc 分支） |
 | D5 | 探针依赖 `tools.resolve()`，入参会随宿主变？ | **问题已消失**：`tools.resolve` 在 v1.0.17 移除（它会把宿主打挂），现在探针 = `agentPresets.resolve` + `inspectCompositions` + 工具名；任一步失败就 `fallbackProbe` → 未核验 → 拒绝派单（安全方向是拒绝而不是放行）。 | 已有（v1.0.20） |

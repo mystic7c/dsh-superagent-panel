@@ -2102,7 +2102,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       <p>{ticketWorkflowStateLabel(t, ticket.workflow.status)}
         {ticket.workflow.detail ? <span className="sa-hint">{` · ${ticket.workflow.detail}`}</span> : null}</p>
       {(ticket.workflow.stages ?? []).map((stage, index) => <Folded
-        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
+        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'}${stage.bot ? ` (${stage.bot})` : ''} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
         <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
           {stage.error ?? JSON.stringify(stage.result ?? {}, null, 2)}
         </pre>

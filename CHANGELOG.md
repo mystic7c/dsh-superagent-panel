@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.23] — 2026-11-23
+
+P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但面板上既选不了阶段 Bot，也看不到某个阶段跑了谁。这一版只动 UI 与 `botsView` 的返回体，契约不变。
+
+### 根因与修改
+
+- **阶段 Bot 只能改文件**：编辑器只有阶段勾选，`{stage, bot, budget}` 只能手写 JSON。`client/src/settings.js` 现在为每个已勾选阶段（`gates` 除外，由执行器跑）渲染一行——Bot 下拉（选项来自 `bots[].id`，留空 = 整单 Bot）与 `budget.timeoutMs` 输入；空值不落键，避免保存时留下 schema 会拒的空对象。`botToForm`/`formToBot` 的 `stageSpecs` 已能往返，这一版只是把它接到控件上。
+- **`preset` 要手填 id**（§18 D2）：`GET engine/bots` 的返回体新增 `presets`（`hostPresetIds(ctx)`，宿主不答时不下发），编辑器据此把 `preset` 渲染成只读下拉；宿主不答时仍是自由文本，不凭空造列表。
+- **详情页看不出阶段换了后端**：`stages[].bot`（1.0.22 记录）没有渲染。分阶段流程的阶段行现在显示 `阶段 · 后端 (Bot) · 状态`，混用后端的工单不用打开 Bot 文件就能读出来。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：672 pass / 0 fail。
+- `node scripts/render-check.mjs`：281 checks / 0 fail（新增两条——编辑器里某阶段的 Bot 下拉与预算是该 Bot 的值、阶段行只对 review 显示 `claude (rechecker)`）。
+- `node scripts/check-keys.mjs`：1054 literal keys / 530 shared / 1499 page-local；`node scripts/build-client.mjs`：24 modules / 527565 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
+
+---
+
 ## [1.0.22] — 2026-11-23
 
 `docs/worker-bots-spec.md` §18 的八个未决问题定下六条（D1–D5、D8），两条属于 CLI 后端的问题（D6 claude 联网、D7 codex 思考深度）推迟到 P4/P5。D6/D7 之外真正要改代码的只有三处，其余是把已经长成的行为写进契约。

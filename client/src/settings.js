@@ -1091,6 +1091,9 @@ Object.assign(PAGE_TEXT, {
   'st.botsPreviewStages': ['阶段', 'Stages'],
   'st.botsPreviewEmpty': ['—', '—'],
   'st.botsStagesAll': ['全部内置阶段', 'all built-in stages'],
+  'st.botsStageBot': ['阶段 Bot（留空=用整单 Bot）', 'Stage bot (empty = the whole-ticket bot)'],
+  'st.botsStageBudget': ['阶段超时毫秒（留空=跟随 Bot）', 'Stage timeout in ms (empty = follow the bot)'],
+  'st.botsPresetDefault': ['（宿主默认）', '(host default)'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
    Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
@@ -1238,9 +1241,23 @@ export function BotsCard() {
   if (!state.data) return <Skeleton rows={4} />
   const view = state.data
   const bots = Array.isArray(view.bots) ? view.bots : []
+  const presetIds = Array.isArray(view.presets) ? view.presets : []
+  const botIds = bots.map(bot => bot.id)
   const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
   const builtinOf = bot => BOT_BUILTIN_IDS.includes(bot?.id)
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
+  // §10.2: a stage may name a bot and its own timeout. Empty means "follow the whole-ticket bot", so the key is
+  // dropped instead of saved as an empty object the schema would reject.
+  const setStageSpec = (stage, patch) => {
+    if (!editor) return
+    const specs = { ...(editor.form.stageSpecs ?? {}) }
+    const next = { ...(specs[stage] ?? {}), ...patch }
+    if (!next.bot) delete next.bot
+    if (!next.budget || !Object.keys(next.budget).length) delete next.budget
+    if (next.bot || next.budget) specs[stage] = next
+    else delete specs[stage]
+    editField('stageSpecs', specs)
+  }
   const openEditor = bot => { setSaveError(undefined); setEditor({ form: botToForm(bot), id: bot?.id }) }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
@@ -1359,7 +1376,11 @@ export function BotsCard() {
           <Select value={editor.form.backend} onChange={value => editField('backend', value)}
             options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
-          <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} /></label>
+          {presetIds.length
+            ? <Select value={editor.form.preset} onChange={value => editField('preset', value)}
+              options={[{ value: '', label: pt(t, 'st.botsPresetDefault') },
+                ...presetIds.map(id => ({ value: id, label: id }))]} />
+            : <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} />}</label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
           <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
@@ -1380,6 +1401,23 @@ export function BotsCard() {
               : editor.form.stages.filter(item => item !== stage))} />
           {stage}</label>)}
       </div>
+      {/* §10.2: which bot runs which stage, and that stage's own timeout. `gates` has no row: the executor runs it. */}
+      {editor.form.stages.filter(stage => stage !== 'gates').map(stage => {
+        const spec = isPlainObject(editor.form.stageSpecs?.[stage]) ? editor.form.stageSpecs[stage] : {}
+        const budget = isPlainObject(spec.budget) ? spec.budget : {}
+        return <div className="sa-field-grid" key={`stage-${stage}`} data-testid={`sa-bot-stage-${stage}`}>
+          <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBot')} · ${stage}`}</span>
+            <Select value={String(spec.bot ?? '')} options={[{ value: '', label: pt(t, 'st.botsPreviewEmpty') },
+              ...botIds.map(id => ({ value: id, label: id }))]}
+              onChange={value => setStageSpec(stage, { bot: value || undefined })} /></label>
+          <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBudget')} · ${stage}`}</span>
+            <Input value={budget.timeoutMs === undefined ? '' : String(budget.timeoutMs)}
+              onChange={event => {
+                const text = String(event.target.value).trim()
+                setStageSpec(stage, { budget: text === '' ? undefined : { ...budget, timeoutMs: Number(text) } })
+              }} /></label>
+        </div>
+      })}
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
         <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
