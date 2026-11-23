@@ -72,6 +72,7 @@ node scripts/render-check.mjs          # jsdom 渲染回归
 | 文档 | 内容 |
 | --- | --- |
 | [docs/pages.md](docs/pages.md) | 六个页签分别能看什么、改什么 |
+| [docs/architecture.md](docs/architecture.md) | 分层架构、superagent / router / worker 三个概念，以及一份工单从到达、评估、执行、闸门到验收的完整阶段 |
 | [docs/quickstart.md](docs/quickstart.md) | 从空状态到接单的完整配置、状态文件与排障 |
 | [docs/intake-and-eval.md](docs/intake-and-eval.md) | 评估模式、阈值、预算与 shadow 配置 |
 | [docs/feature-maturity.md](docs/feature-maturity.md) | 功能成熟度分级与已知边界 |

@@ -67,14 +67,14 @@ export function useEngineActions(call) {
     // `route` persists a manual deliverable/backend choice; the host validates it and never bypasses capability limits.
     createTicket: ({ title, body, repoId, route }) => call('POST engine/ticket',
       { body: { title, body, ...(repoId ? { repoId } : {}), ...(route ? { route } : {}) } }),
-    // `profile` is the one-run override from the detail page (worker-profiles spec §7.6): it never changes the Ticket.
-    /** @type {(id: string, options?: {dryRun?: boolean, wait?: boolean, profile?: string}) => Promise<any>} */
-    runTicket: (id, { dryRun = true, wait = false, profile } = {}) => call('POST engine/ticket/:id/run',
-      { id, body: { dryRun, wait, ...(profile ? { profile } : {}) } }),
-    // Worker profiles live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
-    profiles: () => call('GET engine/profiles'),
-    saveProfiles: profiles => call('POST engine/profiles', { body: { profiles } }),
-    verifyProfileBackend: backend => call('POST engine/profiles/verify', { body: { backend } }),
+    // `bot` is the one-run override from the detail page (worker-bots spec §7.6): it never changes the Ticket.
+    /** @type {(id: string, options?: {dryRun?: boolean, wait?: boolean, bot?: string}) => Promise<any>} */
+    runTicket: (id, { dryRun = true, wait = false, bot } = {}) => call('POST engine/ticket/:id/run',
+      { id, body: { dryRun, wait, ...(bot ? { bot } : {}) } }),
+    // Worker bots live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
+    bots: () => call('GET engine/bots'),
+    saveBots: bots => call('POST engine/bots', { body: { bots } }),
+    verifyBotBackend: backend => call('POST engine/bots/verify', { body: { backend } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
     refreshCi: (id) => call('POST engine/ticket/:id/ci', { id }),
     verifyTicket: (id) => call('POST engine/ticket/:id/verify', { id }),

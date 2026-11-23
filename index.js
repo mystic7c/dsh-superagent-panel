@@ -262,21 +262,21 @@ export function apply(ctx, config = {}) {
           return
         }
         if (method === 'GET' && second === 'config') { send(res, 200, engine.configView()); return }
-        // Worker profiles ("档位") live in the state dir, never in a repository (§4.1). The view carries every backend's
+        // Worker bots ("Bot") live in the state dir, never in a repository (§4.1). The view carries every backend's
         // verification state too, so the panel can warn about an unverified backend without a second request.
-        if (method === 'GET' && second === 'profiles') { send(res, 200, await engine.profilesView()); return }
-        if (method === 'POST' && second === 'profiles' && third === undefined) {
+        if (method === 'GET' && second === 'bots') { send(res, 200, await engine.botsView()); return }
+        if (method === 'POST' && second === 'bots' && third === undefined) {
           try {
-            send(res, 200, await engine.saveProfiles({ profiles: body?.profiles }))
+            send(res, 200, await engine.saveBots({ bots: body?.bots }))
           } catch (error) {
-            const code = typeof error?.code === 'string' ? error.code : 'PROFILE_SCHEMA_INVALID'
+            const code = typeof error?.code === 'string' ? error.code : 'BOT_SCHEMA_INVALID'
             const problems = Array.isArray(error?.problems) ? error.problems : []
             throw new ActionError(400, error instanceof Error ? error.message : String(error), { code, problems })
           }
           return
         }
         // "smoke 核验": re-probe one backend now instead of trusting a cached answer (§3.7).
-        if (method === 'POST' && second === 'profiles' && third === 'verify') {
+        if (method === 'POST' && second === 'bots' && third === 'verify') {
           try {
             send(res, 200, await engine.verifyBackend(body?.backend))
           } catch (error) {
@@ -444,9 +444,9 @@ export function apply(ctx, config = {}) {
           assertTicketFree(third)
           const work = executeTicket({ ctx, engine, ticketId: third, dryRun,
             backend: typeof body?.backend === 'string' ? body.backend : undefined,
-            // §7.6: a profile chosen for this run only — a new run, an explicit dispatch layer, no change to the
-            // Ticket's stored fields or to the profile file.
-            profile: typeof body?.profile === 'string' && body.profile.trim() ? body.profile.trim() : undefined,
+            // §7.6: a bot chosen for this run only — a new run, an explicit dispatch layer, no change to the
+            // Ticket's stored fields or to the bot file.
+            bot: typeof body?.bot === 'string' && body.bot.trim() ? body.bot.trim() : undefined,
             log: line => ctx.logger?.info?.('superagent executor: %s', line) })
             .catch(error => {
               const message = error instanceof Error ? error.message : String(error)
@@ -681,7 +681,7 @@ export function apply(ctx, config = {}) {
     ctx.effect(() => ctx.webServer.register({ kind: 'prefix', path: PREFIX, handler }))
     ctx.logger?.info?.('superagent management API mounted at %s', PREFIX)
   } catch (error) {
-    // A route collision must not take the whole profile down: the panel then reports the host as unreachable.
+    // A route collision must not take the whole bot down: the panel then reports the host as unreachable.
     ctx.logger?.error?.('superagent management API failed to mount: %s', error instanceof Error ? error.message : String(error))
   }
   return ready
