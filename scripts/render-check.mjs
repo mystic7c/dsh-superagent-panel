@@ -469,7 +469,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
-  ticketDismissable, HistoryChanges,
+  ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError,
   botPreview, botToForm, formToBot,
   createSessionOpener, openSessionMessage,
@@ -504,6 +504,11 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   primaryActionOf: 'live-ui.js',
   ticketStatus: 'live-ui.js',
   ticketDismissable: 'ticket-detail.js',
+  requestIsTitle: 'ticket-detail.js',
+  ticketVisibleJumps: 'ticket-detail.js',
+  durationText: 'overview.js',
+  ConfirmButton: 'widgets.js',
+  Modal: 'controls.js',
   HistoryChanges: 'settings.js',
   AutomationBar: 'live-ui.js',
   failureReasonTextOf: 'overview.js',
@@ -1501,6 +1506,9 @@ check('done group states its accepted/dismissed split', /已验收.*已忽略/.t
 // A finished dry run publishes from the primary slot; the rerun it used to lead with stays in the ⋯ menu.
 const readyRow = [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')]
   .find(row => (row.textContent ?? '').includes('演示：干跑完成待发布'))
+check('the execution row is opened by a button that holds its main column (U-02)',
+  Boolean(readyRow?.querySelector('button.sa-row-open > .sa-row-main .sa-row-title')),
+  readyRow?.querySelector('.sa-row-open')?.outerHTML?.slice(0, 240) ?? 'no row')
 check('the execution queue lists the finished dry run', Boolean(readyRow),
   [...rootElement.querySelectorAll('.sa-exec-queue .sa-row-openable')].map(row => (row.textContent ?? '').slice(0, 32)).join(' | '))
 readyRow?.querySelector('.sa-row-open')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
@@ -1532,6 +1540,15 @@ check('a finished dry run makes 发布 MR the primary action', readyPrimary.incl
     await openRow('演示：正在执行的工单')
     await leaveDetail()
     await openRow('演示：干跑完成待发布')
+    const focused = document.activeElement
+    check('a route change moves focus to the new page title (U-04)',
+      Boolean(focused?.classList?.contains('sa-page-head-title') || focused?.classList?.contains('sa-scroll')),
+      String(focused?.className ?? focused?.tagName ?? 'none'))
+    check('a detail page keeps the panel h1 as the only h1 (U-03)',
+      rootElement.querySelectorAll('h1').length === 1
+        && Boolean(rootElement.querySelector('.sa-head h1.sa-title'))
+        && Boolean(rootElement.querySelector('.sa-page-head h2.sa-page-head-title')),
+      `h1 count=${rootElement.querySelectorAll('h1').length}`)
     const carried = draftOf()?.value ?? ''
     check('a detail draft does not come back with the previous Ticket', carried === '', JSON.stringify(carried))
   }
@@ -1549,6 +1566,15 @@ await sleep(1000)
 clickByText('手工建单')
 await sleep(800)
 const manualModal = rootElement.querySelector('.sa-modal')
+{
+  const described = manualModal?.getAttribute('aria-describedby')
+  const sentence = described ? rootElement.querySelector(`#${described}`) : null
+  check('a dialog announces its consequence sentence (U-01)',
+    Boolean(described) && Boolean(sentence) && (sentence.textContent ?? '').trim().length > 0,
+    JSON.stringify({ described, sentence: sentence?.textContent?.slice(0, 80) ?? null }))
+  check('an open dialog locks the page scroll behind it (U-01)', document.body.style.overflow === 'hidden',
+    `overflow=${document.body.style.overflow}`)
+}
 check('manual Ticket opens in place, without leaving Execution', Boolean(manualModal)
   && Boolean(manualModal.querySelector('input')) && /建单/.test(manualModal.textContent ?? ''), (manualModal?.textContent ?? '').slice(0, 160))
 // AC-01: the form previews the automatic judgement and saves a manual override; the two dimensions are separate.
@@ -1606,6 +1632,8 @@ if (!rootElement.querySelector('.sa-modal')) { clickByText('手工建单'); awai
 rootElement.ownerDocument.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 await sleep(500)
 check('manual Ticket modal closes with Escape', !rootElement.querySelector('.sa-modal'), 'modal still open')
+check('closing the last dialog releases the page scroll (U-01)', document.body.style.overflow === '',
+  `overflow=${document.body.style.overflow}`)
 
 // AC-03: while a run is active the stop entry sits in the header, states "正在停止" only after the request is recorded,
 // and never pretends the worker has already finished.
@@ -2440,6 +2468,69 @@ console.log('STEP pure projections')
     JSON.stringify({ previewWhileClosed, previewWhileOpen, titleWhileOpen: openTitle?.textContent ?? null }))
   signalRoot.unmount()
   signalHost.remove()
+}
+
+// ---- batch 3 (U-01…U-06): the contract the checks above cannot see in a DOM diff -------------------------------
+{
+  // U-02: DESIGN.md §Rows forbids a stretched ::after hit area; the row's own button carries the main column instead.
+  check('no stretched row overlay is left in the stylesheet (U-02)',
+    !/\.sa-open::after/.test(PANEL_CSS) && !/\.sa-open:focus-visible\s*\{[^}]*outline:\s*none/.test(PANEL_CSS)
+      && /\.sa-row-open\s*\{[^}]*align-items:\s*stretch/.test(PANEL_CSS),
+    'sa-open::after / focus outline:none / align-items still shipped')
+  // U-05: brand colour is the tab underline's alone — the switch and the settings rail use a neutral active fill.
+  const switchRule = PANEL_CSS.match(/\.sa-switch-input:checked \+ \.sa-switch-track \{[^}]*\}/)?.[0] ?? ''
+  const railRule = PANEL_CSS.match(/\.sa-settings-nav \.sa-settings-group\[aria-current='true'\]\s*\{[^}]*\}/)?.[0] ?? ''
+  check('the brand colour only marks the current tab (U-05)',
+    Boolean(switchRule) && Boolean(railRule) && !/brand-primary/.test(switchRule) && !/brand-primary/.test(railRule),
+    JSON.stringify({ switchRule, railRule }))
+  check('disabled controls share one opacity (U-06)',
+    !/opacity:\s*0\.(55|72)/.test(PANEL_CSS) && /\.sa-btn:disabled \{[^}]*opacity: 0\.4/.test(PANEL_CSS),
+    'more than one disabled opacity still shipped')
+  check('the signal disclosure trigger reads as a control (U-06)',
+    /\.sa-signal-toggle \{[^}]*cursor: pointer/.test(PANEL_CSS) && /\.sa-signal-toggle:focus-visible/.test(PANEL_CSS),
+    'no cursor/focus ring for .sa-signal-toggle')
+  check('the patch body keeps the 12px mono floor (U-06)',
+    /\.sa-diff pre \{[^}]*--sa-fs-meta/.test(PANEL_CSS), 'diff body still at the 11px caption size')
+  // U-03: a Ticket whose body only repeats its title must not print the same paragraph twice.
+  check('a Ticket whose body is its title does not repeat it (U-03)',
+    requestIsTitle({ title: '修一下登录', body: '修一下登录 ' }) === true
+      && requestIsTitle({ title: '修一下登录', body: '修一下登录，并补一条断言。' }) === false,
+    'requestIsTitle does not separate the repeated case')
+  // U-03: the section jump disappears with the section it scrolls to.
+  const repeatedJumps = ticketVisibleJumps({ title: '修一下登录', body: '修一下登录' }, false)
+  const distinctJumps = ticketVisibleJumps({ title: '修一下登录', body: '补一条断言' }, false)
+  check('the request jump disappears with the request section (U-03)',
+    !repeatedJumps.some(jump => jump.id === 'sa-ticket-request')
+      && distinctJumps.some(jump => jump.id === 'sa-ticket-request'),
+    JSON.stringify(repeatedJumps.map(jump => jump.id)))
+  // U-06: 659.9s is a number, not a duration; an old run's already-labelled cause must not be labelled twice.
+  check('a long average run time reads as a duration (U-06)',
+    durationText(659900) === '11m' && durationText(45000) === '45s' && durationText(90000) === '1m 30s',
+    JSON.stringify([durationText(659900), durationText(45000), durationText(90000)]))
+  const repeated = failureReasonTextOf(t, '其他原因：没有可用档位：没有可用档位：没有已保存的档位覆盖 edit')
+  check('a cause stored with a repeated segment is collapsed before it is labelled (U-06)',
+    (repeated.match(/没有可用档位/g) ?? []).length === 1 && (repeated.match(/其他原因/g) ?? []).length === 1,
+    repeated)
+}
+{
+  // U-05: the destructive confirmations all pass `variant="danger"`; ConfirmButton is what turns that into the tone.
+  const confirmHost = document.createElement('div')
+  document.body.appendChild(confirmHost)
+  const confirmRoot = ReactDOM.createRoot(confirmHost)
+  confirmRoot.render(React.createElement(Panel.Provider,
+    { value: { t, call: async () => ({}), navigate() {}, notify() {} } },
+    React.createElement(ConfirmButton, { label: '打回', title: '打回这张工单？', message: '会记录打回原因',
+      confirmLabel: '确认打回', variant: 'danger', onConfirm: async () => true })))
+  await sleep(150)
+  confirmHost.querySelector('button')?.click()
+  await sleep(150)
+  const confirmButton = [...confirmHost.querySelectorAll('.sa-modal button')]
+    .find(button => (button.textContent ?? '').trim() === '确认打回')
+  check('a destructive confirmation confirms in the danger tone (U-05)',
+    Boolean(confirmButton?.classList.contains('sa-btn-danger')),
+    String(confirmButton?.className ?? 'no confirm button'))
+  confirmRoot.unmount()
+  confirmHost.remove()
 }
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))

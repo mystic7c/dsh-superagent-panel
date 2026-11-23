@@ -107,8 +107,8 @@ Object.assign(PAGE_TEXT, {
   // ---- P2-9 run quality (GET engine/metrics) ---------------------------------------------------------------------
   'ov.q.title': ['运行质量', 'Run quality'],
   'ov.q.empty': ['过去 24 小时没有运行。', 'No runs in the last 24 hours.'],
-  'ov.q.kpi': ['运行 {runs} 次 · 成功率 {rate}% · 平均耗时 {avg}s · 自动修复 {repaired} 次',
-    '{runs} runs · {rate}% succeeded · {avg}s avg · {repaired} auto-repairs'],
+  'ov.q.kpi': ['运行 {runs} 次 · 成功率 {rate}% · 平均耗时 {avg} · 自动修复 {repaired} 次',
+    '{runs} runs · {rate}% succeeded · {avg} avg · {repaired} auto-repairs'],
   'ov.q.failures': ['主要失败原因', 'Top failure causes'],
   'ov.q.failureCount': ['{count} 次', '{count}×'],
   // N2-04: a failure cause is a stopReason/errorCode, not a sentence. Known codes get their Chinese label; an unknown
@@ -204,12 +204,32 @@ export function ovRuleHits(decisions, now) {
       || String(left.name).localeCompare(String(right.name))) }
 }
 
+/** Drop consecutive duplicate 「A：A：…」 segments: an old run can carry a cause that was labelled twice before it was
+    stored, and re-labelling that text would make the desk card read like a broken sentence. */
+/** A run's average is a duration, not a number of seconds: 659.9s reads as 11 分 0 秒 once it passes a minute. */
+export function durationText(ms) {
+  const seconds = Math.max(0, Math.round(Number(ms) / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60), rest = seconds % 60
+  return rest ? `${minutes}m ${rest}s` : `${minutes}m`
+}
+
+export function collapseRepeats(text) {
+  const parts = String(text ?? '').split(/[：:]/)
+  if (parts.length < 3) return String(text ?? '')
+  const kept = parts.filter((part, index) => index === 0 || part.trim() !== parts[index - 1].trim())
+  return kept.join('：').replace(/([：:])\1+/g, '：')
+}
+
 /** Known executor failures are shown in the operator's language; an unknown error stays clipped and raw. */
 /** N2-04: metrics hand back a stopReason/errorCode (e.g. `stopped`) or a clipped error sentence, and the shift brief
     must read like a cause, not a constant. Known reasons reuse the run dictionaries; an unknown identifier is still
     shown, but labelled as a technical id so it does not pass for a human sentence. */
 export function failureReasonTextOf(t, reason) {
-  const raw = String(reason ?? '').trim()
+  // Metrics carry whatever sentence the run recorded; older runs stored the already-labelled text, so a cause that
+  // reads 「其他原因：没有可用档位：没有可用档位：…」 repeats the same segment twice. Collapse those repeats first, then
+  // label only what is still an unlabelled cause.
+  const raw = collapseRepeats(String(reason ?? '').trim())
   if (!raw) return '—'
   if (/^[A-Za-z][A-Za-z0-9_.-]*$/.test(raw)) {
     const stop = runStopLabel(t, { stopReason: raw })
@@ -217,6 +237,10 @@ export function failureReasonTextOf(t, reason) {
     if (label && !/其他原因/.test(label)) return label
     return pt(t, 'ov.failureUnknown', { raw })
   }
+  // An older run stored the already-rendered sentence, label included; wrapping it again reads
+  // 「其他原因：其他原因：…」. The label is the localized prefix up to its placeholder.
+  const otherPrefix = String(pt(t, 'detail.errorOther', { cause: '\u0000' })).split('\u0000')[0]
+  if (otherPrefix && raw.startsWith(otherPrefix)) return raw
   return failureLabel(t, raw) || raw
 }
 
@@ -259,7 +283,7 @@ export function ovQualityOf(t, metrics) {
   const failedRounds = count(acceptance.failed) + count(acceptance.errored)
   const acceptanceRate = rounds > 0 ? Math.round((delivered / Math.max(1, delivered + failedRounds)) * 100) : 0
   const acceptanceText = rounds > 0 ? pt(t, 'ov.q.acceptance', { rounds, rate: acceptanceRate }) : ''
-  return { total, rate, avgText: avgMs > 0 ? String(Math.round(avgMs / 100) / 10) : '0', repaired,
+  return { total, rate, avgText: avgMs > 0 ? durationText(avgMs) : '0s', repaired,
     failures, triggerText, acceptanceText }
 }
 
@@ -598,20 +622,20 @@ export function LiveOverviewPage({ route }) {
   // Inbox desk (P0): one row per blocking item — kind icon, title, summary and the one step that settles it (open the
   // Ticket or the Source). Count = rendered rows; a count without rows (list still loading) says so instead of lying.
   // The whole row used to be a click-only div: not focusable, not operable from the keyboard and not announced as a
-  // control (WIG P1). The title is now a real button whose stretched overlay (`.sa-open::after`) covers the row, and
-  // the explicit action button keeps its own clickable layer above it.
+  // control (WIG P1). The main column is now one real button, so the hit area and the announced control coincide
+  // (DESIGN.md §Rows keeps the explicit action button as its own sibling).
   const inboxRows = blockingItems.length
     ? h('ul', { className: 'sa-list' }, blockingItems.map(item => h('li', { key: item.id },
       h('div', { className: 'sa-row sa-row-openable' },
         h(Icon, { name: ovInboxIcon(item), size: 16 }),
+        h('button', { type: 'button', className: 'sa-row-open sa-open',
+          title: String(item.title ?? '') || undefined,
+          'aria-label': `${String(item.title ?? '') || item.id} — ${pt(t, ovInboxActionKey(item))}`,
+          onClick: () => openInboxItem(item) },
         h('div', { className: 'sa-row-main' },
           h('div', { className: 'sa-row-title' },
-            h('button', { type: 'button', className: 'sa-row-open sa-open',
-              title: String(item.title ?? '') || undefined,
-              'aria-label': `${String(item.title ?? '') || item.id} — ${pt(t, ovInboxActionKey(item))}`,
-              onClick: () => openInboxItem(item) },
-            h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—'))),
-          item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null),
+            h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—')),
+          item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null)),
         h('div', { className: 'sa-row-actions' },
           // Only the two kinds whose Ticket can be dismissed: a gate/accept item must be settled by its real action.
           item.kind === 'publish' || item.kind === 'failure'

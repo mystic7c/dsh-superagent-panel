@@ -142,7 +142,7 @@ export const PANEL_CSS = `
 .sa-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--sa-sp-4); border: none;
   border-radius: var(--sa-r-sm); background: transparent; padding: 0 var(--sa-sp-12); color: var(--dsw-alias-label-primary);
   font: inherit; font-size: var(--sa-fs-body); line-height: 1; font-weight: 500; white-space: nowrap; cursor: pointer; }
-.sa-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.sa-btn:disabled { cursor: not-allowed; opacity: 0.4; }
 .sa-btn:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-btn-md { height: 32px; }
 .sa-btn-sm { height: 28px; padding: 0 var(--sa-sp-8); font-size: var(--sa-fs-meta); }
@@ -160,7 +160,7 @@ export const PANEL_CSS = `
   cursor: pointer; }
 .sa-icon-btn:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
 .sa-icon-btn:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
-.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.55; }
+.sa-icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
 .sa-icon-btn[data-variant='outline'] { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md);
   background: transparent; }
 .sa-icon-btn[data-variant='outline']:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
@@ -209,7 +209,7 @@ export const PANEL_CSS = `
 .sa-segment:hover:not(:disabled), .sa-segment[aria-checked='true'] { color: var(--dsw-alias-label-primary); }
 .sa-segment[aria-checked='true'] { background: var(--dsw-alias-bg-base, var(--dsw-alias-bg-layer-1)); box-shadow: var(--dsw-elevation-soft, 0 1px 2px transparent); }
 .sa-segment:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
-.sa-segment:disabled { cursor: default; opacity: 0.55; }
+.sa-segment:disabled { cursor: default; opacity: 0.4; }
 
 /* Variant: stage filter chips. Each stage is one pill and the active one is the only tinted surface, so the row reads
    as "which slice of the queue" rather than as a second tab bar (the page tabs already own that shape). */
@@ -236,7 +236,7 @@ export const PANEL_CSS = `
 .sa-menu-picker > svg { color: var(--sa-label-tertiary); flex: none; }
 .sa-menu-picker:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-menu-picker[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
-.sa-menu-item-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-menu-item-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-menu-item-note { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--sa-label-tertiary); }
 .sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
 
@@ -276,8 +276,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-list .sa-row[role='button'] { padding-left: var(--sa-sp-8); padding-right: var(--sa-sp-8); }
 /* The whole-row affordance is mouse-only; keyboard opens through this title button, which is a sibling of the row's
    action buttons (no interactive element nested inside another). */
-.sa-row-open { flex: 1 1 auto; min-width: 0; min-height: 24px; display: flex; align-items: center; padding: 0;
+.sa-row-open { flex: 1 1 auto; min-width: 0; min-height: 24px; display: flex; align-items: stretch; padding: 0;
   border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sa-row-open > .sa-row-main { flex: 1 1 auto; }
 .sa-row-open > span { display: block; }
 .sa-row-open:focus-visible { outline: var(--sa-focus); outline-offset: -2px; border-radius: var(--sa-r-sm); }
 .sa-row-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-4); }
@@ -299,7 +300,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-row-evidence .sa-inline-link { font-size: var(--sa-fs-meta); }
 .sa-exec-queue .sa-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 300px max-content;
   column-gap: var(--sa-sp-12); align-items: center; }
-.sa-exec-queue .sa-row .sa-row-main { grid-column: 2; min-width: 0; }
+.sa-exec-queue .sa-row .sa-row-open { grid-column: 2; min-width: 0; }
 .sa-exec-queue .sa-row-evidence { grid-column: 3; display: flex; }
 .sa-exec-queue .sa-row-actions { grid-column: 4; margin-left: 0; }
 .sa-queue-head { display: grid; grid-template-columns: 16px minmax(0, 1fr) 300px max-content;
@@ -318,17 +319,24 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
     white-space: normal; overflow: visible; text-overflow: clip; color: var(--dsw-alias-label-secondary); }
   .sa-queue-head { display: none; }
 }
-.sa-row-meta .sa-btn, .sa-row-meta .sa-icon-btn, .sa-row-meta button, .sa-row-meta a { position: relative; z-index: 1; }
-.sa-open { max-width: 100%; padding: 0; border: 0; background: transparent; color: inherit; font: inherit;
-  font-size: var(--sa-fs-title); line-height: 1.35; font-weight: 500; text-align: left; cursor: pointer;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sa-open::after { content: ''; position: absolute; inset: 0; border-radius: var(--sa-r-md); }
-.sa-open:focus-visible { outline: none; }
-.sa-open:focus-visible::after { outline: var(--sa-focus); outline-offset: 2px; }
+/* .sa-open is the same real button, nothing more: the main column it holds keeps its own type scale, and the button
+   itself is the hit area (DESIGN.md §Rows: no stretched ::after). */
+.sa-open { max-width: 100%; min-width: 0; padding: 0; border: 0; background: transparent; color: inherit; font: inherit;
+  text-align: left; cursor: pointer; }
 .sa-ticket { display: flex; gap: var(--sa-sp-12); align-items: flex-start; }
 .sa-ticket-body { flex: 1 1 220px; min-width: 0; }
 .sa-ticket > .sa-ticket-body { display: flex; flex-direction: column; gap: var(--sa-sp-4); }
 .sa-ticket .sa-row, .sa-row-openable, .sa-row[role='button'] { min-height: 44px; }
+/* The signal preview is a real disclosure trigger (role=button on a span): it must read as operable and keep the
+   24px touch floor even though it sits on a title line, which had no styles at all before. */
+.sa-signal-toggle, .sa-signal-text { display: inline-flex; align-items: center; min-height: 24px; min-width: 0;
+  border-radius: var(--sa-r-sm); }
+.sa-signal-toggle { cursor: pointer; }
+.sa-signal-text { white-space: normal; overflow-wrap: anywhere; }
+.sa-signal-toggle:hover, .sa-signal-text:hover { text-decoration: underline; }
+.sa-signal-toggle:focus-visible, .sa-signal-text:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
+.sa-signal-full { margin: var(--sa-sp-8) 0 0; font-size: var(--sa-fs-body); line-height: 1.5;
+  color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .sa-inline-link { position: relative; z-index: 1; color: var(--sa-link-text); text-decoration: none; }
 .sa-inline-link:hover { text-decoration: underline; }
 .sa-inline-link:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
@@ -377,14 +385,14 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   padding: var(--sa-sp-12) var(--sa-sp-16); border: 0.5px solid var(--sa-line);
   border-radius: var(--sa-r-md);
   background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 7%, transparent); }
-.sa-automation-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-automation-main { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-automation-head { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
 .sa-automation-title { font-size: var(--sa-fs-body); line-height: 1.4; font-weight: 600;
   color: var(--dsw-alias-label-primary); }
 .sa-automation-facts { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-automation .sa-btn { flex: none; }
 .sa-automation[data-compact='true'] { padding: var(--sa-sp-8) var(--sa-sp-12); }
-.sa-automation[data-compact='true'] .sa-automation-main { gap: 1px; }
+.sa-automation[data-compact='true'] .sa-automation-main { gap: var(--sa-sp-2); }
 .sa-automation-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
 @container (max-width: 760px) {
   .sa-automation { align-items: flex-start; }
@@ -467,11 +475,11 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-settings-group { display: flex; flex-direction: column; gap: var(--sa-sp-16); min-width: 0; }
 /* The nav re-uses the name for its row buttons; the descendant selector keeps both meanings (critique §18). */
 .sa-settings-nav .sa-settings-group { display: flex; flex-direction: row; align-items: center; gap: var(--sa-sp-8); width: 100%;
-  min-height: 36px; padding: var(--sa-sp-8) var(--sa-sp-12); border: 0; border-left: 2px solid transparent; background: transparent;
+  min-height: 36px; padding: var(--sa-sp-8) var(--sa-sp-12); border: 0; border-radius: var(--sa-r-sm); background: transparent;
   color: var(--dsw-alias-label-secondary); font: inherit; font-size: var(--sa-fs-body); line-height: 1.5; text-align: left; cursor: pointer; }
 .sa-settings-nav .sa-settings-group:hover { color: var(--dsw-alias-label-primary); }
 .sa-settings-nav .sa-settings-group[aria-current='true'] { color: var(--dsw-alias-label-primary);
-  font-weight: 600; border-left-color: var(--dsw-alias-brand-primary); }
+  font-weight: 600; background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); }
 .sa-settings-nav .sa-settings-group:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
 /* Reference-only groups (evaluation catalog, prompt brief) sit below a divider in the settings rail: the navigation
    promises what can be changed first, and keeps read-only context reachable. */
@@ -480,7 +488,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   color: var(--sa-label-tertiary); }
 .sa-settings-nav .sa-settings-group[data-reference='true'] { color: var(--dsw-alias-label-secondary); font-size: var(--sa-fs-meta); }
 .sa-settings-nav .sa-settings-group[data-reference='true'][aria-current='true'] {
-  border-left-color: var(--sa-label-tertiary); }
+  background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-settings-body { min-width: 0; max-width: 640px; display: flex; flex-direction: column; gap: var(--sa-sp-24); }
 
 /* ---------- settings intro + Octo group picker ---------- */
@@ -495,7 +503,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .sa-group-option:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-group-option:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
-.sa-group-option:disabled { cursor: default; opacity: 0.72; }
+.sa-group-option:disabled { cursor: default; opacity: 0.4; }
 .sa-group-option-main { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
 .sa-group-option-name { font-size: var(--sa-fs-body); line-height: 1.4; color: var(--dsw-alias-label-primary); }
 
@@ -505,7 +513,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-history-row { display: flex; align-items: center; gap: var(--sa-sp-12); padding: var(--sa-sp-12) 0;
   border-top: 0.5px solid var(--sa-line); }
 .sa-history-row:first-child { border-top: 0; }
-.sa-history-main { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
+.sa-history-main { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: var(--sa-sp-2); }
 .sa-history-label { font-size: var(--sa-fs-body); color: var(--dsw-alias-label-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -556,7 +564,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-input { box-sizing: border-box; display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 32px; min-width: 0;
   padding: 0 var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm);
   background: var(--dsw-alias-bg-layer-1, transparent); color: var(--dsw-alias-label-primary); }
-.sa-input:hover { border-color: var(--dsw-alias-border-l3, var(--sa-line)); }
+.sa-input:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-input:focus-within { border-color: var(--dsw-alias-brand-primary); outline: var(--sa-focus); outline-offset: -1px; }
 .sa-input-full { width: 100%; }
 .sa-input input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--dsw-alias-label-primary);
@@ -579,10 +587,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list, but
    it is still 24px tall (WCAG 2.5.8 minimum). */
 .sa-switch-compact .sa-switch-track { width: 36px; }
-.sa-switch-input:checked + .sa-switch-track { background: var(--dsw-alias-brand-primary); }
+.sa-switch-input:checked + .sa-switch-track { background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-border-l3)); }
 .sa-switch-input:focus-visible + .sa-switch-track { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-switch-input:disabled + .sa-switch-track { opacity: 0.4; cursor: not-allowed; }
-.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%;
+.sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: var(--sa-r-pill);
   background: var(--dsw-alias-label-primary-foreground); transition: transform 140ms ease; }
 .sa-switch-input:checked + .sa-switch-track .sa-switch-thumb { transform: translateX(16px); }
 .sa-switch-compact .sa-switch-input:checked + .sa-switch-track .sa-switch-thumb { transform: translateX(12px); }
@@ -645,7 +653,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-diff { border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); overflow: auto;
   background: var(--dsw-alias-bg-layer-2, transparent); max-height: min(62vh, 640px); }
 .sa-diff pre { margin: 0; padding: var(--sa-sp-8) 0; font-family: var(--ds-font-family-code, Menlo, monospace);
-  font-size: var(--sa-fs-caption); line-height: 1.5; }
+  font-size: var(--sa-fs-meta); line-height: 1.5; }
 .sa-diff { overscroll-behavior: contain; }
 .sa-diff-line { display: block; padding: 0 var(--sa-sp-12); white-space: pre; }
 .sa-diff-add { background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 14%, transparent); }
@@ -701,7 +709,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-page-head-top { display: flex; align-items: center; }
 .sa-page-head-top > .sa-btn { margin-left: calc(-1 * var(--sa-sp-8)); }
 .sa-page-head-main { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; width: 100%; }
-.sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
+.sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600;
+  overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-page-head-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
 /* Sign-off fact that rides on the title row: quiet meta text plus its jump link, never a full-width line. */
 .sa-page-head-note { display: inline-flex; align-items: center; gap: var(--sa-sp-8); font-size: var(--sa-fs-meta);

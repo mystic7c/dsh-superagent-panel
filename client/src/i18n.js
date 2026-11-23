@@ -99,6 +99,11 @@ export const TEXT = {
     input: ['输入', 'Input'],
     report: ['报告', 'Report'],
     attention: ['待答复', 'Attention'],
+    acceptance: ['验收', 'Acceptance'],
+    inFlight: ['在飞', 'In flight'],
+    dryRun: ['干跑', 'Dry run'],
+    accept: ['接单', 'Accept'],
+    publish: ['发布', 'Publish'],
   },
   meaning: {
     agent: ['在这个仓库上主动工作的编码智能体：监听来源、判断请求、开立工单并执行。', 'The coding agent that works proactively on this repository: it watches Sources, judges requests, opens Tickets and executes them.'],
@@ -128,6 +133,11 @@ export const TEXT = {
     input: ['送进执行器 Session 的触发、文本或备注。', 'A Trigger, text or note delivered to the executor Session.'],
     report: ['执行器对工单的结论：进展、等待、就绪、受阻或失败。', 'The executor\'s report on a Ticket: progress, waiting, ready, blocked or failed.'],
     attention: ['执行器向人提出的问题，工单暂停等待回答。', 'A question the executor asks a person; the Ticket waits for the answer.'],
+    acceptance: ['交付之后对有证据的结论做一次复核，再决定通过或打回。', 'One review of the evidence after delivery that passes or rejects the result.'],
+    inFlight: ['已经开始、还没有结论的运行或交付：数量会随时间变化。', 'A run or delivery that has started and has no outcome yet; the count moves with time.'],
+    dryRun: ['只读试跑：照常评估与执行，但不提交、不推送、不写任何状态。', 'A read-only rehearsal: it evaluates and runs as usual but commits, pushes and records nothing.'],
+    accept: ['同意一条触发进入执行：它变成工单并占用一个执行槽位。', 'Accepting a Trigger into execution: it becomes a Ticket and takes an executor slot.'],
+    publish: ['把一个已结束的交付补发出去：重跑闸门、提交、推送并开 MR。', 'Re-sending a finished delivery: rerun the gates, commit, push and open an MR.'],
   },
   glossaryGroup: { roles: ['角色', 'Roles'], source: ['来源', 'Source'], trigger: ['触发与线程', 'Triggers and Threads'], eval: ['评估与策略', 'Eval and Policy'], execution: ['执行', 'Execution'] },
   decision: { accept: ['接单', 'Accept'], reopen: ['续做', 'Reopen'], stop: ['停止', 'Stop'], ignore: ['忽略', 'Ignore'], unavailable: ['未完成', 'Unavailable'], wouldAccept: ['本会接单', 'Would accept'] },
@@ -473,7 +483,8 @@ export const TEXT = {
 export const GLOSSARY = { roles: ['agent', 'mainSession', 'executorSession'], source: ['source', 'channel'],
   trigger: ['trigger', 'thread', 'correlation', 'subscription', 'fanout', 'disposition'],
   eval: ['policy', 'policyVersion', 'eval', 'gate', 'assessment', 'decision', 'mandate', 'scope', 'strength'],
-  execution: ['executor', 'environment', 'ticket', 'assignment', 'input', 'report', 'attention'] }
+  execution: ['executor', 'environment', 'ticket', 'assignment', 'input', 'report', 'attention',
+    'acceptance', 'inFlight', 'dryRun', 'accept', 'publish'] }
 export const GLOSSARY_VALUES = {
   decision: ['decision.accept', 'decision.reopen', 'decision.stop', 'decision.ignore', 'decision.unavailable', 'decision.wouldAccept'],
   strength: ['strength.explicit', 'strength.inferred'],

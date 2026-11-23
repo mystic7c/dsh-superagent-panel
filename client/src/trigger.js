@@ -207,8 +207,8 @@ export function threadRowKeyDown(event) {
 }
 
 /** One thread row: title, source icon + name, last activity, and the shape-coded state with its text. The open action
-    is one real `<button>` whose `::after` covers the whole row (the `.sa-open` pattern), so the row is a list item with
-    native semantics instead of a `<li role="button">` (P1/A4). */
+    is one real `<button>` that holds the row's main column, so the row is a list item with native semantics instead of a
+    `<li role="button">` (P1/A4); its hit area is the button itself, never a stretched `::after` (DESIGN.md §Rows). */
 export function ThreadListRow({ row, selected, onOpen, octoConfig, compact = false, tabbable = false }) {
   const { t } = usePanel()
   const view = threadViewOf(row)
@@ -219,19 +219,19 @@ export function ThreadListRow({ row, selected, onOpen, octoConfig, compact = fal
     style: { paddingLeft: 'var(--sa-sp-8)', paddingRight: 'var(--sa-sp-8)',
       ...(selected ? { background: 'var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2))' } : null) },
   },
+  h('button', { type: 'button', className: 'sa-row-open sa-open', tabIndex: tabbable ? 0 : -1,
+    'aria-current': selected ? 'true' : undefined, onClick: onOpen, onKeyDown: threadRowKeyDown },
   h('div', { className: 'sa-row-main' },
     h('div', { className: 'sa-row-title' },
-      h('button', { type: 'button', className: 'sa-row-open sa-open', tabIndex: tabbable ? 0 : -1,
-        'aria-current': selected ? 'true' : undefined, onClick: onOpen, onKeyDown: threadRowKeyDown },
-      h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig)))),
+      h('span', { className: 'sa-ellipsis' }, threadTitleOf(t, row, octoConfig))),
     h('div', { className: 'sa-row-meta' },
       h('span', { className: 'sa-actions' },
         h(Icon, { name: THREAD_SOURCE_ICON[row.source] ?? 'message', size: 12 }),
         h('span', null, threadSourceLabel(t, row.source))),
       row.lastAt ? h(When, { at: row.lastAt }) : null,
-      h(StatusText, { state: view.state }, pt(t, view.labelKey)))),
-    compact ? h('span', { className: 'sa-row-chevron', 'aria-hidden': 'true' },
-      h(Icon, { name: 'chevron-right', size: 14 })) : null)
+      h(StatusText, { state: view.state }, pt(t, view.labelKey))))),
+  compact ? h('span', { className: 'sa-row-chevron', 'aria-hidden': 'true' },
+    h(Icon, { name: 'chevron-right', size: 14 })) : null)
 }
 
 export const TRG_PAGE_SIZE = 50

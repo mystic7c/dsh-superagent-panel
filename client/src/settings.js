@@ -1462,7 +1462,7 @@ export function BotsCard() {
           {preview ? <div className="sa-field" data-testid="sa-bot-preview">
             <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
             {preview.unverified
-              ? <p className="sa-hint" style={{ color: 'var(--dsw-alias-state-warn-primary)' }}>
+              ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
                 {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
               : null}
             <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],

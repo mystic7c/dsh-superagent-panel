@@ -154,6 +154,8 @@ CSS Modules 或组件库。token 定义在 `.sa-page` / `.sa-main` / `.sa-toast`
 **The Raised Text Rule.** 11–12px 的文本不许直接用 tertiary / link / state 原值，必须用对应的 `--sa-*` 抬升变体；形状与填充不受此限。
 
 **The One Accent Rule.** 品牌色只用于：主操作、当前选中、焦点环。屏幕上同时出现的品牌色块不超过一个。
+开关的选中态、设置左栏的当前项不算「当前选中」的展示位：它们用 `--dsw-alias-interactive-bg-active` 的中性底色，
+把唯一的品牌色块留给当前页签的下划线。
 
 ## Typography
 
@@ -163,7 +165,8 @@ CSS Modules 或组件库。token 定义在 `.sa-page` / `.sa-main` / `.sa-toast`
 **Character:** 只有一套 sans，靠字号、字重和颜色分层，不靠字族对比。等宽只用于 ID、commit、diff、路径——它们是"要照抄的东西"。
 
 ### Hierarchy
-- **Page**（600，20px / 1.4）：面板页标题「超级智能体」，每页一个。
+- **Page**（600，20px / 1.4）：面板页标题「超级智能体」是页面唯一的 `h1.sa-title`（外壳渲染）；详情的页头
+  `h2.sa-page-head-title` 与区块标题同级，超过两行截断，全文留在 `title` 属性里。
 - **Title**（600，15px / 1.35）：区块标题、工单标题、卡片标题。
 - **Body**（400，13px / 1.5）：正文与表格内容。这是默认档，其余四档都是相对它的例外。
 - **Meta**（400，12px / 1.4）：次要说明、字段值、按钮小号、时间戳。

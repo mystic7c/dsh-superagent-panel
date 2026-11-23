@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.1.4] — 2026-11-23
+
+整体审查后的第三批修复：全部落在界面契约上——弹窗不说明它要做什么、整行点击靠一层伪元素、页标题与「需求」各说一遍、路由切换把键盘用户丢在 `<body>`、品牌色铺到开关和设置左栏、以及十一条细则（字号、禁用态、术语表、时长与失败原因的读法）。
+
+### 根因与修改
+
+- **弹窗只报名字，不报后果**：`Modal` 的 `description` 渲染成裸 `<p>`，`role="dialog"` 只有 `aria-label`，读屏只会念标题；打开时也不锁页面滚动，背后的长页面还能滚。现在每个弹窗用自己的 `aria-describedby` 指向那句后果说明（`sa-modal-desc-N`），打开时 `body.overflow = hidden` 并在关闭/卸载时还原。
+- **整行可点靠 `::after` 覆盖层**：行内主按钮只有标题那么大，点击区由 `.sa-open::after { inset: 0 }` 撑出来，还带 `outline: none` + 只画伪元素的焦点环。DESIGN.md §Rows 明文禁止这条路，而且覆盖层会吃掉 chips 的命中/hover 语义。现在主列就是真按钮（`button.sa-row-open > .sa-row-main`，`align-items: stretch`），删掉 `::after` 与 `outline: none`，焦点环回到按钮本身；执行台的栅格列也改由按钮持有（`.sa-exec-queue .sa-row .sa-row-open { grid-column: 2 }`）。
+- **页标题与「需求」重复**：工单标题本身常常就是需求原文，下面「需求」段把同一段再印一遍，页头又折成两三行。现在 `requestIsTitle()` 判断「正文与标题同一段」时不再渲染需求段、对应的跳转项也一并收起，页头两行截断、全文进 `title`。审查里「页标题应为 h1」这条经实测不成立——外壳已经有页面唯一的 `h1.sa-title`「超级智能体」（`client/src/shell.js`），页头再出一个 h1 就是两个；页头保持 `h2`，DESIGN.md 已写清这条层级。
+- **路由切换丢焦点**：`PanelShell` 只重置滚动，点进去的那一行按钮随即卸载，焦点落到 `<body>`。现在路由变化（且焦点本来不在别处）时把焦点交给新页面的 `.sa-page-head-title`（必要时补 `tabindex="-1"`），与搜索面板原有的做法一致。
+- **品牌色超量**：开关选中态挂 `brand-primary` 底色、设置左栏当前项挂品牌色左边框，同屏出现三处品牌色。现在两处改用 `--dsw-alias-interactive-bg-active` 中性底色（带回退），品牌色只留当前页签下划线；危险动作统一 `variant="danger"`（忽略/停止确认、打回验收，原来是 `primary` 与 `outline`）。
+- **十一条细则**：warning 内联色改 `--sa-warn-text`；输入框 hover 改底色而非换边框色；禁用态 opacity 统一 0.4（原来 0.55/0.72/0.4 三种）；裸 `gap: 2px|1px` 改 `var(--sa-sp-2)`；开关圆点 50% → `var(--sa-r-pill)`；diff 正文 11px → 12px；补 `.sa-signal-toggle/.sa-signal-text/.sa-signal-full` 样式（原来 role=button 的信号预览没有 cursor、没有焦点环、命中区只有 12px 高）；术语表补「验收/在飞/干跑/接单/发布」五条。
+- **概览的可读性**：平均耗时原来直接印 `659.9s`，现在 `durationText()` 输出 `11m`／`1m 30s`（整分省秒）；旧数据里已带标签的失败原因会二次包裹成「其他原因：其他原因：…」，`collapseRepeats()` 先收起连续重复段，`failureReasonTextOf()` 再检测已有前缀，不再叠加。
+
+### 验证
+
+- `node scripts/render-check.mjs` → 305 checks / ok:true / 0 fail / 0 skip（新增 15 条：行按钮持有主列、路由切换焦点、单 h1、弹窗 `aria-describedby` 与滚动锁、滚动释放、品牌色只在下划线、禁用态单一 opacity、信号触发器 cursor/焦点环、diff 字号、`requestIsTitle`、`durationText`、失败原因去重、危险确认语气）。
+- `node --test lib/live/*.test.js` → 688 pass / 0 fail；`npm run types`、`npm run check:js`、`node scripts/check-keys.mjs`、`node scripts/build-client.mjs --check` 全绿。
+- `DESIGN.md` 同步两处：Page 标题是每页唯一的 `h1` 且两行截断；One Accent Rule 明确开关与设置左栏的选中态用中性底色，品牌色留给页签下划线。
+
 ## [1.1.3] — 2026-11-23
 
 整体审查后的第二批修复：全部是「记录的数据与实际发生的事对不上」——轮询丢了消息还说同步完成、轮询链每保存一次设置就翻一倍、关掉的收件箱项再也不回来、停机时把没落盘的游标 ack 掉、后台批次失败无人接收、UAT 结果落在别的仓库卡上、详情页草稿跟着路由跑到别的工单。
