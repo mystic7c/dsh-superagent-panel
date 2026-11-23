@@ -365,6 +365,19 @@ export function apply(ctx, config = {}) {
           // Group ↔ repository bindings must stay consistent: a bound chat has to be watched, and the repository has
           // to exist. Rejecting here keeps a half-written binding out of live.json.
           if ('octo.chatRepos' in patch || 'octo.watchChatIds' in patch) {
+            // A malformed value used to crash the cross-check below (`new Set` on a string, `Object.values` on null)
+            // and surface as a 500. live-json rejects these too, so the request is simply a bad one: answer 400.
+            const watchedPatch = patch['octo.watchChatIds']
+            if ('octo.watchChatIds' in patch && !(Array.isArray(watchedPatch)
+              && watchedPatch.every(chatId => typeof chatId === 'string' && chatId.trim()))) {
+              throw new ActionError(400, 'octo.watchChatIds 必须是非空字符串数组')
+            }
+            const bindingsPatch = patch['octo.chatRepos']
+            if ('octo.chatRepos' in patch && !(bindingsPatch !== null && typeof bindingsPatch === 'object'
+              && !Array.isArray(bindingsPatch)
+              && Object.values(bindingsPatch).every(repoId => typeof repoId === 'string' && repoId.trim()))) {
+              throw new ActionError(400, 'octo.chatRepos 必须是从非空字符串到非空字符串的映射')
+            }
             const config = engine.readConfig().config
             const repoIds = new Set(config.repos.map(repo => repo.id))
             const watched = new Set('octo.watchChatIds' in patch ? patch['octo.watchChatIds'] : config.octo.watchChatIds ?? [])

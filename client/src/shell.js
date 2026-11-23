@@ -3,7 +3,7 @@
 
    Written in JSX (compiled to the same `h` binding the build prelude defines). */
 
-import { Icon, hhmm, scrollPanelTo } from "./util.js"
+import { Icon, hhmm, plainTitle, scrollPanelTo } from "./util.js"
 import { errorText, fullTime, when } from "./i18n.js"
 import { Button, IconButton, Input, Menu, Modal, SegmentedTabs, StatusIcon, Tag } from "./controls.js"
 import { Panel, PanelProvider, PanelState, same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -125,11 +125,21 @@ export function GlobalSearch({ open, onClose }) {
   const inputRef = useRef(null)
   useEffect(() => {
     if (!open) { setQuery(''); setResult(undefined); setFailure(undefined); setBusy(false); return undefined }
-    // Focus the field once the dialog has mounted. Guarded by rAF: a layout-less environment (jsdom render-check) has
-    // no frame loop and its focus polyfill throws on synthetic focus, while every real browser focuses as intended.
+    // Focus the field twice: once in this effect (before the dialog's own effect runs) and once on the next frame for
+    // a browser that has not laid the field out yet. The rAF alone lost the race with Modal's dialog focus, so Cmd+K
+    // after the glossary could leave the caret outside the field (ui audit B-06).
+    // Focus the field on the frame after mount, and again on the next one: Modal's own effect focuses the dialog, and
+    // any later focus steal (the glossary closing restores its opener) would otherwise leave the caret outside the
+    // field — Cmd+K after the glossary landed on the dialog element (ui audit B-06). It must stay inside rAF: jsdom's
+    // focus polyfill throws from React's IE input-event path when focus runs inside the commit.
     if (typeof requestAnimationFrame !== 'function') return undefined
-    const handle = requestAnimationFrame(() => inputRef.current?.focus())
-    return () => cancelAnimationFrame(handle)
+    const focusField = () => { try { inputRef.current?.focus() } catch { /* jsdom */ } }
+    let second
+    const first = requestAnimationFrame(() => {
+      focusField()
+      second = requestAnimationFrame(focusField)
+    })
+    return () => { cancelAnimationFrame(first); if (second !== undefined) cancelAnimationFrame(second) }
   }, [open])
   useEffect(() => {
     if (!open) return undefined
@@ -167,7 +177,7 @@ export function GlobalSearch({ open, onClose }) {
       onClick={() => go({ page: 'execution', id: ticket.id })}>
       <StatusIcon state={ticketStatus(ticket).state} size={14} />
       <div className="sa-row-main">
-        <div className="sa-row-title"><span className="sa-ellipsis">{ticket.title || ticket.id}</span></div>
+        <div className="sa-row-title"><span className="sa-ellipsis">{plainTitle(ticket.title) || ticket.id}</span></div>
         <div className="sa-row-meta">
           <Tag tone={ticketStatus(ticket).tone}>{pt(t, ticketStatus(ticket).labelKey)}</Tag>
           {ticket.updatedAt ? <When at={ticket.updatedAt} /> : null}
@@ -328,9 +338,14 @@ export function PanelShell({ location, openTab }) {
     const previous = previousRoute.current
     previousRoute.current = key
     if (previous === undefined || previous === key) return
+    // Focus is stranded when it sits on <body> or on a control the navigation just unmounted (the row that opened the
+    // page). A control that survived the change — a tab, a menu item — keeps focus and needs nothing.
     const active = document.activeElement
-    if (active && active !== document.body) return
-    const head = document.querySelector('.sa-page-head-title') ?? scroller.current
+    const stranded = !active || active === document.body || !document.body.contains(active)
+    if (!stranded) return
+    // The page title, else the panel heading on a page that has none (Overview). The scroll container is never the
+    // target: focused programmatically it drew a ring around the whole content area on every navigation (A-06/B-10).
+    const head = document.querySelector('.sa-page-head-title') ?? document.querySelector('.sa-head h1.sa-title')
     if (!(head instanceof HTMLElement)) return
     if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1')
     head.focus()
