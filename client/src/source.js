@@ -8,12 +8,12 @@ import { API, Icon, clampPageOffset, hostName, hostOfUrl, hhmm, scrollPanelTo, s
 import { errorText, localized, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
-import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, Section, Skeleton, When } from "./widgets.js"
+import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { useLiveResource } from "./live-model.js"
 import { initialPageQuery, rememberPageState } from "./router.js"
 import { setupStateOf } from "./setup.js"
-import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
+import { engineOn, AutomationBar, executorOn, panelRepoOf } from "./live-ui.js"
 import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   // The panel head already shows "数据更新于 HH:MM"; repeating the same clock here under a second name made it look
@@ -42,6 +42,7 @@ Object.assign(PAGE_TEXT, {
   'src.action.filtered': ['查看被过滤', 'See filtered'],
   'src.action.uat': ['检查 UAT', 'Check UAT'],
   'src.action.project': ['打开项目', 'Open project'],
+  'src.action.manage': ['管理仓库', 'Manage repository'],
   'src.checkNeedsToken': ['先保存 Octo token 才能检查新消息。', 'Save the Octo token before checking for messages.'],
   'src.disabled': ['已禁用：打开「启用引擎」（设置→来源）并保存。',
     'Disabled: turn on “Engine enabled” under Settings → Source and save.'],
@@ -146,37 +147,6 @@ export function sourceStatRows(source) {
     return rows
   }
   return []
-}
-
-/** The execution card's GitLab and repository facts (`source.config` plus the matching `config.repos` entry). */
-export function sourceRepoRows(t, source, repo) {
-  const config = source?.config ?? {}
-  const rows = []
-  // R2-05: label the project/URL with the host the base URL actually names.
-  const host = hostName(hostOfUrl(config.baseUrl))
-  if (config.project) rows.push([pt(t, 'repo.project', { host }), h('span', { className: 'sa-mono', translate: 'no' }, String(config.project))])
-  if (config.baseUrl) {
-    const remote = String(config.baseUrl)
-    // U-10: a GitHub-backed repository was labelled "GitLab 地址" because the label was hard-coded.
-    const remoteKey = /github\.com/i.test(remote) ? 'repo.baseUrlGithub'
-      : /gitlab/i.test(remote) ? 'repo.baseUrl' : 'repo.baseUrlOther'
-    rows.push([pt(t, remoteKey, { host }), h(ExternalLink, { href: remote, icon: null }, remote)])
-  }
-  if (config.targetBranch) rows.push([pt(t, 'repo.targetBranch'), h('span', { className: 'sa-mono', translate: 'no' }, String(config.targetBranch))])
-  rows.push([pt(t, 'repo.token'),
-    config.tokenConfigured ? pt(t, 'repo.tokenConfigured') : pt(t, 'repo.tokenMissingLocal')])
-  if (repo?.repo) rows.push([pt(t, 'repo.localPath'), h('span', { className: 'sa-mono', translate: 'no' }, String(repo.repo))])
-  if (repo?.baseBranch || config.targetBranch) {
-    rows.push([pt(t, 'repo.branches'), `${repo?.baseBranch ?? '—'} → ${config.targetBranch ?? '—'}`])
-  }
-  return rows
-}
-
-/** Verify/acceptance mode of one repository in one small line (`人工验收 · 合并后验收`). */
-export function sourceRepoModeHint(t, repo) {
-  if (!repo) return ''
-  return `${pt(t, 'repo.verifyMode')}：${repoVerifyModeText(t, repo.verifyMode)}`
-    + ` · ${pt(t, 'repo.acceptance')}：${repoAcceptanceText(t, repo.acceptance)}`
 }
 
 /** One filter reason in the active language; an unknown code falls back to the host's own human text. */
@@ -287,14 +257,12 @@ export function RawSignalRows({ items, onReplay, onLabel, busy, labelBusy, focus
         h('div', { className: 'sa-row-title' },
           h(Tag, { tone: SIGNAL_TONE[status] ?? 'outline' }, statusLabel === statusKey ? status : statusLabel),
           expandable
-            ? h('span', { className: open ? 'sa-signal-text sa-signal-text-open' : 'sa-ellipsis sa-signal-toggle',
-              title: full, role: 'button', tabIndex: 0, 'aria-expanded': open ? 'true' : 'false',
-              onClick: () => toggleRow(item.id),
-              onKeyDown: event => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                toggleRow(item.id)
-              } },
+            // A real button: a span with role=button is not focusable in older Safari and had no accessible role in some
+            // screen readers (audit P2).
+            ? h('button', { type: 'button',
+              className: open ? 'sa-signal-text sa-signal-text-open' : 'sa-ellipsis sa-signal-toggle',
+              title: full, 'aria-expanded': open ? 'true' : 'false',
+              onClick: () => toggleRow(item.id) },
             open ? pt(t, 'src.signalCollapse') : (preview || pt(t, 'src.signalPreviewEmpty')))
             : h('span', { className: 'sa-ellipsis' }, preview || pt(t, 'src.signalPreviewEmpty'))),
         (item?.source || reason || at)
@@ -563,8 +531,8 @@ export function LiveSourcePage({ route }) {
   const sources = Array.isArray(data.sources) ? data.sources : []
   const octo = sources.find(source => source.id === 'octo')
   const paused = data.paused === true || data.config?.paused === true || data.engine?.paused === true
-  const engineEnabled = data.config?.enabled === true
-  const executorEnabled = data.config?.executor?.enabled !== false
+  const engineEnabled = engineOn(data.config)
+  const executorEnabled = executorOn(data.config)
   const automationNeeded = paused || !engineEnabled || !executorEnabled
   const automationReady = Boolean(data.config?.octo?.tokenConfigured
     && (data.config?.octo?.watchChatIds ?? []).length > 0
@@ -596,7 +564,9 @@ export function LiveSourcePage({ route }) {
   })
   const counted = [...imSources, ...codeSources]
   const enabled = counted.filter(source => source.enabled).length
-  const lastAt = counted.map(source => source.lastAt).filter(Boolean).sort().at(-1)
+  // ISO strings sort lexically only while they share a timezone offset; parse before comparing.
+  const lastAt = counted.map(source => source.lastAt).filter(item => Number.isFinite(Date.parse(item)))
+    .sort((left, right) => Date.parse(left) - Date.parse(right)).at(-1)
   const clock = lastAt ? hhmm(lastAt, t.lang) : ''
   const summary = clock
     ? pt(t, 'src.summary', { active: enabled, total: counted.length, time: clock })
@@ -632,6 +602,8 @@ export function LiveSourcePage({ route }) {
           disabled: uatBusy === source.repoId || !source.repoId, onClick: () => { void checkUat(source.repoId) } },
           pt(t, 'src.action.uat')),
       projectUrl ? h(ExternalLink, { key: 'project', href: projectUrl }, pt(t, 'src.action.project')) : null,
+      h(Button, { key: 'manage', variant: 'ghost', size: 'sm',
+        onClick: () => navigate({ page: 'settings', group: 'repos' }) }, pt(t, 'src.action.manage')),
     ]
   }
   const uatResult = (source) => {
@@ -651,13 +623,11 @@ export function LiveSourcePage({ route }) {
     const notes = []
     // Every disabled Source says so on its own card: the page-level automation bar explains the pause, not which
     // Sources are switched off, and two cards reading only "空闲" looked like healthy repositories (critique 2026-11-11).
-    if (!source.enabled) notes.push(pt(t, source.kind === 'execution' ? 'src.disabledRepo' : 'src.disabled'))
     // U-10: `ready` only means the local path is readable. Say what is missing (the token) instead of a green "正常".
     const localOnly = isExecutionSource(source) && source.state === 'ready' && source.config?.tokenConfigured === false
     if (localOnly) notes.push(pt(t, 'src.localOnlyNote'))
     if (source.detail && (!showAutomationBar || source.enabled)) notes.push(String(source.detail))
     const stats = sourceStatRows(source)
-    const detailRows = isExecutionSource(source) ? sourceRepoRows(t, source, repo) : []
     return h('div', { key: source.id, className: 'sa-card' },
       h('div', { className: 'sa-card-head' },
         h('span', { className: 'sa-section-icon' }, h(Icon, { name: sourceIconName(source), size: 16 })),
@@ -669,8 +639,6 @@ export function LiveSourcePage({ route }) {
       isExecutionSource(source)
         ? h(Fragment, null,
           stats.length ? h(SourceStats, { rows: stats }) : null,
-          detailRows.length ? h(KeyValues, { rows: detailRows }) : null,
-          repo ? h('p', { className: 'sa-hint' }, sourceRepoModeHint(t, repo)) : null,
           h('div', { className: 'sa-actions' }, cardActions(source)),
           uatResult(source))
         : h('div', { className: 'sa-card-row' },
@@ -680,12 +648,25 @@ export function LiveSourcePage({ route }) {
           h('div', { className: 'sa-actions' }, cardActions(source))))
   }
 
+  // The intake ledger comes first: repository cards are configuration summaries, the signals are the work record.
+  const groups = h('div', { className: 'sa-source-groups' },
+    imSources.length
+      ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
+        h('div', { className: 'sa-cards-2' }, imSources.map(renderCard)))
+      : null,
+    codeSources.length
+      ? h(Section, { key: 'code', title: pt(t, 'src.groupCode') },
+        h('div', { className: 'sa-cards-2' }, codeSources.map(renderCard)))
+      : null)
+  const pageOff = !engineEnabled ? pt(t, 'src.disabled')
+    : !executorEnabled ? pt(t, 'src.disabledRepo') : null
   return h(Fragment, null,
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h('p', { className: 'sa-hint', role: 'status' }, summary),
+    pageOff ? h(Hint, null, pageOff) : null,
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
+        progress: setup })
       : null,
     focusId && (focus.data || focus.error?.missing)
       ? h(LocatedSignal, { view: focus.data, missing: Boolean(focus.error?.missing),
@@ -694,15 +675,6 @@ export function LiveSourcePage({ route }) {
         onOpenTicket: id => leaveTo({ page: 'execution', id }),
         onOpenThread: key => leaveTo({ page: 'trigger', id: key }) })
       : null,
-    h('div', { className: 'sa-source-groups' },
-      imSources.length
-        ? h(Section, { key: 'im', title: pt(t, 'src.groupIm') },
-          h('div', { className: 'sa-cards-2' }, imSources.map(renderCard)))
-        : null,
-      codeSources.length
-        ? h(Section, { key: 'code', title: pt(t, 'src.groupCode') },
-          h('div', { className: 'sa-cards-2' }, codeSources.map(renderCard)))
-        : null),
     octo ? h('div', { ref: filteredRef },
       h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
         filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
@@ -752,5 +724,6 @@ export function LiveSourcePage({ route }) {
                   total: signalTotal ?? signalItems.length })),
                 h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (signalTotal ?? signalItems.length),
                   onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
-              : h(Hint, null, pt(t, 'src.signalsEmpty')))))
+              : h(Hint, null, pt(t, 'src.signalsEmpty')))),
+    groups)
 }

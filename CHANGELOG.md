@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.1.11] — 2026-11-24
+
+第十批：整体代码走查 + UI 体检（设计 A 27/40、检测 B 1 个 P1）后的修复，重点是把「哪条信息归哪个页面」重新钉死。
+
+### 信息归属（本次重点）
+
+- **来源页不再复述仓库配置**：项目/远程地址/目标分支/令牌/本地路径/分支/验证与验收方式只留在「设置 → 仓库」；来源页的仓库卡改成运营卡（状态、执行工单/待合并 MR/UAT、打开项目、管理仓库），信号台账移到页面主体最前面。
+- **检查新消息只留两个入口**：顶部状态条与来源页；概览、执行页的自动化条都去掉了重复按钮。
+- **重新加载配置全站一个**：移到设置页头（与变更历史/复制路径同一行），来源与仓库分组里各自那份删掉。
+- **手工建单只在执行页**：设置 → 运行里的第二份表单删除，文案与 render-check 断言同步。
+- **概览不再重复暂停横幅**：暂停/未运行由顶部状态条与执行页自动化条负责；概览只保留设置清单（页头的「还有 N 项待配置」在概览页隐藏，不再和清单并排出现）。
+- **绑定的写入走草稿**：监听群 → 仓库绑定不再即时写 `live.json`，改为进入设置草稿，保存时按高风险变更确认。
+- **仓库编辑器补全**：远程地址、GitLab 项目、基分支/目标分支、验证/验收方式、UAT/健康检查地址现在都能在弹窗里改（Host 的 `updateRepoDefinition` 早已接受这些字段，之前 UI 只回传三个）。
+- **能力矩阵改为指向 Bot 页**：`设置 → Worker` 不再和 Bot 页的后端核验状态抢同一件事。
+- 部署与限制块只保留全局文件事实（配置文件、路径、worktree 根），逐仓库事实回到仓库卡。
+
+### 客户端逻辑
+
+- 详情页粘性头不再粘住不消失（`stuckRef` 跨轮询保留）；验收不通过的拒收理由移到按钮下方，切工单时清空。
+- 最近一次运行不再把 running/interrupted/stopped 一律写成「运行成功」，按 `runView` 给标签。
+- 执行器开关判定统一为 `executorOn()`，引擎开关统一为 `engineOn()`（此前有 truthy / `=== true` / `!== false` 三种读法）。
+- 相对时间由 30s 共享时钟刷新（轮询会在负载相同的时候跳过，`When` 原本会冻住）。
+- 顶部「需要你处理 N 件」优先用 blocking 行数，不再和概览的清单数字打架。
+- 触发页首行点击、空状态判定、翻页边界；评估页越界深链的诚实提示；弹窗 Esc 只关最上层、Tab 焦点跳过隐藏控件；信号列表只有一个 `role=status`；运行列表按开始时间排序（`sortRunsNewestFirst`）后再取最新闸门与改动。
+- 闸门「已通过」计数兼容没有 `state` 的旧运行（看 `exitCode`/`timedOut`），与交付证据的 6/6 一致。
+
+### Host / 引擎
+
+- GitLab PAT 不再发给 api.github.com（GitHub 调用只读 `GITHUB_TOKEN`）；GitLab/GitHub 的响应体读取超时不再被 `.catch(() => '')` 吞成空成功。
+- 仓库禁用时消息在评估前就记为 `skipped`（可重放），不再先判成 accepted 再丢弃。
+- 自动化设置不再被运行落盘时的旧 ticket 覆盖；web-uat 先合并后建基线时会直接判定 deployed，不再永久卡在 deploy-pending。
+- 闸门输出改为有界滚动尾巴 + 流式 `markerSeen`（长日志不再整段驻留内存，`requireOutput` 也不会因为落在 4000 字符之前就误判缺证据）。
+- abort/timeout 的 `runCommand` 与 CLI `runProcess` 都加了硬结算定时器（孙进程占着管道时不再永久 working 并占住 claim）。
+- `maxExecutions: 0` 视为不限次（不再变成 1）；`verifySeconds` 读写同用 30 秒下限；显式 repo id 走字符集校验；legacy `gitlab.tokenFile` 只被第一个仓库继承；event id 超过安全整数时保留字符串。
+- `live.json` 顶层不是对象时拒绝覆盖；evidence/shadow/worker-bot 的临时文件名加随机后缀、evidence 写入串行化。
+
+### 体检项
+
+- 评估页筛选组标签对比度 3.71:1（低于 DESIGN.md 的 11–12px raised token 规则）改用 `--sa-label-tertiary`。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **734 pass / 0 fail**。
+- `node scripts/render-check.mjs` → **309 checks / ok:true / 0 fail / 1 skip**（唯一 skip 是本机没有可检查的 UAT 仓库卡）。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 独立实例逐页截图复核（7 页 + 工单详情），确认不再有重复的暂停横幅/配置清单/检查按钮。
+
 ## [1.1.10] — 2026-11-24
 
 第九批：把上一轮 UI 体检里明确留作「重新设计量级」的三条 P2 补完。

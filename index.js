@@ -471,6 +471,9 @@ export function apply(ctx, config = {}) {
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'run') {
           const dryRun = body?.dryRun === true
           requireExecutor(engine, { dryRun })
+          // Answer 404 here like /gate and /stop do: without it a mistyped id gets a 202 "started" and the executor's
+          // "ticket not found" only reaches the host log.
+          if (!engine.state.tickets?.[third]) throw new ActionError(404, '工单不存在')
           assertTicketFree(third)
           const backend = typeof body?.backend === 'string' ? body.backend : undefined
           // Same rule as creating a Ticket: a run may only target a backend the operator enabled, otherwise the executor
