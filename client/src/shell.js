@@ -473,7 +473,7 @@ export function PanelShell({ location, openTab }) {
 }
 
 /** Root panel component: route history above the single status poll and the provider that shares it. */
-export function App({ openSession, t, currentSessionId }) {
+export function App({ openSession, t, currentSessionId, openTerminalTab, expandSidebar }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
   // U-08: a page owns its own filter parameters. Switching tabs drops the ones that belong to the page we left, so a URL
@@ -504,7 +504,7 @@ export function App({ openSession, t, currentSessionId }) {
     ? { route: current.stack.at(-1), stack: current.stack.slice(0, -1) }
     : { route: current.route.id ? { page: current.route.page } : HOME, stack: [] }), [move])
   const openTab = useCallback(tab => move(() => ({ stack: [], route: { page: tab } })), [move])
-  return <PanelProvider t={t} openSession={openSession} currentSessionId={currentSessionId} navigate={navigate} back={back}
+  return <PanelProvider t={t} openSession={openSession} openTerminalTab={openTerminalTab} expandSidebar={expandSidebar} currentSessionId={currentSessionId} navigate={navigate} back={back}
     route={location.route}
     backLabel={routeLabel(t, location.stack.at(-1) ?? (location.route.id ? { page: location.route.page } : HOME))}>
     <PanelShell location={location} openTab={openTab} />

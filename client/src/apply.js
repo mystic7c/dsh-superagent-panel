@@ -16,20 +16,62 @@ export function SidebarIcon({ size }) {
   return h(SuperagentIcon, { size })
 }
 
-/** The GUI Session this panel is shown in, as far as the client can tell. The sidebar is bound to that Session, so its
- *  mounted id is the one a host action must act on; it is read on click, not captured, because the person can switch. */
+/** The GUI Session this panel is shown in, as far as the client can tell; read on click, not captured, because the
+ *  person can switch Sessions between clicks.
+ *
+ *  `sidebarRight.mounted` names the on-screen Session only while the Conversation fills the main column — with this
+ *  panel open it does not. So the fallback is the workspace's own selection record (`dsh.sessions.current`, the same
+ *  value `UiWorkspace` persists and restores), which survives the panel taking the main column. */
 export function currentSessionIdOf(ctx) {
   try {
     const mounted = ctx.get?.('sidebarRight')?.mounted?.getSnapshot?.()
-    return typeof mounted === 'string' ? mounted : ''
+    if (typeof mounted === 'string' && mounted) return mounted
+  } catch { /* service unavailable: fall through to the selection record */ }
+  try {
+    const raw = globalThis.localStorage?.getItem('dsh.sessions.current')
+    const selected = raw ? JSON.parse(raw)?.sessionId : undefined
+    return typeof selected === 'string' ? selected : ''
   } catch { return '' }
+}
+
+/** Reveal a Host terminal in the right Sidebar of one Session. Returns false when this host has no Sidebar to put it in,
+ *  which the caller reports instead of leaving the person with a running Claude Code they cannot see.
+ *
+ *  `openTab` is the public path — it expands the column — but it acts on the Session that is on screen, so it only works
+ *  once the caller has brought that Session back; `openTabIn` places the tab in any Session without touching the column
+ *  and is the fallback for the moment before. */
+export function terminalTabOpener(ctx) {
+  return (sessionId, terminalId) => {
+    if (!sessionId || !terminalId) return false
+    const sidebar = ctx.get?.('sidebarRight')
+    if (!sidebar) return false
+    const params = { params: { terminalId } }
+    try { sidebar.openTab?.('terminal', params); return true } catch { /* no Session on screen yet */ }
+    try { sidebar.openTabIn?.(sessionId, 'terminal', params); return true } catch { return false }
+  }
+}
+
+/** Expand the right Sidebar once the Conversation is back on screen. A Sidebar command needs an on-screen Session, so
+ *  this is a no-op (not an error) while this panel still owns the main column. */
+export function sidebarExpander(ctx) {
+  return () => {
+    try {
+      const sidebar = ctx.get?.('sidebarRight')
+      if (!sidebar?.toggleExpanded) return false
+      if (sidebar.isExpanded?.()) return true
+      sidebar.toggleExpanded()
+      return true
+    } catch { return false }
+  }
 }
 
 export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(createSessionOpener(ctx), [ctx])
   const currentSessionId = useCallback(() => currentSessionIdOf(ctx), [ctx])
-  return h(App, { openSession, t, currentSessionId })
+  const openTerminalTab = useCallback(terminalTabOpener(ctx), [ctx])
+  const expandSidebar = useCallback(sidebarExpander(ctx), [ctx])
+  return h(App, { openSession, t, currentSessionId, openTerminalTab, expandSidebar })
 }
 
 /** Client half: the sidebar icon plus the panel in the `main` slot.

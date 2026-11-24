@@ -145,12 +145,16 @@ export const stay = () => {}
 export const noSession = async () => {}
 /** The GUI Session the panel is shown in; a host that cannot name one still loads the panel (see `currentSessionId`). */
 export const noSessionId = () => ''
+/** Reveals a Host terminal beside the panel; a host without a right Sidebar answers false (see `terminalTabOpener`). */
+export const noTerminalTab = () => false
+/** Expands the right Sidebar; a host without one answers false. */
+export const noSidebarExpand = () => false
 /**
  * One provider for the whole panel: the typed caller, routing callbacks, session opener and the toast.
  * `route` is passed down as well so a page can tell a list view from a deep-linked detail view.
  */
-export function PanelProvider({ t, openSession = noSession, currentSessionId = noSessionId, navigate = stay, back = stay,
-  backLabel = '', route, children }) {
+export function PanelProvider({ t, openSession = noSession, currentSessionId = noSessionId, openTerminalTab = noTerminalTab,
+  expandSidebar = noSidebarExpand, navigate = stay, back = stay, backLabel = '', route, children }) {
   const copy = useRef(t)
   copy.current = t
   const call = useMemo(() => caller(key => copy.current(key)), [])
@@ -161,8 +165,9 @@ export function PanelProvider({ t, openSession = noSession, currentSessionId = n
   // the first one's dismiss timer and could vanish early.
   const toastSeq = useRef(0)
   const notify = useCallback((text, tone) => setToast({ text, tone, id: (toastSeq.current += 1) }), [])
-  const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId }),
-    [t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId])
+  const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId,
+    openTerminalTab, expandSidebar }),
+  [t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId, openTerminalTab, expandSidebar])
   return h(Panel.Provider, { value: context },
     h('style', null, PANEL_CSS),
     children,

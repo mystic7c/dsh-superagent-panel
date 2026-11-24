@@ -951,14 +951,24 @@ export function runRouteTag(t, run) {
     session id can contain because the host puts it on a shell command line; when it is not one, the terminal still
     opens — a fresh `claude` in the worktree is better than a dead control. */
 export function RunWorkerTerminal({ run }) {
-  const { t, call, currentSessionId, notify } = usePanel()
+  const { t, call, currentSessionId, openTerminalTab, expandSidebar, openSession, notify } = usePanel()
   const backend = run?.worker?.backend
   const candidate = typeof run?.worker?.sessionId === 'string' ? run.worker.sessionId.trim() : ''
   const resume = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(candidate) ? candidate : ''
   const cwd = typeof run?.worktree === 'string' ? run.worktree : ''
   const { run: open, busy } = useAction(async () => {
-    const result = await call('POST engine/workers/terminal', { body: { sessionId: currentSessionId(), cwd, resume } })
-    notify(t('openWorkerTerminalOpened'))
+    const sessionId = currentSessionId()
+    const result = await call('POST engine/workers/terminal', { body: { sessionId, cwd, resume } })
+    // The host opened the PTY under this Session; the right Sidebar is where the person can type into it, and that
+    // Sidebar belongs to the Conversation — so the conversation has to be the thing on screen for the tab to show. The
+    // panel cannot expand it itself: a Sidebar command needs an on-screen Session, and this panel is that screen.
+    const shown = openTerminalTab(sessionId, result?.terminalId)
+    notify(t(shown ? 'openWorkerTerminalOpened' : 'openWorkerTerminalHidden'))
+    if (!shown) return result
+    await openSession(sessionId)
+    // Now that the Conversation is on screen the Sidebar answers, so the terminal lands in sight instead of behind a
+    // collapsed column. A host that refuses leaves the tab in place — one click on its own toggle still shows it.
+    expandSidebar()
     return result
   })
   if (backend !== 'claude' || !cwd) return null
