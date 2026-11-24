@@ -100,7 +100,7 @@ export const PANEL_CSS = `
 /* A caption per segmented group: "全部 / 全部 / 全部" on one line told nobody which axis it filtered. The caption is
    visual only (the radiogroup keeps its own aria-label) and disappears once the row is too narrow to host it. */
 .sa-filter-group { display: inline-flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
-.sa-filter-group-label { font-size: var(--sa-fs-caption); line-height: 1; color: var(--dsw-alias-label-tertiary);
+.sa-filter-group-label { font-size: var(--sa-fs-caption); line-height: 1; color: var(--sa-label-tertiary);
   white-space: nowrap; }
 @container (max-width: 900px) { .sa-filter-group-label { display: none; } }
 /* Secondary filters (repo/reason/date range) participate in the filter row on wide pages and fold into a disclosure
@@ -374,6 +374,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
    24px touch floor even though it sits on a title line, which had no styles at all before. */
 .sa-signal-toggle, .sa-signal-text { display: inline-flex; align-items: center; min-height: 24px; min-width: 0;
   border-radius: var(--sa-r-sm); }
+/* Native button needs the text-button reset; the span carried no default chrome. */
+button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; padding: 0; margin: 0; font: inherit;
+  color: inherit; text-align: left; }
 .sa-signal-toggle { cursor: pointer; }
 .sa-signal-text { white-space: normal; overflow-wrap: anywhere; }
 .sa-signal-toggle:hover, .sa-signal-text:hover { text-decoration: underline; }

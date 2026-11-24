@@ -6,7 +6,7 @@ import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyV
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
-import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
+import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
@@ -1422,7 +1422,10 @@ export function DeliveryEvidenceCard({ data, id, loading, error, onRetry, accept
   const latest = rounds.at(-1)
   const diff = compare.data
   const previous = rounds.length > 1 ? rounds.at(-2) : null
-  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed').length
+  // The evidence record stores a state word; a run gate only carries exitCode. Counting one and rendering the other
+  // printed "闸门 0/6" directly above six green rows (design review P1).
+  const passed = (latest.gates ?? []).filter(gate => gate.state === 'passed' || gate.state === 'skipped'
+    || (gate.state === 'unknown' && gate.exitCode === 0 && gate.timedOut !== true)).length
   const platform = latest.platform ?? {}
   const incomplete = diff?.incomplete
   const uncertain = diff?.filesUncertain
@@ -1552,6 +1555,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const headRef = useRef(null)
   // The PageHead (title/status/primary action) scrolls away; the sticky tier-2 row re-shows that context once it is
   // out of view, so a deep scroll never leaves only the section links and the generic page chrome (C31).
+  // The threshold lives in a ref, not in a closure: the effect re-runs on every poll, and a fresh `stuck = false` meant
+  // the first frame after a poll compared against the wrong state and the bar stayed stuck after scrolling back up (M-2).
+  const stuckRef = useRef(false)
+  useEffect(() => { stuckRef.current = false; setHeadStuck(false) }, [id])
   useEffect(() => {
     const node = headRef.current ?? document.querySelector('.sa-page-head')
     const root = document.querySelector('.sa-scroll')
@@ -1559,7 +1566,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     // Audit P3: one read per animation frame, and a state write only when the threshold actually flips (a scroll
     // event used to force two layouts and two renders per frame).
     let frame = 0
-    let stuck = false
     const measure = () => {
       frame = 0
       const head = node.getBoundingClientRect()
@@ -1570,8 +1576,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       // The compact context appears only once the real PageHead is under the sticky nav (a small overlap margin keeps
       // it from flickering at the boundary).
       const next = head.bottom <= scroll.top + 8
-      if (next === stuck) return
-      stuck = next
+      if (next === stuckRef.current) return
+      stuckRef.current = next
       setHeadStuck(next)
     }
     const schedule = () => { if (!frame) frame = requestAnimationFrame(measure) }
@@ -1631,6 +1637,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   }, { reload: refreshAll })
   const acceptFail = useAction(async intents => {
     await act.acceptTicket(id, { ok: false, intents: Array.isArray(intents) ? intents : undefined })
+    setRejectIntents([])
     notify(pt(t, 'ticket.rejectRecorded'))
   }, { reload: refreshAll })
   const dismiss = useAction(async () => {
@@ -1663,6 +1670,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const [answerError, setAnswerError] = useState(false)
   // P1-3: rejection intents are optional checkboxes next to the reject button.
   const [rejectIntents, setRejectIntents] = useState([])
+  // A ticked reason belongs to the Ticket it was ticked on.
+  useEffect(() => { setRejectIntents([]) }, [id])
   const answer = useAction(async () => {
     const text = String(answerText ?? '').trim()
     if (!text) { setAnswerError(true); return }
@@ -1697,11 +1706,15 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     if (!root) return undefined
     // Same filtered list as the jump row (audit P2): a hidden section is neither linked nor observed.
     const ticket = data?.ticket ?? {}
-    const runs = Array.isArray(data?.runs) ? data.runs : []
+    const runs = sortRunsNewestFirst(data?.runs)
     const gates = latestGatesOf({ ...ticket, runs })
     const hasGates = gates.gates.length > 0 || Boolean(ticket.pendingGate ?? gates.run?.pendingGate)
     const nodes = ticketVisibleJumps(ticket, hasGates).map(jump => document.getElementById(jump.id)).filter(Boolean)
     if (!nodes.length) return undefined
+    // The nav's at-rest state was hard-coded to 需求/改动, but a Ticket whose body repeats its title hides 需求. Start on
+    // the first section that is actually on the page (review L-18).
+    const visibleIds = nodes.map(node => node.id)
+    setActiveJump(current => (visibleIds.includes(current) ? current : visibleIds[0]))
     const observer = new IntersectionObserver(entries => {
       const visible = entries.filter(entry => entry.isIntersecting)
         .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
@@ -1719,7 +1732,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   if (loading) return <Skeleton rows={5} />
 
   const ticket = data?.ticket ?? {}
-  const runs = Array.isArray(data?.runs) ? data.runs : []
+  // The host returns runs oldest-first; every helper below reads the list as newest-first (latest gate, latest summary).
+  const runs = sortRunsNewestFirst(data?.runs)
   const trigger = data?.trigger
   const decision = data?.decision
   const thread = data?.thread
@@ -1751,7 +1765,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const failedRun = view.state === 'error' ? runs.find(run => run.status === 'failed') : undefined
   const failedSteps = (failedRun?.steps ?? [])
     .filter(step => step.state === 'failed' && step.name !== 'error').map(step => ticketStepLabel(t, step.name))
-  const canRun = config.executor?.enabled === true
+  const canRun = executorOn(config)
   // R2-10: match the server's PUBLISHABLE_STATUSES (ready/failed/pushed) — a queued Ticket has not run yet, so
   // offering "发布 MR" on it promised an action the API rejects.
   const canPush = canRun && config.executor?.allowPush === true && publishableStatusOf(ticket)
@@ -2328,17 +2342,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       {canAccept && !accepted
         ? <>
           <Hint>{pt(t, acceptMode === 'merged' ? 'ticket.acceptHintMerged' : 'ticket.acceptHint')}</Hint>
-          {/* P1-3: rejection intents are optional; they ride on the accept POST only when at least one is ticked. */}
-          <div className="sa-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="sa-hint">{pt(t, 'detail.acceptIntentsHint')}</span>
-            {ACCEPTANCE_INTENTS.map(intent => <label key={intent}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-4)', fontSize: 'var(--sa-fs-meta)' }}>
-              <input type="checkbox" checked={rejectIntents.includes(intent)}
-                onChange={event => setRejectIntents(previous => event.target.checked
-                  ? [...previous, intent] : previous.filter(item => item !== intent))} />
-              <span>{pt(t, ACCEPTANCE_INTENT_KEYS[intent])}</span>
-            </label>)}
-          </div>
           <div className="sa-actions">
             <ConfirmButton label={pt(t, 'ticket.acceptPass')} title={pt(t, 'ticket.acceptPassTitle')}
               message={pt(t, 'ticket.acceptPassConfirm', { title: ticket.title ?? ticket.id })}
@@ -2348,6 +2351,18 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
               message={pt(t, 'ticket.acceptFailConfirm', { title: ticket.title ?? ticket.id })}
               confirmLabel={pt(t, 'detail.confirmAcceptFail')}
               variant="danger" icon="blocked" onConfirm={async () => { await acceptFail.run(rejectIntents) }} />
+          </div>
+          {/* P1-3: rejection intents are optional and only travel with 验收不通过 (the pass POST has no such field). They
+              used to sit above both buttons, reading as if they applied to passing too (review L-17). */}
+          <div className="sa-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="sa-hint">{pt(t, 'detail.acceptIntentsHint')}</span>
+            {ACCEPTANCE_INTENTS.map(intent => <label key={intent}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-4)', fontSize: 'var(--sa-fs-meta)' }}>
+              <input type="checkbox" checked={rejectIntents.includes(intent)}
+                onChange={event => setRejectIntents(previous => event.target.checked
+                  ? [...previous, intent] : previous.filter(item => item !== intent))} />
+              <span>{pt(t, ACCEPTANCE_INTENT_KEYS[intent])}</span>
+            </label>)}
           </div>
         </>
         : !canAccept && !accepted && hasAcceptanceEvidence

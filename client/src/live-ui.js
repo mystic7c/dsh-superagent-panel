@@ -376,6 +376,17 @@ export function panelRepos(data) {
   return Array.isArray(data?.repos) ? data.repos : []
 }
 
+/** Whether the executor is switched on. One predicate: `!== false` here, `=== true` in two other files and
+    a truthy read in a third made the same switch read "on" on one page and "off" on another (review M-5). */
+export function executorOn(config) {
+  return config?.executor?.enabled !== false
+}
+
+/** One reading of "the engine is on", shared by every page: `enabled === true` is the contract; a missing key is off. */
+export function engineOn(config) {
+  return config?.enabled === true
+}
+
 /** Default repository id: the config default, the status fallback, then the first repository. */
 export function panelDefaultRepo(data) {
   return data?.config?.defaultRepo ?? data?.defaultRepo ?? panelRepos(data)[0]?.id
@@ -644,7 +655,7 @@ export function TicketStatusTag({ ticket }) {
  * executor enabled. Its one primary action starts all missing parts together; other surfaces link here
  * instead of repeating the same warning in four places.
  */
-export function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, onCheck, checkBusy = false, compact = false, progress }) {
+export function AutomationBar({ paused, engineEnabled, executorEnabled, onStart, compact = false, progress }) {
   const { t } = usePanel()
   const onlyPaused = paused && engineEnabled && executorEnabled
   const facts = []
@@ -669,8 +680,6 @@ export function AutomationBar({ paused, engineEnabled, executorEnabled, onStart,
       {compact ? null : <span className="sa-hint">{hint}</span>}
     </div>
     <div className="sa-automation-actions">
-      {onCheck ? <Button variant="ghost" size="sm" icon={<Icon name="message" size={14} />}
-        disabled={checkBusy} onClick={onCheck}>{pt(t, 'actions.checkNow')}</Button> : null}
       <ConfirmButton
         label={onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start')}
         confirmLabel={onlyPaused ? pt(t, 'automation.resume') : pt(t, 'automation.start')}
@@ -966,7 +975,7 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
     const cleanup = result?.cleanup ?? result?.ticket?.links?.cleanup
     notify(pt(t, cleanup ? 'detail.dismissRecorded' : 'detail.dismissRecordedBare'))
   }, { reload: refreshAll })
-  const canPublish = Boolean(data?.config?.executor?.enabled && data?.config?.executor?.allowPush
+  const canPublish = Boolean(executorOn(data?.config) && data?.config?.executor?.allowPush
     && publishableStatusOf(ticket))
   const hasMr = Boolean(ticket.links?.mergeRequest?.iid || ticket.links?.mergeRequest?.webUrl)
   const primary = primaryActionOf(ticket, view)
@@ -1103,15 +1112,16 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
-/** @param {{ tickets: any[], page?: string, actions?: any, reload?: any, now?: any, evidenceLabel?: any }} props */
-export function TicketList({ tickets, page = 'execution', actions, reload, now, evidenceLabel }) {
+/** @param {{ tickets: any[], page?: string, actions?: any, reload?: any, now?: any, evidenceLabel?: any, announce?: boolean }} props */
+export function TicketList({ tickets, page = 'execution', actions, reload, now, evidenceLabel, announce = true }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
   // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
   // mounted when the list empties, so "0 tickets" is announced too instead of the region vanishing mid-announcement.
-  const status = <span className="sa-sr-only" role="status" aria-live="polite">
+  // Grouped lists pass announce={false}: one region per group meant five announcements for one poll.
+  const status = announce ? <span className="sa-sr-only" role="status" aria-live="polite">
     {pt(t, 'list.status', { count: list.length })}
-  </span>
+  </span> : null
   if (!list.length) return status
   return <>
     {status}
@@ -1145,9 +1155,13 @@ export function TicketGroups({ tickets, page = 'execution', actions, reload, cla
     <Section key={group} title={pt(t, `group.${group}`)}
       count={groupCounts?.[group] === false ? undefined : grouped.get(group).length}
       badge={groupNotes?.[group] ?? null}>
-      <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} evidenceLabel={evidenceLabel} />
+      <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} evidenceLabel={evidenceLabel}
+        announce={false} />
     </Section>)
-  const body = <>{header ?? null}{rendered}</>
+  // One status region for the whole ledger (the grouped lists stay silent above), so a poll announces one number.
+  const body = <>{header ?? null}
+    <span className="sa-sr-only" role="status" aria-live="polite">{pt(t, 'list.status', { count: list.length })}</span>
+    {rendered}</>
   return className ? <div className={className}>{body}</div> : body
 }
 
@@ -1353,7 +1367,7 @@ export function ExecutorLoad({ load, labels = true }) {
       </div>}
       {labels ? <div className="sa-loadbar-meta">
         {counts.map(entry => <span key={entry.key}>{pt(t, entry.key, { count: entry.value })}</span>)}
-        {load.paused ? <Tag key="paused" tone="warning">{pt(t, 'loadbarPaused')}</Tag> : null}
+        {/* The pause already has a title tag and a 恢复处理 action in this section; a third badge repeated it. */}
       </div> : null}
     </div>
   </div>
@@ -1375,9 +1389,15 @@ export function providerStateText(t, map, value) {
 
 /** The latest run that carries gate results, plus the gates themselves. */
 export function latestGatesOf(ticket) {
-  const runs = Array.isArray(ticket?.runs) ? ticket.runs : []
+  const runs = sortRunsNewestFirst(ticket?.runs)
   const run = runs.find(entry => Array.isArray(entry.gates) && entry.gates.length) ?? runs[0]
   return { run, gates: Array.isArray(run?.gates) ? run.gates : [] }
+}
+
+/** Runs arrive oldest-first in some payloads and newest-first in others; ordering is explicit so "latest" is true. */
+export function sortRunsNewestFirst(runs) {
+  return (Array.isArray(runs) ? [...runs] : []).sort((left, right) =>
+    (Date.parse(right?.startedAt ?? '') || 0) - (Date.parse(left?.startedAt ?? '') || 0))
 }
 
 /** Every gate this run recorded, as paired shape+text. Unknown names keep their configured name (a repository may

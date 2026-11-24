@@ -35,6 +35,9 @@ Object.assign(PAGE_TEXT, {
   'actions.search': ['搜索', 'Search'],
   'actions.more': ['更多操作', 'More actions'],
   'shell.scrollLabel': ['页面内容', 'Page content'],
+  'shell.pausedIntake': ['接单暂停', 'Intake paused'],
+  'shell.pausedDispatch': ['派发暂停', 'Dispatch paused'],
+  'shell.pausedBoth': ['接单与派发暂停', 'Intake and dispatch paused'],
 })
 
 /** The shared language for non-hook code (class components, pure helpers): pages set it from `t.lang` on render. */
@@ -48,6 +51,13 @@ export function globalHealth(data) {
   if (engine.phase === 'error') return { state: 'error', labelKey: 'shell.error' }
   if (engine.phase === 'blocked') return { state: 'warning', labelKey: 'shell.blocked' }
   if (paused) return { state: 'warning', labelKey: 'shell.paused' }
+  // The two directional pauses live in Settings (they keep the engine's cursor movement intact) and used to be
+  // invisible everywhere except their own switches. The header mirrors them so a paused intake is never a surprise.
+  const intakeOff = data?.config?.pausedIntake === true
+  const dispatchOff = data?.config?.pausedDispatch === true
+  if (intakeOff && dispatchOff) return { state: 'warning', labelKey: 'shell.pausedBoth' }
+  if (intakeOff) return { state: 'warning', labelKey: 'shell.pausedIntake' }
+  if (dispatchOff) return { state: 'warning', labelKey: 'shell.pausedDispatch' }
   // A boot that has not finished is not a running engine (B8: a start that threw looked identical to a healthy one,
   // with every route answering 503 behind a green "运行中").
   if (engine.phase === 'starting') return { state: 'warning', labelKey: 'shell.starting' }
@@ -61,7 +71,7 @@ export function globalHealth(data) {
 
 /** `运行中 · 需要你处理 2 件 · 数据更新于 12:31`; the only "data updated" line in the panel (title = full time). */
 export function GlobalStatus() {
-  const { t, navigate } = usePanel()
+  const { t, navigate, route } = usePanel()
   const { data, error, reload, updatedAt } = usePanelData()
   if (!data) {
     return <div className="sa-global-status" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)',
@@ -73,7 +83,10 @@ export function GlobalStatus() {
   }
   const health = globalHealth(data)
   // P0: the header count follows the derived inbox when the host exposes it; older hosts keep the status-derived count.
-  const pending = data.inbox ? Number(data.inbox.blocking ?? 0) : needsYouCount(data)
+  // The array wins over the host's scalar because a host can report a stale `blocking` total while the rows are live
+  // (Overview reads the same payload, and the header must not disagree with the section below it).
+  const blockingRows = Array.isArray(data.inbox?.items) ? data.inbox.items.filter(item => item.blocking === true).length : 0
+  const pending = data.inbox ? blockingRows || Number(data.inbox.blocking ?? 0) : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
   const setup = setupStateOf(data)
   // When only the last switch (engine) is left, Overview owns the single "start automation" action; a second
@@ -103,7 +116,7 @@ export function GlobalStatus() {
     {sentence}
     <span aria-hidden="true">·</span>
     {updated}
-    {setup.done < setup.total && !onlyEnginePending
+    {setup.done < setup.total && !onlyEnginePending && route?.page !== 'overview'
       ? <>
         <span aria-hidden="true">·</span>
         <button type="button" className="sa-setup-chip" onClick={() => navigate({ page: 'overview' })}>
@@ -142,9 +155,10 @@ export function GlobalSearch({ open, onClose }) {
       return
     }
     event.preventDefault()
+    // From "nothing active" ArrowUp means "the last row" (a listbox convention); Math.max(0, -1 - 1) landed on the first.
     const next = event.key === 'ArrowDown'
       ? Math.min(nodes.length - 1, activeIndex + 1)
-      : Math.max(0, activeIndex - 1)
+      : activeIndex < 0 ? nodes.length - 1 : Math.max(0, activeIndex - 1)
     setActiveIndex(next)
     nodes[next]?.scrollIntoView?.({ block: 'nearest' })
   }

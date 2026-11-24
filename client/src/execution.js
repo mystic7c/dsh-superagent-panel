@@ -15,7 +15,7 @@ import { ConfirmButton, EmptyState, ErrorState, Hint, Section, Skeleton, When } 
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { useLiveResource } from "./live-model.js"
 import { setupStateOf } from "./setup.js"
-import { AutomationBar, ExecutorLoad, ManualTicketForm, TICKET_GROUP_ORDER, TicketGroups, TicketList, failureLabel, panelRepoOf, runTriggerLabel, ticketStatus } from "./live-ui.js"
+import { engineOn, AutomationBar, executorOn, ExecutorLoad, runView, ManualTicketForm, TICKET_GROUP_ORDER, TicketGroups, TicketList, failureLabel, panelRepoOf, runTriggerLabel, ticketStatus } from "./live-ui.js"
 import { TicketDetail } from "./ticket-detail.js"
 import { Fragment, React, h, useCallback, useEffect, useState } from "./react.js"
 // Same attention order as TICKET_GROUP_ORDER (P0 §3.6.3): waiting → failed → working → queued → done.
@@ -61,7 +61,6 @@ Object.assign(PAGE_TEXT, {
   'ex.filterLabel': ['按阶段筛选', 'Filter by stage'],
   'ex.filterAll': ['全部', 'All'],
   'ex.recentLabel': ['最近一次执行', 'Last run'],
-  'ex.recentOk': ['运行成功', 'Run succeeded'],
   'ex.recentFailed': ['运行失败', 'Run failed'],
   'ex.recentWaiting': ['闸门等待你处理', 'A gate needs you'],
   'ex.recentTicket': ['查看工单', 'Open Ticket'],
@@ -153,8 +152,8 @@ export function ExecutionQueuePage({ route }) {
   })
   const status = model.data
   const paused = Boolean(status && (status.paused === true || status.config?.paused === true || status.engine?.paused === true))
-  const engineEnabled = status?.config?.enabled === true
-  const executorEnabled = status?.config?.executor?.enabled !== false
+  const engineEnabled = engineOn(status?.config)
+  const executorEnabled = executorOn(status?.config)
   const automationNeeded = Boolean(status) && (paused || !engineEnabled || !executorEnabled)
   const automationReady = Boolean(status?.config?.octo?.tokenConfigured
     && (status?.config?.octo?.watchChatIds ?? []).length > 0
@@ -183,8 +182,12 @@ export function ExecutionQueuePage({ route }) {
   const recentRunFailed = recentRun?.status === 'failed'
   // A run parked on a failing gate is neither success nor failure: say what it waits for (P0-3).
   const recentRunWaiting = recentRun?.status === 'waiting_for_human'
-  const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : 'success'
-  const recentRunKey = recentRunFailed ? 'ex.recentFailed' : recentRunWaiting ? 'ex.recentWaiting' : 'ex.recentOk'
+  // The chip says what the run actually is. It used to claim "运行成功" for every status that was not failed or waiting,
+  // so a running, interrupted or stopped run read as a success (review M-3).
+  const recentView = recentRun ? runView(t, recentRun) : null
+  const recentRunTone = recentRunFailed ? 'danger' : recentRunWaiting ? 'warning' : ticketStatus(recentRun ?? {}).tone
+  const recentRunLabel = recentRunFailed ? pt(t, 'ex.recentFailed')
+    : recentRunWaiting ? pt(t, 'ex.recentWaiting') : recentView?.label
   const counts = list.data?.counts ?? {}
   // The host counts lifecycle stages; `dismissed` is a slice of the ended history, so its count comes from the rows.
   const countOf = group => group === 'dismissed'
@@ -336,7 +339,7 @@ export function ExecutionQueuePage({ route }) {
   return h(Fragment, null,
     automationNeeded && automationReady
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy, compact: true, progress: setup })
+        progress: setup })
       : null,
     h(Section, { title: pt(t, 'ex.executor'),
       badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
@@ -347,7 +350,7 @@ export function ExecutionQueuePage({ route }) {
           recentRun ? h(Fragment, null,
             h('span', { className: 'sa-hint' }, pt(t, 'ex.recentLabel')),
             h(When, { at: recentRun.startedAt ?? recentRun.at }),
-            h(Tag, { tone: recentRunTone }, pt(t, recentRunKey)),
+            h(Tag, { tone: recentRunTone }, recentRunLabel),
             // P1-2 (optional): how the run was started — manual / automatic / retry / resume. U-09: this is a fact about
             // the run, not a control, so it renders in the quiet tone (no pill border) under the trigger's own label.
             runTriggerLabel(t, recentRun)
@@ -374,7 +377,7 @@ export function ExecutionQueuePage({ route }) {
               onClick: () => navigate({ page: 'overview' }) },
             pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed) }) + ' →')
             : h('span', { className: 'sa-hint' }, pt(t, 'ex.runs24hNone')))),
-      status.config?.executor?.enabled === false && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
+      !executorOn(status.config) && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
       h('div', { className: 'sa-actions' },
         h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
           pt(t, 'ex.createTicket')),

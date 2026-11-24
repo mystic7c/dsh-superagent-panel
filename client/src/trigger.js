@@ -409,13 +409,16 @@ export function LiveTriggerPage({ route }) {
   // In the narrow layout the detail is hidden unless the route carries an id, and the first row is already the
   // implicit selection; opening it must still promote it to the route so the single-pane detail appears.
   const openThread = (key) => {
-    if (key !== selected || (compact && !routeId)) navigate({ page: 'trigger', id: key })
+    // The first row is the implicit selection: clicking it must still put it in the route, or the click did nothing.
+    if (key !== selected || routeId !== key) navigate({ page: 'trigger', id: key })
   }
 
   // R2-06: only a workspace with no Thread at all says "go configure a source"; an empty search/filter result must
   // offer to clear the filter instead of sending the operator back to source setup.
   const activeFilter = filter !== THREAD_FILTERS[0] || Boolean(q || repo || reason || from || to)
-  if (data !== undefined && (counts.all ?? 0) === 0 && !activeFilter) {
+  // A missing/partial `counts` used to read as "no Thread at all"; fall back to the returned rows and the total.
+  const threadCount = Number.isFinite(Number(counts.all)) ? Number(counts.all) : Math.max(total, items.length)
+  if (data !== undefined && threadCount === 0 && !activeFilter) {
     return h(EmptyState, { icon: 'inbox', title: pt(t, 'trg.emptyTitle'), hint: pt(t, 'trg.emptyHint'),
       action: h(Button, { variant: 'primary', icon: h(Icon, { name: 'inbox', size: 14 }),
         onClick: () => navigate({ page: 'source' }) }, pt(t, 'trg.emptyAction')) })
