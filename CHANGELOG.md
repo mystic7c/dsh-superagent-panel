@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.12] — 2026-11-24
+
+### 设置 → 仓库改为列表
+
+- 仓库不再用两列卡片：每行一个仓库，事实（项目、远程地址、本地路径、分支、闸门、验证/验收方式）折行排在行内，令牌编辑与测试结果仍在行内；行之间用发丝线分隔（`sa-repo-list` / `sa-repo-row` / `sa-repo-facts`）。
+- `render-check` 断言同步：由「两列卡片网格」改为「一行一个仓库、列表内没有卡片」。
+
+### 打包文件名
+
+- 新增 `npm run pack:release`（`scripts/pack-release.mjs`）：`npm pack` 的 scoped 文件名（`mystic7c-dsh-superagent-panel-<v>.tgz`）统一改成 `dsh-superagent-panel-<v>.tgz`，与 `local-install.mjs` 的默认查找、`docs/delivery.md`、`docs/self-development.md`、README 一致；不再需要 `--tarball` 绕过。
+
 ## [1.1.11] — 2026-11-24
 
 第十批：整体代码走查 + UI 体检（设计 A 27/40、检测 B 1 个 P1）后的修复，重点是把「哪条信息归哪个页面」重新钉死。

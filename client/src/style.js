@@ -518,6 +518,20 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
 .sa-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
+/* Settings → 仓库 is a list, not a card gallery: one repository per row, its facts as wrapping label/value pairs so the
+   row still answers project / branch / gates without the two-up cards' empty half. */
+.sa-repo-list { min-width: 0; }
+.sa-repo-row { padding: var(--sa-sp-16) 0; }
+.sa-repo-row:first-child { padding-top: 0; }
+.sa-repo-row .sa-row-main { gap: var(--sa-sp-8); }
+.sa-repo-facts { display: flex; flex-wrap: wrap; gap: var(--sa-sp-2) var(--sa-sp-24); min-width: 0;
+  font-size: var(--sa-fs-meta); line-height: 1.6; }
+.sa-repo-fact { display: inline-flex; align-items: baseline; gap: var(--sa-sp-8); min-width: 0; max-width: 100%; }
+.sa-repo-fact-label { flex: none; color: var(--sa-label-tertiary); }
+.sa-repo-fact-value { min-width: 0; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
+/* Token editor sits on one line at the end of a repository row: [input][保存][清除]. */
+.sa-token-row { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; flex-wrap: wrap; margin-top: var(--sa-sp-4); }
+.sa-token-row .sa-input-full { flex: 1 1 200px; min-width: 0; }
 
 /* ---------- panes (trigger: list + detail; settings: nav + form) ---------- */
 .sa-panes { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
