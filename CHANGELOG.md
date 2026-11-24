@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.1.9] — 2026-11-24
+
+第二轮整体审查（代码 + UI）后的第八批修复：客户端 12 条逻辑缺陷、Host / 引擎 20 条缺陷，以及两轮 UI 体检（设计 A 28/40、检测 B 0 个 P1）发现的可用性与无障碍问题。四条上批反馈的修复在本轮实测确认未回归。
+
+### 客户端逻辑（client-review）
+
+- **每条已结束的运行都被展开**：trace 的默认展开条件是「有 stopReason」，而任何结束的运行都有，于是一页里所有运行轨迹全开。现在按 `RUN_FAILURE_STOP_REASONS`（error/timeout/gate_failed/…/repair_limit）只展开失败运行。
+- **自动化开关会自动弹回**：`mode === 'off'` 时切换开关，下一次渲染又按 `enabled` 复位。现在 `checked = form.enabled && form.mode !== 'off'`，且关闭态下开关禁用。
+- **保存成功会把整组草稿清空**：`commitGroup` 在 reload 未回来前用服务端旧值覆盖 `drafts[group]`，保存期间输入的内容消失。现在保存前快照 `submitted`，reload 后只保留与快照不同的键。
+- **深链会改写「上次查看」**：概览写入 `ovSaveLastSeen` 时不区分是否带 `route.id`，从工单深链进来会把游标推进。现在 `deepLinked` 时不写。
+- **触发 / 来源页翻页在 popstate 后被重置**：筛选变化 effect 会把刚恢复的 offset 打回第一页。现在用 `restoringFilters` / `restoringSignalFilters` 标记 + `currentSlice` 镜像，只有筛选真的变化才重置。
+- 其余：`stopped` / `gates-passed` 缺视图导致「状态未知」（补 TICKET_VIEW 与文案）、`runTrigger.heartbeat/repair` 没文案（定时巡检 / 自动修复）、执行器负载为 0 时整块消失（渲染图例、只省轨道）、搜索面板切换关键词时旧结果仍可点（先清空再 busy）、`uatBusy` 是全局布尔（改按 repoId，一次只跑一个仓库）、详情页头尾各有一份主操作（头随滚动让位时只保留粘性条那一份）。
+
+### Host / 引擎（host-review）
+
+- **已处理的信号会被重评并重复建单**：游标回退到 `firstFailed - 1` 后，其后已 `accepted/ignored` 的信号再次进入 `buildRecords`，而信号此刻读回不带 `status`，于是又开一张工单。现在按 `TERMINAL_SIGNAL_STATUSES` 跳过，游标回退不再复活已决信号。
+- **追加要求返回 202 但什么都没跑**：`POST ticket/:id/revision` 直接 `executeTicket`，工单被占用时内部 409 只写日志。现在先 `assertTicketFree`，占用即 409。
+- **轮询间隔可以设成 0 或极大值**：`pollSeconds` / `verifySeconds` 在 config 归一化、live-json 校验、调度 `setTimeout` 三处都没有上限，`setTimeout` 溢出会变成「每 tick 轮询一次」。现在夹在 2–3600s / 60–86400s。
+- **重载后旧引擎还能写台账**：`stop()` 只关 LiveState，`pollSync` / `pollEvents` 循环没有 `disposed` 守卫，重载后旧循环会覆盖新引擎的台账。现在 `stop()` 关全部五本台账，循环开头检查 `disposed`，关闭后写入静默丢弃。
+- **同一毫秒的临时文件互相覆盖**：收件箱、操作、验收、信号四处临时名用 `pid + Date.now()`。现在加 `randomBytes(6)` 并 try/catch 清理。
+- **定时派发失败也吃掉配额**：`runs` 没增长时 `attempts/lastRunAt` 已落库。现在 `restoreScheduledAttempt` 归还配额与时钟。
+- 其余（P3）：gate 的 `stop` 不再被 `requireExecutor` 403（release/retry 才查，release 另加 `requirePush`）；`refreshInbox` 路由包 try/catch；`/run` 校验 `body.backend` 在已启用后端内；`ticketView` 存在性检查改读 `state.tickets`（纯性能）；`labelSignal` 的读改写搬进 `signals.commit`；`replaySignal` 先去重 + 原子占位再 shadow，并新增 `markReplayedSignal` 治愈崩溃窗口；毒事件只把游标冻到失败点之前；远端分支删除按 `${repo.featurePrefix}${ticketId}` 精确匹配；认领到已 `merged` 的 MR 直接记 `merged`；`verifyTicketInner` 拒绝 `dismissed/closed`；新增 `assertBranchName`（拒前导 `-`、空白、`..`）；非 sha 的 diff base 直接丢弃；`failRun` 清 `stopRequested`；抽 `runGateBootstrap` 让手工发布也跑 `pnpm install --frozen-lockfile`。
+
+### UI 体检（设计 A 28/40 + 检测 B）
+
+- **「更多筛选」是空转开关**：`.sa-textlink { display: inline-flex }` 的优先级压过 `.sa-filter-toggle { display: none }`，点了只翻 `aria-expanded`，输入框位置不动。现在用 `.sa-filter-toggle.sa-textlink` 精确匹配，折叠区用 `.sa-filter-extra--collapsed` / `[data-open]` 控制。
+- **触发页筛选墙**：左栏 5 个常驻输入把首条线程推到 y≈530。现在只留档位 chip + 搜索，「更多筛选」展开仓库/原因/日期（从 / 至）。
+- **详情页 390 分区导航溢出**：跳转条 353px 只能放下 5 项，`运行记录`/`时间线` 被裁且容器不可滑。现在 `overflow-x: auto` 且当前项自动滚入视野。
+- **两个 disclosure 的 `aria-expanded` 与可见性矛盾**：改动文件与时间线把「展开全部」写成 `aria-expanded={expanded}`，但被控制的区域一直可见，读屏播报「已折叠」。现在溢出项放进独立区域（`#sa-changed-files-more` / `#sa-timeline-more`），折叠时 `hidden`，`aria-controls` 指向它。
+- **深色模式 placeholder 3.41:1**：全站没有 `::placeholder` 规则，13 个输入框用浏览器默认 `#757575`。现在统一取 `--dsw-alias-label-secondary` 并 `opacity: 1`。
+- **搜索面板不是 combobox**：输入框没有 `role/aria-expanded/aria-controls/aria-activedescendant`，方向键不动。现在按 combobox 语义接线，↑/↓ 移动选中项、Enter 打开，选中行有可见底色。
+- 其余：术语表在 ≤520px 改堆叠（弹窗在 `.sa-page` 外，容器查询管不到，改 `@media`）；390 主标签改 4 列网格（第七个不再单独折行成「小节标题」）；路由变化聚焦页面标题时先在 10 帧内重试（详情页数据未到时标题还不存在），并且仍然不聚焦滚动容器；`Section` 标题 `aria-label` 只留标题文字；相对时间 <60s 读「刚刚」而不是「现在」；「已验收」与「6 项未过闸门」冲突处补「已由人工验收放行（N 项未过）」；执行页窄屏的 MR 行加「证据 ·」前缀，不再像下一行的证据；`保存令牌 / 清除令牌` 在窄屏改为 outline 变体；Bot 的「复制内置」改「另存为副本」（旁边就是「复制为 JSON」）；来源页「最近同步」两种写法统一；评估页第三个「全部」改「全部视图」。
+- **两处自伤（本轮实测发现并修掉）**：`unfinished` 在 `TicketDetail` 头里越界引用（移到 `DeliveryEvidenceCard` 并传 `accepted`）、`evidenceLabel` 加在 span 上但 `TicketRow` 没收这个 prop。两次都只有实测截图能发现——构建是绿的。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **733 pass / 0 fail**（host 侧 19 条新断言，覆盖信号重放、占用即 409、间隔上限、`disposed`、临时名、配额归还、分支名、diff base、`stopRequested`、bootstrap 等）。
+- `node scripts/render-check.mjs` → **311 checks / ok:true / 0 fail / 0 skip**。门槛里三条断言按新行为重写：列头在分组名之前、改动文件/时间线的溢出区域用 `hidden` 表达、路由聚焦接受 `sa-page-head-title`。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`（1067 / 541 / 1517）全绿。
+- 独立实例实测（`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-r2`、独立端口、CDP 1280/390）：触发左栏折叠区高 0 → 展开 112px 且带「从 / 至」，首条线程上移到 y≈380；评估在 1280 无「更多筛选」、390 点开后 0 → 72px；执行页 390 的证据行带「证据 ·」前缀；详情页改动文件 5 + 1（折叠）/ 时间线 8 + 7（折叠）且 `aria-expanded` 与 `hidden` 一致；搜索输入框 `role=combobox`、14 个 option、↓ 后 `aria-activedescendant=sa-search-option-0` 且行有底色；设置页从 scrollTop 240 切「运行 / 仓库」后 Intro 与按钮仍在视口内。
+
 ## [1.1.8] — 2026-11-23
 
 整体代码 + UI 审查后的第七批修复：4 条使用中反馈（触发页线程栏被 160px 内滚动条夹住、评估页筛选空档消失、执行页按仓库分组缺「查看全部」且列头压住分组名、设置页切页签把说明和按钮顶出屏幕），加上客户端 12 条逻辑缺陷、Host 侧 12 条缺陷，以及两轮 UI 体检（设计 A / 检测 B）发现的 17 条可用性与无障碍问题。

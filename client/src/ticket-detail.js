@@ -213,6 +213,7 @@ Object.assign(PAGE_TEXT, {
     'The baseline changed ({from} → {to}); the previous round\'s gate results cannot be reused as-is.'],
   'detail.evidenceUnfinished': ['本轮仍未通过：{names}。',
     'Still not passing in this round: {names}.'],
+  'detail.evidenceReleasedByHand': ['已由人工验收放行（{count} 项未过）。', 'Released after a manual sign-off ({count} failing).'],
   'detail.evidenceStale': ['以下闸门沿用了旧代码的结果，需要重跑：{names}。',
     'These gates reused results from older code and must be re-run: {names}.'],
   'detail.evidenceNone': ['无', 'none'],
@@ -490,35 +491,42 @@ export const TIMELINE_RECENT = 8
 // A wide changes rail can hold dozens of paths; the list shows this many before the "show more" control.
 export const CHANGES_FILES_RECENT = 5
 
-/** Timeline with a vertical axis, shape-coded dots and a timestamp per event; long histories collapse to the latest. */
+/** Timeline with a vertical axis, shape-coded dots and a timestamp per event; long histories collapse to the latest.
+    The control is a real disclosure: the older events live in their own region, present but hidden while collapsed, so
+    aria-expanded and the rendered state never disagree (audit B round two). */
 export function TicketTimeline({ ticket, runs }) {
   const { t } = usePanel()
   const [expanded, setExpanded] = useState(false)
   const events = ticketEvents(t, ticket, runs)
-  const shown = expanded ? events : events.slice(-TIMELINE_RECENT)
-  return <>
-    {events.length > TIMELINE_RECENT
-      ? <p className="sa-hint">{pt(t, 'ticket.timelineRecent', { count: shown.length, total: events.length })}</p>
-      : null}
-    <ol id="sa-timeline-events" className="sa-timeline">{shown.map((event, index) => <li key={index} className="sa-event">
-      <div className="sa-event-actor">
-        <StatusIcon state={event.state} size={14} />
-        <TicketStamp at={event.at} />
-        <span>{event.stepName ? ticketStepLabel(t, event.stepName) : pt(t, event.labelKey)}</span>
-        {event.dry ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+  const older = events.length > TIMELINE_RECENT ? events.slice(0, events.length - TIMELINE_RECENT) : []
+  const recent = events.length > TIMELINE_RECENT ? events.slice(-TIMELINE_RECENT) : events
+  const renderEvent = (event, index) => <li key={`${event.at ?? ''}-${index}`} className="sa-event">
+    <div className="sa-event-actor">
+      <StatusIcon state={event.state} size={14} />
+      <TicketStamp at={event.at} />
+      <span>{event.stepName ? ticketStepLabel(t, event.stepName) : pt(t, event.labelKey)}</span>
+      {event.dry ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+    </div>
+    {event.sha
+      ? <div className="sa-actions">
+        <code className="sa-mono" title={event.sha}>{String(event.sha).slice(0, 7)}</code>
+        <CopyButton value={event.sha} />
+        {event.detail ? <span className="sa-hint" title={event.detailTitle}>{event.detail}</span> : null}
       </div>
-      {event.sha
-        ? <div className="sa-actions">
-          <code className="sa-mono" title={event.sha}>{String(event.sha).slice(0, 7)}</code>
-          <CopyButton value={event.sha} />
-          {event.detail ? <span className="sa-hint" title={event.detailTitle}>{event.detail}</span> : null}
-        </div>
-        : event.detail ? <p className="sa-event-text" title={event.detailTitle}>{event.detail}</p> : null}
-    </li>)}</ol>
-    {events.length > TIMELINE_RECENT
+      : event.detail ? <p className="sa-event-text" title={event.detailTitle}>{event.detail}</p> : null}
+  </li>
+  return <>
+    {older.length
+      ? <p className="sa-hint">{pt(t, 'ticket.timelineRecent', { count: recent.length, total: events.length })}</p>
+      : null}
+    {older.length
+      ? <ol id="sa-timeline-more" className="sa-timeline" hidden={!expanded}>{older.map(renderEvent)}</ol>
+      : null}
+    <ol id="sa-timeline-events" className="sa-timeline">{recent.map(renderEvent)}</ol>
+    {older.length
       ? <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-8)' }}>
         <Button variant="ghost" size="sm" icon={expanded ? 'chevron-up' : 'chevron-down'}
-          aria-expanded={expanded} aria-controls="sa-timeline-events"
+          aria-expanded={expanded} aria-controls="sa-timeline-more"
           onClick={() => setExpanded(value => !value)}>
           {expanded ? pt(t, 'ticket.timelineCollapse') : pt(t, 'ticket.timelineShowAll', { count: events.length })}
         </Button>
@@ -528,6 +536,11 @@ export function TicketTimeline({ ticket, runs }) {
 }
 
 /** worker event type (P0 §1.1 trace) → icon, label and the shape its row gets. */
+/** Stop reasons that mean the run did not deliver: those traces open by default (§13.1). 'done', 'stopped',
+ *  'merged' and friends are normal endings and stay folded. */
+export const RUN_FAILURE_STOP_REASONS = ['error', 'timeout', 'gate_failed', 'worker_failed', 'prepare_failed',
+  'push_failed', 'mr_failed', 'interrupted', 'refused', 'repair_limit']
+
 export const TRACE_KINDS = {
   assistant: { icon: 'message', state: 'ongoing', labelKey: 'ticket.traceAssistant' },
   tool_call: { icon: 'settings', state: 'ongoing', labelKey: 'ticket.traceToolCall' },
@@ -978,8 +991,9 @@ export function TicketRunRows({ runs, choices = [], onRerun }) {
         <RunHandoff run={run} />
         <RunReport run={run} />
         <RunBot run={run} choices={choices} onRerun={onRerun} />
-        {/* §13.1: a failed, refused or timed-out run shows its trace directly instead of behind a fold. */}
-        <RunTrace run={run} open={run.status === 'failed' || Boolean(run.stopReason)} />
+        {/* §13.1: a failed, refused or timed-out run shows its trace directly instead of behind a fold. A successful
+            run also carries a stopReason ('done'), so the status family decides, not the mere presence of one. */}
+        <RunTrace run={run} open={run.status === 'failed' || RUN_FAILURE_STOP_REASONS.includes(String(run.stopReason))} />
       </div>
     </li>
   })}</ul>
@@ -1287,8 +1301,10 @@ export function AutomationCard({ ticket, onSaved }) {
           <span className="sa-card-title">{automationSummaryText(t, stored) || pt(t, 'auto.modeOff')}</span>
           <label className="sa-actions">
             <span className="sa-hint">{pt(t, 'auto.enabled')}</span>
-            <Switch checked={form.enabled} onChange={value => update({ enabled: value })}
-              label={pt(t, 'auto.enabled')} />
+            {/* With mode 'off' the host persists enabled=false whatever the switch says, so the switch would spring
+                back on save (automationFormOf ANDs mode !== 'off'). Disable it instead of accepting a lie. */}
+            <Switch checked={form.enabled && form.mode !== 'off'} disabled={form.mode === 'off'}
+              onChange={value => update({ enabled: value })} label={pt(t, 'auto.enabled')} />
           </label>
         </div>
         <div className="sa-field">
@@ -1387,7 +1403,7 @@ export function ticketVisibleJumps(ticket, hasGateResults) {
 }
 
 /** AC-08/09: bounded delivery evidence, independent of the worktree and the operation-ledger window. */
-export function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
+export function DeliveryEvidenceCard({ data, id, loading, error, onRetry, accepted }) {
   const { t } = usePanel()
   const rounds = Array.isArray(data?.rounds) ? data.rounds : []
   // The Host owns the comparison (completeness markers, baseline change, reused/stale gate results); the card must not
@@ -1449,7 +1465,10 @@ export function DeliveryEvidenceCard({ data, id, loading, error, onRetry }) {
         from: String(diff.baseline.from).slice(0, 8), to: String(diff.baseline.to).slice(0, 8) })}</p>
       : null}
     {unfinished.length
-      ? <p className="sa-hint">{pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') })}</p>
+      ? <p className="sa-hint">{pt(t, 'detail.evidenceUnfinished', { names: unfinished.join('、') })}
+        {/* The head says 已验收 while the gates below say they failed; without this line the two read as a bug
+            (ui review P2-5). The sign-off itself is a human decision, and this is where the gap is visible. */}
+        {accepted ? ` ${pt(t, 'detail.evidenceReleasedByHand', { count: unfinished.length })}` : ''}</p>
       : null}
     {diff?.gatesStale?.length
       ? <p className="sa-hint">{pt(t, 'detail.evidenceStale', { names: diff.gatesStale.join('、') })}</p>
@@ -1487,6 +1506,18 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
+  const jumpsRef = useRef(null)
+  // The jump row is a horizontal scroller on a phone (8 destinations do not fit 353 px). Scrolling the page must keep
+  // the current destination visible inside it, or the nav silently hides where you are (ui review P1-2).
+  useEffect(() => {
+    const box = jumpsRef.current
+    const active = box?.querySelector("[data-active='true']")
+    if (!box || !active || active.offsetLeft === undefined) return
+    const left = active.offsetLeft
+    const right = left + active.offsetWidth
+    if (left < box.scrollLeft) box.scrollLeft = Math.max(0, left - 8)
+    else if (right > box.scrollLeft + box.clientWidth) box.scrollLeft = right - box.clientWidth + 8
+  }, [activeJump])
   const [headStuck, setHeadStuck] = useState(false)
   const [filesExpanded, setFilesExpanded] = useState(false)
   // A new Ticket starts with the compact file list again (the component instance survives an id change).
@@ -1522,6 +1553,9 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       frame = 0
       const head = node.getBoundingClientRect()
       const scroll = root.getBoundingClientRect()
+      // An unlaid-out head reports every edge as 0, which reads as "scrolled away" and would move the primary action
+      // into the sticky bar on first paint (and in any zero-layout test environment).
+      if (!head.height) return
       // The compact context appears only once the real PageHead is under the sticky nav (a small overlap margin keeps
       // it from flickering at the boundary).
       const next = head.bottom <= scroll.top + 8
@@ -2072,7 +2106,9 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.
   const headActions = <>
     {acceptanceNote}
-    {primaryAction}
+    {/* One primary action, one place: while the sticky bar is showing it, the head copy is not rendered, so the DOM
+        never carries two same-named controls and a screen reader hears it once (review P3). */}
+    {headStuck ? null : primaryAction}
     {/* AC-03: the stop entry also lives in the header while a run is active, so it is not buried in the ⋯ menu only. */}
     {activeRun && !ticket.stopRequested
       ? <Button size="sm" variant="ghost" icon="stop" disabled={stopRun.busy} onClick={() => setPending('stop')}>
@@ -2106,11 +2142,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         </span>
         <TicketStatusTag ticket={ticket} />
       </div> : null}
-      <div className="sa-detail-jumps">{jumps.map(jump => <button key={jump.id} type="button" className="sa-detail-jump"
+      <div className="sa-detail-jumps" ref={jumpsRef}>{jumps.map(jump => <button key={jump.id} type="button" className="sa-detail-jump"
         data-active={activeJump === jump.id ? 'true' : undefined}
         aria-current={activeJump === jump.id ? 'location' : undefined}
         onClick={() => jumpTo(jump.id)}>{pt(t, jump.labelKey)}</button>)}</div>
-      {headStuck && primaryAction ? <div className="sa-detail-context-action">{primaryAction}</div> : null}
+      {headStuck ? <div className="sa-detail-context-action">{primaryAction}</div> : null}
     </nav>
 
     {ticket.workflow ? <Section title={pt(t, 'wf.progress')}>
@@ -2165,19 +2201,31 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
               ? <>
                 {/* Each file name is the entry point to its own patch (only available while the worktree exists). */}
                 <ul id="sa-changed-files" className="sa-list">
-                  {(filesExpanded ? changes.files : changes.files.slice(0, CHANGES_FILES_RECENT))
-                    .map((file, index) => <li key={index} className="sa-row">
+                  {changes.files.slice(0, CHANGES_FILES_RECENT).map((file, index) => <li key={index} className="sa-row">
+                    <button type="button" className="sa-file-diff"
+                      title={pt(t, 'ticket.diffOpenFile', { path: file })}
+                      onClick={() => openDiff(file)}>
+                      <Icon name="diff" size={13} /><span className="sa-mono">{file}</span>
+                    </button>
+                  </li>)}
+                </ul>
+                {/* The overflow lives in its own region, present but hidden while collapsed: aria-expanded then
+                    describes what is actually rendered (audit B round two). */}
+                {changes.files.length > CHANGES_FILES_RECENT
+                  ? <ul id="sa-changed-files-more" className="sa-list" hidden={!filesExpanded}>
+                    {changes.files.slice(CHANGES_FILES_RECENT).map((file, index) => <li key={index} className="sa-row">
                       <button type="button" className="sa-file-diff"
                         title={pt(t, 'ticket.diffOpenFile', { path: file })}
                         onClick={() => openDiff(file)}>
                         <Icon name="diff" size={13} /><span className="sa-mono">{file}</span>
                       </button>
                     </li>)}
-                </ul>
+                  </ul>
+                  : null}
                 {changes.files.length > CHANGES_FILES_RECENT
                   ? <div className="sa-actions">
                     <Button variant="ghost" size="sm" icon={filesExpanded ? 'chevron-up' : 'chevron-down'}
-                      aria-expanded={filesExpanded} aria-controls="sa-changed-files"
+                      aria-expanded={filesExpanded} aria-controls="sa-changed-files-more"
                       onClick={() => setFilesExpanded(value => !value)}>
                       {pt(t, filesExpanded ? 'ticket.filesCollapse' : 'ticket.filesShowAll', { count: changes.files.length })}
                     </Button>
@@ -2231,7 +2279,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     <Section id="sa-acceptance" title={pt(t, 'ticket.acceptCard')}>
       {/* AC-08/09: durable evidence lives next to (not inside) the acceptance record. */}
       <div style={{ marginBottom: 'var(--sa-sp-8)' }}>
-        <DeliveryEvidenceCard data={evidence.data} id={id} loading={evidence.loading} error={evidence.error} onRetry={evidence.reload} />
+        <DeliveryEvidenceCard data={evidence.data} id={id} loading={evidence.loading} error={evidence.error} onRetry={evidence.reload}
+          accepted={accepted} />
       </div>
       {/* P1-3: the acceptance rounds (status, newest round, checks, last decision) lead the block when the host has them. */}
       {acceptanceRecord

@@ -1054,7 +1054,8 @@ Object.assign(PAGE_TEXT, {
   'st.botsBuiltinNote': ['内置三个 Bot 始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
   'st.botsBuiltinTag': ['内置', 'built-in'],
   'st.botsCopy': ['复制为 JSON', 'Copy as JSON'],
-  'st.botsDuplicate': ['复制内置', 'Copy built-in'],
+  // Sits right next to 「复制为 JSON」, so the same verb read as the same action. This one creates an editable copy.
+  'st.botsDuplicate': ['另存为副本', 'Save a copy'],
   'st.botsDelete': ['删除', 'Delete'],
   'st.botsDeleteTitle': ['删除 Bot', 'Delete bot'],
   'st.botsDeleteMessage': ['删除 Bot {id}？引用它的规则和显式指定会失效。', 'Delete bot {id}? Rules and explicit choices that name it will stop working.'],
@@ -2003,10 +2004,19 @@ export function LiveSettingsPage({ route }) {
     clearTimeout(savedTimers.current[group])
     delete savedTimers.current[group]
     setSavedTimes(previous => settingsOmit(previous, group))
+    // Snapshot what this save covers. The inputs stay editable while patchSettings + reload are in flight, so dropping
+    // the whole draft afterwards silently discarded anything typed during those few hundred milliseconds (review P2).
+    const submitted = drafts[group] ?? {}
     try {
       await actions.patchSettings(patch)
       await reload()
-      setDrafts(previous => settingsOmit(previous, group))
+      setDrafts(previous => {
+        const now = previous[group]
+        if (!now) return previous
+        const left = Object.keys(now).reduce((acc, key) => (
+          settingsSame(now[key], submitted[key]) ? acc : { ...acc, [key]: now[key] }), {})
+        return Object.keys(left).length ? { ...previous, [group]: left } : settingsOmit(previous, group)
+      })
       setSavedTimes(previous => ({ ...previous, [group]: new Date().toISOString() }))
       savedTimers.current[group] = setTimeout(() => {
         delete savedTimers.current[group]

@@ -336,7 +336,7 @@ Schema 是契约；实现 MUST 在保存期跑它，并把 `schema` 报错翻译
 ```jsonl
 {"id":"generalist","name":"通用","description":"跟随宿主后端与模型，等同 v1.0.7 默认行为。","backend":"dsh","requires":["edit","exec"]}
 {"id":"surgical","name":"小修","description":"简单改动：implement → gates，不跑 plan 与 review。","backend":"dsh","requires":["edit","exec"],"stages":["implement","gates"]}
-{"id":"reviewer","name":"审阅者","description":"只读复核，产出报告。只能当阶段 Bot 用（见 §10.2）。","backend":"dsh","requires":[]}
+{"id":"reviewer","name":"审阅者","description":"只读复核，产出报告。只能放在阶段位，不能当主 Bot。","backend":"dsh","requires":[]}
 ```
 
 `surgical` 与今天的 simple 模式等价（`workflow.js` 中 `plan` 为空即 `ready` 的分支）。内置 Bot 的 `backend` 一律 `dsh`（P1–P3 只上线 dsh，内置 Bot 不应因为配置里写了别的后端就跳到未核验的后端上）；用户自建 Bot 才能指向其他后端，且该后端必须先满足 §3.7。

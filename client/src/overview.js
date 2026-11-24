@@ -366,7 +366,10 @@ export function LiveOverviewPage({ route }) {
   // The previous visit is read once (this render) and written after it: reading it in an effect would already see
   // the new value and every visit would claim "nothing new".
   const [lastSeen] = useState(ovReadLastSeen)
-  useEffect(() => { ovSaveLastSeen(Date.now()) }, [])
+  // Only the desk itself moves the mark. A deep link to one Ticket renders the detail from this same component, and
+  // writing the mark on mount made the next real visit claim "nothing new since last time" (review P3).
+  const deepLinked = Boolean(route?.id)
+  useEffect(() => { if (!deepLinked) ovSaveLastSeen(Date.now()) }, [deepLinked])
   // P0 inbox (contract §3.6.5): the host derives the actionable items, the desk lists them verbatim. An older host
   // has no `inbox` field, so the resource stays disabled (no 404 polling) and every surface falls back to needsHuman.
   const inbox = useLiveResource('engine/inbox', {}, 30000, { enabled: Boolean(data?.inbox) })

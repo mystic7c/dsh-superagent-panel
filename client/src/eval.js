@@ -75,7 +75,9 @@ Object.assign(PAGE_TEXT, {
   'ev.fromShort': ['从', 'From'],
   'ev.toShort': ['至', 'To'],
   'ev.viewLabel': ['评估视图', 'View'],
-  'ev.viewAll': ['全部', 'All'],
+  // Two segmented groups both started with "全部" (result kind and view), which read as the same control on one row
+  // (ui review P2-3). The view group names the dimension instead.
+  'ev.viewAll': ['全部视图', 'All views'],
   'ev.viewDivergence': ['模型分歧', 'Model divergence'],
   'ev.viewOverride': ['人工改判', 'Human override'],
   'ev.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
@@ -347,6 +349,9 @@ export function LiveEvalPage() {
   // must keep the page restored from the URL, and a popstate restore must not be reset to page 1 (review P1 AC-07).
   const firstFilterRun = useRef(true)
   const restoringFilters = useRef(false)
+  // Mirror for the []-deps popstate listener: comparing inside that closure would always see mount-time values.
+  const currentSlice = useRef({ kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view })
+  currentSlice.current = { kind, range, q, repo: repoFilter, reason: reasonFilter, from, to, view }
   useEffect(() => {
     if (firstFilterRun.current) { firstFilterRun.current = false; return }
     // The popstate restore is consumed here, not by a timer: a later passive-effect flush could otherwise treat the
@@ -363,7 +368,13 @@ export function LiveEvalPage() {
   useEffect(() => {
     const restore = () => {
       const next = evalUrlState()
-      restoringFilters.current = true
+      // Only a slice that really changes is a restore; a same-URL popstate used to leave the flag set, so the next real
+      // filter change skipped its reset to page 1 (review P3).
+      const now = currentSlice.current
+      if (next.kind !== now.kind || next.range !== now.range || next.q !== now.q || next.repo !== now.repo
+        || next.reason !== now.reason || next.from !== now.from || next.to !== now.to || next.view !== now.view) {
+        restoringFilters.current = true
+      }
       setKind(next.kind); setRange(next.range); setQuery(next.q); setQ(next.q)
       setRepo(next.repo); setRepoFilter(next.repo); setReason(next.reason); setReasonFilter(next.reason)
       setFrom(next.from); setTo(next.to); setView(next.view); setOffset(next.offset)

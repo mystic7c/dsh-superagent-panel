@@ -1024,20 +1024,29 @@ check('sign-off note and the action cluster ride on the title row',
   && Boolean(rootElement.querySelector('.sa-page-head-actions [aria-haspopup="menu"]')),
   rootElement.querySelector('.sa-page-head-actions')?.textContent?.slice(0, 120) ?? 'no head actions')
 const filesToggle = [...rootElement.querySelectorAll('.sa-changes-side button')].find(node => /显示更多/.test(node.textContent ?? ''))
-const fileRows = () => rootElement.querySelectorAll('.sa-changes-side .sa-file-diff').length
-check('a long changed-file list starts compact with a show-more control', Boolean(filesToggle) && fileRows() === 5, `rows=${fileRows()}`)
+// The overflow files live in their own region that is present but `hidden` while collapsed, so aria-expanded and the
+// rendered state agree (audit B round two).
+const filesMore = () => rootElement.querySelector('#sa-changed-files-more')
+const fileRows = () => rootElement.querySelectorAll('#sa-changed-files .sa-file-diff').length
+const allFileRows = () => rootElement.querySelectorAll('.sa-changes-side .sa-file-diff').length
+check('a long changed-file list starts compact with a show-more control',
+  Boolean(filesToggle) && fileRows() === 5 && filesMore()?.hidden === true,
+  `rows=${fileRows()} more=${Boolean(filesMore())} hidden=${filesMore()?.hidden}`)
 filesToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
 check('show more reveals every changed file',
-  fileRows() === 8 && [...rootElement.querySelectorAll('.sa-changes-side button')].some(node => (node.textContent ?? '').trim() === '收起'),
-  `rows=${fileRows()}`)
+  allFileRows() === 8 && filesMore()?.hidden === false
+    && [...rootElement.querySelectorAll('.sa-changes-side button')].some(node => (node.textContent ?? '').trim() === '收起'),
+  `rows=${allFileRows()} hidden=${filesMore()?.hidden}`)
 const collapseFiles = [...rootElement.querySelectorAll('.sa-changes-side button')].find(node => (node.textContent ?? '').trim() === '收起')
 collapseFiles?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(300)
-check('the changed-file list collapses again', fileRows() === 5, `rows=${fileRows()}`)
+check('the changed-file list collapses again', fileRows() === 5 && filesMore()?.hidden === true,
+  `rows=${fileRows()} hidden=${filesMore()?.hidden}`)
 // P1 §3.2: every changed file row opens that file's own patch (one on-demand request per click).
 const fileDiffButtons = () => [...rootElement.querySelectorAll('.sa-changes-side .sa-file-diff')]
-check('every changed file row is a diff entry point', fileDiffButtons().length === 5, `rows=${fileDiffButtons().length}`)
+check('every changed file row is a diff entry point', fileDiffButtons().length === 8,
+  `rows=${fileDiffButtons().length}`)
 fileDiffButtons()[0]?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
 await sleep(400)
 const diffModal = rootElement.querySelector('.sa-diff-modal')
@@ -1101,17 +1110,25 @@ check('ticket id is copyable from the detail head', Boolean(rootElement.querySel
   const firstActor = rootElement.querySelector('.sa-timeline .sa-event-actor')
   check('timeline rows start with an absolute time', Boolean(firstActor && /\d{1,2}:\d{2}/.test(firstActor.textContent ?? '')), firstActor?.textContent?.slice(0, 80))
   check('timeline no longer prints 40-char SHAs', !/[0-9a-f]{40}/.test(timeline), 'sha')
+  // Same shape as the file list: recent events in the always-visible list, the older ones in a region that is
+  // `hidden` while collapsed.
   const timelineEvents = () => rootElement.querySelectorAll('.sa-timeline .sa-event').length
-  const collapsedEvents = timelineEvents()
+  const recentEvents = () => rootElement.querySelectorAll('#sa-timeline-events .sa-event').length
+  const moreEvents = () => rootElement.querySelector('#sa-timeline-more')
+  const collapsedEvents = recentEvents()
   const expandButton = [...rootElement.querySelectorAll('.sa-main button')].find(node => /展开全部/.test(node.textContent ?? ''))
-  check('timeline collapses long histories by default', collapsedEvents <= 8 && Boolean(expandButton), `events=${collapsedEvents}`)
+  check('timeline collapses long histories by default',
+    collapsedEvents <= 8 && moreEvents()?.hidden === true && Boolean(expandButton),
+    `events=${collapsedEvents} hidden=${moreEvents()?.hidden}`)
   expandButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   await sleep(400)
-  check('timeline expands to the full history', timelineEvents() > collapsedEvents, `after=${timelineEvents()}`)
+  check('timeline expands to the full history', timelineEvents() > collapsedEvents && moreEvents()?.hidden === false,
+    `after=${timelineEvents()} hidden=${moreEvents()?.hidden}`)
   const collapseButton = [...rootElement.querySelectorAll('.sa-main button')].find(node => (node.textContent ?? '').trim() === '收起')
   collapseButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
   await sleep(300)
-  check('timeline can collapse again', timelineEvents() === collapsedEvents, `back=${timelineEvents()}`)
+  check('timeline can collapse again', recentEvents() === collapsedEvents && moreEvents()?.hidden === true,
+    `back=${recentEvents()} hidden=${moreEvents()?.hidden}`)
   writeFileSync('/tmp/render-detail.txt', detailText)
 }
 check('detail shows the acceptance card', text().includes('验收'), text().slice(0, 200))
@@ -2360,7 +2377,7 @@ console.log('STEP pure projections')
       /未核验/.test(botsText()) && /dsh/.test(botsText()), botsText().slice(0, 240))
     const firstRow = host.querySelector('.sa-bot-row')
     check('a built-in bot offers copy but not edit or delete (§4.5/§13.2)',
-      /内置/.test(firstRow?.textContent ?? '') && /复制内置/.test(firstRow?.textContent ?? '')
+      /内置/.test(firstRow?.textContent ?? '') && /另存为副本/.test(firstRow?.textContent ?? '')
         && !/删除/.test(firstRow?.textContent ?? '') && [...firstRow.querySelectorAll('button')]
           .every(node => (node.textContent ?? '').trim() !== '编辑'),
       firstRow?.textContent?.slice(0, 160) ?? 'no row')
