@@ -489,6 +489,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
   PanelProvider,
   botPreview, botToForm, formToBot,
+  applyRenderFrame, fitGrid,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -536,6 +537,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   botPreview: 'settings.js',
   botToForm: 'settings.js',
   formToBot: 'settings.js',
+  applyRenderFrame: 'terminal.js',
+  fitGrid: 'terminal.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
   apiCall: 'api.js',
@@ -742,7 +745,7 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   // The Claude Code run left a conversation behind: the row offers to reopen it in a sidebar terminal. A Codex or DSH
   // run has nothing to resume (a thread id is not a Claude session), so those rows keep no such control.
   const claudeRunRow = rootElement.querySelector('#sa-run-run_demo_claude')
-  check('a Claude Code run offers to reopen its conversation in a terminal',
+  check('a Claude Code run offers to take its conversation over in the panel\'s own terminal',
     Boolean(claudeRunRow?.querySelector('.sa-run-terminal')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
   check('a Codex run never offers a Claude terminal',
     Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-terminal'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
@@ -2659,6 +2662,32 @@ console.log('STEP pure projections')
     !asked.some(call => call.includes('thread/undefined')), JSON.stringify(asked.slice(0, 4)))
   root.unmount()
   host.remove()
+}
+
+// The panel's own terminal screen: the Host stream only advances when every render frame is written AND acknowledged,
+// so the frame path is worth driving without a browser.
+{
+  const writes = []
+  const fake = {
+    reset: () => writes.push('reset'),
+    resize: (cols, rows) => writes.push(`resize ${cols}x${rows}`),
+    write: (data, done) => { writes.push(`write ${String(data).slice(0, 7)}`); done() },
+  }
+  const snapshot = { revision: 4, frame: { type: 'snapshot', screen: 'screen-bytes', info: { cols: 100, rows: 30 } } }
+  const applied = applyRenderFrame(fake, snapshot, () => writes.push('ack 4'))
+  check('a snapshot frame replaces the screen, matches the Host grid and acknowledges it',
+    applied && writes.join(' | ') === 'reset | resize 100x30 | write screen- | ack 4', writes.join(' | '))
+  writes.length = 0
+  applyRenderFrame(fake, { revision: 5, frame: { type: 'output', data: 'later-bytes' } }, () => writes.push('ack 5'))
+  check('an output frame appends without resetting the screen',
+    writes.join(' | ') === 'write later-b | ack 5', writes.join(' | '))
+  const grid = []
+  const fitted = fitGrid({ resize: (cols, rows) => grid.push(`term ${cols}x${rows}`) },
+    { proposeDimensions: () => ({ cols: 220, rows: 80 }) },
+    { environment: { maxCols: 200, maxRows: 60 } },
+    { resize: (cols, rows) => grid.push(`host ${cols}x${rows}`) })
+  check('the emulator grid is clamped to what the Host accepts and reported back',
+    fitted && grid.join(' | ') === 'term 200x60 | host 200x60', grid.join(' | '))
 }
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))

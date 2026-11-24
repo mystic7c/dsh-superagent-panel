@@ -8,6 +8,7 @@ import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
 import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
+import { RunTerminalPane } from "./terminal.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
@@ -950,8 +951,14 @@ export function runRouteTag(t, run) {
     Session, and any other backend has nothing to resume, so both render nothing. The id is checked against what a
     session id can contain because the host puts it on a shell command line; when it is not one, the terminal still
     opens — a fresh `claude` in the worktree is better than a dead control. */
+/** The takeover control: start the real Claude Code CLI on this run's conversation inside the panel, or stop showing it.
+ *
+ *  The button only appears for a run that actually came from the CLI — an in-process DSH worker has a Session the
+ *  interface opens instead. The terminal itself is rendered here, not in the Host's right Sidebar: a person reading a
+ *  run wants its conversation in the same place. */
 export function RunWorkerTerminal({ run }) {
-  const { t, call, currentSessionId, openTerminalTab, expandSidebar, openSession, notify } = usePanel()
+  const { t, call, currentSessionId, notify } = usePanel()
+  const [shown, setShown] = useState()
   const backend = run?.worker?.backend
   const candidate = typeof run?.worker?.sessionId === 'string' ? run.worker.sessionId.trim() : ''
   const resume = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(candidate) ? candidate : ''
@@ -959,19 +966,15 @@ export function RunWorkerTerminal({ run }) {
   const { run: open, busy } = useAction(async () => {
     const sessionId = currentSessionId()
     const result = await call('POST engine/workers/terminal', { body: { sessionId, cwd, resume } })
-    // The host opened the PTY under this Session; the right Sidebar is where the person can type into it, and that
-    // Sidebar belongs to the Conversation — so the conversation has to be the thing on screen for the tab to show. The
-    // panel cannot expand it itself: a Sidebar command needs an on-screen Session, and this panel is that screen.
-    const shown = openTerminalTab(sessionId, result?.terminalId)
-    notify(t(shown ? 'openWorkerTerminalOpened' : 'openWorkerTerminalHidden'))
-    if (!shown) return result
-    await openSession(sessionId)
-    // Now that the Conversation is on screen the Sidebar answers, so the terminal lands in sight instead of behind a
-    // collapsed column. A host that refuses leaves the tab in place — one click on its own toggle still shows it.
-    expandSidebar()
+    setShown({ sessionId, terminalId: String(result?.terminalId ?? '') })
+    notify(t('openWorkerTerminalOpened'))
     return result
   })
   if (backend !== 'claude' || !cwd) return null
+  if (shown !== undefined) {
+    return <RunTerminalPane sessionId={shown.sessionId} terminalId={shown.terminalId}
+      title={`${t('runTerminalTitle')} · ${candidate ? liveShortId(candidate, 8) : cwd}`} onClose={() => setShown(undefined)} />
+  }
   return <Button variant="ghost" size="sm" className="sa-run-terminal" disabled={busy}
     title={`${t('openWorkerTerminalHint')}\n${cwd}`} onClick={() => void open()}>{t('openWorkerTerminal')}</Button>
 }

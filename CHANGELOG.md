@@ -20,13 +20,20 @@
 - 会话标识按 `/^[A-Za-z0-9_-]{1,128}$/` 校验后才拼进 shell 命令行；缺会话 / 会话未运行 / 无终端服务 / 超出终端上限都返回带原因的 4xx，而不是 500。
 - `cliInvocation` 只在会话 id 是 UUID 形状时才加 `--resume`：`claude --resume <value>` 会把未知值当**会话标题**去匹配，而流里没拿到 `session_id` 时会退化成 `worker-xxxxxxxx` 这种合成 id——以前理论上可能续到别人的会话，现在直接不加该参数。
 - 客户端：`PanelProvider` 新增 `currentSessionId`（点击时读取：`sidebarRight.mounted`，面板占着主栏时它为空，退回工作区自己的选择记录 `dsh.sessions.current`），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
-- 接管的落点：终端开在当前 GUI 会话的右侧栏里，但右侧栏属于对话——面板占着主栏时既没有 `mounted` 也没有展开的侧栏。所以点击后面板把对话换回主栏，再展开右侧栏并聚焦那个终端标签页（`sidebarRight.openTab` / `toggleExpanded`，都失败时退回 `openTabIn` + 提示，终端仍在）。
+- 同一个运行再点一次会回到已经在跑的那个终端（按标题认领，`reused: true`），不会占用宿主仅有的几个 agent 终端位、也不会在同一个会话上再起一个 Claude Code。
+
+### 终端就长在面板里
+
+- 终端不再是右侧栏的标签页：`client/src/terminal.js` 直接渲染在运行行下方展开的 `.sa-terminal` 浮层里（标题栏 + xterm 屏 + 关闭），宿主只提供 `TerminalView` 模型，屏幕由面板自己的 `@xterm/xterm` + `@xterm/addon-fit` 画。xterm 是动态 `import()` 的，静态检查（`check-keys`/`render-check` 在 Node 里跑）不会因为它的 UMD 头崩。
+- 帧协议按宿主的写法接：`snapshot` 先 `reset()` 再按 `info.cols/rows` 定尺寸、`output` 直接写，写完 `acknowledge(revision)`；`ResizeObserver` 走 `fitGrid`（按 `environment.maxCols/maxRows` 夹紧）把容器尺寸同步回宿主，人打字经 `view.write(data, true)` 交回 PTY。
+- 刚开的终端本窗口的 roster 还是旧缓存，第一次 `refresh()` 会 `missingTerminal`：改成退避重试（最多 8 次、间隔 350ms），不再让「已打开但看不到」变成失败态。
+- `view.state` 的订阅通知不带参数，直接 `setState(snapshot)` 不生效：改为订阅里递增计数器、渲染时读 `getSnapshot()`，连接状态与画面才会跟着动。
 
 ### 验证
 
 - `lib/live/worker-cli.test.js` 28/28（新增 resume argv、续接透传、流式 trace 三例）；新增 `lib/live/worker-terminal.test.js` 6/6（接管参数与策略、无 id 开新会话、注入形态 id 拒绝、缺会话/无服务/超上限、写入失败关闭终端）。
 - `render-check`：新增 claude 运行夹具，断言「claude 运行显示接管按钮、Codex 与 DSH 运行不显示」。
-- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：点「在终端接管」→ 右侧栏展开、标签页里 `claude --resume f46922bb-…` 正在跑、首键后可输入。
+- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：点「在终端接管」→ 面板内浮层出现、`connected`、屏上是 `claude --resume f46922bb-…` 恢复出的上一轮对话（PINEAPPLE 问答），可继续输入。
 
 ## [1.1.12] — 2026-11-24
 

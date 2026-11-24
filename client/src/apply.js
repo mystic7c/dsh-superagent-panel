@@ -34,34 +34,18 @@ export function currentSessionIdOf(ctx) {
   } catch { return '' }
 }
 
-/** Reveal a Host terminal in the right Sidebar of one Session. Returns false when this host has no Sidebar to put it in,
- *  which the caller reports instead of leaving the person with a running Claude Code they cannot see.
+/** Resolve the Host's terminal view for one terminal id: the model this panel renders and types into.
  *
- *  `openTab` is the public path — it expands the column — but it acts on the Session that is on screen, so it only works
- *  once the caller has brought that Session back; `openTabIn` places the tab in any Session without touching the column
- *  and is the fallback for the moment before. */
-export function terminalTabOpener(ctx) {
+ *  The view model is the Host's own (`ctx.webTerminals.view`), so the terminal keeps running across a panel remount and
+ *  the Host still owns the process; only the screen is ours. */
+export function terminalViewFactory(ctx) {
   return (sessionId, terminalId) => {
-    if (!sessionId || !terminalId) return false
-    const sidebar = ctx.get?.('sidebarRight')
-    if (!sidebar) return false
-    const params = { params: { terminalId } }
-    try { sidebar.openTab?.('terminal', params); return true } catch { /* no Session on screen yet */ }
-    try { sidebar.openTabIn?.(sessionId, 'terminal', params); return true } catch { return false }
-  }
-}
-
-/** Expand the right Sidebar once the Conversation is back on screen. A Sidebar command needs an on-screen Session, so
- *  this is a no-op (not an error) while this panel still owns the main column. */
-export function sidebarExpander(ctx) {
-  return () => {
+    if (!sessionId || !terminalId) return undefined
     try {
-      const sidebar = ctx.get?.('sidebarRight')
-      if (!sidebar?.toggleExpanded) return false
-      if (sidebar.isExpanded?.()) return true
-      sidebar.toggleExpanded()
-      return true
-    } catch { return false }
+      const terminals = ctx.get?.('webTerminals')
+      if (!terminals?.view) return undefined
+      return terminals.view(sessionId, `superagent-worker-${terminalId}`, `superagent://worker/${terminalId}`, terminalId)
+    } catch { return undefined }
   }
 }
 
@@ -69,9 +53,8 @@ export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(createSessionOpener(ctx), [ctx])
   const currentSessionId = useCallback(() => currentSessionIdOf(ctx), [ctx])
-  const openTerminalTab = useCallback(terminalTabOpener(ctx), [ctx])
-  const expandSidebar = useCallback(sidebarExpander(ctx), [ctx])
-  return h(App, { openSession, t, currentSessionId, openTerminalTab, expandSidebar })
+  const terminalView = useCallback(terminalViewFactory(ctx), [ctx])
+  return h(App, { openSession, t, currentSessionId, terminalView })
 }
 
 /** Client half: the sidebar icon plus the panel in the `main` slot.

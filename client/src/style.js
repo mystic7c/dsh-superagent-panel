@@ -897,6 +897,27 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-modal-body { margin-top: 0; }
 .sa-modal-footer { margin-top: 0; display: flex; justify-content: flex-end; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-toast-error { color: var(--sa-danger-text, var(--dsw-alias-state-error-primary)); }
+/* The Claude Code TUI the panel hosts itself. It floats over the page so a run row stays readable next to it; the
+   screen is xterm's own canvas, so only the frame around it follows the panel's tokens. */
+.sa-terminal { position: fixed; right: var(--sa-sp-24, 24px); bottom: var(--sa-sp-24, 24px); z-index: 1100;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(760px, calc(100vw - var(--sa-sp-32, 32px) * 2));
+  height: min(520px, 62vh); border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px);
+  background: var(--sa-surface-raised); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; }
+.sa-terminal-bar { display: flex; align-items: center; gap: var(--sa-sp-8, 8px); padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px);
+  border-bottom: 1px solid var(--sa-line); background: var(--sa-surface-raised); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-meta, 12px); }
+.sa-terminal-title { font-weight: 600; color: var(--dsw-alias-label-primary); }
+.sa-terminal-spacer { flex: 1 1 auto; }
+.sa-terminal-close { border: 0; background: none; color: var(--sa-link-text); font: inherit; cursor: pointer;
+  padding: var(--sa-sp-2, 2px) var(--sa-sp-4, 4px); border-radius: var(--sa-r-sm, 4px); }
+.sa-terminal-close:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
+.sa-terminal-screen { min-height: 0; padding: var(--sa-sp-4, 4px) 0 0 var(--sa-sp-4, 4px); background: var(--sa-surface-raised); }
+.sa-terminal-screen .xterm { height: 100%; }
+.sa-terminal-error { margin: 0; padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-top: 1px solid var(--sa-line); }
+/* One narrow column: the pane would cover the page it describes. */
+@container (max-width: 760px) {
+  .sa-terminal { left: var(--sa-sp-8, 8px); right: var(--sa-sp-8, 8px); width: auto; height: 52vh; }
+}
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);
   border-radius: var(--sa-r-md, 8px); background: var(--dsw-alias-toast-bg, var(--dsw-alias-bg-overlay));
