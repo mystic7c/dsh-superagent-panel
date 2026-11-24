@@ -36,7 +36,7 @@
 1. 注释 tag：`git tag -a vX.Y.Z -m "vX.Y.Z — …" && git push origin vX.Y.Z`。
 2. 打 tarball 并附到 Release（也留一份到仓库外的 `releases/`，桌面端从这里装）：
    ```bash
-   npm pack                      # 产物落在仓库根，注意 mv 走，别提交
+   npm run pack:release          # 产物：../releases/dsh-superagent-panel-X.Y.Z.tgz
    gh release create vX.Y.Z --title "vX.Y.Z — …" --notes-file notes.md ../releases/dsh-superagent-panel-X.Y.Z.tgz
    ```
 3. npm 发布（**暂未启用**，目前只走 GitHub Release 的 tarball）：启用时执行
