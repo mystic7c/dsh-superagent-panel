@@ -288,8 +288,8 @@ Object.assign(PAGE_TEXT, {
   'st.routeWrite': ['可写', 'write'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
-  'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址按仓库在上方卡片编辑。',
-    'Deployment and the remote target are configured in live.json. Shown read-only here, with reload and a UAT check.'],
+  'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址在上方仓库列表里逐行编辑。',
+    'Read-only facts about where live.json lives and where worktrees go. Edit project, branch, token, UAT and health URLs per repository in the list above.'],
 
   // ---- source group ----
   'st.enabled': ['启用引擎', 'Engine enabled'],
@@ -898,7 +898,10 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
   }
   const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
   const rows = repoFactRows(t, repo)
-  return <div className="sa-card">
+  // A repository is a configured thing, not a card to browse: one list row per repository (2026-11-24 review). The facts
+  // stay on the row as label/value pairs so the list still answers "which project, which branch, which gates" in place.
+  return <li className="sa-row sa-repo-row">
+    <div className="sa-row-main">
     <div className="sa-card-head">
       <span className="sa-section-icon"><Icon name="pull" size={16} /></span>
       <span className="sa-card-title">{repo.name ?? repo.id}</span>
@@ -910,7 +913,11 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
       {repo.name && repo.id && repo.name !== repo.id
         ? <span className="sa-mono sa-hint" translate="no">{String(repo.id)}</span> : null}
     </div>
-    <KeyValues rows={rows} />
+    <div className="sa-repo-facts">{rows.map(([label, value], index) =>
+      <span className="sa-repo-fact" key={index}>
+        <span className="sa-repo-fact-label">{label}</span>
+        <span className="sa-repo-fact-value">{value}</span>
+      </span>)}</div>
     <div className="sa-actions">
       <Button variant="outline" size="sm" icon={<Icon name="settings" size={14} />}
         onClick={() => onEdit?.(repo)}>{pt(t, 'repos.edit')}</Button>
@@ -934,37 +941,32 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
         <Hint>{pt(t, 'repos.testHint')}</Hint>
       </div>
       : null}
-    <div className="sa-field" style={{ marginTop: 'var(--sa-sp-8)' }}>
-      <span className="sa-field-head">{pt(t, 'repo.token')}</span>
-      <div style={{ display: 'flex', width: '100%', minWidth: 0 }}>
-        <Input type="password" autoComplete="off" value={token} disabled={tokenBusy} className="sa-input-full"
-          placeholder={pt(t, 'repos.tokenPlaceholder', { host })} aria-label={pt(t, 'repos.tokenPlaceholder', { host })}
-          onChange={event => setToken(event.target.value)} />
-      </div>
-      <div className="sa-actions">
-        <Button variant="outline" size="sm" icon={<Icon name="shield" size={14} />}
-          disabled={tokenBusy || !token.trim()}
-          onClick={() => { void Promise.resolve(onSaveToken?.(repo, token.trim())).then(saved => { if (saved) setToken('') }) }}>
-          {pt(t, 'repos.tokenSave')}
-        </Button>
-        {repo.tokenConfigured
-          // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
-          // Outline, like 保存令牌 beside it: the ghost variant is bare text, which on a phone wrapped onto its own
-          // line and read as a field heading instead of a button (ui review P2).
-          ? <ConfirmButton variant="outline" label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle', { host })}
-            message={pt(t, 'repos.tokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
-            onConfirm={async () => {
-              if (tokenBusy) return false
-              const cleared = await onSaveToken?.(repo, '')
-              if (cleared !== false) setToken('')
-              // `false` keeps the dialog open: the host refused, and `saveRepoTokenFor` already said why.
-              return cleared !== false
-            }} />
-          : null}
-      </div>
-      <Hint>{pt(t, 'repos.tokenHint')}</Hint>
+    <div className="sa-token-row">
+      <Input type="password" autoComplete="off" value={token} disabled={tokenBusy} className="sa-input-full"
+        placeholder={pt(t, 'repos.tokenPlaceholder', { host })} aria-label={pt(t, 'repo.token')}
+        onChange={event => setToken(event.target.value)} />
+      <Button variant="outline" size="sm" icon={<Icon name="shield" size={14} />}
+        disabled={tokenBusy || !token.trim()}
+        onClick={() => { void Promise.resolve(onSaveToken?.(repo, token.trim())).then(saved => { if (saved) setToken('') }) }}>
+        {pt(t, 'repos.tokenSave')}
+      </Button>
+      {repo.tokenConfigured
+        // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
+        // Outline, like 保存令牌 beside it: the ghost variant is bare text, which on a phone wrapped onto its own
+        // line and read as a field heading instead of a button (ui review P2).
+        ? <ConfirmButton variant="outline" label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle', { host })}
+          message={pt(t, 'repos.tokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
+          onConfirm={async () => {
+            if (tokenBusy) return false
+            const cleared = await onSaveToken?.(repo, '')
+            if (cleared !== false) setToken('')
+            // `false` keeps the dialog open: the host refused, and `saveRepoTokenFor` already said why.
+            return cleared !== false
+          }} />
+        : null}
     </div>
-  </div>
+    </div>
+  </li>
 }
 
 const HISTORY_VALUE_PREVIEW = 80
@@ -1835,9 +1837,10 @@ export function LiveSettingsPage({ route }) {
       {repos.length
         ? <>
           <p className="sa-hint" role="status">{pt(t, 'repos.summary', { count: repos.length, default: defaultRepoName })}</p>
-          <div className="sa-cards-2">{repos.map(repo => <ReposCard key={repo.id} repo={repo}
+          <ul className="sa-list sa-repo-list">{repos.map(repo => <ReposCard key={repo.id} repo={repo}
             isDefault={repo.id === defaultRepoId} onSaveToken={saveRepoTokenFor} tokenBusy={tokenSaving === repo.id}
-            onEdit={openRepoEdit} onToggle={toggleRepo} />)}</div>
+            onEdit={openRepoEdit} onToggle={toggleRepo} />)}</ul>
+          <Hint>{pt(t, 'repos.tokenHint')}</Hint>
         </>
         : <EmptyState icon="pull" title={pt(t, 'repos.empty')}
           action={<div className="sa-actions">

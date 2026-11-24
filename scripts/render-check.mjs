@@ -1370,8 +1370,10 @@ clickByText('仓库', '.sa-settings-nav button')
 await sleep(900)
 const reposText = text()
 check('repositories group lists every repository', repoLabels.every(label => reposText.includes(label)), reposText.slice(0, 400))
-check('repositories group uses the two-up card grid', rootElement.querySelectorAll('.sa-main .sa-cards-2').length >= 1,
-  String(rootElement.querySelectorAll('.sa-main .sa-cards-2').length))
+const repoRowCount = rootElement.querySelectorAll('.sa-main .sa-repo-list .sa-repo-row').length
+check('repositories group lists repositories as rows, not cards',
+  repoRowCount === liveRepos.length && rootElement.querySelectorAll('.sa-main .sa-repo-list .sa-card').length === 0,
+  `${repoRowCount}/${liveRepos.length}`)
 check('repositories group carries the default repository summary', new RegExp(`${liveRepos.length} 个仓库 · 默认仓库 ${defaultRepoId}`).test(reposText), reposText.slice(0, 200))
 check('repositories group shows gates and clone path', reposText.includes('闸门') && reposText.includes('本地路径'), reposText.slice(0, 300))
 check('repositories group absorbs the deployment facts',

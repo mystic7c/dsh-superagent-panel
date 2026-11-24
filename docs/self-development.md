@@ -107,7 +107,7 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 本机桌面 profile 的安装态**只来自 `main` 的打包产物**，不是开发工作树：
 
-- profile 依赖是 `file:<tarball 绝对路径>`（例如 `file:/abs/path/to/releases/mystic7c-dsh-superagent-panel-0.4.21.tgz`，
+- profile 依赖是 `file:<tarball 绝对路径>`（例如 `file:/abs/path/to/releases/dsh-superagent-panel-0.4.21.tgz`，
   换成你自己机器上的路径）。
 - `~/.dsh/profiles/desktop/node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的**实体目录**，
   不是指向开发仓库的 `link:`。
@@ -116,15 +116,14 @@ CDP。因此本机需要 Chrome/Chromium，可用 `CHROME_PATH` 指定可执行�
 
 ### 本地打包与安装
 
-推荐用仓库自带脚本（参数见下），等价的纯手工步骤如下：
+打包用 `npm run pack:release`（`scripts/pack-release.mjs`：`npm pack` 后把 scoped 文件名改成 `dsh-superagent-panel-<version>.tgz`）；安装用 `node scripts/local-install.mjs`（参数见下）。等价的纯手工步骤如下：
 
 ```bash
 # 1) 在 dev 仓库的 main 分支打 tarball，产物落在仓库同级的 releases/
 cd <dev-repo>
 git switch main && git pull --ff-only
-mkdir -p ../releases
-npm pack --pack-destination ../releases
-# 产物：../releases/mystic7c-dsh-superagent-panel-<version>.tgz
+npm run pack:release
+# 产物：../releases/dsh-superagent-panel-<version>.tgz（脚本负责把 npm pack 的 scoped 文件名改掉）
 
 # 2) 备份 profile 的 package.json
 PROFILE="$HOME/.dsh/profiles/desktop"
@@ -134,13 +133,13 @@ cp "$PROFILE/package.json" "$PROFILE/package.json.bak-local-install-$(date +%Y%m
 rm -rf "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel"
 
 # 4) 把 tarball 解包到 profile node_modules 的包目录（tarball 内层是 package/）
-TARBALL="$(cd ../releases && pwd)/mystic7c-dsh-superagent-panel-<version>.tgz"
+TARBALL="$(cd ../releases && pwd)/dsh-superagent-panel-<version>.tgz"
 mkdir -p "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel"
 tar -xzf "$TARBALL" -C "$PROFILE/node_modules/@mystic7c/dsh-superagent-panel" --strip-components=1
 
 # 5) 把 profile dependency 改为 file:<tarball 绝对路径>
 #    编辑 "$PROFILE/package.json" 的 dependencies：
-#    "@mystic7c/dsh-superagent-panel": "file:/.../mystic7c-dsh-superagent-panel-<version>.tgz"
+#    "@mystic7c/dsh-superagent-panel": "file:/.../dsh-superagent-panel-<version>.tgz"
 
 # 6) 在面板「插件管理」里重载该插件（或禁用→启用），然后刷新页面
 ```
