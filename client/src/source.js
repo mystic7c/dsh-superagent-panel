@@ -16,7 +16,9 @@ import { setupStateOf } from "./setup.js"
 import { AutomationBar, panelRepoOf, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
 import { Fragment, React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
-  'src.summary': ['已启用 {active}/{total} · 最近同步 {time}', '{active}/{total} enabled · synced {time}'],
+  // The panel head already shows "数据更新于 HH:MM"; repeating the same clock here under a second name made it look
+  // like a different measurement (ui review P2-4).
+  'src.summary': ['已启用 {active}/{total} · 上次同步成功 {time}', '{active}/{total} enabled · last sync {time}'],
   'src.summaryNoSync': ['已启用 {active}/{total} · 还没有同步记录', '{active}/{total} enabled · not synced yet'],
   'src.state.ready': ['正常', 'Ready'],
   'src.state.error': ['异常', 'Error'],
@@ -404,7 +406,9 @@ export function LiveSourcePage({ route }) {
   const { data, error, reload, actions } = usePanelData()
   // Keyed by repo id: one shared slot meant a UAT check started on one repository card answered for all of them.
   const [uat, setUat] = useState({})
-  const [uatBusy, setUatBusy] = useState(false)
+  // Which repository is being checked, not a single global flag: one card's spinner used to grey out every card's UAT
+  // button (review P3).
+  const [uatBusy, setUatBusy] = useState('')
   const filteredRef = useRef(null)
   const poll = useAction(() => actions.poll({ dryRun: true }), { reload })
   const startAutomation = useAction(async () => {
@@ -413,10 +417,10 @@ export function LiveSourcePage({ route }) {
   }, { reload })
   const checkUat = async (repoId) => {
     if (!repoId) return
-    setUatBusy(true)
+    setUatBusy(repoId)
     try { const result = await actions.checkUat(repoId); setUat(previous => ({ ...previous, [repoId]: result })) }
     catch (failure) { setUat(previous => ({ ...previous, [repoId]: { ok: false, error: errorText(failure) } })) }
-    finally { setUatBusy(false) }
+    finally { setUatBusy(current => current === repoId ? '' : current) }
   }
   const focusFiltered = () => scrollPanelTo(filteredRef.current)
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
@@ -451,9 +455,16 @@ export function LiveSourcePage({ route }) {
     return () => clearTimeout(timer)
   }, [sigQuery, sigRepoInput, sigReasonInput])
   // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
+  // A popstate restore rewrites the whole slice; without the flag this effect undoes the restored page right away and
+  // back/forward always landed on 1–20 (review P2). eval.js consumes the same flag.
   const firstSignalFilterRun = useRef(true)
+  const restoringSignalFilters = useRef(false)
+  // Mirror for the []-deps popstate listener, which cannot read the current state through its closure.
+  const currentSignalSlice = useRef({ sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo })
+  currentSignalSlice.current = { sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo }
   useEffect(() => {
     if (firstSignalFilterRun.current) { firstSignalFilterRun.current = false; return }
+    if (restoringSignalFilters.current) { restoringSignalFilters.current = false; return }
     setSigOffset(0)
   }, [sigQ, sigStatus, sigRepo, sigReason, sigFrom, sigTo])
   useEffect(() => {
@@ -477,6 +488,14 @@ export function LiveSourcePage({ route }) {
       try {
         const params = new URLSearchParams(window.location.search)
         const status = params.get('srcStatus') || 'all'
+        const next = { q: params.get('srcQ') || '', status: Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all',
+          repo: params.get('srcRepo') || '', reason: params.get('srcReason') || '',
+          from: params.get('srcFrom') || '', to: params.get('srcTo') || '' }
+        const now = currentSignalSlice.current
+        if (next.q !== now.sigQ || next.status !== now.sigStatus || next.repo !== now.sigRepo
+          || next.reason !== now.sigReason || next.from !== now.sigFrom || next.to !== now.sigTo) {
+          restoringSignalFilters.current = true
+        }
         setSigQuery(params.get('srcQ') || ''); setSigQ(params.get('srcQ') || '')
         setSigStatus(Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all')
         setSigRepo(params.get('srcRepo') || ''); setSigRepoInput(params.get('srcRepo') || '')
@@ -610,7 +629,7 @@ export function LiveSourcePage({ route }) {
       // A `manual` repository has no UAT to check (contract §12.3); keep the project link as its one action.
       isManual(source) ? null
         : h(Button, { key: 'uat', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'refresh', size: 14 }),
-          disabled: uatBusy || !source.repoId, onClick: () => { void checkUat(source.repoId) } },
+          disabled: uatBusy === source.repoId || !source.repoId, onClick: () => { void checkUat(source.repoId) } },
           pt(t, 'src.action.uat')),
       projectUrl ? h(ExternalLink, { key: 'project', href: projectUrl }, pt(t, 'src.action.project')) : null,
     ]

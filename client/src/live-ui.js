@@ -41,6 +41,7 @@ Object.assign(PAGE_TEXT, {
     'ci-passed': ['CI 通过', 'CI passed'], 'ci-failed': ['CI 失败', 'CI failed'],
     'mr-open': ['MR 已创建', 'MR open'], merged: ['已合并', 'Merged'], deployed: ['已部署 UAT', 'Deployed to UAT'],
     'deploy-pending': ['部署 UAT 中', 'Deploying to UAT'], 'deploy-failed': ['部署失败', 'Deploy failed'],
+    'gates-passed': ['闸门通过', 'Gates passed'], stopped: ['已停止', 'Stopped'],
     closed: ['MR 已关闭', 'MR closed'], dismissed: ['已忽略', 'Dismissed'], failed: ['失败', 'Failed'], unknown: ['状态未知', 'Unknown state'],
     'dry-run': ['干跑完成', 'Dry run finished'], running: ['运行中', 'Running'],
     // P0: a run parked on a failing gate is a state of its own; the Ticket keeps the phase label it reached.
@@ -86,7 +87,8 @@ Object.assign(PAGE_TEXT, {
   // P1-2: how a run was started and why it stopped; shared by the list band, the run records and the detail header.
   runTrigger: { manual: ['手动', 'Manual'], auto: ['自动', 'Automatic'], retry: ['重试', 'Retry'],
     revise: ['追加要求', 'Revision'], publish: ['发布', 'Publish'], resume: ['恢复触发', 'Resumed'],
-    pipeline: ['流水线', 'Pipeline'], other: ['触发方式：{trigger}', 'Trigger: {trigger}'],
+    pipeline: ['流水线', 'Pipeline'], heartbeat: ['定时巡检', 'Heartbeat'], repair: ['自动修复', 'Repair'],
+    other: ['触发方式：{trigger}', 'Trigger: {trigger}'],
     label: ['触发方式', 'Triggered by'], hint: ['这次运行是怎么触发的', 'How this run was started'] },
   runStop: { done: ['完成', 'Done'], error: ['执行失败', 'Failed'], timeout: ['超时', 'Timed out'],
     worker_failed: ['worker 失败', 'Worker failed'], no_changes: ['无改动', 'No changes'],
@@ -473,6 +475,10 @@ export const TICKET_VIEW = {
   // opens a fresh MR, so the row offers that instead of only the diagnosis.
   'ci-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'redeliver' },
   'deploy-failed': { state: 'error', tone: 'danger', group: 'failed', needsHuman: true, primary: 'redeliver' },
+  // Run-level statuses the executor writes without a Ticket phase of their own: a stopped run, and a run that cleared
+  // its gates but has not handed off yet. Without these the UI printed "状态未知（stopped）" / "交付时：状态未知".
+  stopped: { state: 'idle', tone: 'neutral', group: 'queued', needsHuman: false, primary: 'none' },
+  'gates-passed': { state: 'idle', tone: 'success', group: 'working', needsHuman: false, primary: 'none' },
 }
 
 /**
@@ -551,7 +557,8 @@ export function ticketRunInterrupted(ticket, runs) {
 
 /** How a run was started (P1-2 `run.trigger`) → the operator's label; a missing trigger renders nothing. */
 export const RUN_TRIGGER_KEYS = { manual: 'runTrigger.manual', auto: 'runTrigger.auto', retry: 'runTrigger.retry',
-  revise: 'runTrigger.revise', publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline' }
+  revise: 'runTrigger.revise', publish: 'runTrigger.publish', resume: 'runTrigger.resume', pipeline: 'runTrigger.pipeline',
+  heartbeat: 'runTrigger.heartbeat', repair: 'runTrigger.repair' }
 export function runTriggerLabel(t, run) {
   const trigger = run?.trigger
   if (!trigger) return null
@@ -926,8 +933,9 @@ export function ticketEvidence(t, ticket, view, now = Date.now()) {
 export function publishableStatusOf(ticket) {
   return ['ready', 'failed', 'pushed', 'ci-failed', 'deploy-failed', 'closed'].includes(String(ticket?.status ?? ''))
 }
-/** @param {{ ticket: any, page?: string, actions?: any, reload?: any, compact?: boolean, extra?: any, now?: any }} props */
-export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now }) {
+/** @param {{ ticket: any, page?: string, actions?: any, reload?: any, compact?: boolean, extra?: any, now?: any,
+    evidenceLabel?: any }} props */
+export function TicketRow({ ticket, page = 'execution', actions, reload, compact = false, extra, now, evidenceLabel }) {
   const { t, navigate, notify } = usePanel()
   const model = usePanelData()
   const act = actions ?? model?.actions
@@ -1063,7 +1071,9 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
           <div className="sa-row-meta">{chips}</div>
         </div>
       </button>
-      <span className="sa-row-evidence">{evidence}</span>
+      {/* In the narrow layout the evidence becomes its own line under the row, where a bare MR link read as the next
+          row's evidence (ui review P2-8). The label is passed by the page that owns the column heading. */}
+      <span className="sa-row-evidence" data-label={evidenceLabel ?? undefined}>{evidence}</span>
       <div className="sa-row-actions" {...stopInner}>
         {publishUnavailableTip}
         {primaryButton}
@@ -1093,8 +1103,8 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
 }
 
 /** Plain ticket list (no group headers). Empty lists render nothing: the page owns its empty state. */
-/** @param {{ tickets: any[], page?: string, actions?: any, reload?: any, now?: any }} props */
-export function TicketList({ tickets, page = 'execution', actions, reload, now }) {
+/** @param {{ tickets: any[], page?: string, actions?: any, reload?: any, now?: any, evidenceLabel?: any }} props */
+export function TicketList({ tickets, page = 'execution', actions, reload, now, evidenceLabel }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
   // The list polls every 30s: a status region announces only the count that changed, never the whole list. It stays
@@ -1106,7 +1116,8 @@ export function TicketList({ tickets, page = 'execution', actions, reload, now }
   return <>
     {status}
     <ul className="sa-list">{list.map(ticket =>
-      <TicketRow key={ticket.id} ticket={ticket} page={page} actions={actions} reload={reload} now={now} />)}</ul>
+      <TicketRow key={ticket.id} ticket={ticket} page={page} actions={actions} reload={reload} now={now}
+        evidenceLabel={evidenceLabel} />)}</ul>
   </>
 }
 
@@ -1117,7 +1128,8 @@ export const TICKET_GROUP_ORDER = ['waiting', 'failed', 'working', 'queued', 'do
 /** Execution tab: one Section per non-empty stage group, stage order fixed. `groupNotes` adds a one-line summary
     (e.g. the done group's accepted/dismissed/retried split) as the section badge; `className` wraps the groups so a
     page can switch the row layout without changing every TicketRow consumer. */
-export function TicketGroups({ tickets, page = 'execution', actions, reload, className, groupNotes, groupCounts, header }) {
+export function TicketGroups({ tickets, page = 'execution', actions, reload, className, groupNotes, groupCounts, header,
+  evidenceLabel }) {
   const { t } = usePanel()
   const list = Array.isArray(tickets) ? tickets : []
   if (!list.length) return null
@@ -1133,7 +1145,7 @@ export function TicketGroups({ tickets, page = 'execution', actions, reload, cla
     <Section key={group} title={pt(t, `group.${group}`)}
       count={groupCounts?.[group] === false ? undefined : grouped.get(group).length}
       badge={groupNotes?.[group] ?? null}>
-      <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} />
+      <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} evidenceLabel={evidenceLabel} />
     </Section>)
   const body = <>{header ?? null}{rendered}</>
   return className ? <div className={className}>{body}</div> : body
@@ -1326,18 +1338,19 @@ export function ExecutorLoad({ load, labels = true }) {
   ]
   const total = counts.reduce((sum, entry) => sum + entry.value, 0)
   // Zero is information: "working 0 · queued 0 · waiting 0 · failed 0" says the executor is calm without a sentence
-  // that repeats the header. No track is drawn at zero — an empty 8px bar reads as a broken progress bar.
+  // that repeats the header. No track is drawn at zero — an empty 8px bar reads as a broken progress bar — but the
+  // legend still renders: dropping the whole block made "nothing is running" the one answer the panel refused to give
+  // exactly when someone asks it (review P3).
   // The bar is segmented, so it only means something with its legend: the same counts and words as the stage filter
   // sit under it, and the segment colours are read through those words rather than guessed.
-  if (total === 0) return null
-  return <div className="sa-executor-load">
+  return <div className="sa-executor-load" data-idle={total === 0 ? 'true' : undefined}>
     <div className="sa-loadbar">
-      <div className="sa-loadbar-track" role="img" style={{ display: 'flex' }}
+      {total === 0 ? null : <div className="sa-loadbar-track" role="img" style={{ display: 'flex' }}
         aria-label={counts.map(entry => pt(t, entry.key, { count: entry.value })).join(' · ')}>
         {counts.filter(entry => entry.value > 0).map(entry =>
           <span key={entry.key} className="sa-loadbar-fill" data-tone={entry.tone}
             style={{ display: 'block', width: `${(entry.value / total) * 100}%` }} />)}
-      </div>
+      </div>}
       {labels ? <div className="sa-loadbar-meta">
         {counts.map(entry => <span key={entry.key}>{pt(t, entry.key, { count: entry.value })}</span>)}
         {load.paused ? <Tag key="paused" tone="warning">{pt(t, 'loadbarPaused')}</Tag> : null}

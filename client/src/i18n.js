@@ -583,7 +583,9 @@ export function when(value, lang) {
   const seconds = Math.round((date.getTime() - Date.now()) / 1000)
   if (Math.abs(seconds) < 86_400) {
     const relative = new Intl.RelativeTimeFormat(timeLocale(lang), { numeric: 'auto' })
-    if (Math.abs(seconds) < 60) return relative.format(0, 'second')
+    // numeric:'auto' renders zero seconds as 现在 / "now", which reads as "this is happening right now" in a dense list
+    // (ui review P2). 刚刚 / "just now" says when, which is what the surrounding timestamps mean.
+    if (Math.abs(seconds) < 60) return lang === 'en' ? 'just now' : '刚刚'
     if (Math.abs(seconds) < 3600) return relative.format(Math.round(seconds / 60), 'minute')
     return relative.format(Math.round(seconds / 3600), 'hour')
   }

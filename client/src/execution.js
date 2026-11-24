@@ -295,7 +295,8 @@ export function ExecutionQueuePage({ route }) {
       queueHeader,
       h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
         badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
-        h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
+        h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth,
+          evidenceLabel: pt(t, 'ex.colEvidence') })))
     : execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' },
       queueHeader,
@@ -303,9 +304,11 @@ export function ExecutionQueuePage({ route }) {
       // the ended history: before this, one repo with 40 finished Tickets pushed the whole list into a wall of rows
       // while the stage view offered 查看全部/收起 (user report 2026-11-23).
       repoGroupsOf(shownTickets).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
-        h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
+        h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth,
+          evidenceLabel: pt(t, 'ex.colEvidence') }))))
     : h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
-      className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader })
+      className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader,
+      evidenceLabel: pt(t, 'ex.colEvidence') })
   // The cap and its one reveal button belong to the list, not to a grouping branch: both groupings show the newest 10
   // finished Tickets and both offer the rest behind the same button.
   const doneReveal = doneOverflow && stage !== 'dismissed'
