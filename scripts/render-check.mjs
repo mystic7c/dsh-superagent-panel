@@ -101,7 +101,7 @@ const loadedLive = loadLiveConfig(stateDir)
 const liveRepos = configRepos(loadedLive.config)
 const primaryRepoId = liveRepos[0]?.id ?? 'repo-1'
 const defaultRepoId = loadedLive.config.defaultRepo ?? primaryRepoId
-const repoLabels = liveRepos.map(repo => repo.gitlab.project || repo.id)
+const repoLabels = liveRepos.map(repo => repo.name || repo.id)
 const nowIso = new Date().toISOString()
 // Always inject the walkthrough Ticket. The old guard skipped it whenever the operator's real state happened to hold
 // another pending acceptance, which changed which inbox row the detail walkthrough opened (and broke it entirely when
@@ -472,7 +472,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   setupStateOf, globalHealth, evalEmptyState,
   // U-05…U-11 (one source of truth for the wording): the risk-change diff, the page query whitelist, the signal body
   // row component, the reason/failure vocabulary and the source/repo label projections.
-  riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, sourceRepoRows,
+  riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, repoFactRows,
   workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
   ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
@@ -503,7 +503,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   failureLabel: 'live-ui.js',
   workflowBlockedDetail: 'live-ui.js',
   runTriggerLabel: 'live-ui.js',
-  sourceRepoRows: 'source.js',
+  repoFactRows: 'settings.js',
   initialPageQuery: 'router.js',
   rememberPageState: 'router.js',
   hostOfUrl: 'util.js',
@@ -1226,11 +1226,12 @@ check('run group no longer carries the repository list', !settingsText.includes(
 // run group no longer competes with them for the operator's attention.
 check('run group no longer carries the worker backend or capability matrix',
   !settingsText.includes('Worker 后端') && !settingsText.includes('运行后端能力'), settingsText.slice(0, 400))
-if (ebsConfigured) {
-  const repoSelect = [...rootElement.querySelectorAll('select')]
-    .find(select => [...select.options].some(option => option.value === 'ebs'))
-  check('manual ticket form offers the ebs repository', Boolean(repoSelect), String(repoSelect?.value))
-} else skip('manual ticket form offers the ebs repository', 'no ebs repository configured on this machine')
+// 手工建单 is an Execution action: Settings no longer carries a second copy of the form, so this group must not offer
+// a repository picker at all (the Execution modal check below covers the surviving one).
+check('the run group offers no second manual-ticket form',
+  !settingsText.includes('手工建单（测试）') && ![...rootElement.querySelectorAll('.sa-main select')]
+    .some(select => [...select.options].some(option => option.value === 'ebs')),
+  settingsText.slice(0, 400))
 // The run timeout is editable (it used to be file-only, so a timed-out Ticket could not be retried with more time).
 const timeoutInput = rootElement.querySelector('.sa-main input[aria-label="执行超时"]')
 check('run timeout is editable from the run group',
@@ -1373,7 +1374,8 @@ check('repositories group uses the two-up card grid', rootElement.querySelectorA
   String(rootElement.querySelectorAll('.sa-main .sa-cards-2').length))
 check('repositories group carries the default repository summary', new RegExp(`${liveRepos.length} 个仓库 · 默认仓库 ${defaultRepoId}`).test(reposText), reposText.slice(0, 200))
 check('repositories group shows gates and clone path', reposText.includes('闸门') && reposText.includes('本地路径'), reposText.slice(0, 300))
-check('repositories group absorbs the deployment facts', reposText.includes('部署与限制') && reposText.includes('live.json'), reposText.slice(0, 500))
+check('repositories group absorbs the deployment facts',
+  reposText.includes('配置文件与路径') && reposText.includes('live.json'), reposText.slice(0, 500))
 if (twoReposConfigured) {
   const tokenInputs = [...rootElement.querySelectorAll('.sa-main input[type="password"]')]
   check('repositories group offers a GitLab token editor', tokenInputs.length >= 2, `inputs=${tokenInputs.length}`)
@@ -1496,7 +1498,8 @@ const queueHead = rootElement.querySelector('.sa-queue-head')
 // title), where it read as a caption for 已结束 alone (review fix 1.1.8).
 check('execution column header leads the ledger, above the group titles',
   Boolean(queueHead) && !queueHead.closest('.sa-section')
-    && queueHead.nextElementSibling?.classList.contains('sa-section'),
+    && (queueHead.nextElementSibling?.classList.contains('sa-section')
+      || queueHead.nextElementSibling?.nextElementSibling?.classList.contains('sa-section')),
   queueHead?.parentElement?.className ?? 'no header')
 const loadLegend = rootElement.querySelector('.sa-loadbar-meta')
 check('executor load bar carries the stage legend', Boolean(loadLegend) &&
@@ -2107,16 +2110,14 @@ console.log('STEP pure projections')
 
   // U-10: the remote address is named after the host (a GitHub repository is not a "GitLab 地址"), and a repository
   // without a token says what still works instead of implying it is broken.
-  const githubRows = sourceRepoRows(t,
-    { config: { baseUrl: 'https://github.com/org/app', project: 'org/app', tokenConfigured: false } },
-    { repo: '/src/app' })
-  const gitlabRows = sourceRepoRows(t,
-    { config: { baseUrl: 'https://gitlab.example.com', project: 'grp/app', tokenConfigured: true } },
-    { repo: '/src/app' })
+  // The rows moved to the Settings → Repositories card when the Source page stopped repeating configuration.
+  const githubRows = repoFactRows(t,
+    { baseUrl: 'https://github.com/org/app', project: 'org/app', repo: '/src/app', tokenConfigured: false })
+  const gitlabRows = repoFactRows(t,
+    { baseUrl: 'https://gitlab.example.com', project: 'grp/app', repo: '/src/app', tokenConfigured: true })
   const rowLabelOf = (rows, label) => rows.some(row => row[0] === label)
   check('the remote address is named after its host and a token-less repository says what still works (U-10)',
     rowLabelOf(githubRows, 'GitHub 地址') && rowLabelOf(gitlabRows, 'GitLab 地址')
-      && githubRows.some(row => row[1] === '令牌未配置（不影响本地只读）')
       && !rowLabelOf(githubRows, 'GitLab 地址')
       // R2-05: the project row follows the same host, so one card never pairs "GitLab 项目" with "GitHub 地址".
       && rowLabelOf(githubRows, 'GitHub 项目') && rowLabelOf(gitlabRows, 'GitLab 项目'),

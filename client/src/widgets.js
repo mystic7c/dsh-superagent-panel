@@ -9,11 +9,32 @@ import { GLOSSARY, GLOSSARY_VALUES, errorText, fullTime, readableMarkers, transl
 import { inlines, markdownBlocks } from "./markdown.js"
 import { Button, CopyButton, IconButton, InfoTip, Modal, STATUS_STATES, StatusIcon, StatusText, Tag, controlIcon } from "./controls.js"
 import { same, useAction, usePanel } from "./api.js"
-import { Fragment, React, h, useState } from "./react.js"
+import { Fragment, React, h, useEffect, useState } from "./react.js"
+/** One shared 30s tick for every relative timestamp: the poll skips identical payloads, so without it "3 分钟前"
+    froze until something else changed the document. */
+const clockSubscribers = new Set()
+let clockTimer
+function subscribeClock(listener) {
+  clockSubscribers.add(listener)
+  if (!clockTimer) clockTimer = setInterval(() => {
+    const now = Date.now()
+    for (const notify of clockSubscribers) notify(now)
+  }, 30000)
+  return () => {
+    clockSubscribers.delete(listener)
+    if (!clockSubscribers.size && clockTimer) { clearInterval(clockTimer); clockTimer = undefined }
+  }
+}
+function useClock() {
+  const [, setNow] = useState(Date.now())
+  useEffect(() => subscribeClock(setNow), [])
+}
+
 /** Relative time with an absolute tooltip; the only timestamp renderer pages need. */
 /** @param {{ at?: any }} props */
 export function When({ at }) {
   const { t } = usePanel()
+  useClock()
   return <time dateTime={at} title={fullTime(at, t.lang)}>{when(at, t.lang)}</time>
 }
 

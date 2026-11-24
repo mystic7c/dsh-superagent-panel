@@ -155,6 +155,8 @@ export function Switch({ checked, onChange, label, className, disabled, inputRef
 
 /** Module counter behind the dialog description ids (React's `useId` is not re-exported by the panel's runtime shim). */
 let MODAL_SEQ = 0
+/** Open dialogs, bottom to top. Each one listens on document, so without this stack one Escape closed all of them. */
+const OPEN_MODALS = []
 
 /** Accessible dialog with focus trapping, Escape/backdrop dismissal, and focus restoration. */
 /** @param {{ open?: any, onClose?: () => void, title?: any, closeLabel?: any, description?: any, footer?: any, className?: any, restoreTo?: any, children?: any }} props */
@@ -181,11 +183,18 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
     // The mask covers the page but the wheel still scrolls it underneath: lock the body for as long as a dialog is up.
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
+    const token = { dialog }
+    OPEN_MODALS.push(token)
     const onKeyDown = (event) => {
+      // Only the topmost dialog answers: Escape must close the confirmation, not the settings modal underneath it.
+      if (OPEN_MODALS[OPEN_MODALS.length - 1] !== token) return
       if (event.key === 'Escape') { event.stopPropagation(); close.current() }
       else if (event.key === 'Tab' && dialog.current) {
+        // display:none / detached controls match the selector but cannot take focus; including them let the trap
+        // bounce focus out of the dialog on the first Tab.
         const focusable = [...dialog.current.querySelectorAll('*')].filter(element =>
-          element.matches('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'))
+          element.matches('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')
+          && element.getClientRects().length > 0)
         const first = focusable[0], last = focusable.at(-1), active = document.activeElement
         if (!first || !dialog.current.contains(active) || active === dialog.current || active === (event.shiftKey ? first : last)) {
           event.preventDefault()
@@ -195,6 +204,8 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
     }
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      const at = OPEN_MODALS.indexOf(token)
+      if (at >= 0) OPEN_MODALS.splice(at, 1)
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
       // Focus goes back to whatever opened the dialog. A keyboard-opened dialog has no usable opener (the active

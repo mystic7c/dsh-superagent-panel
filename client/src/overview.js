@@ -15,7 +15,7 @@ import { PAGE_TEXT, pt } from "./localtext.js"
 import { PANEL_LANG, globalHealth } from "./shell.js"
 import { useLiveResource } from "./live-model.js"
 import { SetupBanner, SetupChecklist, setupStateOf } from "./setup.js"
-import { AutomationBar, FunnelBar, TicketList, TicketRow, failureLabel, localizedText, needsHuman, needsYouCount, problemsOf, runStopLabel, ticketStatus } from "./live-ui.js"
+import { engineOn, AutomationBar, executorOn, FunnelBar, TicketList, TicketRow, failureLabel, localizedText, needsHuman, needsYouCount, problemsOf, runStopLabel, ticketStatus } from "./live-ui.js"
 import { TicketDetail, ticketStepLabel } from "./ticket-detail.js"
 import { Fragment, React, h, useEffect, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
@@ -33,8 +33,6 @@ Object.assign(PAGE_TEXT, {
   'ov.deskScope': ['需要你处理 = 等你签收；值得留意 = 无需你动作的漂移。',
     'Needs you = waiting for your sign-off; Worth a look = drift that needs no action.'],
   'ov.noFlow': ['暂无 24 小时数据', 'No 24-hour data yet'],
-  'ov.paused': ['处理已暂停：不开始新的评估、派工或回复。', 'Processing is paused: no new Eval, dispatch or reply starts.'],
-  'ov.resume': ['去执行页恢复', 'Resume on Execution'],
   'ov.runState': ['运行/暂停', 'Running / paused'],
   'ov.pollInterval': ['轮询间隔', 'Poll interval'],
   'ov.seconds': ['{value} 秒', '{value}s'],
@@ -57,7 +55,7 @@ Object.assign(PAGE_TEXT, {
   'ov.pulseInFlight': ['在飞', 'In flight'],
   'ov.pulseNext': ['每 {seconds} 秒轮询 · 下次轮询 {remain} 秒后', 'Polls every {seconds}s · next in {remain}s'],
   'ov.pulseDue': ['每 {seconds} 秒轮询 · 正在轮询', 'Polls every {seconds}s · polling now'],
-  'ov.pulsePaused': ['处理已暂停 · 不自动轮询', 'Paused · no automatic polling'],
+  'ov.pulseNoPoll': ['暂停期间不自动轮询', 'No automatic polling while paused'],
   'ov.pulseOff': ['自动触发未开启', 'Automatic intake is off'],
   // Same denominator as the Source page ("已启用 1/3"): a disabled Source is configuration, not an incident.
   'ov.pulseSourcesValue': ['已启用 {active}/{total}', '{active}/{total} enabled'],
@@ -389,8 +387,8 @@ export function LiveOverviewPage({ route }) {
   const setup = setupStateOf(data)
   const health = globalHealth(data)
   const paused = data.paused === true || config.paused === true || engine.paused === true
-  const engineEnabled = config.enabled === true
-  const executorEnabled = config.executor?.enabled !== false
+  const engineEnabled = engineOn(config)
+  const executorEnabled = executorOn(config)
   const prerequisitesReady = setup.steps.slice(0, 3).every(step => step.done)
   const automationNeeded = paused || !engineEnabled || !executorEnabled
   const showAutomationBar = automationNeeded && prerequisitesReady
@@ -496,8 +494,10 @@ export function LiveOverviewPage({ route }) {
   const pollSecondCount = Number(config.pollSeconds) || 10
   const lastPollMs = Date.parse(engine.lastPollAt ?? '')
   const remain = Number.isFinite(lastPollMs) ? Math.max(0, Math.ceil((lastPollMs + pollSecondCount * 1000 - now) / 1000)) : undefined
-  const engineDetail = paused ? pt(t, 'ov.pulsePaused')
-    : config.enabled === false ? pt(t, 'ov.pulseOff')
+  // The pause itself is the status cell's job; repeating "处理已暂停" in the detail and again on the in-flight row
+  // made one fact appear three times in the same card.
+  const engineDetail = config.enabled === false ? pt(t, 'ov.pulseOff')
+    : paused ? pt(t, 'ov.pulseNoPoll')
     : Number.isFinite(remain) ? (remain > 0 ? pt(t, 'ov.pulseNext', { seconds: pollSecondCount, remain })
       : pt(t, 'ov.pulseDue', { seconds: pollSecondCount }))
     : pt(t, 'ov.autoVerifyValue', { value: engine.autoVerifySeconds ?? '—' })
@@ -508,15 +508,16 @@ export function LiveOverviewPage({ route }) {
   const enabledSources = sources.filter(source => source.enabled === true)
   const healthySources = enabledSources.filter(source => !['error', 'setup'].includes(source.state))
   const badSourceCount = enabledSources.length - healthySources.length
-  const executorOff = data.config?.executor?.enabled === false
+  const executorOff = !executorOn(data.config)
   const load = data.load ?? {}
   const loadTotal = ['running', 'queued', 'waiting', 'failed'].reduce((sum, key) => sum + Number(load[key] ?? 0), 0)
   const lifetime = engine.events ?? {}
   const activeText = activeTickets.length
     ? pt(t, 'ov.pulseActive', { count: activeTickets.length, progress: progressOf(activeTickets[0]) })
-    : paused ? pt(t, 'ov.pulsePaused')
-      : config.enabled === false ? pt(t, 'ov.pulseOff')
-        : pt(t, 'ov.pulseIdleActive')
+    // The engine row above already says why nothing runs (off / paused); leaving a dash here stops the same sentence
+    // appearing twice inside one card.
+    : config.enabled === false || paused ? '—'
+      : pt(t, 'ov.pulseIdleActive')
   const pulseRows = [
     [pt(t, 'ov.pulseEngine'), h('span', { className: 'sa-actions', style: { gap: 'var(--sa-sp-8)' } },
       h(StatusText, { state: health.state }, pt(t, health.labelKey)),
@@ -676,16 +677,13 @@ export function LiveOverviewPage({ route }) {
       h(StatusIcon, { state: 'warning', size: 14 }),
       h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.inboxError')),
       h(Button, { variant: 'ghost', size: 'sm', onClick: () => { void inbox.reload() } }, t('reload'))) : null,
-    // One automation story, one primary action. When the three prerequisites are configured, it replaces both the
-    // paused banner and the setup card (which otherwise repeated the same engine step in two places).
+    // One automation story, one primary action: the bar owns "paused or not running yet" once the three prerequisites
+    // exist, and the setup card owns the missing prerequisite before that. A separate paused banner said the same thing
+    // beside it (and pointed at a 执行 page whose control is disabled until the same prerequisite is met).
     showAutomationBar
       ? h(AutomationBar, { paused, engineEnabled, executorEnabled, onStart: () => startAutomation.run(),
-        onCheck: () => { void poll.run() }, checkBusy: poll.busy, progress: setup })
-      : paused ? h('div', { className: 'sa-banner',
-        style: { display: 'flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' } },
-        h(StatusIcon, { state: 'warning', size: 14 }),
-        h('span', { style: { flex: '1 1 220px', minWidth: 0 } }, pt(t, 'ov.paused')),
-        h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution' }) }, pt(t, 'ov.resume'))) : null,
+        progress: setup })
+      : null,
 
     // First-run setup. The full card is for a quiet, empty workspace; once any history exists it stays one line so
     // work is never pushed below a tutorial. It disappears when the automation bar takes over the remaining step.

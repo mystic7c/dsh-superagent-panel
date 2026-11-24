@@ -4,7 +4,7 @@ import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, Statu
 import { same, stay, usePanel, usePanelData } from "./api.js"
 import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
-import { ManualTicketForm, panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
+import { panelDefaultRepo, panelRepos, repoAcceptanceText, repoVerifyModeText } from "./live-ui.js"
 import { gateOnFail } from "./ticket-detail.js"
 import { apply } from "./apply.js"
 import { React, h, useEffect, useRef, useState } from "./react.js"
@@ -63,6 +63,8 @@ Object.assign(PAGE_TEXT, {
   'st.capTitle': ['运行后端能力', 'Worker capability matrix'],
   'st.capHint': ['当前实现能力，不是产品承诺；后端能力来自各自 CLI/宿主的实际实现，新增后端时需同步更新 README 与本表。',
     'What the current implementation can do — not a product promise. Capabilities come from each CLI/host implementation; update the README and this table when adding a backend.'],
+  'st.capLive': ['本机后端是否已安装并核验，以 Bot 页为准。', 'Whether a backend is installed and verified on this machine lives on the Bot page.'],
+  'st.capLiveLink': ['打开 Bot 页', 'Open the Bot page'],
   'st.capCurrent': ['当前', 'Current'],
   'st.capBackend': ['后端', 'Backend'],
   'st.capStream': ['流式事件', 'Streaming events'],
@@ -164,7 +166,7 @@ Object.assign(PAGE_TEXT, {
   'repos.verifyManual': ['人工验证（只观察合并）', 'Manual (observe merge only)'],
   'repos.acceptDeployed': ['部署后验收', 'Accept after deploy'],
   'repos.acceptMerged': ['合并后验收', 'Accept after merge'],
-  'repos.manageHint': ['自动接单群 → 仓库的绑定在「设置 → 来源」里管理；手工建单在「设置 → 运行」里选择仓库。',
+  'repos.manageHint': ['自动接单群 → 仓库的绑定在「设置 → 来源」里管理；手工建单在「执行」页选择仓库。',
     'Group → repository bindings live under Settings → Source; manual tickets pick a repository under Settings → Runtime.'],
   'repos.gates': ['闸门', 'Gates'],
   'repos.gatesEmpty': ['默认闸门', 'Default gates'],
@@ -200,9 +202,10 @@ Object.assign(PAGE_TEXT, {
   'st.bindingRepo': ['接单仓库', 'Repository'],
   'st.bindingAdd': ['添加绑定', 'Add binding'],
   'st.bindingRemove': ['移除', 'Remove'],
+  'st.bindingsSaveHint': ['监听群的改动随本组「保存」一起提交；保存前会列出高风险变更。',
+    'Group changes are saved with this group: the save bar lists the high-risk changes first.'],
   'st.bindingEmpty': ['还没有绑定的群。现有群默认走默认仓库。',
     'No bound group yet. Existing groups fall back to the default repository.'],
-  'st.bindingSaved': ['群绑定已保存', 'Group bindings saved'],
   'st.bindingChatRequired': ['请填写群 ID。', 'Enter the group chat ID.'],
   'st.groupsPick': ['从群列表选择', 'Pick from group list'],
   'st.groupsLoading': ['读取群列表…', 'Loading groups…'],
@@ -253,7 +256,7 @@ Object.assign(PAGE_TEXT, {
     'Intake: connect Octo first, then choose watched groups, who may trigger work, and the poll interval; read-only values come from the host.'],
   'st.evalHint': ['评估方式、判定模型与规则目录由 live.json 和代码版本决定，这里只读展示。',
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
-  'st.runHint': ['执行器总开关、运行方式、闸门/超时与手工建单。改完保存后立即生效；worker 后端在「Worker」分组单独管理。',
+  'st.runHint': ['执行器总开关、运行方式、闸门与超时。改完保存后立即生效；手工建单在「执行」页，worker 后端在「Worker」分组。',
     'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
   'st.workerHint': ['路由模式决定“建议 / 自动 / 单后端”；启用多个后端后按任务类型分发。suggest 只记录建议、仍用默认后端执行。',
     'The routing mode decides suggest / auto / single. With several backends enabled, work is dispatched by task type; suggest only records the choice and still runs the default backend.'],
@@ -285,7 +288,7 @@ Object.assign(PAGE_TEXT, {
   'st.routeWrite': ['可写', 'write'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
-  'st.deployHint': ['部署与远端目标由 live.json 文件配置。这里只读展示，可重载配置或检查 UAT。',
+  'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址按仓库在上方卡片编辑。',
     'Deployment and the remote target are configured in live.json. Shown read-only here, with reload and a UAT check.'],
 
   // ---- source group ----
@@ -317,12 +320,6 @@ Object.assign(PAGE_TEXT, {
     'No allowed senders and “accept any human” is off, so the engine rejects polling.'],
   'st.noChats': ['还没有监听群。用「从群列表选择」添加，或手工填写群 ID。',
     'No watched groups yet. Use “Pick from group list”, or paste a chat id.'],
-  'st.probeHint': ['“检查新消息”是干跑：只读取并评估，不写入状态、不建工单。',
-    '“Check for new messages” is a dry run: it only reads and evaluates, writing no state and creating no Ticket.'],
-  'st.probeAt': ['检查于 {time}', 'Checked {time}'],
-  'st.probeSummary': ['检查完成：可接单 {accepted} · 忽略 {ignored}（干跑，未写入）',
-    'Check finished: {accepted} acceptable · {ignored} ignored (dry run, nothing written)'],
-  'st.probeFailed': ['检查失败。', 'The check failed.'],
   'st.errBusy': ['已有一次轮询在进行中，请稍后再试。', 'A poll is already running; try again shortly.'],
   'st.errPaused': ['引擎已暂停：非干跑轮询会被拒绝。', 'The engine is paused: a non-dry-run poll is rejected.'],
   'st.errNoConfig': ['live.json 不存在。', 'live.json does not exist.'],
@@ -331,7 +328,6 @@ Object.assign(PAGE_TEXT, {
   'st.errNoSender': ['没有允许发送者，也没有“允许任意人类”。', 'No allowed senders and “accept any human” is off.'],
   'st.reloadConfig': ['重载配置', 'Reload config'],
   'st.reloading': ['重载中…', 'Reloading…'],
-  'st.probing': ['检查中…', 'Checking…'],
   'st.senderPlaceholderExample': ['发送者 UID，如 oc_xxxx…', 'Sender UID, e.g. oc_xxxx…'],
   'st.chatIdPlaceholder': ['群 ID，如 oc_xxxx…', 'Group ID, e.g. oc_xxxx…'],
   'st.historyRestoreTitle': ['恢复这个历史版本？', 'Restore this version?'],
@@ -488,24 +484,12 @@ Object.assign(PAGE_TEXT, {
     'Accept a request or create a Ticket, and the latest brief will appear here.'],
 
   // ---- deploy section (folded into the repositories group) ----
-  'st.deployTitle': ['部署与限制', 'Deployment & limits'],
+  'st.deployTitle': ['配置文件与路径', 'Config file & paths'],
   'st.configFile': ['live.json', 'live.json'],
   'st.configExists': ['配置文件', 'Config file'],
   'st.fileExists': ['已找到', 'Found'],
   'st.fileMissing': ['不存在（使用默认值）', 'Missing (defaults in use)'],
-  'st.gitlabProject': ['{host} 项目', '{host} project'],
-  'st.gitlabBase': ['{host} 地址', '{host} base URL'],
-  'st.branches': ['分支', 'Branches'],
-  'st.gitlabToken': ['{host} 令牌', '{host} token'],
-  'st.uatUrl': ['UAT 地址', 'UAT URL'],
-  'st.healthUrl': ['健康检查地址', 'Health URL'],
-  'st.reloadHint': ['改完 live.json 后重载，引擎会重新读取配置与 token 状态。',
-    'After editing live.json, reload so the engine re-reads config and token state.'],
   'st.configError': ['live.json 读取失败：', 'Could not read live.json: '],
-  'st.checkUat': ['检查 UAT', 'Check UAT'],
-  'st.uatOk': ['UAT 可访问', 'UAT reachable'],
-  'st.uatFail': ['UAT 不可访问', 'UAT unreachable'],
-  'st.uatUnset': ['未配置 UAT 地址。', 'The UAT URL is not configured.'],
   'st.httpStatus': ['HTTP {status}', 'HTTP {status}'],
 })
 
@@ -657,6 +641,8 @@ export function settingsPatchOf(group, draft) {
     if ('review.expireHours' in draft) patch['review.expireHours'] = Number(draft['review.expireHours'])
   }
   if (group === 'source') {
+    // Bindings ride the same draft/save/confirm path as the switches above (review M-4).
+    for (const key of ['octo.watchChatIds', 'octo.chatTitles', 'octo.chatRepos']) if (key in draft) patch[key] = draft[key]
     if ('enabled' in draft) patch.enabled = draft.enabled === true
     if ('pollSeconds' in draft) patch.pollSeconds = Number(draft.pollSeconds)
     if ('octo.allowAnyHuman' in draft) patch['octo.allowAnyHuman'] = draft['octo.allowAnyHuman'] === true
@@ -675,9 +661,10 @@ export function settingsPatchOf(group, draft) {
     if ('pausedDispatch' in draft) patch.pausedDispatch = draft.pausedDispatch === true
     if ('gitlab.createMr' in draft) patch['gitlab.createMr'] = draft['gitlab.createMr']
     // P2: the run timeout is editable from Settings; it is stored as milliseconds in live.json.
-    if ('executor.timeoutMs' in draft) patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
-    // Repair budget shared by gate auto-repair and the staged review loop (0..6).
-    if ('executor.maxRepairRounds' in draft) patch['executor.maxRepairRounds'] = Number(draft['executor.maxRepairRounds'])
+    // An emptied field means "use the stored value" (the input shows the default as its placeholder); Number('') is 0,
+    // which used to persist a zero timeout / zero repair budget (review L-19).
+    if ('executor.timeoutMs' in draft && draft['executor.timeoutMs'] !== '') patch['executor.timeoutMs'] = Number(draft['executor.timeoutMs'])
+    if ('executor.maxRepairRounds' in draft && draft['executor.maxRepairRounds'] !== '') patch['executor.maxRepairRounds'] = Number(draft['executor.maxRepairRounds'])
     for (const key of ['executor.workerBackend', 'executor.workerModel', 'executor.workerCommand']) {
       if (key in draft) patch[key] = draft[key]
     }
@@ -708,29 +695,6 @@ export function settingsSaveFailure(t, failure) {
   if (status === 409) return { error: new Error(t('settingsConflict')), raw: errorText(failure) }
   if (status === 0) return { error: new Error(t('offline')), raw: errorText(failure) }
   return { error: failure instanceof Error ? failure : new Error(errorText(failure)) }
-}
-
-/** Poll (dry run) result → one status line. */
-export function settingsProbeView(t, result) {
-  if (!result) return undefined
-  if (result.skipped === 'busy') return { state: 'warning', text: pt(t, 'st.errBusy') }
-  if (result.error) {
-    const mapped = settingsHostError(t, result.error)
-    return { state: 'error', text: mapped ?? pt(t, 'st.probeFailed'), raw: mapped ? String(result.error) : undefined }
-  }
-  const fetched = Number(result.fetched ?? 0)
-  return { state: fetched ? 'done' : 'idle', text: pt(t, 'st.probeSummary', {
-    accepted: Array.isArray(result.accepted) ? result.accepted.length : 0,
-    ignored: Array.isArray(result.ignored) ? result.ignored.length : 0 }) }
-}
-
-/** UAT check result → one status line. */
-export function settingsUatView(t, uat) {
-  if (!uat) return undefined
-  if (uat.ok) return { state: 'done', text: `${pt(t, 'st.uatOk')} · ${pt(t, 'st.httpStatus', { status: uat.status })}` }
-  if (/uatUrl is not configured/i.test(String(uat.error ?? ''))) return { state: 'warning', text: pt(t, 'st.uatUnset') }
-  const status = uat.status ? ` · ${pt(t, 'st.httpStatus', { status: uat.status })}` : ''
-  return { state: 'error', text: `${pt(t, 'st.uatFail')}${status}`, raw: uat.error ? String(uat.error) : undefined }
 }
 
 /** One switch row of a group form: label (+ optional badge and info tip) and explanatory hint on the left, the switch
@@ -858,11 +822,16 @@ export const WORKER_CAPABILITIES = [
 
 /** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
 export function WorkerCapabilityCard({ currentBackend }) {
-  const { t } = usePanel()
+  const { t, navigate } = usePanel()
   const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
   return <div className="sa-field">
     <span className="sa-field-head">{pt(t, 'st.capTitle')}</span>
     <Hint>{pt(t, 'st.capHint')}</Hint>
+    {/* The static contract above and the live backend check on the Bot page answer different questions; say so once
+        here instead of letting the two tables look like two owners of the same fact. */}
+    <p className="sa-hint">{pt(t, 'st.capLive')}
+      {' '}<button type="button" className="sa-textlink" onClick={() => navigate({ page: 'bots' })}>
+        {pt(t, 'st.capLiveLink')}</button></p>
     <table className="sa-glossary sa-capabilities">
       <thead><tr>
         <th>{pt(t, 'st.capBackend')}</th>
@@ -894,6 +863,22 @@ export function WorkerCapabilityCard({ currentBackend }) {
 export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
   token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
 
+/** The read-only facts of one repository card. Exported so the render check asserts the same rows the card draws and
+    no page can invent a second wording for them (the Source page used to repeat these rows). */
+export function repoFactRows(t, repo) {
+  const host = hostName(hostOfUrl(repo?.baseUrl))
+  const gates = Array.isArray(repo.gates) ? repo.gates : []
+  return [
+    [pt(t, 'repo.project', { host }), repo.project ? <span className="sa-mono" translate="no">{String(repo.project)}</span> : t('empty')],
+    [pt(t, 'repo.baseUrl', { host }), repo.baseUrl ? <span className="sa-mono" translate="no">{String(repo.baseUrl)}</span> : t('empty')],
+    [pt(t, 'repo.localPath'), repo.repo ? <span className="sa-mono" translate="no">{String(repo.repo)}</span> : t('empty')],
+    [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
+    [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
+    [pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repo.verifyMode)],
+    [pt(t, 'repo.acceptance'), repoAcceptanceText(t, repo.acceptance)],
+  ]
+}
+
 export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
   // R2-05: a GitHub-backed repository must not be called "GitLab project" on the same card that shows a GitHub URL.
   const host = hostName(hostOfUrl(repo?.baseUrl))
@@ -912,16 +897,7 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
     }
   }
   const testLabel = key => pt(t, TEST_LABELS[key] ?? 'repos.check.connection')
-  const gates = Array.isArray(repo.gates) ? repo.gates : []
-  const rows = [
-    [pt(t, 'repo.project', { host }), repo.project ? <span className="sa-mono" translate="no">{String(repo.project)}</span> : t('empty')],
-    [pt(t, 'repo.baseUrl', { host }), repo.baseUrl ? <span className="sa-mono" translate="no">{String(repo.baseUrl)}</span> : t('empty')],
-    [pt(t, 'repo.localPath'), repo.repo ? <span className="sa-mono" translate="no">{String(repo.repo)}</span> : t('empty')],
-    [pt(t, 'repo.branches'), `${repo.baseBranch ?? t('empty')} → ${repo.targetBranch ?? t('empty')}`],
-    [pt(t, 'repos.gates'), gates.length ? gates.map(gate => repoGateLabel(t, gate)).join(t('listSeparator')) : pt(t, 'repos.gatesEmpty')],
-    [pt(t, 'repo.verifyMode'), repoVerifyModeText(t, repo.verifyMode)],
-    [pt(t, 'repo.acceptance'), repoAcceptanceText(t, repo.acceptance)],
-  ]
+  const rows = repoFactRows(t, repo)
   return <div className="sa-card">
     <div className="sa-card-head">
       <span className="sa-section-icon"><Icon name="pull" size={16} /></span>
@@ -1520,8 +1496,6 @@ export function LiveSettingsPage({ route }) {
   const bodyRef = useRef(null)
   const introRef = useRef(null)
   const [reloadState, setReloadState] = useState({ busy: false })
-  const [probe, setProbe] = useState({ busy: false })
-  const [uatState, setUatState] = useState({ busy: false })
   const [tokenSaving, setTokenSaving] = useState(null)
   const [octoTokenDraft, setOctoTokenDraft] = useState('')
   const [octoTokenBusy, setOctoTokenBusy] = useState(false)
@@ -1548,7 +1522,6 @@ export function LiveSettingsPage({ route }) {
   const [senderDraft, setSenderDraft] = useState('')
   const [bindingForm, setBindingForm] = useState({ chatId: '', title: '', repoId: '' })
   const [bindingError, setBindingError] = useState(undefined)
-  const [bindingBusy, setBindingBusy] = useState(false)
   useEffect(() => () => {
     for (const timer of Object.values(savedTimers.current)) clearTimeout(timer)
   }, [])
@@ -1745,7 +1718,14 @@ export function LiveSettingsPage({ route }) {
     // AC-10: edit one gate field at a time instead of hand-writing the whole gates JSON. A deep clone keeps the form
     // independent from the loaded config (cancel must not mutate it).
     const gates = Array.isArray(repo.gates) ? JSON.parse(JSON.stringify(repo.gates)) : []
-    setRepoEdit({ id: repo.id, name: repo.name ?? repo.id, repo: repo.repo ?? '', gates })
+    // AC-10 only exposed the gates. Every other value the repository uses (branches, remote, verify/acceptance mode,
+    // UAT URL) was fixed at creation and could only be changed by editing live.json by hand (review H-1).
+    setRepoEdit({
+      id: repo.id, name: repo.name ?? repo.id, repo: repo.repo ?? '',
+      baseBranch: repo.baseBranch ?? '', verifyMode: repo.verifyMode ?? 'manual', acceptance: repo.acceptance ?? 'merged',
+      baseUrl: repo.gitlab?.baseUrl ?? '', project: repo.gitlab?.project ?? '', targetBranch: repo.gitlab?.targetBranch ?? '',
+      uatUrl: repo.gitlab?.uatUrl ?? '', healthUrl: repo.gitlab?.healthUrl ?? '', gates,
+    })
     setRepoEditError(undefined)
   }
   const editGate = (index, key, value) => {
@@ -1769,7 +1749,12 @@ export function LiveSettingsPage({ route }) {
     setRepoEditBusy(true)
     setRepoEditError(undefined)
     try {
-      await actions.updateRepo(repoEdit.id, { name: repoEdit.name.trim() || repoEdit.id, repo: repoEdit.repo.trim(), gates })
+      await actions.updateRepo(repoEdit.id, {
+        name: repoEdit.name.trim() || repoEdit.id, repo: repoEdit.repo.trim(), gates,
+        baseBranch: repoEdit.baseBranch.trim(), verifyMode: repoEdit.verifyMode, acceptance: repoEdit.acceptance,
+        gitlab: { baseUrl: repoEdit.baseUrl.trim(), project: repoEdit.project.trim(),
+          targetBranch: repoEdit.targetBranch.trim(), uatUrl: repoEdit.uatUrl.trim(), healthUrl: repoEdit.healthUrl.trim() },
+      })
       await reload()
       setRepoEdit(undefined)
       notify(pt(t, 'repos.editSaved'))
@@ -1828,15 +1813,12 @@ export function LiveSettingsPage({ route }) {
   // lives here as a read-only sub-section instead of owning a seventh navigation entry.
   const renderRepos = () => {
     const deployHost = hostName(hostOfUrl(gitlab.baseUrl))
+    // Only facts that belong to the host file itself are global now: project, branches, token, UAT and health URLs are
+    // per-repository values edited on the card above (a global summary contradicted them as soon as a second
+    // repository disagreed).
     const deployRows = [
       [pt(t, 'st.configFile'), <span className="sa-mono" translate="no">{config.file ?? t('empty')}</span>],
       [pt(t, 'st.configExists'), config.exists ? pt(t, 'st.fileExists') : pt(t, 'st.fileMissing')],
-      [pt(t, 'st.gitlabProject', { host: deployHost }), gitlab.project ? <span className="sa-mono" translate="no">{gitlab.project}</span> : t('empty')],
-      [pt(t, 'st.gitlabBase', { host: deployHost }), gitlab.baseUrl ? <ExternalLink href={gitlab.baseUrl} icon={null}>{gitlab.baseUrl}</ExternalLink> : t('empty')],
-      [pt(t, 'st.branches'), `${config.baseBranch ?? t('empty')} → ${gitlab.targetBranch ?? t('empty')}`],
-      [pt(t, 'st.uatUrl'), gitlab.uatUrl ? <ExternalLink href={gitlab.uatUrl} icon={null}>{gitlab.uatUrl}</ExternalLink> : t('empty')],
-      [pt(t, 'st.healthUrl'), gitlab.healthUrl ? <ExternalLink href={gitlab.healthUrl} icon={null}>{gitlab.healthUrl}</ExternalLink> : t('empty')],
-      [pt(t, 'st.gitlabToken', { host: deployHost }), gitlab.tokenConfigured ? pt(t, 'st.tokenOk') : pt(t, 'st.tokenMissing')],
       [pt(t, 'st.worktreeRoot'), config.worktreeRoot ? <span className="sa-mono" translate="no">{config.worktreeRoot}</span> : t('empty')],
     ]
     return <div className="sa-settings-group">
@@ -1867,34 +1849,17 @@ export function LiveSettingsPage({ route }) {
       <Hint>{pt(t, 'st.deployHint')}</Hint>
       {config.error ? <p className="sa-banner sa-danger">{`${pt(t, 'st.configError')}${config.error}`}</p> : null}
       <KeyValues rows={deployRows} />
-      <Hint>{pt(t, 'st.reloadHint')}</Hint>
-      <div className="sa-actions">
-        {reloadButton()}
-        <Button variant="outline" size="sm" icon={<Icon name="external" size={14} />} disabled={uatState.busy}
-          aria-busy={uatState.busy ? 'true' : undefined} onClick={() => { void runUat() }}>
-          {uatState.busy ? pt(t, 'st.probing') : pt(t, 'st.checkUat')}
-        </Button>
-      </div>
-      <SettingsStatusLine view={reloadView} busy={reloadState.busy} />
-      <SettingsStatusLine view={uatState.view} busy={uatState.busy} />
     </div>
   }
 
-  /** Rewrite the whole group→repository map (host validates consistency) and refresh the model. */
-  const applyBindings = async (watched, titles, bindings) => {
-    setBindingBusy(true)
-    try {
-      await actions.patchSettings({ 'octo.watchChatIds': watched, 'octo.chatTitles': titles, 'octo.chatRepos': bindings })
-      await reload()
-      notify(pt(t, 'st.bindingSaved'))
-      return true
-    } catch (failure) {
-      notify(errorText(failure))
-      return false
-    } finally { setBindingBusy(false) }
+  /** Stage a binding change in the source draft; the group's 保存 (with its risk confirmation) writes it. */
+  const editBindings = (watched, titles, bindings) => {
+    editField('source', 'octo.watchChatIds', watched, octo.watchChatIds ?? [])
+    editField('source', 'octo.chatTitles', titles, octo.chatTitles ?? {})
+    editField('source', 'octo.chatRepos', bindings, octo.chatRepos ?? {})
   }
   const closeBindingForm = () => { setBindingForm({ chatId: '', title: '', repoId: '' }); setBindingError(undefined) }
-  const onAddBinding = async () => {
+  const onAddBinding = () => {
     const chatId = bindingForm.chatId.trim()
     if (!chatId) {
       // The missing chat id is marked on the field (and announced there), not only in a transient toast.
@@ -1907,7 +1872,8 @@ export function LiveSettingsPage({ route }) {
     const watched = [...new Set([...(octo.watchChatIds ?? []), chatId])]
     const titles = { ...(octo.chatTitles ?? {}), ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
     const bindings = { ...(octo.chatRepos ?? {}), [chatId]: repoId }
-    if (await applyBindings(watched, titles, bindings)) closeBindingForm()
+    editBindings(watched, titles, bindings)
+    closeBindingForm()
   }
   const dirtyOf = group => Boolean(drafts[group] && Object.keys(drafts[group]).length)
   const dirtyGroups = new Set(SETTINGS_GROUPS.map(group => group.id).filter(dirtyOf))
@@ -2074,30 +2040,6 @@ export function LiveSettingsPage({ route }) {
     }
   }
 
-  const runProbe = async () => {
-    if (probe.busy) return
-    setProbe({ busy: true })
-    try {
-      const result = await actions.poll({ dryRun: true })
-      await reload()
-      setProbe({ busy: false, at: new Date().toISOString(), view: settingsProbeView(t, result) })
-    } catch (failure) {
-      setProbe({ busy: false, view: { state: 'error', text: pt(t, 'st.probeFailed'), raw: errorText(failure) } })
-    }
-  }
-
-  const runUat = async () => {
-    if (uatState.busy) return
-    setUatState({ busy: true })
-    try {
-      // Ask for the default repository explicitly: the host's "any repository with a UAT url" fallback made this line
-      // the answer for a card that was never checked.
-      const uat = await actions.checkUat(defaultRepoId)
-      setUatState({ busy: false, view: settingsUatView(t, uat) })
-    } catch (failure) {
-      setUatState({ busy: false, view: { state: 'error', text: pt(t, 'st.uatFail'), raw: errorText(failure) } })
-    }
-  }
 
   const reloadView = reloadState.error
     ? { state: 'error', text: pt(t, 'st.reloadFailed'), raw: errorText(reloadState.error) }
@@ -2261,8 +2203,13 @@ export function LiveSettingsPage({ route }) {
     const enabled = 'enabled' in draft ? draft.enabled : config.enabled === true
     const allowAnyHuman = 'octo.allowAnyHuman' in draft ? draft['octo.allowAnyHuman'] : octo.allowAnyHuman === true
     const pollSeconds = 'pollSeconds' in draft ? draft.pollSeconds : String(config.pollSeconds ?? '')
-    const chatIds = Array.isArray(octo.watchChatIds) ? octo.watchChatIds : []
-    const chatNames = chatIds.map(id => octo.chatTitles?.[id] ?? id)
+    // Bindings are a source-group draft like every other setting here: writing them straight to live.json bypassed
+    // both the dirty indicator and the high-risk confirmation in the save bar (review M-4).
+    const chatIds = Array.isArray(draft['octo.watchChatIds'] ?? octo.watchChatIds)
+      ? (draft['octo.watchChatIds'] ?? octo.watchChatIds) : []
+    const chatTitles = draft['octo.chatTitles'] ?? octo.chatTitles ?? {}
+    const chatRepos = draft['octo.chatRepos'] ?? octo.chatRepos ?? {}
+    const chatNames = chatIds.map(id => chatTitles[id] ?? id)
     const senders = senderValuesOf(draft)
     const cursors = engine.channelCursors ?? {}
     const cursorRows = Object.entries(cursors).map(([chat, seq]) => `${octo.chatTitles?.[chat] ?? chat} · ${seq}`)
@@ -2297,24 +2244,14 @@ export function LiveSettingsPage({ route }) {
       <KeyValues rows={rows} />
       {!allowAnyHuman && !senders.length ? <p className="sa-banner">{pt(t, 'st.noSenders')}</p> : null}
       {chatNames.length ? null : <Hint>{pt(t, 'st.noChats')}</Hint>}
-      <div className="sa-actions">
-        <Button variant="outline" size="sm" icon={<Icon name="message" size={14} />} disabled={probe.busy}
-          aria-busy={probe.busy ? 'true' : undefined} onClick={() => { void runProbe() }}>
-          {probe.busy ? pt(t, 'st.probing') : pt(t, 'actions.checkNow')}
-        </Button>
-        {reloadButton()}
-      </div>
-      <Hint>{pt(t, 'st.probeHint')}</Hint>
-      <SettingsStatusLine view={probe.view} busy={probe.busy}
-        note={probe.at ? pt(t, 'st.probeAt', { time: hhmmss(probe.at, t.lang) }) : undefined} />
-      <SettingsStatusLine view={reloadView} busy={reloadState.busy} />
       <div className="sa-field" id="sa-settings-bindings" tabIndex={-1}
         style={{ scrollMarginTop: 'calc(var(--sa-sticky-top) + var(--sa-sp-16))' }}>
         <span className="sa-field-head">{pt(t, 'st.bindings')}</span>
         <Hint>{pt(t, 'st.bindingsHint')}</Hint>
+        <Hint>{pt(t, 'st.bindingsSaveHint')}</Hint>
         <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-4)' }}>
           <Button variant="outline" size="sm" icon={<Icon name="message" size={14} />}
-            disabled={octoGroups.busy || bindingBusy} onClick={() => { void loadOctoGroups() }}>
+            disabled={octoGroups.busy} onClick={() => { void loadOctoGroups() }}>
             {octoGroups.busy ? pt(t, 'st.groupsLoading') : pt(t, 'st.groupsPick')}
           </Button>
           {octoGroups.open
@@ -2336,18 +2273,16 @@ export function LiveSettingsPage({ route }) {
               <div className="sa-actions" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
                 <div style={{ flex: '0 1 240px', minWidth: 0 }}>
                   <Select label={pt(t, 'st.bindingRepo')} value={octo.chatRepos?.[chatId] ?? defaultRepoId}
-                    options={repoOptions} disabled={bindingBusy}
-                    onChange={next => { void applyBindings(chatIds, octo.chatTitles ?? {}, { ...(octo.chatRepos ?? {}), [chatId]: next }) }} />
+                    options={repoOptions}
+                    onChange={next => editBindings(chatIds, chatTitles, { ...chatRepos, [chatId]: next })} />
                 </div>
                 <span style={{ flex: '0 0 auto' }}>
                   <ConfirmButton label={pt(t, 'st.bindingRemove')} title={pt(t, 'st.bindingRemoveTitle')}
                     message={pt(t, 'st.bindingRemoveMessage')} confirmLabel={pt(t, 'st.bindingRemoveConfirm')}
                     onConfirm={async () => {
-                      // Removing a binding changes what the engine watches: confirm first, never delete on a stray click.
-                      if (bindingBusy) return
-                      const titles = settingsOmit(octo.chatTitles ?? {}, chatId)
-                      const bindings = settingsOmit(octo.chatRepos ?? {}, chatId)
-                      await applyBindings(chatIds.filter(item => item !== chatId), titles, bindings)
+                      // Removing a binding changes what the engine watches; the draft keeps it visible until 保存.
+                      editBindings(chatIds.filter(item => item !== chatId), settingsOmit(chatTitles, chatId),
+                        settingsOmit(chatRepos, chatId))
                     }} />
                 </span>
               </div>
@@ -2360,15 +2295,13 @@ export function LiveSettingsPage({ route }) {
             aria-label={pt(t, 'st.chatIdPlaceholder')}
             aria-invalid={bindingError ? 'true' : undefined}
             aria-describedby={bindingError ? 'sa-field-binding-chat-error' : undefined}
-            disabled={bindingBusy}
             onChange={event => { setBindingError(undefined); setBindingForm(previous => ({ ...previous, chatId: event.target.value })) }} />
           <Input value={bindingForm.title} placeholder={pt(t, 'st.bindingTitle')} aria-label={pt(t, 'st.bindingTitle')}
-            disabled={bindingBusy} onChange={event => setBindingForm(previous => ({ ...previous, title: event.target.value }))} />
+            onChange={event => setBindingForm(previous => ({ ...previous, title: event.target.value }))} />
           <Select label={pt(t, 'st.bindingRepo')} value={bindingForm.repoId || defaultRepoId} options={repoOptions}
-            disabled={bindingBusy} onChange={next => setBindingForm(previous => ({ ...previous, repoId: next }))} />
+            onChange={next => setBindingForm(previous => ({ ...previous, repoId: next }))} />
           <Button variant="outline" size="sm" icon={<Icon name="plus" size={14} />}
-            aria-busy={bindingBusy ? 'true' : undefined}
-            disabled={bindingBusy || !bindingForm.chatId.trim()} onClick={() => { void onAddBinding() }}>{pt(t, 'st.bindingAdd')}</Button>
+            disabled={!bindingForm.chatId.trim()} onClick={() => onAddBinding()}>{pt(t, 'st.bindingAdd')}</Button>
         </div>
         {bindingError
           ? <p className="sa-error" id="sa-field-binding-chat-error" role="alert">{bindingError}</p>
@@ -2456,9 +2389,7 @@ export function LiveSettingsPage({ route }) {
         <p className="sa-hint" id="sa-field-expire-hint">{pt(t, 'st.reviewExpireHint')}</p>
         {fieldErrorMessage('review', 'expire')}
       </div>
-      <KeyValues rows={[
-        [pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 }), ''],
-      ]} />
+      <Hint>{pt(t, 'st.reviewSummary', { pending: counts.pending ?? 0, answered: counts.answered ?? 0 })}</Hint>
       <Hint>{pt(t, 'st.reviewExample')}</Hint>
       {saveBarFor('review')}
     </div>
@@ -2535,9 +2466,6 @@ export function LiveSettingsPage({ route }) {
         {fieldErrorMessage('run', 'repair')}
       </div>
       <KeyValues rows={rows} />
-      {/* The manual Ticket form is the same component the Execution page opens in its dialog (live-ui.js): one set
-          of fields, one write path, one success/error treatment. The inline form resets itself after each creation. */}
-      <ManualTicketForm onDone={() => { void reload() }} />
       {saveBarFor('run')}
     </div>
   }
@@ -2793,6 +2721,12 @@ export function LiveSettingsPage({ route }) {
 
   // AC-10: show what saving will change before the request leaves the panel. Compare against the loaded repository,
   // not the draft, so a no-op save is visibly a no-op and token-only fields never enter the preview.
+  // One text input bound to one repoEdit field; the add modal keeps its own form state, so this stays local.
+  const repoEditField = (field, labelKey) => <label className="sa-field">
+    <span className="sa-field-head">{pt(t, labelKey)}</span>
+    <Input className="sa-input-full" value={repoEdit?.[field] ?? ''} aria-label={pt(t, labelKey)}
+      onChange={event => setRepoEdit(previous => ({ ...previous, [field]: event.target.value }))} />
+  </label>
   const repoEditRows = (() => {
     if (!repoEdit) return []
     const current = repos.find(item => item.id === repoEdit.id) ?? {}
@@ -2801,6 +2735,18 @@ export function LiveSettingsPage({ route }) {
     if (repoEdit.name !== nameNow) rows.push([pt(t, 'repos.field.name'), nameNow, repoEdit.name])
     const repoNow = current.repo ?? ''
     if (repoEdit.repo !== repoNow) rows.push([pt(t, 'repos.field.repo'), repoNow, repoEdit.repo])
+    // Every field the editor owns is diffed, not only gates: a silently changed target branch is a delivery risk.
+    const changed = [
+      ['repos.field.baseBranch', current.baseBranch, repoEdit.baseBranch],
+      ['repos.field.targetBranch', current.gitlab?.targetBranch, repoEdit.targetBranch],
+      ['repos.field.baseUrl', current.gitlab?.baseUrl, repoEdit.baseUrl],
+      ['repos.field.project', current.gitlab?.project, repoEdit.project],
+      ['repos.field.uatUrl', current.gitlab?.uatUrl, repoEdit.uatUrl],
+      ['repos.field.healthUrl', current.gitlab?.healthUrl, repoEdit.healthUrl],
+      ['repos.field.verifyMode', current.verifyMode, repoEdit.verifyMode],
+      ['repos.field.acceptance', current.acceptance, repoEdit.acceptance],
+    ]
+    for (const [key, before, after] of changed) if (String(before ?? '') !== String(after ?? '')) rows.push([pt(t, key), before ?? '', after])
     // Field-level gate diff: changing a command, cwd, timeout or failure policy must be visible, not hidden behind an
     // unchanged gate count (review P2 AC-10).
     const gatesBefore = Array.isArray(current.gates) ? current.gates : []
@@ -2833,10 +2779,12 @@ export function LiveSettingsPage({ route }) {
     <div className="sa-settings-intro" ref={introRef}>
       <Hint>{pt(t, 'st.pageIntro')}</Hint>
       <div className="sa-actions">
+        {reloadButton()}
         <Button variant="ghost" size="sm" icon={<Icon name="history" size={14} />}
           onClick={() => { void openHistory() }}>{pt(t, 'st.history')}</Button>
         {config.file ? <CopyButton value={config.file} label={pt(t, 'st.copyConfigPath')} /> : null}
       </div>
+      <SettingsStatusLine view={reloadView} busy={reloadState.busy} />
     </div>
     <div className="sa-settings">
       <nav className="sa-settings-nav" aria-label={pt(t, 'st.navLabel')}>
@@ -2906,6 +2854,26 @@ export function LiveSettingsPage({ route }) {
           <span className="sa-field-head">{pt(t, 'repos.field.repo')}</span>
           <Input className="sa-input-full" value={repoEdit.repo} aria-label={pt(t, 'repos.field.repo')}
             onChange={event => setRepoEdit(previous => ({ ...previous, repo: event.target.value }))} />
+        </label>
+        {repoEditField('baseBranch', 'repos.field.baseBranch')}
+        {repoEditField('targetBranch', 'repos.field.targetBranch')}
+        {repoEditField('baseUrl', 'repos.field.baseUrl')}
+        {repoEditField('project', 'repos.field.project')}
+        {repoEditField('uatUrl', 'repos.field.uatUrl')}
+        {repoEditField('healthUrl', 'repos.field.healthUrl')}
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.verifyMode')}</span>
+          <Select label={pt(t, 'repos.field.verifyMode')} value={repoEdit.verifyMode}
+            options={[{ value: 'manual', label: pt(t, 'repo.verifyModeManual') },
+              { value: 'web-uat', label: pt(t, 'repo.verifyModeWebUat') }]}
+            onChange={value => setRepoEdit(previous => ({ ...previous, verifyMode: value }))} />
+        </label>
+        <label className="sa-field">
+          <span className="sa-field-head">{pt(t, 'repos.field.acceptance')}</span>
+          <Select label={pt(t, 'repos.field.acceptance')} value={repoEdit.acceptance}
+            options={[{ value: 'merged', label: pt(t, 'repo.acceptanceMerged') },
+              { value: 'deployed', label: pt(t, 'repo.acceptanceDeployed') }]}
+            onChange={value => setRepoEdit(previous => ({ ...previous, acceptance: value }))} />
         </label>
         <div className="sa-field" style={{ gridColumn: '1 / -1' }}>
           <span className="sa-field-head">{pt(t, 'repos.gates')}</span>
