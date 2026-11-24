@@ -18,6 +18,7 @@
 
 - 新增 `lib/live/worker-terminal.js` + Host 路由 `POST /superagent/api/engine/workers/terminal`：为当前 GUI 会话开一个侧边终端（worktree 目录、120x32），输入 `claude --resume <id>`；没有可续接的 id 时开一个新的 `claude`。首个按键即由人接管，和自己在终端里开一样。
 - 会话标识按 `/^[A-Za-z0-9_-]{1,128}$/` 校验后才拼进 shell 命令行；缺会话 / 会话未运行 / 无终端服务 / 超出终端上限都返回带原因的 4xx，而不是 500。
+- `cliInvocation` 只在会话 id 是 UUID 形状时才加 `--resume`：`claude --resume <value>` 会把未知值当**会话标题**去匹配，而流里没拿到 `session_id` 时会退化成 `worker-xxxxxxxx` 这种合成 id——以前理论上可能续到别人的会话，现在直接不加该参数。
 - 客户端：`PanelProvider` 新增 `currentSessionId`（取自 `sidebarRight.mounted`，点击时读取），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
 
 ### 验证
