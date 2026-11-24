@@ -78,6 +78,9 @@ Object.assign(PAGE_TEXT, {
   'ex.stageFailed': ['失败', 'Failed'],
   'ex.stageDone': ['已结束', 'Ended'],
   'ex.stageDismissed': ['已忽略', 'Dismissed'],
+  // The chips row also shows it as a peer of 已结束, which read as three competing totals (全部 71 / 已结束 71 / 已忽略 8).
+  // The chip says it is a slice; the section title stays plain (ui review A-08).
+  'ex.filterDismissed': ['其中已忽略', 'of which dismissed'],
   'ex.dismissedNote': ['失败后由人放弃的工单，不会再执行；点开可看当时的失败原因。',
     'Tickets a person dropped after a failed run. They never run again; open one for the failure that preceded it.'],
   'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
@@ -195,7 +198,7 @@ export function ExecutionQueuePage({ route }) {
   const stageOptions = EXEC_STAGES.map(group => ({
     value: group,
     label: h(Fragment, null,
-      h('span', null, pt(t, group === 'all' ? 'ex.filterAll' : EXEC_STAGE_LABEL[group])),
+      h('span', null, pt(t, group === 'all' ? 'ex.filterAll' : group === 'dismissed' ? 'ex.filterDismissed' : EXEC_STAGE_LABEL[group])),
       h('span', { className: 'sa-chip-count', 'data-zero': countOf(group) === 0 ? 'true' : undefined }, countOf(group))),
   }))
   // Filtering is client-side: one fetch already carries every stage, so switching a pill never refetches.
@@ -208,7 +211,9 @@ export function ExecutionQueuePage({ route }) {
   const doneAllowed = execView.showDone || stage === 'done' || stage === 'dismissed'
   const inStage = doneAllowed ? inStageBase : inStageBase.filter(ticket => ticketStatus(ticket).group !== 'done')
   const doneTickets = inStageBase.filter(ticket => ticketStatus(ticket).group === 'done')
-  const recentDone = doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
+  // Only while the ended group is allowed: with 显示已结束 off the queue still rendered the newest 10 finished rows,
+  // because this slice was taken from `inStageBase` while `inStage` had already dropped them (review P2).
+  const recentDone = !doneAllowed ? [] : doneExpanded ? doneTickets : doneTickets.slice(0, EXEC_DONE_RECENT)
   const shownTickets = doneTickets.length > recentDone.length
     ? [...inStage.filter(ticket => ticketStatus(ticket).group !== 'done'), ...recentDone]
     : inStage
@@ -222,7 +227,7 @@ export function ExecutionQueuePage({ route }) {
     h('span', null, pt(t, 'ex.colTicket')),
     h('span', null, pt(t, 'ex.colEvidence')),
     h('span', null, pt(t, 'ex.colActions')))
-  const doneOverflow = doneTickets.length > EXEC_DONE_RECENT
+  const doneOverflow = doneAllowed && doneTickets.length > EXEC_DONE_RECENT
   const emptyState = h(Section, { title: pt(t, 'ex.tickets'), count: 0 },
     h(EmptyState, { icon: 'inbox', title: pt(t, 'ex.emptyTitle'), hint: pt(t, 'ex.emptyHint'),
       action: h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
@@ -287,22 +292,28 @@ export function ExecutionQueuePage({ route }) {
     : null
   const queueBody = stage === 'dismissed'
     ? h('div', { className: 'sa-exec-queue' },
+      queueHeader,
       h(Section, { title: pt(t, 'ex.stageDismissed'), count: inStage.length,
         badge: h('span', { className: 'sa-hint' }, pt(t, 'ex.dismissedNote')) },
-        queueHeader,
         h(TicketList, { tickets: inStage, page: 'execution', actions: model.actions, reload: reloadBoth })))
     : execView.groupBy === 'repo'
     ? h('div', { className: 'sa-exec-queue' },
-      repoGroupsOf(inStage).map((group, index) => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
-        index === 0 ? queueHeader : null,
+      queueHeader,
+      // Grouping by repository batches the same rows the stage view renders, so it obeys the same "recent 10" cap on
+      // the ended history: before this, one repo with 40 finished Tickets pushed the whole list into a wall of rows
+      // while the stage view offered 查看全部/收起 (user report 2026-11-23).
+      repoGroupsOf(shownTickets).map(group => h(Section, { key: group.key, title: group.name, count: group.tickets.length },
         h(TicketList, { tickets: group.tickets, page: 'execution', actions: model.actions, reload: reloadBoth }))))
-    : h(Fragment, null,
-      h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
-        className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader }),
-      doneOverflow ? h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', 'aria-expanded': doneExpanded,
-          onClick: () => setDoneExpanded(value => !value) },
-          pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length }))) : null)
+    : h(TicketGroups, { tickets: shownTickets, page: 'execution', actions: model.actions, reload: reloadBoth,
+      className: 'sa-exec-queue', groupNotes, groupCounts, header: queueHeader })
+  // The cap and its one reveal button belong to the list, not to a grouping branch: both groupings show the newest 10
+  // finished Tickets and both offer the rest behind the same button.
+  const doneReveal = doneOverflow && stage !== 'dismissed'
+    ? h('div', { className: 'sa-actions' },
+      h(Button, { variant: 'outline', size: 'sm', 'aria-expanded': doneExpanded,
+        onClick: () => setDoneExpanded(value => !value) },
+        pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length })))
+    : null
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
     title: paused ? pt(t, 'ex.resumeTitle') : pt(t, 'ex.pauseTitle'),
@@ -374,6 +385,7 @@ export function ExecutionQueuePage({ route }) {
           : !inStage.length ? stageEmptyState
             : h(Fragment, null,
               queueBody,
+              doneReveal,
               !execView.showDone && stage !== 'done' && doneTickets.length
                 ? h('div', { className: 'sa-actions' },
                   h(Button, { variant: 'outline', size: 'sm', onClick: () => updateView({ showDone: true }) },

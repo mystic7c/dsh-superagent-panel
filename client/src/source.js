@@ -4,7 +4,7 @@
    keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
    no request of its own. */
 
-import { API, Icon, hostName, hostOfUrl, hhmm, scrollPanelTo, shortId } from "./util.js"
+import { API, Icon, clampPageOffset, hostName, hostOfUrl, hhmm, scrollPanelTo, shortId } from "./util.js"
 import { errorText, localized, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -436,15 +436,20 @@ export function LiveSourcePage({ route }) {
   const [sigQuery, setSigQuery] = useState(srcInitial.current.q)
   const [sigQ, setSigQ] = useState(srcInitial.current.q)
   const [sigStatus, setSigStatus] = useState(srcInitial.current.status)
+  // `sigRepo`/`sigReason` are the applied filters (request + URL); the inputs keep their own state so the 300 ms
+  // debounce covers every text field. Re-setting the applied value to itself only debounced `sigQuery`, so typing in
+  // either text field fired one request per keystroke (review P3).
   const [sigRepo, setSigRepo] = useState(srcInitial.current.repo)
   const [sigReason, setSigReason] = useState(srcInitial.current.reason)
+  const [sigRepoInput, setSigRepoInput] = useState(srcInitial.current.repo)
+  const [sigReasonInput, setSigReasonInput] = useState(srcInitial.current.reason)
   const [sigFrom, setSigFrom] = useState(srcInitial.current.from)
   const [sigTo, setSigTo] = useState(srcInitial.current.to)
   const [sigOffset, setSigOffset] = useState(srcInitial.current.offset)
   useEffect(() => {
-    const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepo); setSigReason(sigReason) }, 300)
+    const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepoInput); setSigReason(sigReasonInput) }, 300)
     return () => clearTimeout(timer)
-  }, [sigQuery, sigRepo, sigReason])
+  }, [sigQuery, sigRepoInput, sigReasonInput])
   // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
   const firstSignalFilterRun = useRef(true)
   useEffect(() => {
@@ -474,7 +479,8 @@ export function LiveSourcePage({ route }) {
         const status = params.get('srcStatus') || 'all'
         setSigQuery(params.get('srcQ') || ''); setSigQ(params.get('srcQ') || '')
         setSigStatus(Object.hasOwn(SIGNAL_SHAPE, status) ? status : 'all')
-        setSigRepo(params.get('srcRepo') || ''); setSigReason(params.get('srcReason') || '')
+        setSigRepo(params.get('srcRepo') || ''); setSigRepoInput(params.get('srcRepo') || '')
+        setSigReason(params.get('srcReason') || ''); setSigReasonInput(params.get('srcReason') || '')
         setSigFrom(params.get('srcFrom') || ''); setSigTo(params.get('srcTo') || '')
         const offset = Number(params.get('srcOffset') ?? 0)
         setSigOffset(Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0)
@@ -509,6 +515,15 @@ export function LiveSourcePage({ route }) {
     scrollPanelTo(node, { align: 'center' })
   }, [focusId, focus.data, signals.data])
   useEffect(() => { if (signals.error?.missing) setSignalsOff(true) }, [signals.error])
+  // An offset from a link (or a shrinking result set) can point past the end: the log then rendered "no signals yet"
+  // with the pager unmounted, so there was no way back to a real page (review P2).
+  const signalTotal = Number.isFinite(Number(signals.data?.total))
+    ? Number(signals.data.total) : (signals.data ? (signals.data.items ?? []).length : undefined)
+  useEffect(() => {
+    if (signalTotal === undefined) return
+    const lastPage = clampPageOffset(sigOffset, signalTotal, 20)
+    if (lastPage !== undefined) setSigOffset(lastPage)
+  }, [signalTotal, sigOffset])
   const label = useAction(async (signal, labelId) => {
     await actions.labelSignal(signal.id, labelId)
     notify(pt(t, 'src.labelSaved', { label: signalLabelText(t, labelId) }))
@@ -680,7 +695,7 @@ export function LiveSourcePage({ route }) {
       ? null
       : h('div', { 'aria-busy': signals.loading ? 'true' : undefined },
         h(Section, { title: pt(t, 'src.signals'),
-          count: signals.data ? (Number.isFinite(signals.data.total) ? signals.data.total : signalItems.length) : undefined,
+          count: signalTotal,
           badge: signals.data && labelTotal > 0
             ? h('span', { className: 'sa-hint' }, pt(t, 'src.labelsSummary', {
               correct: Number(labelCounts.correct) || 0, falseWake: Number(labelCounts.false_wake) || 0,
@@ -691,10 +706,10 @@ export function LiveSourcePage({ route }) {
           h('div', { className: 'sa-filters' },
             h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
               onChange: event => setSigQuery(event?.target?.value ?? '') }),
-            h(Input, { value: sigRepo, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
-              onChange: event => setSigRepo(event?.target?.value ?? '') }),
-            h(Input, { value: sigReason, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
-              onChange: event => setSigReason(event?.target?.value ?? '') }),
+            h(Input, { value: sigRepoInput, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
+              onChange: event => setSigRepoInput(event?.target?.value ?? '') }),
+            h(Input, { value: sigReasonInput, placeholder: pt(t, 'src.signalReasonPlaceholder'), label: pt(t, 'src.signalReasonFilter'),
+              onChange: event => setSigReasonInput(event?.target?.value ?? '') }),
             h(Input, { type: 'date', value: sigFrom, label: pt(t, 'src.signalFrom'),
               onChange: event => setSigFrom(event?.target?.value ?? '') }),
             h(Input, { type: 'date', value: sigTo, label: pt(t, 'src.signalTo'),
@@ -714,9 +729,9 @@ export function LiveSourcePage({ route }) {
                 h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset <= 0,
                   onClick: () => setSigOffset(Math.max(0, sigOffset - 20)) }, pt(t, 'src.prev')),
                 h('span', { className: 'sa-hint', role: 'status' }, pt(t, 'src.signalPageInfo', {
-                  from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, Number(signals.data.total) || signalItems.length),
-                  total: Number(signals.data.total) || signalItems.length })),
-                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (Number(signals.data.total) || signalItems.length),
+                  from: sigOffset + 1, to: Math.min(sigOffset + signalItems.length, signalTotal ?? signalItems.length),
+                  total: signalTotal ?? signalItems.length })),
+                h(Button, { variant: 'ghost', size: 'sm', disabled: sigOffset + signalItems.length >= (signalTotal ?? signalItems.length),
                   onClick: () => setSigOffset(sigOffset + 20) }, pt(t, 'src.next'))))
               : h(Hint, null, pt(t, 'src.signalsEmpty')))))
 }

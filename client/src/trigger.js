@@ -4,7 +4,7 @@
    ThreadDetail — facts → evaluation (the latest decision lives there now) plus the message timeline — so this page only
    owns filtering, selection and the pane switch. */
 
-import { API, Icon } from "./util.js"
+import { API, Icon, clampPageOffset } from "./util.js"
 import { when } from "./i18n.js"
 import { Button, IconButton, Input, SegmentedControl, StatusText } from "./controls.js"
 import { same, usePanel, usePanelData } from "./api.js"
@@ -18,7 +18,7 @@ Object.assign(PAGE_TEXT, {
   'trg.title': ['线程', 'Threads'],
   'trg.filter': ['线程筛选', 'Thread filter'],
   'trg.filter.subscribed': ['已订阅', 'Subscribed'],
-  'trg.filter.recent': ['24h 新触发', 'New in 24h'],
+  'trg.filter.recent': ['24 小时新触发', 'New in the last 24 hours'],
   'trg.filter.all': ['全部', 'All'],
   'trg.filterCount': ['{count} 条', '{count}'],
   'trg.refresh': ['刷新线程', 'Refresh threads'],
@@ -291,15 +291,20 @@ export function LiveTriggerPage({ route }) {
   const [filter, setFilter] = useState(initial.current.filter)
   const [query, setQuery] = useState(initial.current.q)
   const [q, setQ] = useState(initial.current.q)
+  // `repo`/`reason` are the applied filters (request + URL); the inputs keep their own state so the 300 ms debounce
+  // covers every text field. Re-setting the applied value to itself only debounced `query`, so typing in either text
+  // field fired one request per keystroke (review P3).
   const [repo, setRepo] = useState(initial.current.repo)
   const [reason, setReason] = useState(initial.current.reason)
+  const [repoInput, setRepoInput] = useState(initial.current.repo)
+  const [reasonInput, setReasonInput] = useState(initial.current.reason)
   const [from, setFrom] = useState(initial.current.from)
   const [to, setTo] = useState(initial.current.to)
   const [offset, setOffset] = useState(initial.current.offset)
   useEffect(() => {
-    const timer = setTimeout(() => { setQ(query); setRepo(repo); setReason(reason) }, 300)
+    const timer = setTimeout(() => { setQ(query); setRepo(repoInput); setReason(reasonInput) }, 300)
     return () => clearTimeout(timer)
-  }, [query, repo, reason])
+  }, [query, repoInput, reasonInput])
   // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
   const firstThreadFilterRun = useRef(true)
   useEffect(() => {
@@ -328,7 +333,8 @@ export function LiveTriggerPage({ route }) {
     const restore = () => {
       const next = trgUrlState()
       setFilter(next.filter)
-      setQuery(next.q); setQ(next.q); setRepo(next.repo); setReason(next.reason)
+      setQuery(next.q); setQ(next.q); setRepo(next.repo); setRepoInput(next.repo)
+      setReason(next.reason); setReasonInput(next.reason)
       setFrom(next.from); setTo(next.to); setOffset(next.offset)
     }
     window.addEventListener('popstate', restore)
@@ -359,13 +365,22 @@ export function LiveTriggerPage({ route }) {
   const routeId = route?.id
   const items = Array.isArray(data?.items) ? data.items : []
   const counts = data?.counts ?? {}
+  // A host that reports the total as a string (`"51"`) used to disable 「下一页」 forever and print `51–50 / 共 50 条`.
+  const total = Number.isFinite(Number(data?.total)) ? Number(data.total) : items.length
+  // An offset from a pasted link (or a shrinking result set) can point past the end. The old page then showed
+  // "nothing in this filter" with the pager unmounted, so there was no way back to a real page (review P3).
+  useEffect(() => {
+    const lastPage = clampPageOffset(offset, total, TRG_PAGE_SIZE)
+    if (data === undefined || lastPage === undefined) return
+    setOffset(lastPage)
+  }, [data, total, offset])
   const selected = routeId ?? items[0]?.key
   // One Tab stop for the whole list: the selected row (or the first one) is the tabbable row; ↑/↓/Home/End move
   // focus between rows so 50 rows do not add 50 tab stops (P2).
   const tabbableKey = items.some(row => row.key === selected) ? selected : items[0]?.key
   // While the 300ms debounce catches up the list still shows the previous result; expose that to assistive tech
   // instead of silently swapping rows under it (P3).
-  const filtering = query !== q
+  const filtering = query !== q || repoInput !== repo || reasonInput !== reason
 
   const chooseFilter = (value) => {
     if (value === filter) return
@@ -392,7 +407,7 @@ export function LiveTriggerPage({ route }) {
   const options = THREAD_FILTERS.map(value => ({ value, label: pt(t, `trg.filter.${value}`),
     title: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }),
     description: pt(t, 'trg.filterCount', { count: counts[value] ?? 0 }) }))
-  const total = Number.isFinite(data.total) ? data.total : items.length
+  // A host that reports the total as a string (`"51"`) used to disable 「下一页」 forever and print `51–50 / 共 50 条`.
   const pageFrom = items.length ? offset + 1 : 0
   const pageTo = Math.min(offset + items.length, total)
   const list = h('div', { className: 'sa-pane sa-pane-aside' },
@@ -403,10 +418,10 @@ export function LiveTriggerPage({ route }) {
         className: 'sa-segmented-chips' }),
       h(Input, { value: query, placeholder: pt(t, 'trg.searchPlaceholder'), label: pt(t, 'trg.search'),
         onChange: event => setQuery(event?.target?.value ?? '') }),
-      h(Input, { value: repo, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
-        onChange: event => setRepo(event?.target?.value ?? '') }),
-      h(Input, { value: reason, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
-        onChange: event => setReason(event?.target?.value ?? '') }),
+      h(Input, { value: repoInput, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
+        onChange: event => setRepoInput(event?.target?.value ?? '') }),
+      h(Input, { value: reasonInput, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
+        onChange: event => setReasonInput(event?.target?.value ?? '') }),
       h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
         onChange: event => setFrom(event?.target?.value ?? '') }),
       h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
@@ -423,8 +438,8 @@ export function LiveTriggerPage({ route }) {
             onOpen: () => openThread(row.key), octoConfig })))
           : h(EmptyState, { icon: 'filter', title: pt(t, 'trg.noneInFilter'),
             action: h(Button, { variant: 'outline', size: 'sm', onClick: () => {
-              setFilter(THREAD_FILTERS[0]); setQuery(''); setQ(''); setRepo(''); setReason('')
-              setFrom(''); setTo(''); setOffset(0)
+              setFilter(THREAD_FILTERS[0]); setQuery(''); setQ(''); setRepo(''); setRepoInput('')
+              setReason(''); setReasonInput(''); setFrom(''); setTo(''); setOffset(0)
             } }, pt(t, 'trg.clearFilter')) })),
       items.length
         ? h('div', { className: 'sa-pagination' },

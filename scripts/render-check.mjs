@@ -1475,9 +1475,11 @@ check('stage filter keeps the counts for every stage', ['排队', '执行中', '
 check('execution ledger has a column header', ['工单', '证据', '操作'].every(label => (rootElement.querySelector('.sa-queue-head')?.textContent ?? '').includes(label)),
   rootElement.querySelector('.sa-queue-head')?.textContent ?? '')
 const queueHead = rootElement.querySelector('.sa-queue-head')
-const queueSectionTitle = queueHead?.closest('.sa-section')?.querySelector('.sa-section-title')
-check('execution column header sits under its group title',
-  Boolean(queueHead) && queueHead.previousElementSibling === queueSectionTitle,
+// The header labels the whole ledger, so it leads it: it used to sit inside the first group (and under that group's
+// title), where it read as a caption for 已结束 alone (review fix 1.1.8).
+check('execution column header leads the ledger, above the group titles',
+  Boolean(queueHead) && !queueHead.closest('.sa-section')
+    && queueHead.nextElementSibling?.classList.contains('sa-section'),
   queueHead?.parentElement?.className ?? 'no header')
 const loadLegend = rootElement.querySelector('.sa-loadbar-meta')
 check('executor load bar carries the stage legend', Boolean(loadLegend) &&
@@ -1553,7 +1555,7 @@ check('a finished dry run makes 发布 MR the primary action', readyPrimary.incl
     await openRow('演示：干跑完成待发布')
     const focused = document.activeElement
     check('a route change moves focus to the new page title (U-04)',
-      Boolean(focused?.classList?.contains('sa-page-head-title') || focused?.classList?.contains('sa-scroll')),
+      Boolean(focused?.classList?.contains('sa-page-head-title') || focused?.classList?.contains('sa-title')),
       String(focused?.className ?? focused?.tagName ?? 'none'))
     check('a detail page keeps the panel h1 as the only h1 (U-03)',
       rootElement.querySelectorAll('h1').length === 1

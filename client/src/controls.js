@@ -95,6 +95,9 @@ export function SegmentedTabs({ items, value, onChange, label, className }) {
 export function SegmentedControl({ options = [], value, onChange, label, disabled, className }) {
   const list = useRef(null)
   const selectable = options.filter(option => !option.disabled && !disabled)
+  // A `value` that matches no option (stale URL, a kind an older host does not know) left every chip at tabIndex -1,
+  // so the radiogroup could not be reached by keyboard at all. Fall back to the first selectable chip.
+  const known = options.some(option => option.value === value)
   const focusAt = (position) => {
     if (!selectable.length) return
     const option = selectable[(position + selectable.length) % selectable.length]
@@ -112,7 +115,7 @@ export function SegmentedControl({ options = [], value, onChange, label, disable
   return <div ref={list} role="radiogroup" aria-label={label} className={cx('sa-segmented', className)} onKeyDown={onKeyDown}>
     {options.map(option => <button key={option.value} type="button" role="radio" aria-checked={option.value === value}
       data-value={String(option.value)} title={option.title} disabled={disabled || option.disabled}
-      tabIndex={option.value === value || (value === undefined && option === selectable[0]) ? 0 : -1} className="sa-segment"
+      tabIndex={option.value === value || (!known && option === selectable[0]) ? 0 : -1} className="sa-segment"
       onClick={() => { if (option.value !== value && !option.disabled && !disabled) onChange(option.value) }}>{option.label}
       {option.description ? <span className="sa-sr-only">{option.description}</span> : null}
     </button>)}
@@ -171,7 +174,10 @@ export function Modal({ open, onClose, title, closeLabel, description, footer, c
   useEffect(() => {
     if (!open) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
-    dialog.current?.focus()
+    // Do not steal focus from a field the dialog's own content already focused: a dialog-level focus is only the
+    // fallback for a dialog with no autofocused control (ui audit B-06).
+    const inside = document.activeElement instanceof HTMLElement && Boolean(dialog.current?.contains(document.activeElement))
+    if (!inside) dialog.current?.focus()
     // The mask covers the page but the wheel still scrolls it underneath: lock the body for as long as a dialog is up.
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'

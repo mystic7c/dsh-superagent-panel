@@ -140,7 +140,8 @@ export const TEXT = {
   },
   glossaryGroup: { roles: ['角色', 'Roles'], source: ['来源', 'Source'], trigger: ['触发与线程', 'Triggers and Threads'], eval: ['评估与策略', 'Eval and Policy'], execution: ['执行', 'Execution'] },
   decision: { accept: ['接单', 'Accept'], reopen: ['续做', 'Reopen'], stop: ['停止', 'Stop'], ignore: ['忽略', 'Ignore'], unavailable: ['未完成', 'Unavailable'], wouldAccept: ['本会接单', 'Would accept'] },
-  strength: { explicit: ['明确', 'Explicit'], inferred: ['推断', 'Inferred'] },
+  // A bare 明确 / 推断 on the row read as a stray word (ui review A-10); the tag now names what it classifies.
+  strength: { explicit: ['明确请求', 'Explicit request'], inferred: ['推断候选', 'Inferred candidate'] },
   mode: { off: ['关闭', 'Off'], observe: ['仅观察', 'Observe'], auto: ['自动接单', 'Auto'] },
   stage: { answer: ['待回答', 'Needs an answer'], review: ['待评审', 'Needs review'], blocked: ['受阻', 'Blocked'], failed: ['失败', 'Failed'], delivery: ['待送达', 'Delivery failed'], queued: ['排队中', 'Queued'], working: ['执行中', 'Working'], idle: ['等待触发', 'Waiting for a Trigger'] },
   'ticket.ended': ['已结束', 'ended'],

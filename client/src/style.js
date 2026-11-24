@@ -83,6 +83,12 @@ export const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+/* Secondary filters (repo/reason/date range) participate in the filter row on wide pages and fold into a disclosure
+   on a phone, where they used to occupy half the screen before the first row (ui review A-02). */
+.sa-filter-extra { display: contents; }
+.sa-filter-toggle { display: none; }
+.sa-date-range { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-date-range > .sa-hint { white-space: nowrap; }
 .sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
 .sa-repo-diff { display: flex; flex-direction: column; gap: var(--sa-sp-4); padding: var(--sa-sp-8) var(--sa-sp-12); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-md); background: var(--dsw-alias-bg-layer-2); }
 .sa-risk { display: flex; flex-direction: column; gap: var(--sa-sp-8); padding: var(--sa-sp-12);
@@ -341,7 +347,9 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-inline-link:hover { text-decoration: underline; }
 .sa-inline-link:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
 .sa-textlink { padding: 0; border: 0; background: none; font: inherit; font-size: var(--sa-fs-meta);
-  color: var(--sa-link-text); cursor: pointer; text-align: left; }
+  color: var(--sa-link-text); cursor: pointer; text-align: left;
+  /* Inline links keep their baseline but take the 24px pointer floor (they measured 16.8px; ui audit B-08). */
+  display: inline-flex; align-items: center; min-height: 24px; }
 .sa-textlink:hover { text-decoration: underline; }
 .sa-textlink:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
 .sa-more { align-self: flex-start; }
@@ -466,9 +474,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* ---------- panes (trigger: list + detail; settings: nav + form) ---------- */
 .sa-panes { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
-.sa-pane-aside { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); align-self: start;
-  position: sticky; top: 0; max-height: calc(var(--sa-sticky-top) + var(--sa-sp-32) * 3); overflow-y: auto;
-  overscroll-behavior: contain; }
+/* The trigger list is not its own scroller: a 160px-capped sticky pane showed three rows and then a second scrollbar
+   inside the page (review 2026-11-23). It grows with its rows and the page scroller scrolls both panes together,
+   which is also what the compact layout does. (No backticks in here: this block lives inside a template literal.) */
+.sa-pane-aside { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); align-self: start; }
 .sa-settings { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-settings-nav { display: flex; flex-direction: column; gap: var(--sa-sp-2); min-width: 0; }
 /* Content group inside the settings body: one concept's fields, vertical rhythm (used by 60-settings). */
@@ -587,7 +596,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 /* The execution view bar's switch sits in a 28px control row: a smaller track keeps it from out-weighing the list, but
    it is still 24px tall (WCAG 2.5.8 minimum). */
 .sa-switch-compact .sa-switch-track { width: 36px; }
-.sa-switch-input:checked + .sa-switch-track { background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-border-l3)); }
+.sa-switch-input:checked + .sa-switch-track { background: var(--dsw-alias-label-primary); }
 .sa-switch-input:focus-visible + .sa-switch-track { outline: var(--sa-focus); outline-offset: 2px; }
 .sa-switch-input:disabled + .sa-switch-track { opacity: 0.4; cursor: not-allowed; }
 .sa-switch-thumb { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: var(--sa-r-pill);
@@ -632,6 +641,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-raw-body { max-height: 320px; }
 .sa-folded { min-width: 0; }
 .sa-folded-summary { display: flex; align-items: center; gap: var(--sa-sp-4); cursor: pointer; list-style: none;
+  /* 24px tall: the summary measured 16.8px and was the smallest pointer target on the page (ui audit B-08). */
+  min-height: 24px;
   font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
 .sa-folded-summary::-webkit-details-marker { display: none; }
 .sa-folded-summary:focus-visible { outline: var(--sa-focus); outline-offset: 2px; border-radius: var(--sa-r-sm); }
@@ -903,7 +914,6 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
     border-bottom-color: var(--dsw-alias-brand-primary); }
   .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
   .sa-list-bar { gap: var(--sa-sp-8) var(--sa-sp-12); }
-  .sa-pane-aside { position: static; max-height: none; overflow: visible; }
   .sa-tabs { gap: var(--sa-sp-16); }
   .sa-page-head-title { font-size: var(--sa-fs-title); }
   .sa-row-actions { margin-left: 0; }
@@ -941,6 +951,12 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
      and the tools ever share a row again, so the hit area can never sit on the status time. */
   .sa-head-tools { padding-right: calc(40px + var(--sa-sp-4)); }
   .sa-tabs .sa-tab { min-height: 40px; }
+  /* Seven tabs do not fit 390px: the row used to clip the last one to half a glyph with no scroll affordance. Wrapping
+     keeps every destination visible (ui review A-07). */
+  .sa-tabs { flex-wrap: wrap; overflow-x: visible; }
+  .sa-filter-toggle { display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
+  .sa-filter-extra { display: none; }
+  .sa-filter-extra[data-open='true'] { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); width: 100%; }
 }
 @container (max-width: 760px) {
   /* Once the recent-run line wraps under the load bar it is a leading label, not a right-aligned caption. */

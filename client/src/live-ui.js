@@ -3,7 +3,7 @@
    Pages must never translate a raw engine status themselves — they call ticketStatus/decisionKindView/dispositionView
    and render the returned label key through `pt`. */
 
-import { Icon, cx, executorSessionId, hhmmss, safeHttpUrl, shortId } from "./util.js"
+import { Icon, cx, executorSessionId, hhmmss, plainTitle, safeHttpUrl, shortId } from "./util.js"
 import { errorText, fullTime, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, Modal, Select, StatusIcon, StatusText, Tag } from "./controls.js"
 import { caller, same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -1054,11 +1054,11 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
     <div className="sa-row sa-row-openable">
       <StatusIcon state={rowIconState} size={16} />
       <button type="button" className="sa-row-open sa-open"
-        aria-label={`${ticket.title ?? pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`}
+        aria-label={`${plainTitle(ticket.title) || pt(t, 'row.untitled')} — ${pt(t, view.labelKey)}`}
         onClick={open}>
         <div className="sa-row-main">
           <div className="sa-row-title">
-            <span className="sa-ellipsis">{ticket.title || pt(t, 'row.untitled')}</span>
+            <span className="sa-ellipsis">{plainTitle(ticket.title) || pt(t, 'row.untitled')}</span>
           </div>
           <div className="sa-row-meta">{chips}</div>
         </div>
@@ -1127,17 +1127,16 @@ export function TicketGroups({ tickets, page = 'execution', actions, reload, cla
     if (!grouped.has(group)) grouped.set(group, [])
     grouped.get(group).push(ticket)
   }
-  // One column header for the whole ledger, placed under the first group title: above every group it was a table
-  // header that preceded the section it described, and repeating it for each stage turned a four-column list into
-  // three little tables. The groups that follow share the same tracks.
-  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map((group, index) =>
+  // One column header for the whole ledger, above every group: it names the tracks, and inside a group it read as that
+  // group's own caption ("工单 证据 操作" directly under "已结束", user report 2026-11-23).
+  const rendered = TICKET_GROUP_ORDER.filter(group => grouped.get(group).length).map(group =>
     <Section key={group} title={pt(t, `group.${group}`)}
       count={groupCounts?.[group] === false ? undefined : grouped.get(group).length}
       badge={groupNotes?.[group] ?? null}>
-      {index === 0 ? header ?? null : null}
       <TicketList tickets={grouped.get(group)} page={page} actions={actions} reload={reload} />
     </Section>)
-  return className ? <div className={className}>{rendered}</div> : <>{rendered}</>
+  const body = <>{header ?? null}{rendered}</>
+  return className ? <div className={className}>{body}</div> : body
 }
 
 /**

@@ -153,6 +153,24 @@ export function panelScroller(node) {
   return undefined
 }
 
+/** Titles arrive as Markdown one-liners whose link target is an absolute host path the reader can neither open nor use;
+    printing the source made every list row read `[标题](/Users/…)` and truncate mid-path (ui review A-01). Show the
+    label, drop the backticks around inline code, and collapse whitespace so one row stays one line. */
+export function plainTitle(text) {
+  return String(text ?? '')
+    .replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** A deep-linked or remembered page offset can point past the end of a shrinking result set. Returns the last page's
+    offset when that happens, and `undefined` when the requested offset is fine (or the total is not known yet). */
+export function clampPageOffset(offset, total, pageSize) {
+  if (!Number.isFinite(offset) || !Number.isFinite(total) || total <= 0 || offset < total) return undefined
+  return Math.max(0, Math.floor((total - 1) / pageSize) * pageSize)
+}
+
 /** Bring `target` (an element, or an element id inside the panel) to the top of the panel's scroller. `align:'center'`
     centres it instead. Returns false when the target or its geometry is unavailable, in which case nothing is scrolled:
     a test DOM (jsdom reports zeroed rects) and a detached node must not move the page. */
