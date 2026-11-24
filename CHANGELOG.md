@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.1.8] — 2026-11-23
+
+整体代码 + UI 审查后的第七批修复：4 条使用中反馈（触发页线程栏被 160px 内滚动条夹住、评估页筛选空档消失、执行页按仓库分组缺「查看全部」且列头压住分组名、设置页切页签把说明和按钮顶出屏幕），加上客户端 12 条逻辑缺陷、Host 侧 12 条缺陷，以及两轮 UI 体检（设计 A / 检测 B）发现的 17 条可用性与无障碍问题。
+
+### 用户反馈的四条
+
+- **触发页左侧线程列表太短 + 内部滚动条**：`.sa-pane-aside` 同时是 `position: sticky` 又带 `max-height: calc(64px + 32px*3)` 与 `overflow-y: auto`，1280 下只有 160px 高、线程只能露两行，还会和页面滚动条套成双滚动条。现在去掉 sticky/max-height/overflow，线程栏按内容撑开、由页面统一滚动（窄屏本来就是这套行为），并删掉 `@container (max-width:960px)` 里已冗余的覆盖。
+- **评估页筛选条件因无数据而消失**：`kindOptions` 用 `value === 'all' || value === kind || counts[value] > 0` 过滤，于是「续做 / 停止 / 未完成」在没有命中时整颗 chip 消失，用户无法切到一个空结果再回看。现在固定渲染 `EVAL_KINDS` 全量六档，计数留给小标题。
+- **执行页按仓库分组没有「查看全部 / 收起」，列头位置也错**：`队列头（工单 / 证据 / 操作）` 原先由 `TicketGroups` 塞进第一个 `Section` 内、跟在「已结束」「ebs」这些分组名后面，读起来像分组自己的说明；按仓库分组时又完全不带 10 条上限与展开按钮。现在列头在两种分组下都渲染在分组名之前（`execution.js` 直接放在 `.sa-exec-queue` 下，`TicketGroups` 的 header 提到 Section 之外），仓库分组同样复用 `EXEC_DONE_RECENT` 上限与共享的「查看全部（N）/收起」按钮。
+- **设置页点左栏页签把说明和按钮顶出屏幕**：`selectGroup` 在 `setTimeout(0)` 里无条件 `scrollPanelTo(bodyRef)`，把面板滚到右栏正文顶部，于是 Intro 说明与「变更历史 / 复制路径」被顶走；右栏不够高时又不会滚，所以只在长分组上跳。现在只在正文顶部已经离开可视区时才滚（`top < 0 || top >= clientHeight`），并且滚的是正文而不是整个面板。
+
+### 客户端逻辑（client-review）
+
+- **仓库「测试配置」每次都抛错**：`ReposCard` 从 `usePanel()` 解构 `actions`，而 Panel context 里没有它（只有 `t/call/navigate/...`），每次点击都是 `TypeError`。改为 `usePanelData().actions`。
+- **关掉「显示已结束」仍显示 10 条已结束**：`recentDone` 判断的是已被过滤后的 `inStage`，条件恒真。改为按 `doneAllowed` 判断并保留最近 10 条。
+- **信号翻页越界后无路可回**：信号偏移超过总数时列表空、分页器又整块不渲染，只能刷新。现在 `clampPageOffset` 把越界偏移夹回最后一页（评估页同一式）。
+- **URL 里带未知 kind/range 时整组筛选没有 tab 停靠点**：`evalUrlState` 不校验取值，`SegmentedControl` 于是所有 chip `tabIndex=-1`。现在 URL 状态按 `EVAL_KINDS` / `EVAL_RANGES` 校验，`SegmentedControl` 在值未知时也给第一颗可选项 `tabIndex=0`。
+- **触发 / 来源页的仓库与原因筛选每个键都发一次请求**：防抖 effect 把 `repo`/`reason` 设成它们自己的旧值，依赖不变。现在输入先进 `repoInput`/`reasonInput`，300ms 后统一提交三个文本筛选。
+- 其余：`total` 非数字时 `NaN` 分页；评估「已夹到最后一页」提示永不清除、`restoringFilters` 用 `setTimeout` 释放（改为消费即清）；`toast` id 用 `Date.now()` 会撞（改自增）；Markdown 标题层级在正文从 `##` 起跳时被固定成 h3/h4（按文档最小标题为基准）；`useLiveResource` 在 disabled 时永远 `loading: true`；清令牌被宿主拒绝后对话框仍关掉（`useAction` 现在返回 `result !== false`，确认框按 `false` 保持打开）；`Section` 的 `<h2>` 里塞了计数与按钮，屏幕阅读器把「运行质量去执行页」当标题念（加 `aria-label`）。
+
+### Host / 引擎（host-review）
+
+- **已忽略 / 已关闭的工单还会被定时派发**：`dismissTicket` 保留 `automation`，`automationSkipReason` 又不看 `dismissed|closed`，`maxExecutions` 没配时限不住。现在 `automationSkipReason` 直接返回 `dismissed`/`closed`，`executeTicketInner` 里非显式触发（manual/resume/revise）也拒绝已结束工单。
+- **游标越过没有评估到的消息**：`fillSyncGap` 报出回填缺口、或某条消息评估失败时，`cursors[chatId]` 仍被推到 `maxSeq`，那段消息永远不会再读。现在游标取 `max(baseline, min(maxSeq, gap.from-1, failedSeq-1))`。
+- **修复预算三处不一致**：执行器 `REPAIR_LIMIT = 3` / 默认 1、live.json 允许 6、workflow 默认 2。现在统一 `lib/live/repair.js`（上限 6、默认 2），配置归一化、校验消息、bot、repos、workflow 与执行器共用。
+- **能力证据过期永远检测不到**：`environmentFor` 不传 `ctx.versions[backend]`，`version` 恒为 undefined。现在传 `hostVersionOf(ctx)`，且没有 `evidence.version` 的非兜底探针判 `unverified`。
+- 其余：仓库停用时体检重放仍写入一个没落库的 `decisionId`（改在 markSignal 前返回 invalid）；同一 `dedupeKey` 的重复收件箱行永远不 resolve（改为 resolve 所有非规范行）；设置补丁类型不对时 500 而不是 400；`acceptAt` 状态面默认值 0.8 与配置 0.5 不一致；`7d` 窗口退化成全时段；worker 的 `setTimeout(Math.max(1, undefined))` 变成立即触发；原子写在 rename 后不 fsync 目录（新增 `syncDirectory` / `renameDurable`，11 个存储共用）；自动验证的传输超时也吃掉重试预算（现在按 `transportFailure` 退还一次）。
+
+### UI 体检（设计 A + 检测 B）
+
+- **列表标题把 Markdown 源码当正文**：评估 / 执行 / 概览 / 命令面板的行标题直接打印 `[标题](/Users/...)` 并在中途截断。新增 `plainTitle()` 去掉链接语法、反引号与多余空白。
+- **窄屏筛选墙**：390 下 14 个筛选控件占掉半屏。现在仓库/原因/日期收进「更多筛选」折叠（仅 ≤600 容器），首行只留档位 chip、时间窗与搜索。
+- **日期区间没有「从/至」**：两个「年/月/日」并排无法分辨。加上前后缀标签。
+- **开关「开」看不出来**：`--dsw-alias-interactive-bg-active` 在本主题是 `#2631481a`（淡到看不见），DESIGN.md:157 要求的中性底导致开关与关闭态几乎同色。改用 `--dsw-alias-label-primary`（本主题 `#0f1115`）作图轨，视觉上明确、也没有抢走品牌色（U-05 仍通过）。这是对 DESIGN.md:157 字面要求的有意偏离，理由记录在此。
+- **点击页签后整页出现 2px 黑框**：`shell.js` 路由变化时在没有页面标题的页面上聚焦滚动容器（`tabindex=-1`），焦点环把整个内容区框住，像调试框。现在只聚焦页面标题，没有标题时聚焦面板 h1；`.sa-scroll:focus-visible` 恢复 DESIGN 的 2px。
+- **390 第七个页签被裁成半个字**：`.sa-tabs` 在 ≤600 容器改为换行。
+- **触控目标只有 16.8px**：折叠摘要与复制链接加上 24px 最小高度。
+- **Cmd+K 在术语表弹窗之后失焦**：弹窗自身的 `dialog.focus()` 在子组件之后执行，把输入框的焦点抢回来（3/3 复现）。现在弹窗只在内部没有任何焦点时才接焦点，搜索框连续两帧聚焦。
+- **群 ID 输入框只有 placeholder**（补 `aria-label`）、清除令牌按钮在窄屏折行后像字段标题（改 outline 变体）、「明确」裸词（改「明确请求 / 推断候选」）、`24h`/`24 小时` 用词（统一 24 小时）、执行页「已忽略 8」与「全部 71」口径（改「其中已忽略 8」）、概览「主要失败原因」只显示一行省略号（改两行夹取）。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **712 pass / 0 fail**（新增：已忽略/已关闭工单不再自动执行、缺口与失败消息的游标不回退、修复预算默认 2 上限 6、版本缺失的探针判 unverified、停用仓库重放返回 invalid、重复收件箱行 resolve、设置补丁 400、acceptAt 0.5、7d 窗口、worker 超时兜底、rename 后目录 fsync、传输失败退还验证预算）。
+- `node scripts/render-check.mjs` → **311 checks / ok:true / 0 fail / 0 skip**。渲染门槛的「列头在分组名之前」断言按新行为重写（旧断言编码的是被修掉的 bug）。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
+- 独立实例实测（`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-review`、独立端口、CDP 截图）：1280 触发页线程栏从 160px 内滚动改为整页滚动且分页器可见；评估页六颗档位 chip 在 0 命中时仍全部渲染；执行页列头在「已结束」/仓库名之上，`查看全部（71）` 在按仓库分组下同样出现并展开到 71 行；设置页从 scrollTop 240 切到「运行 / 仓库」后落在 scrollTop 12，Intro 与两个按钮仍在视口内；术语表 → Esc → Cmd+K 后焦点落在搜索输入框。
+- 回归防护：`scripts/build-client.mjs` 增加模板字面量守卫——CSS 注释里出现反引号会让 `PANEL_CSS` 提前结束（本次实际踩到：整站样式变成 `<style>NaN</style>`），现在构建直接报 `style.js: N comment open(s) vs M comment close(s)`。
+
 ## [1.1.7] — 2026-11-23
 
 整体审查后的第六批修复（P3 批量）：一次 429/5xx 就让整次执行变红、GitLab 的登录页被报成「JSON 无效」、流水线第二页的失败 job 看不见、超长 job 日志整份读进内存、判定模型的输入没有上限，以及面板侧「失败和成功长得一样」的六处细节。

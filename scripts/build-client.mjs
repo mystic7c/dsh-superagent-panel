@@ -48,6 +48,21 @@ const footer = `
 })
 `
 
+// The stylesheet is one template literal, so a stray backtick (a quoted `.sa-class` in a CSS comment) ends it
+// early: the built bundle still looks valid, `--check` still matches, and the panel renders unstyled (it shipped
+// once as `<style>NaN</style>`). A truncated literal always leaves its last `/*` unterminated — catch that here.
+const styleSource = readFileSync(join(sourceDir, 'style.js'), 'utf8')
+const cssStart = styleSource.indexOf('export const PANEL_CSS = `')
+if (cssStart < 0) throw new Error('style.js no longer exports PANEL_CSS as a template literal')
+const cssOpen = styleSource.indexOf('`', cssStart + 'export const PANEL_CSS = '.length)
+const cssClose = styleSource.indexOf('`', cssOpen + 1)
+const cssBody = styleSource.slice(cssOpen + 1, cssClose)
+const comments = cssBody.split('/*').length - 1
+const closes = cssBody.split('*/').length - 1
+if (comments !== closes) {
+  throw new Error(`style.js: ${comments} comment open(s) vs ${closes} close(s) — a backtick inside the stylesheet ended the template literal early`)
+}
+
 // A real bundle: the modules are ESM with explicit imports, and `react` stays external so the loader
 // supplies it. `format: 'cjs'` plus the banner's `module`/`exports` shims keep the factory contract the
 // loader expects, while `jsxFactory: 'h'` still points JSX at the shared `h` binding from react.js.

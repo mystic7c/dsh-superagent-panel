@@ -17,10 +17,12 @@ export function When({ at }) {
   return <time dateTime={at} title={fullTime(at, t.lang)}>{when(at, t.lang)}</time>
 }
 
-/** @param {{ title?: any, count?: any, icon?: any, hint?: any, action?: any, badge?: any, id?: string, children?: any }} props */
+/** @param {{ title?: any, count?: any, icon?: any, hint?: any, action?: any, badge?: any, id?: string, children?: any }} props
+ *  `aria-label` keeps the heading's accessible name to the title: the count, hint and action buttons inside the
+ *  <h2> made a screen reader announce "运行质量去执行页" (ui audit B-07). */
 export function Section({ title, count, icon, hint, action, badge, id, children }) {
   return <section className="sa-section" id={id}>
-    <h2 className="sa-section-title">
+    <h2 className="sa-section-title" aria-label={typeof title === 'string' ? title : undefined}>
       {icon ? <span className="sa-section-icon">{controlIcon(icon, 15)}</span> : null}
       <span className="sa-section-name">{title}</span>
       {count !== undefined && count !== null
@@ -66,7 +68,12 @@ export function Inlines({ parts, depth = 0 }) {
 
 /** Render a safe Markdown subset; raw HTML is shown as text. Fenced code gets its own block with a copy control. */
 export function MarkdownLite({ text }) {
-  return <div className="sa-md">{markdownBlocks(text).map((block, index) => {
+  const blocks = markdownBlocks(text)
+  // The page already owns h2. Rank from this document's own shallowest heading, so a body that starts at `##` renders
+  // h3 instead of skipping a level under the page's h2 (the previous fixed offset turned `##` into h4).
+  const levels = blocks.filter(block => block.kind === 'heading').map(block => block.level ?? 2)
+  const topLevel = levels.length ? Math.min(...levels) : 2
+  return <div className="sa-md">{blocks.map((block, index) => {
     if (block.kind === 'code') {
       return <div key={index} className="sa-md-code">
         <div className="sa-md-code-head">
@@ -82,10 +89,8 @@ export function MarkdownLite({ text }) {
         {block.items.map((item, at) => <li key={at}><Inlines parts={inlines(item)} /></li>)}
       </List>
     }
-    // Markdown headings keep their rank in the document outline: the page already owns h2, so `#`/`##` land on h3 and
-    // deeper levels step down from there instead of every heading collapsing into a styled paragraph.
     if (block.kind === 'heading') {
-      const Heading = /** @type {any} */ (`h${Math.min(6, 2 + (block.level ?? 2))}`)
+      const Heading = /** @type {any} */ (`h${Math.min(6, 3 + Math.max(0, (block.level ?? 2) - topLevel))}`)
       return <Heading key={index} className="sa-md-heading"><Inlines parts={inlines(block.text)} /></Heading>
     }
     return <p key={index}><Inlines parts={inlines(block.text)} /></p>

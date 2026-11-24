@@ -6,7 +6,7 @@
    stay shared with the other pages (34-live-ui). Contract: spec/impl-contract-2026-11.md §6.1; round-2 critique:
    spec/…/.impeccable/critique/2026-11-05T10-56-46Z__superagent-panel.md (O1–O7). */
 
-import { Icon, hhmm } from "./util.js"
+import { Icon, hhmm, plainTitle } from "./util.js"
 import { errorText, when } from "./i18n.js"
 import { Button, DisclosureRow, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
@@ -558,7 +558,9 @@ export function LiveOverviewPage({ route }) {
               h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
                 h(StatusIcon, { state: 'error', size: 14, spin: false }),
                 h('div', { className: 'sa-row-main' },
-                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-ellipsis' }, failureReasonText(item.reason))),
+                  // Two lines, not one: "主要失败原因" is a sentence-length cause, and a single ellipsis hid the whole
+                  // point of the list at every width (ui review A-05).
+                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-clamp-2' }, failureReasonText(item.reason))),
                   h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count }))))))))
             : null,
           (quality.triggerText || quality.acceptanceText)
@@ -634,7 +636,7 @@ export function LiveOverviewPage({ route }) {
           onClick: () => openInboxItem(item) },
         h('div', { className: 'sa-row-main' },
           h('div', { className: 'sa-row-title' },
-            h('span', { className: 'sa-ellipsis' }, String(item.title ?? '') || '—')),
+            h('span', { className: 'sa-ellipsis' }, plainTitle(item.title) || '—')),
           item.summary ? h('div', { className: 'sa-row-meta' }, h('span', { className: 'sa-hint' }, String(item.summary))) : null)),
         h('div', { className: 'sa-row-actions' },
           // Only the two kinds whose Ticket can be dismissed: a gate/accept item must be settled by its real action.

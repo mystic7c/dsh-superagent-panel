@@ -173,5 +173,7 @@ export function useLiveResource(route, params, intervalMs = 30000, options = {})
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` is the stable identity of params
   }, [call, route, key, enabled])
   const { data, error, reload } = usePoll(load, [load], intervalMs)
-  return { data, error, loading: data === undefined && !error, reload }
+  // A disabled resource resolves `undefined` on purpose; reporting `loading` for it left every optional endpoint
+  // spinning a skeleton forever.
+  return { data, error, loading: enabled && data === undefined && !error, reload }
 }

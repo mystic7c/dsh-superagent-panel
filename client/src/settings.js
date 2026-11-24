@@ -1,4 +1,4 @@
-import { API, Icon, hhmmss, hostName, hostOfUrl, scrollPanelTo } from "./util.js"
+import { API, Icon, hhmmss, hostName, hostOfUrl, panelScroller, scrollPanelTo } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
 import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
@@ -897,7 +897,9 @@ export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.no
 export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, tokenBusy }) {
   // R2-05: a GitHub-backed repository must not be called "GitLab project" on the same card that shows a GitHub URL.
   const host = hostName(hostOfUrl(repo?.baseUrl))
-  const { t, actions } = usePanel()
+  // The Panel context carries t/call/navigate only; the actions live on the model context (as BotsCard does).
+  const { t } = usePanel()
+  const { actions } = usePanelData()
   const [token, setToken] = useState('')
   const [test, setTest] = useState({ busy: false })
   const runTest = async () => {
@@ -971,12 +973,16 @@ export function ReposCard({ repo, isDefault, onSaveToken, onEdit, onToggle, toke
         </Button>
         {repo.tokenConfigured
           // Cancel sends nothing: ConfirmButton only calls onConfirm from the dialog's own 确定 button.
-          ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle', { host })}
+          // Outline, like 保存令牌 beside it: the ghost variant is bare text, which on a phone wrapped onto its own
+          // line and read as a field heading instead of a button (ui review P2).
+          ? <ConfirmButton variant="outline" label={pt(t, 'repos.tokenClear')} title={pt(t, 'repos.tokenClearTitle', { host })}
             message={pt(t, 'repos.tokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
             onConfirm={async () => {
-              if (tokenBusy) return
+              if (tokenBusy) return false
               const cleared = await onSaveToken?.(repo, '')
               if (cleared !== false) setToken('')
+              // `false` keeps the dialog open: the host refused, and `saveRepoTokenFor` already said why.
+              return cleared !== false
             }} />
           : null}
       </div>
@@ -1511,6 +1517,7 @@ export function LiveSettingsPage({ route }) {
   const [riskConfirm, setRiskConfirm] = useState(undefined)
   const savedTimers = useRef({})
   const bodyRef = useRef(null)
+  const introRef = useRef(null)
   const [reloadState, setReloadState] = useState({ busy: false })
   const [probe, setProbe] = useState({ busy: false })
   const [uatState, setUatState] = useState({ busy: false })
@@ -2162,7 +2169,8 @@ export function LiveSettingsPage({ route }) {
               {octoTokenBusy ? t('saving') : pt(t, 'st.octoTokenSave')}
             </Button>
             {configured
-              ? <ConfirmButton label={pt(t, 'repos.tokenClear')} title={pt(t, 'st.octoTokenClearTitle')}
+              // Outline, like 保存令牌 beside it: bare text reads as a field heading when it wraps on a phone.
+              ? <ConfirmButton variant="outline" label={pt(t, 'repos.tokenClear')} title={pt(t, 'st.octoTokenClearTitle')}
                 message={pt(t, 'st.octoTokenClearMessage')} confirmLabel={pt(t, 'repos.tokenClear')}
                 onConfirm={async () => { if (!octoTokenBusy) await saveOctoTokenFor('') }} />
               : null}
@@ -2337,7 +2345,9 @@ export function LiveSettingsPage({ route }) {
           </div>
           : <Hint>{pt(t, 'st.bindingEmpty')}</Hint>}
         <div className="sa-actions" style={{ marginTop: 'var(--sa-sp-4)' }}>
+          {/* The chat id had only a placeholder, so it had no accessible name once the field held a value (ui audit B-11). */}
           <Input id="sa-field-binding-chat" value={bindingForm.chatId} placeholder={pt(t, 'st.chatIdPlaceholder')}
+            aria-label={pt(t, 'st.chatIdPlaceholder')}
             aria-invalid={bindingError ? 'true' : undefined}
             aria-describedby={bindingError ? 'sa-field-binding-chat-error' : undefined}
             disabled={bindingBusy}
@@ -2716,14 +2726,22 @@ export function LiveSettingsPage({ route }) {
 
   // The rail promises what can be changed first: writable groups, then a divider + "参考" label + the read-only groups.
   // `data-reference` is the hook style.js de-emphasises them with; the button keeps its usual label and dirty dot.
-  /** Selecting a group writes it into the panel route (so reload / deep links keep it) and starts the new group at its
-      top; tall and short groups otherwise inherit the previous scroll position mid-page. */
+  /** Selecting a group writes it into the panel route, so reload and deep links keep it. It scrolls only when the new
+      group starts off-screen, and then to the page intro rather than the group heading: the old "scroll to the heading"
+      yanked a taller-than-viewport group up and hid the write-back note and its buttons, so clicking a tab made the page
+      jump (user report 2026-11-23). A short group never scrolled, which is why only some tabs jumped. */
   const selectGroup = id => {
     if (id === active) return
     setActive(id)
     navigate({ page: 'settings', group: id }, true)
     // Defer past the render; scroll the panel, not the host frame (scrollIntoView moves the outer window too).
-    setTimeout(() => { scrollPanelTo(bodyRef.current, { behavior: 'auto' }) }, 0)
+    setTimeout(() => {
+      const node = bodyRef.current
+      const scroller = node && panelScroller(node)
+      if (!scroller) return
+      const top = node.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+      if (top < 0 || top >= scroller.clientHeight) scrollPanelTo(introRef.current ?? node, { behavior: 'auto' })
+    }, 0)
   }
   const settingsNavButton = group => <button key={group.id} type="button"
     className="sa-settings-group" aria-current={active === group.id ? 'true' : undefined}
@@ -2802,7 +2820,7 @@ export function LiveSettingsPage({ route }) {
   )
 
   return <>
-    <div className="sa-settings-intro">
+    <div className="sa-settings-intro" ref={introRef}>
       <Hint>{pt(t, 'st.pageIntro')}</Hint>
       <div className="sa-actions">
         <Button variant="ghost" size="sm" icon={<Icon name="history" size={14} />}

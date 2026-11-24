@@ -124,7 +124,9 @@ export function useAction(action, options = {}) {
     if (running.current) return false
     running.current = true
     setBusy(true)
-    try { await action(...args); await options.reload?.(); return true }
+    // A handler that resolves `false` has refused the action (it already notified): the dialog stays open, exactly as
+    // it does when the handler throws. Without this the confirm closed on a failed host call that did not throw.
+    try { const result = await action(...args); await options.reload?.(); return result !== false }
     catch (failure) { notify(errorText(failure)); return false }
     finally { running.current = false; setBusy(false) }
   }
@@ -152,7 +154,10 @@ export function PanelProvider({ t, openSession = noSession, navigate = stay, bac
   const [toast, setToast] = useState()
   // `tone` was accepted and dropped by callers (`notify(errorText(failure), 'error')`), so a failed save and a saved
   // save looked the same. A failure now keeps the message on screen as an alert with the danger colour.
-  const notify = useCallback((text, tone) => setToast({ text, tone, id: Date.now() }), [])
+  // Monotonic, not Date.now(): two notifies in the same millisecond shared a React key, so the second toast inherited
+  // the first one's dismiss timer and could vanish early.
+  const toastSeq = useRef(0)
+  const notify = useCallback((text, tone) => setToast({ text, tone, id: (toastSeq.current += 1) }), [])
   const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route }),
     [t, call, navigate, back, backLabel, openSession, notify, route])
   return h(Panel.Provider, { value: context },

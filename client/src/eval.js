@@ -1,10 +1,11 @@
-/* Eval page (contract §6.4): the engine's decision history. A kind filter (all, the non-zero kinds and the active kind;
-   counts live only in the section header, so no zero-count pill is rendered) and a 24h window switch sit on top; each
-   row leads with the message it judged, then the shape-coded outcome as a leading tag, the plain-language reason,
-   strength and rule hit count on one meta line, and folds open to the rule-by-rule result plus the raw decision.
-   Data: GET engine/decisions?kind=&window= (host increments, contract §4). */
+/* Eval page (contract §6.4): the engine's decision history. A kind filter (every kind, always: a chip that vanished at
+   zero count moved the other chips under the pointer) and a 24h window switch sit on top; counts live in the section
+   header, so the pills stay stable and only the list changes. Each row leads with the message it judged, then the
+   shape-coded outcome as a leading tag, the plain-language reason, strength and rule hit count on one meta line, and
+   folds open to the rule-by-rule result plus the raw decision. Data: GET engine/decisions?kind=&window= (host
+   increments, contract §4). */
 
-import { API, Icon } from "./util.js"
+import { API, Icon, clampPageOffset, plainTitle } from "./util.js"
 import { reasonLabel, when } from "./i18n.js"
 import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel } from "./api.js"
@@ -68,6 +69,11 @@ Object.assign(PAGE_TEXT, {
   'ev.reasonPlaceholder': ['原因关键字，如 rate-limit', 'Reason keyword, e.g. rate-limit'],
   'ev.from': ['开始日期', 'From date'],
   'ev.to': ['结束日期', 'To date'],
+  // The phone filter row folds its secondary inputs behind this toggle (ui review A-02) and the date pair gets visible
+  // 从/至 words instead of two unlabelled 年/月/日 boxes (A-03).
+  'ev.moreFilters': ['更多筛选', 'More filters'],
+  'ev.fromShort': ['从', 'From'],
+  'ev.toShort': ['至', 'To'],
   'ev.viewLabel': ['评估视图', 'View'],
   'ev.viewAll': ['全部', 'All'],
   'ev.viewDivergence': ['模型分歧', 'Model divergence'],
@@ -193,7 +199,7 @@ export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []
           count > 1 ? h(Tag, { tone: 'quiet', title: pt(t, 'ev.sameDecision', { count }) }, `×${count}`) : null,
           // One line, clipped to the space the tag leaves; flex-grow keeps the tag from being squeezed by long text.
           h('span', { style: { flex: '1 1 0%', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
-            preview || pt(t, 'ev.noPreview'))),
+            plainTitle(preview) || pt(t, 'ev.noPreview'))),
         h('div', { className: 'sa-row-meta' },
           // In-app navigation has no URL to point at, so these are real buttons, not `<a href="#">` fake links (A4).
           decision.threadKey
@@ -269,6 +275,7 @@ export const EVAL_URL_KEYS = { kind: 'evalKind', range: 'evalWindow', q: 'evalQ'
 export const EVAL_PAGE_SIZE = 25
 export const EVAL_SCROLL_KEY = 'superagent-panel/eval-scroll'
 export const EVAL_VIEWS = ['all', 'divergence', 'override']
+export const EVAL_RANGES = ['all', '24h']
 
 /** Read one deep link back into the Eval filters (AC-07) without touching the host's own route parameters. */
 const EVAL_DEFAULTS = { kind: 'all', range: 'all', q: '', repo: '', reason: '', from: '', to: '', view: 'all', offset: 0 }
@@ -276,7 +283,9 @@ export function evalUrlState(search) {
   try {
     const params = search ?? new URLSearchParams(window.location.search)
     const offset = Number(params.get(EVAL_URL_KEYS.offset) ?? 0)
-    return { kind: params.get(EVAL_URL_KEYS.kind) || 'all', range: params.get(EVAL_URL_KEYS.range) || 'all',
+    const kind = params.get(EVAL_URL_KEYS.kind)
+    const range = params.get(EVAL_URL_KEYS.range)
+    return { kind: EVAL_KINDS.includes(kind) ? kind : 'all', range: EVAL_RANGES.includes(range) ? range : 'all',
       q: params.get(EVAL_URL_KEYS.q) || '', repo: params.get(EVAL_URL_KEYS.repo) || '',
       reason: params.get(EVAL_URL_KEYS.reason) || '', from: params.get(EVAL_URL_KEYS.from) || '',
       to: params.get(EVAL_URL_KEYS.to) || '',
@@ -307,8 +316,7 @@ export function dateBound(value, end = false) {
 /** R2-14: an offset from a pasted link (or a shrinking result set) can point past the end. Returns the last page's
     offset when that happens, and `undefined` when the requested offset is fine. */
 export function clampEvalOffset(offset, total, pageSize = EVAL_PAGE_SIZE) {
-  if (!Number.isFinite(offset) || !Number.isFinite(total) || total <= 0 || offset < total) return undefined
-  return Math.max(0, Math.floor((total - 1) / pageSize) * pageSize)
+  return clampPageOffset(offset, total, pageSize)
 }
 
 export function LiveEvalPage() {
@@ -324,6 +332,8 @@ export function LiveEvalPage() {
   const [from, setFrom] = useState(initial.current.from)
   const [to, setTo] = useState(initial.current.to)
   const [view, setView] = useState(initial.current.view)
+  // Only meaningful on a phone, where the secondary filters are folded (style.js shows the toggle at ≤600).
+  const [moreOpen, setMoreOpen] = useState(false)
   const [offset, setOffset] = useState(initial.current.offset)
   const [q, setQ] = useState(initial.current.q)
   const [repoFilter, setRepoFilter] = useState(initial.current.repo)
@@ -339,6 +349,8 @@ export function LiveEvalPage() {
   const restoringFilters = useRef(false)
   useEffect(() => {
     if (firstFilterRun.current) { firstFilterRun.current = false; return }
+    // The popstate restore is consumed here, not by a timer: a later passive-effect flush could otherwise treat the
+    // restored filters as a user change and throw the restored page away.
     if (restoringFilters.current) { restoringFilters.current = false; return }
     setOffset(0)
   }, [kind, range, q, repoFilter, reasonFilter, from, to, view])
@@ -355,9 +367,6 @@ export function LiveEvalPage() {
       setKind(next.kind); setRange(next.range); setQuery(next.q); setQ(next.q)
       setRepo(next.repo); setRepoFilter(next.repo); setReason(next.reason); setReasonFilter(next.reason)
       setFrom(next.from); setTo(next.to); setView(next.view); setOffset(next.offset)
-      // If the restored URL equals the current state no filter effect runs; clear the guard so the next real change
-      // still resets the page.
-      setTimeout(() => { restoringFilters.current = false }, 0)
     }
     window.addEventListener('popstate', restore)
     return () => window.removeEventListener('popstate', restore)
@@ -393,14 +402,17 @@ export function LiveEvalPage() {
   // "filter matched nothing" empty state with no pagination, which is a lie: the filters are fine, the page is not.
   // Clamp to the last page once the total is known and say what happened instead.
   const loadedTotal = Number.isFinite(data?.total) ? data.total : (Array.isArray(data?.items) ? data.items.length : 0)
-  const [clampedFrom, setClampedFrom] = useState(0)
+  // The note belongs to the offset that produced it: `from` is what the link asked for, `at` the page shown. A filter
+  // change resets `offset` to 0, which no longer equals `at`, so the note clears itself instead of hanging above a
+  // list that is already correct (review P3).
+  const [clamped, setClamped] = useState(undefined)
   useEffect(() => {
     const lastPage = clampEvalOffset(offset, loadedTotal)
     if (!data || lastPage === undefined) return
-    setClampedFrom(offset)
+    setClamped({ from: offset, at: lastPage })
     setOffset(lastPage)
   }, [data, loadedTotal, offset])
-  const goOffset = next => { setClampedFrom(0); setOffset(next) }
+  const goOffset = next => { setClamped(undefined); setOffset(next) }
   if (loading && !data) return h(Skeleton, { rows: 5 })
   if (!data) return h(ErrorState, { error, onRetry: reload })
 
@@ -411,11 +423,10 @@ export function LiveEvalPage() {
   const pageTo = Math.min(offset + items.length, total)
   const hasPrev = offset > 0
   const hasNext = offset + items.length < total
-  // A kind earns a pill only when it can produce a list: `all`, every non-zero kind, and the active kind (so switching
-  // the window never traps a selection on a hidden kind). Counts stay in the section header, not in the pills (C11).
-  const kindOptions = EVAL_KINDS
-    .filter(value => value === 'all' || value === kind || (counts[value] ?? 0) > 0)
-    .map(value => ({ value, label: evalKindLabel(t, value) }))
+  // Every kind keeps a pill even at zero: hiding it re-laid the row and slid the remaining chips under the pointer, so
+  // "全部/接单/忽略" moved as the counts changed (user report 2026-11-23). A zero-count kind now selects an empty list
+  // with its own empty state instead of disappearing. Counts stay in the section header, not in the pills (C11).
+  const kindOptions = EVAL_KINDS.map(value => ({ value, label: evalKindLabel(t, value) }))
 
   return h(Fragment, null,
     h(Hint, null, pt(t, 'ev.intro')),
@@ -429,20 +440,27 @@ export function LiveEvalPage() {
         value: view, onChange: setView, label: pt(t, 'ev.viewLabel'), className: 'sa-segmented-chips' }),
       h(Input, { value: query, placeholder: pt(t, 'ev.searchPlaceholder'), label: pt(t, 'ev.search'),
         onChange: event => setQuery(event?.target?.value ?? '') }),
-      h(Input, { value: repo, placeholder: pt(t, 'ev.repoPlaceholder'), label: pt(t, 'ev.repo'),
-        onChange: event => setRepo(event?.target?.value ?? '') }),
-      h(Input, { value: reason, placeholder: pt(t, 'ev.reasonPlaceholder'), label: pt(t, 'ev.reason'),
-        onChange: event => setReason(event?.target?.value ?? '') }),
-      h(Input, { type: 'date', value: from, label: pt(t, 'ev.from'),
-        onChange: event => setFrom(event?.target?.value ?? '') }),
-      h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
-        onChange: event => setTo(event?.target?.value ?? '') }),
+      h('button', { type: 'button', className: 'sa-textlink sa-filter-toggle',
+        'aria-expanded': moreOpen ? 'true' : 'false',
+        onClick: () => setMoreOpen(!moreOpen) }, pt(t, 'ev.moreFilters')),
+      h('div', { className: 'sa-filter-extra', 'data-open': moreOpen ? 'true' : 'false' },
+        h(Input, { value: repo, placeholder: pt(t, 'ev.repoPlaceholder'), label: pt(t, 'ev.repo'),
+          onChange: event => setRepo(event?.target?.value ?? '') }),
+        h(Input, { value: reason, placeholder: pt(t, 'ev.reasonPlaceholder'), label: pt(t, 'ev.reason'),
+          onChange: event => setReason(event?.target?.value ?? '') }),
+        h('div', { className: 'sa-date-range' },
+          h('span', { className: 'sa-hint' }, pt(t, 'ev.fromShort')),
+          h(Input, { type: 'date', value: from, label: pt(t, 'ev.from'),
+            onChange: event => setFrom(event?.target?.value ?? '') }),
+          h('span', { className: 'sa-hint' }, pt(t, 'ev.toShort')),
+          h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
+            onChange: event => setTo(event?.target?.value ?? '') }))),
       h('div', { className: 'sa-actions' },
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(Section, { title: pt(t, 'ev.title'), count: total },
-      clampedFrom > 0
-        ? h(Hint, null, pt(t, 'ev.offsetClamped', { from: clampedFrom + 1, total }))
+      clamped && offset === clamped.at
+        ? h(Hint, null, pt(t, 'ev.offsetClamped', { from: clamped.from + 1, total }))
         : null,
       items.length
         ? h(Fragment, null,
