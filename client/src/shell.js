@@ -123,6 +123,31 @@ export function GlobalSearch({ open, onClose }) {
   const [failure, setFailure] = useState(undefined)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
+  const optionsRef = useRef(null)
+  // Combobox keyboard model: the field keeps focus, ArrowUp/Down move the active option and Enter opens it. Without it
+  // the palette looked like a listbox but only Tab could reach the rows (ui audit B round two).
+  const [activeIndex, setActiveIndex] = useState(-1)
+  useEffect(() => { setActiveIndex(-1) }, [query, result, open])
+  const optionNodes = () => optionsRef.current
+    ? [...optionsRef.current.querySelectorAll('[role="option"]')]
+    : []
+  const onKeyDown = event => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Enter') return
+    const nodes = optionNodes()
+    if (!nodes.length) return
+    if (event.key === 'Enter') {
+      if (activeIndex < 0) return
+      event.preventDefault()
+      nodes[activeIndex]?.click()
+      return
+    }
+    event.preventDefault()
+    const next = event.key === 'ArrowDown'
+      ? Math.min(nodes.length - 1, activeIndex + 1)
+      : Math.max(0, activeIndex - 1)
+    setActiveIndex(next)
+    nodes[next]?.scrollIntoView?.({ block: 'nearest' })
+  }
   useEffect(() => {
     if (!open) { setQuery(''); setResult(undefined); setFailure(undefined); setBusy(false); return undefined }
     // Focus the field twice: once in this effect (before the dialog's own effect runs) and once on the next frame for
@@ -146,6 +171,9 @@ export function GlobalSearch({ open, onClose }) {
     const text = query.trim()
     if (!text) { setResult(undefined); setFailure(undefined); setBusy(false); return undefined }
     let active = true
+    // A new keyword starts a new search: the previous result must not stay on screen (and clickable) while the request
+    // is in flight, because the list reads as the answer to what is now typed (review P3).
+    setResult(undefined)
     setBusy(true)
     const timer = setTimeout(async () => {
       try {
@@ -172,8 +200,8 @@ export function GlobalSearch({ open, onClose }) {
     requestAnimationFrame(() => /** @type {HTMLElement | null} */ (document.querySelector('.sa-scroll'))?.focus())
   }
   const groups = result ? [
-    { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: ticket => <button
-      key={ticket.id} type="button" className="sa-row sa-row-openable"
+    { key: 'tickets', titleKey: 'search.tickets', items: result.tickets ?? [], render: (ticket, extra) => <button
+      key={ticket.id} type="button" className="sa-row sa-row-openable" {...extra}
       onClick={() => go({ page: 'execution', id: ticket.id })}>
       <StatusIcon state={ticketStatus(ticket).state} size={14} />
       <div className="sa-row-main">
@@ -184,8 +212,8 @@ export function GlobalSearch({ open, onClose }) {
         </div>
       </div>
     </button> },
-    { key: 'threads', titleKey: 'search.threads', items: result.threads ?? [], render: thread => <button
-      key={thread.key} type="button" className="sa-row sa-row-openable"
+    { key: 'threads', titleKey: 'search.threads', items: result.threads ?? [], render: (thread, extra) => <button
+      key={thread.key} type="button" className="sa-row sa-row-openable" {...extra}
       onClick={() => go({ page: 'trigger', id: thread.key })}>
       <Icon name="message" size={14} />
       <div className="sa-row-main">
@@ -194,8 +222,8 @@ export function GlobalSearch({ open, onClose }) {
           {thread.lastAt ? <When at={thread.lastAt} /> : null}</div>
       </div>
     </button> },
-    { key: 'triggers', titleKey: 'search.triggers', items: result.triggers ?? [], render: trigger => <button
-      key={trigger.id} type="button" className="sa-row sa-row-openable"
+    { key: 'triggers', titleKey: 'search.triggers', items: result.triggers ?? [], render: (trigger, extra) => <button
+      key={trigger.id} type="button" className="sa-row sa-row-openable" {...extra}
       onClick={() => go(trigger.threadKey ? { page: 'trigger', id: trigger.threadKey } : { page: 'trigger' })}>
       <Icon name="message" size={14} />
       <div className="sa-row-main">
@@ -218,21 +246,33 @@ export function GlobalSearch({ open, onClose }) {
         ? <Hint>{pt(t, 'search.searching')}</Hint>
         : result && result.total === 0
           ? <Hint>{pt(t, 'search.noResults')}</Hint>
-          : <div className="sa-search-groups">{groups.map(group => <section key={group.key} className="sa-section">
-            <h3 className="sa-ledger-title">{pt(t, group.titleKey)}
-              <span className="sa-count" data-empty={group.items.length === 0 ? 'true' : undefined}>
-                {pt(t, 'search.showCount', { count: group.items.length })}
-              </span>
-            </h3>
-            <div className="sa-list">{group.items.map(group.render)}</div>
-          </section>)}</div>
+          : <div className="sa-search-groups" id="sa-search-results" role="listbox" ref={optionsRef}
+            aria-label={pt(t, 'search.title')}>{groups.map((group, groupIndex) => {
+            const offset = groups.slice(0, groupIndex).reduce((sum, entry) => sum + entry.items.length, 0)
+            return <section key={group.key} className="sa-section" role="group" aria-label={pt(t, group.titleKey)}>
+              <h3 className="sa-ledger-title" aria-hidden="true">{pt(t, group.titleKey)}
+                <span className="sa-count" data-empty={group.items.length === 0 ? 'true' : undefined}>
+                  {pt(t, 'search.showCount', { count: group.items.length })}
+                </span>
+              </h3>
+              <div className="sa-list">{group.items.map((item, index) => group.render(item, {
+                id: `sa-search-option-${offset + index}`,
+                role: 'option',
+                'aria-selected': activeIndex === offset + index ? 'true' : 'false',
+                onMouseEnter: () => setActiveIndex(offset + index),
+              }))}</div>
+            </section>
+          })}</div>
   return <Modal open={open} onClose={onClose} title={pt(t, 'search.title')} closeLabel={t('close')} className="sa-search-modal"
     // Ctrl+K has no opener element; Esc must hand focus back to the search trigger, not to <body>.
     restoreTo={() => document.getElementById('sa-search-trigger')}>
     <form role="search" aria-label={pt(t, 'search.title')} onSubmit={event => event.preventDefault()}>
       <Input inputRef={inputRef} icon="search" className="sa-input-full" type="search" name="q" autoComplete="off"
         value={query} placeholder={pt(t, 'search.placeholder')} aria-label={pt(t, 'search.placeholder')}
-        aria-busy={busy ? 'true' : undefined}
+        role="combobox" aria-expanded={groups.length ? 'true' : 'false'} aria-controls="sa-search-results"
+        aria-autocomplete="list"
+        aria-activedescendant={activeIndex >= 0 ? `sa-search-option-${activeIndex}` : undefined}
+        aria-busy={busy ? 'true' : undefined} onKeyDown={onKeyDown}
         onChange={event => setQuery(event.target.value)} />
     </form>
     <div className="sa-modal-body" aria-busy={busy ? 'true' : undefined}>{body}
@@ -343,12 +383,27 @@ export function PanelShell({ location, openTab }) {
     const active = document.activeElement
     const stranded = !active || active === document.body || !document.body.contains(active)
     if (!stranded) return
-    // The page title, else the panel heading on a page that has none (Overview). The scroll container is never the
-    // target: focused programmatically it drew a ring around the whole content area on every navigation (A-06/B-10).
-    const head = document.querySelector('.sa-page-head-title') ?? document.querySelector('.sa-head h1.sa-title')
-    if (!(head instanceof HTMLElement)) return
-    if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1')
-    head.focus()
+    // Only a page that renders its own title announces a destination. A page without one (Overview, the desks) keeps
+    // focus where it already is: falling back to the panel heading rang a UA focus ring around 超级智能体 on every tab
+    // switch — the same "debug box" the scroll-container fallback drew before (ui review A-06, diagnosed again in
+    // round two).
+    // A detail page renders its head only once its data arrives, so the destination may not exist in this commit:
+    // retry over a few frames and give up quietly if it never appears (a route that renders no head announces nothing).
+    let frame = 0
+    let tries = 0
+    const focusHead = () => {
+      const head = document.querySelector('.sa-page-head-title')
+      if (head instanceof HTMLElement) {
+        if (!head.hasAttribute('tabindex')) head.setAttribute('tabindex', '-1')
+        head.focus()
+        return
+      }
+      if (tries >= 10) return
+      tries += 1
+      frame = window.requestAnimationFrame(focusHead)
+    }
+    focusHead()
+    return () => { if (frame) window.cancelAnimationFrame(frame) }
   }, [location.route.page, location.route.id])
   // Ctrl/Cmd+K opens the search palette; `/` does too when the user is not typing in a field.
   useEffect(() => {

@@ -41,6 +41,9 @@ Object.assign(PAGE_TEXT, {
   'trg.reasonPlaceholder': ['原因关键字…', 'Reason keyword…'],
   'trg.from': ['开始日期', 'From date'],
   'trg.to': ['结束日期', 'To date'],
+  'trg.moreFilters': ['更多筛选', 'More filters'],
+  'trg.fromShort': ['从', 'From'],
+  'trg.toShort': ['至', 'To'],
   'trg.pageInfo': ['{from}–{to} / 共 {total} 条', '{from}–{to} of {total}'],
   'trg.prev': ['上一页', 'Previous'],
   'trg.next': ['下一页', 'Next'],
@@ -301,14 +304,24 @@ export function LiveTriggerPage({ route }) {
   const [from, setFrom] = useState(initial.current.from)
   const [to, setTo] = useState(initial.current.to)
   const [offset, setOffset] = useState(initial.current.offset)
+  // Repo / reason / date range sit behind a disclosure: the aside is ~320 px wide, and five stacked inputs pushed the
+  // first Thread below the fold even at 1280 (ui review P1-3). The search field stays visible.
+  const [moreOpen, setMoreOpen] = useState(false)
   useEffect(() => {
     const timer = setTimeout(() => { setQ(query); setRepo(repoInput); setReason(reasonInput) }, 300)
     return () => clearTimeout(timer)
   }, [query, repoInput, reasonInput])
   // A filter change starts at the first page, unless the offset was just restored from the URL or this tab's memory.
+  // A popstate restore rewrites every filter at once; without the flag the reset effect would immediately undo the
+  // restored page and the pager fell back to 1–20 on back/forward (review P2). eval.js consumes the same flag.
   const firstThreadFilterRun = useRef(true)
+  const restoringFilters = useRef(false)
+  // Mirror of the applied slice for the []-deps popstate listener.
+  const currentSlice = useRef({ filter, q, repo, reason, from, to })
+  currentSlice.current = { filter, q, repo, reason, from, to }
   useEffect(() => {
     if (firstThreadFilterRun.current) { firstThreadFilterRun.current = false; return }
+    if (restoringFilters.current) { restoringFilters.current = false; return }
     setOffset(0)
   }, [filter, q, repo, reason, from, to])
   // Keep the filter (chip selection) plus the free-text filter in our own URL params; the host route (including the
@@ -332,6 +345,11 @@ export function LiveTriggerPage({ route }) {
   useEffect(() => {
     const restore = () => {
       const next = trgUrlState()
+      // Only a slice that actually changes is a restore; an offset-only popstate must not leak the flag into the next
+      // real filter change (review P3). The listener has [] deps, so the current slice comes from a ref, not closure.
+      const now = currentSlice.current
+      if (next.filter !== now.filter || next.q !== now.q || next.repo !== now.repo || next.reason !== now.reason
+        || next.from !== now.from || next.to !== now.to) restoringFilters.current = true
       setFilter(next.filter)
       setQuery(next.q); setQ(next.q); setRepo(next.repo); setRepoInput(next.repo)
       setReason(next.reason); setReasonInput(next.reason)
@@ -418,14 +436,21 @@ export function LiveTriggerPage({ route }) {
         className: 'sa-segmented-chips' }),
       h(Input, { value: query, placeholder: pt(t, 'trg.searchPlaceholder'), label: pt(t, 'trg.search'),
         onChange: event => setQuery(event?.target?.value ?? '') }),
-      h(Input, { value: repoInput, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
-        onChange: event => setRepoInput(event?.target?.value ?? '') }),
-      h(Input, { value: reasonInput, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
-        onChange: event => setReasonInput(event?.target?.value ?? '') }),
-      h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
-        onChange: event => setFrom(event?.target?.value ?? '') }),
-      h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
-        onChange: event => setTo(event?.target?.value ?? '') }),
+      h('div', { className: 'sa-actions' },
+        h('button', { type: 'button', className: 'sa-textlink sa-filter-toggle-always', 'aria-expanded': moreOpen ? 'true' : 'false',
+          onClick: () => setMoreOpen(!moreOpen) }, pt(t, 'trg.moreFilters'))),
+      h('div', { className: 'sa-filter-extra sa-filter-extra--collapsed', 'data-open': moreOpen ? 'true' : 'false' },
+        h(Input, { value: repoInput, placeholder: pt(t, 'trg.repoPlaceholder'), label: pt(t, 'trg.repo'),
+          onChange: event => setRepoInput(event?.target?.value ?? '') }),
+        h(Input, { value: reasonInput, placeholder: pt(t, 'trg.reasonPlaceholder'), label: pt(t, 'trg.reason'),
+          onChange: event => setReasonInput(event?.target?.value ?? '') }),
+        h('div', { className: 'sa-date-range' },
+          h('span', { className: 'sa-hint' }, pt(t, 'trg.fromShort')),
+          h(Input, { type: 'date', value: from, label: pt(t, 'trg.from'),
+            onChange: event => setFrom(event?.target?.value ?? '') }),
+          h('span', { className: 'sa-hint' }, pt(t, 'trg.toShort')),
+          h(Input, { type: 'date', value: to, label: pt(t, 'trg.to'),
+            onChange: event => setTo(event?.target?.value ?? '') }))),
       error ? h(ErrorState, { error, onRetry: reload }) : null,
       h('div', { 'aria-busy': filtering ? 'true' : undefined },
         h('span', { className: 'sa-sr-only', role: 'status', 'aria-live': 'polite' }, filtering ? t('loading') : ''),

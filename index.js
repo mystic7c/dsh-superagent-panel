@@ -181,7 +181,11 @@ export function apply(ctx, config = {}) {
         }
         // Actionable inbox (P0-5): persistent "needs you" items derived from tickets/runs/sources.
         if (method === 'GET' && second === 'inbox') {
-          await engine.refreshInbox?.()
+          // Deriving the inbox can fail on a half-written state file; the panel still gets the last snapshot instead of
+          // a 500 on its clock route (the status route above already treats the refresh as best-effort).
+          try { await engine.refreshInbox?.() } catch (error) {
+            ctx.logger?.warn?.('superagent inbox refresh failed: %s', error instanceof Error ? error.message : String(error))
+          }
           send(res, 200, engine.inboxView?.() ?? { items: [], counts: { blocking: 0, system: 0, unread: 0 } })
           return
         }
@@ -468,8 +472,14 @@ export function apply(ctx, config = {}) {
           const dryRun = body?.dryRun === true
           requireExecutor(engine, { dryRun })
           assertTicketFree(third)
+          const backend = typeof body?.backend === 'string' ? body.backend : undefined
+          // Same rule as creating a Ticket: a run may only target a backend the operator enabled, otherwise the executor
+          // dispatches to a switched-off bot and the only trace is a failed run.
+          if (backend !== undefined && !enabledBackends(engine.readConfig().config).includes(backend)) {
+            throw new ActionError(400, `后端未启用：${backend}`)
+          }
           const work = executeTicket({ ctx, engine, ticketId: third, dryRun,
-            backend: typeof body?.backend === 'string' ? body.backend : undefined,
+            backend,
             // §7.6: a bot chosen for this run only — a new run, an explicit dispatch layer, no change to the
             // Ticket's stored fields or to the bot file.
             bot: typeof body?.bot === 'string' && body.bot.trim() ? body.bot.trim() : undefined,
@@ -508,18 +518,24 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, 'action 必须是 release / retry / stop')
           }
           const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 500) : undefined
-          // `release` finalizes the run, which can push and open an MR: the executor switch has to apply here too,
-          // or turning the executor off still delivered code (see resumeTicketInner for the same check).
-          requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
           assertTicketFree(third)
           // Same answer as `/run` and `/publish`: `release` runs the whole post-gate delivery (gates, commit, push, MR)
           // and can take minutes, so the request must not be the thing that waits for it. The refusals that used to be
           // discovered inside the call are checked here first — a 202 for a Ticket that is not parked would be a lie.
           // `wait:true` keeps the synchronous form for the contract tests and for operators driving the API by hand.
-          const view = engine.ticketView(third)
-          if (!view) throw new ActionError(404, `未知工单：${third}`)
-          if (view.ticket.status !== 'gate-blocked') {
+          // Existence comes from the state document, not from `ticketView`, which assembles every run/diff/evidence
+          // block just to answer "is this Ticket parked".
+          const parked = engine.state.tickets?.[third]
+          if (!parked) throw new ActionError(404, `未知工单：${third}`)
+          if (parked.status !== 'gate-blocked') {
             throw new ActionError(409, `ticket ${third} is not waiting for a gate decision`)
+          }
+          // `release` finalizes the run, which can push and open an MR: the executor switch and allowPush apply to
+          // release/retry only. A `stop` must stay possible while the executor is off (or the panel could not stop it),
+          // and a dry-run Ticket stays answerable for the same reason `/run` lets a dry run through.
+          if (action !== 'stop') {
+            requireExecutor(engine, { dryRun: ticketDryRun(engine, third) })
+            if (action === 'release') requirePush(engine)
           }
           const work = resumeTicket({ engine, ticketId: third, action, note,
             log: line => ctx.logger?.info?.('superagent gate: %s', line) })
@@ -627,6 +643,9 @@ export function apply(ctx, config = {}) {
         // Append a human revision and rerun the Ticket as a dry run on the same worktree. The panel's "add a
         // requirement and rerun": validation lives in the engine, the run starts asynchronously like a manual run.
         if (method === 'POST' && second === 'ticket' && third && segments[3] === 'revision') {
+          // The rerun is fire-and-forget, so a busy Ticket used to get a 202 while the executor refused with
+          // `ticket_busy` and only the host log saw it. Refuse up front, like `/run`, before appending the revision.
+          assertTicketFree(third)
           const result = await engine.addRevision(third, body?.text)
           if (result.missing) throw new ActionError(404, `未知工单：${third}`)
           if (result.invalid) throw new ActionError(409, result.invalid)
@@ -699,7 +718,7 @@ export function apply(ctx, config = {}) {
           if (value) { send(res, 200, value); return }
           // A ticket that exists but never delivered anything is an empty result, not a read failure: the detail page
           // renders `detail.evidenceEmpty` for it, while a real error would show the retry state instead.
-          if (engine.ticketView(third)) { send(res, 200, { ticketId: third, rounds: [] }); return }
+          if (engine.state.tickets?.[third]) { send(res, 200, { ticketId: third, rounds: [] }); return }
           throw new ActionError(404, '没有这段交付证据')
         }
         throw new ActionError(404, `未知引擎接口：${method} ${segments.slice(1).join('/')}`)

@@ -76,6 +76,20 @@ export const PANEL_CSS = `
 .sa-detail-jumps { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sa-sp-2); }
 .sa-detail-context-action { display: flex; align-items: center; gap: var(--sa-sp-8); margin-left: auto; flex: none; }
 .sa-detail-jump:focus-visible { outline: var(--sa-focus); outline-offset: -2px; }
+/* Browser-default placeholders (#757575) sit at 3.4:1 on the dark surface; the panel's own secondary label keeps
+   them legible in both themes (ui audit B round two). */
+.sa-page ::placeholder, .sa-modal ::placeholder { color: var(--dsw-alias-label-secondary); opacity: 1; }
+/* A collapsible Section turns its heading into the disclosure control: the whole title row is the hit area, so the
+   count and hint stay inside it, and the chevron only rotates (no layout shift). */
+.sa-section-toggle { display: flex; align-items: center; gap: var(--sa-sp-8); width: 100%; margin: 0; padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--sa-r-4); }
+.sa-section-toggle:hover .sa-section-name { color: var(--dsw-alias-label-primary); }
+.sa-section-toggle:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
+.sa-section-chevron { flex: none; width: 8px; height: 8px; margin-left: auto; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform 120ms ease; opacity: 0.6; }
+.sa-section-toggle[aria-expanded='false'] .sa-section-chevron { transform: rotate(-45deg); }
+@media (prefers-reduced-motion: reduce) { .sa-section-chevron { transition: none; } }
+
 .sa-hint { margin: 0; font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .sa-error { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--sa-danger-text); overflow-wrap: anywhere; white-space: pre-wrap; }
 .sa-banner { margin: 0; padding: var(--sa-sp-8) var(--sa-sp-12); border-radius: var(--sa-r-md); font-size: var(--sa-fs-body);
@@ -83,10 +97,24 @@ export const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+/* A caption per segmented group: "全部 / 全部 / 全部" on one line told nobody which axis it filtered. The caption is
+   visual only (the radiogroup keeps its own aria-label) and disappears once the row is too narrow to host it. */
+.sa-filter-group { display: inline-flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-filter-group-label { font-size: var(--sa-fs-caption); line-height: 1; color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap; }
+@container (max-width: 900px) { .sa-filter-group-label { display: none; } }
 /* Secondary filters (repo/reason/date range) participate in the filter row on wide pages and fold into a disclosure
    on a phone, where they used to occupy half the screen before the first row (ui review A-02). */
 .sa-filter-extra { display: contents; }
-.sa-filter-toggle { display: none; }
+/* The disclosure button is a .sa-textlink for its look; that class sets display: inline-flex, which beat a plain
+   .sa-filter-toggle rule and left the button visible at every width — a switch that flipped aria-expanded while the
+   inputs it claims to hide were always on screen (ui review P1, round two). Same specificity as .sa-textlink, later. */
+.sa-filter-toggle.sa-textlink { display: none; }
+/* Collapsed at every width: the trigger page lives in a 320 px column where five stacked inputs push the list below
+   the fold even on a desktop (ui review P1-3). */
+.sa-filter-extra--collapsed { display: none; }
+.sa-filter-extra--collapsed[data-open='true'] { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); width: 100%; }
+.sa-filter-toggle-always { align-self: flex-start; }
 .sa-date-range { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
 .sa-date-range > .sa-hint { white-space: nowrap; }
 .sa-pagination { display: flex; align-items: center; justify-content: flex-end; gap: var(--sa-sp-8); margin-top: var(--sa-sp-8); }
@@ -190,6 +218,9 @@ export const PANEL_CSS = `
   color: var(--dsw-alias-label-primary); font: inherit; font-size: var(--sa-fs-body); line-height: 1.4; text-align: left;
   white-space: nowrap; cursor: pointer; }
 .sa-menu-item:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+/* The palette is a combobox: the arrow keys move a real selection, so the selected row must look selected, not only
+   respond to the pointer (ui audit B round two). */
+.sa-search-groups [role='option'][aria-selected='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
 .sa-menu-item:focus-visible { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); outline: var(--sa-focus); outline-offset: -2px; }
 .sa-menu-item:disabled { color: var(--sa-label-tertiary); cursor: not-allowed; }
 .sa-menu-trigger[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); color: var(--dsw-alias-label-primary); }
@@ -288,6 +319,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-row-open > span { display: block; }
 .sa-row-open:focus-visible { outline: var(--sa-focus); outline-offset: -2px; border-radius: var(--sa-r-sm); }
 .sa-row-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-4); }
+/* A run row packs a status, a trigger, route/repair/stop tags, a stamp and the run link into one line; on a phone the
+   label shrank to one character per line ("交 付 时 …"). The row title wraps instead of squeezing. */
+#sa-ticket-runs .sa-row-title { flex-wrap: wrap; row-gap: var(--sa-sp-4); }
+#sa-ticket-runs .sa-row-title > span:first-of-type { white-space: nowrap; }
 .sa-row-title { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; font-size: var(--sa-fs-title);
   line-height: 1.35; font-weight: 500; }
 .sa-row-title > span, .sa-row-title > a { min-width: 0; }
@@ -323,6 +358,8 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   /* Keep the cause/MR visible: it becomes a full-width third line instead of being deleted with the column. */
   .sa-exec-queue .sa-row-evidence { display: flex; order: 3; flex: 1 1 100%; padding-left: calc(16px + var(--sa-sp-12));
     white-space: normal; overflow: visible; text-overflow: clip; color: var(--dsw-alias-label-secondary); }
+  /* Without its column heading the line needs its own name, or the MR link under a row looks like the next row's. */
+  .sa-exec-queue .sa-row-evidence[data-label]::before { content: attr(data-label) " · "; color: var(--sa-label-tertiary); }
   .sa-queue-head { display: none; }
 }
 /* .sa-open is the same real button, nothing more: the main column it holds keeps its own type scale, and the button
@@ -440,12 +477,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   /* Keep the ticket context on a first row and the section links on a second, horizontally scrollable row; hiding the
      context left a deep scroll with only links and no identity. */
   .sa-detail-nav { flex-wrap: wrap; row-gap: var(--sa-sp-4); overflow: visible; }
-  .sa-detail-context { display: flex; flex: 1 1 100%; max-width: 100%; }
+  /* Two sticky rows, not three: the context and its primary action share the first row (the action used to claim a
+     whole row of a 390 screen, so the sticky bar covered a fifth of the viewport). */
+  /* The title is the only part that may shrink: with a content-sized flex basis the title pushed the primary action
+     onto a row of its own. */
+  .sa-detail-context { display: flex; flex: 1 1 0; max-width: none; min-width: 0; }
+  .sa-detail-context .sa-detail-context-title { flex: 1 1 auto; }
   .sa-detail-jumps { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto;
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
   .sa-detail-jump { white-space: nowrap; min-height: 32px; }
-  .sa-detail-context-action { margin-left: 0; }
+  /* DOM order is context → jumps → action; a flex order keeps the action beside the title instead of claiming a
+     third row under the section links. */
+  .sa-detail-context-action { order: 1; margin-left: auto; flex: none; }
+  .sa-detail-jumps { order: 2; }
 }
 @container (max-width: 480px) {
   /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */
@@ -720,6 +765,7 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-page-head-top { display: flex; align-items: center; }
 .sa-page-head-top > .sa-btn { margin-left: calc(-1 * var(--sa-sp-8)); }
 .sa-page-head-main { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-16); flex-wrap: wrap; width: 100%; }
+.sa-page-head-title:focus { outline: none; }
 .sa-page-head-title { margin: 0; flex: 1 1 auto; min-width: 0; font-size: var(--sa-fs-page); line-height: 1.4; font-weight: 600;
   overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sa-page-head-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; flex: none; }
@@ -798,6 +844,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-glossary tbody th, .sa-glossary tbody td { overflow-wrap: anywhere; }
 .sa-glossary .sa-glossary-group th { font-weight: 600; color: var(--dsw-alias-label-secondary); padding-top: var(--sa-sp-12); }
 .sa-glossary-values { display: flex; gap: var(--sa-sp-8); align-items: baseline; flex-wrap: wrap; }
+/* The dialog is portalled outside .sa-page, so a container query cannot reach it. On a phone the three glossary
+   columns squeezed 主 Session into 主 / Sessi / on (ui review P2-9); stack each row instead: term · English, then the
+   meaning. */
+@media (max-width: 520px) {
+  .sa-glossary thead { display: none; }
+  .sa-glossary, .sa-glossary tbody, .sa-glossary tr, .sa-glossary td, .sa-glossary tbody th { display: block; width: 100%; }
+  .sa-glossary tr { padding: var(--sa-sp-8) 0; border-bottom: 0.5px solid var(--sa-line); }
+  .sa-glossary td { border: 0; padding: 0; }
+  .sa-glossary tbody td:nth-child(1) { display: inline; font-weight: 600; }
+  .sa-glossary tbody td:nth-child(2) { display: inline; margin-left: var(--sa-sp-8); color: var(--sa-label-tertiary);
+    font-size: var(--sa-fs-meta); }
+  .sa-glossary .sa-glossary-group { padding-top: var(--sa-sp-12); border-bottom: 0.5px solid var(--sa-line); }
+  .sa-glossary .sa-glossary-group th { border: 0; padding: 0; }
+}
 .sa-glossary-values-label { font-size: var(--sa-fs-meta); color: var(--sa-label-tertiary); min-width: 72px; }
 .sa-glossary-values-list { display: flex; flex-wrap: wrap; gap: var(--sa-sp-4); }
 
@@ -951,10 +1011,12 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
      and the tools ever share a row again, so the hit area can never sit on the status time. */
   .sa-head-tools { padding-right: calc(40px + var(--sa-sp-4)); }
   .sa-tabs .sa-tab { min-height: 40px; }
-  /* Seven tabs do not fit 390px: the row used to clip the last one to half a glyph with no scroll affordance. Wrapping
-     keeps every destination visible (ui review A-07). */
-  .sa-tabs { flex-wrap: wrap; overflow-x: visible; }
-  .sa-filter-toggle { display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
+  /* Seven tabs do not fit 390px: the row used to clip the last one to half a glyph with no scroll affordance. A 4-column
+     grid keeps every destination visible and balances the rows (4+3); plain wrapping left 设置 alone on the second row,
+     where it read as a section heading (ui review A-07, round two). */
+  .sa-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 var(--sa-sp-8); overflow-x: visible; }
+  .sa-tabs .sa-tab { justify-content: center; padding: 0 var(--sa-sp-4); }
+  .sa-filter-toggle.sa-textlink { display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
   .sa-filter-extra { display: none; }
   .sa-filter-extra[data-open='true'] { display: flex; flex-wrap: wrap; gap: var(--sa-sp-8); width: 100%; }
 }
