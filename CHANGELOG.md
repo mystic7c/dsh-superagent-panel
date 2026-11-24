@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.10] — 2026-11-24
+
+第九批：把上一轮 UI 体检里明确留作「重新设计量级」的三条 P2 补完。
+
+### 详情页太长（390 下 56 屏）
+
+- **运行记录 / 时间线按长度折叠**：`Section` 新增 `collapsible` / `open` / `onToggle`，标题行变成整行可点的 disclosure（`aria-expanded` + `aria-controls`，右侧 chevron 只做旋转）。运行记录超过 3 条、时间线超过 10 条时默认折叠，短工单不折（不为折叠而折叠）。实测同一张工单：时间线 25 条时 1280 页面高度 6352 → 4188px，390 从 6126 起算只到正文主体。
+- **跳转条会先展开再滚**：点到「运行记录 / 时间线」时先打开目标区，等两帧再滚动，否则会停在一个只有标题的折叠块上（实测：折叠态点击跳转后 `aria-expanded=true`、`scrollTop` 落在 4005）。
+- **顺带修掉 390 上两处更刺眼的问题**：详情粘性条原本三行（标题、跳转、主操作各占一行），把 390 的 20% 屏幕长期盖住——改为标题与主操作同一行 + 跳转一行；运行记录行标题原本被挤成一字一行（「交 付 时：」），现在行内换行而不是压缩。
+
+### 「主要失败原因」只读
+
+- 每条失败原因现在是按钮，点进执行页并已按「失败」档位过滤（`route.stage = 'failed'` 本来就被执行页读取）。实测注入两条失败数据后：两行都可点，`aria-label` 为「<原因> — 查看这些失败运行」，点击后 URL 变为 `execution?stage=failed` 且档位 chip 选中「失败」。
+
+### 三组分段控件没有组名
+
+- 评估页三组 chip 现在带可见小标题「决定类型 / 时间窗口 / 评估视图」（视觉层，读屏仍用 radiogroup 的 `aria-label`）；≤900 容器宽度下标题隐藏，不给窄屏加噪。「全部 / 全部 / 全部」的同名问题也因为第三组叫「全部视图」而消失。
+
+### 验证
+
+- `node --test lib/live/*.test.js` → **733 pass / 0 fail**。
+- `node scripts/render-check.mjs` → **311 checks / ok:true / 0 fail / 0 skip**。
+- `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`（24 modules, 548858 bytes）、`node scripts/check-keys.mjs`（1068 / 541 / 1518）全绿。
+- 独立实例（`/tmp/sa-r2`、独立端口、CDP 1280/390）逐条截图与 DOM 断言验证，见上。
+- 回归防护再次生效：写 CSS 注释时带了反引号，`build-client.mjs` 的模板字面量守卫直接报 `style.js: 47 comment open(s) vs 46 close(s)`，在进浏览器之前就拦住了。
+
 ## [1.1.9] — 2026-11-24
 
 第二轮整体审查（代码 + UI）后的第八批修复：客户端 12 条逻辑缺陷、Host / 引擎 20 条缺陷，以及两轮 UI 体检（设计 A 28/40、检测 B 0 个 P1）发现的可用性与无障碍问题。四条上批反馈的修复在本轮实测确认未回归。

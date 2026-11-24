@@ -1377,6 +1377,11 @@ export function ticketDismissable(ticket) {
   return TICKET_DISMISSABLE.includes(String(ticket?.status ?? ''))
 }
 
+// A Ticket with four runs and a dozen timeline events is still short enough to read in one scroll; past this the two
+// bottom ledgers fold so the request, the change summary and the acceptance card stay reachable (ui review P2).
+export const RUNS_FOLD_AFTER = 3
+export const TIMELINE_FOLD_AFTER = 10
+
 export const DETAIL_JUMPS = [
   // R2-09: the request is what the Ticket is about, so it owns its own section above the change summary.
   { id: 'sa-ticket-request', labelKey: 'ticket.request' },
@@ -1506,6 +1511,12 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // The nav now has an at-rest state: the first section is where the page opens, so it is the current one before
   // any click. Scroll-spy would be better, but a truthful default beats an all-inactive link row.
   const [activeJump, setActiveJump] = useState('sa-ticket-changes')
+  // The two ledgers at the bottom of a Ticket (run records, timeline) are what made a long Ticket 26–56 screens tall.
+  // They collapse when they get long and open again on demand, including through the jump strip.
+  const [foldedSections, setFoldedSections] = useState({})
+  const sectionOpen = (sectionId, defaultOpen) => foldedSections[sectionId] ?? defaultOpen
+  const setSectionOpen = (sectionId, next) => setFoldedSections(current => ({ ...current, [sectionId]: next }))
+  const FOLDABLE_SECTIONS = ['sa-ticket-runs', 'sa-ticket-timeline']
   const jumpsRef = useRef(null)
   // The jump row is a horizontal scroller on a phone (8 destinations do not fit 353 px). Scrolling the page must keep
   // the current destination visible inside it, or the nav silently hides where you are (ui review P1-2).
@@ -2082,7 +2093,11 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   // jump pushed the DSH header and sidebar out of the viewport.
   const jumpTo = id => {
     setActiveJump(id)
-    scrollPanelTo(id, { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
+    // Opening the target first: scrolling to a collapsed section would land on a heading with nothing under it.
+    if (FOLDABLE_SECTIONS.includes(id)) setSectionOpen(id, true)
+    const scroll = () => scrollPanelTo(id, { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })
+    if (FOLDABLE_SECTIONS.includes(id)) window.requestAnimationFrame(() => window.requestAnimationFrame(scroll))
+    else scroll()
   }
 
   // P0 §3.6.6: the person's sign-off is a fact of the Ticket, so it never hides behind a scroll. It now rides on the
@@ -2352,7 +2367,9 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         <TicketGateResults ticket={{ ...ticket, runs }} record={acceptanceRecord} />
       </Section>
       : null}
-    <Section id="sa-ticket-runs" title={pt(t, 'ticket.runs')} count={runs.length}>
+    <Section id="sa-ticket-runs" title={pt(t, 'ticket.runs')} count={runs.length}
+      collapsible={runs.length > RUNS_FOLD_AFTER} open={sectionOpen('sa-ticket-runs', runs.length <= RUNS_FOLD_AFTER)}
+      onToggle={next => setSectionOpen('sa-ticket-runs', next)}>
       {runs.length
         ? <TicketRunRows runs={runs} choices={Array.isArray(data?.botChoices) ? data.botChoices : []}
           onRerun={rerunBot.run} />
@@ -2360,7 +2377,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     </Section>
     {/* P1-7: the host's own activity stream rides inside the timeline as a fold instead of being a second, identical-
         looking timeline above it (T16). */}
-    <Section id="sa-ticket-timeline" title={pt(t, 'ticket.timeline')} count={events.length}>
+    <Section id="sa-ticket-timeline" title={pt(t, 'ticket.timeline')} count={events.length}
+      collapsible={events.length > TIMELINE_FOLD_AFTER}
+      open={sectionOpen('sa-ticket-timeline', events.length <= TIMELINE_FOLD_AFTER)}
+      onToggle={next => setSectionOpen('sa-ticket-timeline', next)}>
       {activities.length
         ? <Folded summary={pt(t, 'ticket.activityFold', { count: activities.length })}>
           <TicketActivities activities={activities} />

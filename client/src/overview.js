@@ -118,6 +118,7 @@ Object.assign(PAGE_TEXT, {
     'Triggers: {manual} manual · {auto} automatic · {timed} timed'],
   'ov.q.acceptance': ['验收：{rounds} 轮 · 通过 {rate}%', 'Acceptance: {rounds} rounds · {rate}% passed'],
   'ov.q.openExecution': ['去执行页', 'Open Execution'],
+  'ov.q.openFailures': ['查看这些失败运行', 'View these failed runs'],
 
   // ---- folded runtime details: a 30-group cursor row stays two lines until it is expanded ------------------------
   'ov.cursorMore': ['其余 {count} 个', '{count} more'],
@@ -560,11 +561,17 @@ export function LiveOverviewPage({ route }) {
               h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.q.failures')),
               h('ul', { className: 'sa-list' }, quality.failures.map((item, index) => h('li', { key: index, className: 'sa-row' },
                 h(StatusIcon, { state: 'error', size: 14, spin: false }),
-                h('div', { className: 'sa-row-main' },
+                // A cause nobody can act on is trivia: each row opens the execution queue already filtered to the
+                // failures it counts (ui review P2, second round).
+                h('button', { type: 'button', className: 'sa-row-open sa-row-openable',
+                  onClick: () => navigate({ page: 'execution', stage: 'failed' }),
+                  title: pt(t, 'ov.q.openFailures'),
+                  'aria-label': `${failureReasonText(item.reason)} — ${pt(t, 'ov.q.openFailures')}` },
+                h('span', { className: 'sa-row-main' },
                   // Two lines, not one: "主要失败原因" is a sentence-length cause, and a single ellipsis hid the whole
                   // point of the list at every width (ui review A-05).
-                  h('div', { className: 'sa-row-title' }, h('span', { className: 'sa-clamp-2' }, failureReasonText(item.reason))),
-                  h('div', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count }))))))))
+                  h('span', { className: 'sa-row-title' }, h('span', { className: 'sa-clamp-2' }, failureReasonText(item.reason))),
+                  h('span', { className: 'sa-row-meta' }, h(Tag, { tone: 'danger' }, pt(t, 'ov.q.failureCount', { count: item.count })))))))))
             : null,
           (quality.triggerText || quality.acceptanceText)
             ? h('p', { className: 'sa-hint' }, [quality.triggerText, quality.acceptanceText].filter(Boolean).join(' · '))

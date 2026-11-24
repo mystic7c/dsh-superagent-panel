@@ -79,6 +79,17 @@ export const PANEL_CSS = `
 /* Browser-default placeholders (#757575) sit at 3.4:1 on the dark surface; the panel's own secondary label keeps
    them legible in both themes (ui audit B round two). */
 .sa-page ::placeholder, .sa-modal ::placeholder { color: var(--dsw-alias-label-secondary); opacity: 1; }
+/* A collapsible Section turns its heading into the disclosure control: the whole title row is the hit area, so the
+   count and hint stay inside it, and the chevron only rotates (no layout shift). */
+.sa-section-toggle { display: flex; align-items: center; gap: var(--sa-sp-8); width: 100%; margin: 0; padding: 0;
+  border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--sa-r-4); }
+.sa-section-toggle:hover .sa-section-name { color: var(--dsw-alias-label-primary); }
+.sa-section-toggle:focus-visible { outline: var(--sa-focus); outline-offset: 2px; }
+.sa-section-chevron { flex: none; width: 8px; height: 8px; margin-left: auto; border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform 120ms ease; opacity: 0.6; }
+.sa-section-toggle[aria-expanded='false'] .sa-section-chevron { transform: rotate(-45deg); }
+@media (prefers-reduced-motion: reduce) { .sa-section-chevron { transition: none; } }
+
 .sa-hint { margin: 0; font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); overflow-wrap: anywhere; }
 .sa-error { margin: 0; font-size: var(--sa-fs-body); line-height: 1.5; color: var(--sa-danger-text); overflow-wrap: anywhere; white-space: pre-wrap; }
 .sa-banner { margin: 0; padding: var(--sa-sp-8) var(--sa-sp-12); border-radius: var(--sa-r-md); font-size: var(--sa-fs-body);
@@ -86,6 +97,12 @@ export const PANEL_CSS = `
 .sa-banner.sa-danger { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
 .sa-actions { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-filters { display: flex; align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); flex-wrap: wrap; }
+/* A caption per segmented group: "全部 / 全部 / 全部" on one line told nobody which axis it filtered. The caption is
+   visual only (the radiogroup keeps its own aria-label) and disappears once the row is too narrow to host it. */
+.sa-filter-group { display: inline-flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; }
+.sa-filter-group-label { font-size: var(--sa-fs-caption); line-height: 1; color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap; }
+@container (max-width: 900px) { .sa-filter-group-label { display: none; } }
 /* Secondary filters (repo/reason/date range) participate in the filter row on wide pages and fold into a disclosure
    on a phone, where they used to occupy half the screen before the first row (ui review A-02). */
 .sa-filter-extra { display: contents; }
@@ -302,6 +319,10 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
 .sa-row-open > span { display: block; }
 .sa-row-open:focus-visible { outline: var(--sa-focus); outline-offset: -2px; border-radius: var(--sa-r-sm); }
 .sa-row-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-4); }
+/* A run row packs a status, a trigger, route/repair/stop tags, a stamp and the run link into one line; on a phone the
+   label shrank to one character per line ("交 付 时 …"). The row title wraps instead of squeezing. */
+#sa-ticket-runs .sa-row-title { flex-wrap: wrap; row-gap: var(--sa-sp-4); }
+#sa-ticket-runs .sa-row-title > span:first-of-type { white-space: nowrap; }
 .sa-row-title { display: flex; align-items: center; gap: var(--sa-sp-8); min-width: 0; font-size: var(--sa-fs-title);
   line-height: 1.35; font-weight: 500; }
 .sa-row-title > span, .sa-row-title > a { min-width: 0; }
@@ -456,12 +477,20 @@ button.sa-row { width: 100%; border: 0; background: transparent; color: inherit;
   /* Keep the ticket context on a first row and the section links on a second, horizontally scrollable row; hiding the
      context left a deep scroll with only links and no identity. */
   .sa-detail-nav { flex-wrap: wrap; row-gap: var(--sa-sp-4); overflow: visible; }
-  .sa-detail-context { display: flex; flex: 1 1 100%; max-width: 100%; }
+  /* Two sticky rows, not three: the context and its primary action share the first row (the action used to claim a
+     whole row of a 390 screen, so the sticky bar covered a fifth of the viewport). */
+  /* The title is the only part that may shrink: with a content-sized flex basis the title pushed the primary action
+     onto a row of its own. */
+  .sa-detail-context { display: flex; flex: 1 1 0; max-width: none; min-width: 0; }
+  .sa-detail-context .sa-detail-context-title { flex: 1 1 auto; }
   .sa-detail-jumps { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto;
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
     mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent); }
   .sa-detail-jump { white-space: nowrap; min-height: 32px; }
-  .sa-detail-context-action { margin-left: 0; }
+  /* DOM order is context → jumps → action; a flex order keeps the action beside the title instead of claiming a
+     third row under the section links. */
+  .sa-detail-context-action { order: 1; margin-left: auto; flex: none; }
+  .sa-detail-jumps { order: 2; }
 }
 @container (max-width: 480px) {
   /* A one-row scroller hid two settings groups on a phone; two rows keep every destination visible. */

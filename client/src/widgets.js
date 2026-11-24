@@ -17,21 +17,34 @@ export function When({ at }) {
   return <time dateTime={at} title={fullTime(at, t.lang)}>{when(at, t.lang)}</time>
 }
 
-/** @param {{ title?: any, count?: any, icon?: any, hint?: any, action?: any, badge?: any, id?: string, children?: any }} props
+/** @param {{ title?: any, count?: any, icon?: any, hint?: any, action?: any, badge?: any, id?: string, children?: any,
+ *  collapsible?: boolean, open?: boolean, onToggle?: (open: boolean) => void, toggleLabel?: string }} props
  *  `aria-label` keeps the heading's accessible name to the title: the count, hint and action buttons inside the
  *  <h2> made a screen reader announce "运行质量去执行页" (ui audit B-07). */
-export function Section({ title, count, icon, hint, action, badge, id, children }) {
+export function Section({ title, count, icon, hint, action, badge, id, children, collapsible = false, open = true,
+  onToggle, toggleLabel }) {
+  // A collapsible Section keeps its body mounted and hides it with `hidden`: the DOM stays stable for scroll
+  // restoration and for the render gate's text queries, and the disclosure state stays honest for assistive tech.
+  const heading = <>
+    {icon ? <span className="sa-section-icon">{controlIcon(icon, 15)}</span> : null}
+    <span className="sa-section-name">{title}</span>
+    {count !== undefined && count !== null
+      ? <span className="sa-count" data-empty={Number(count) === 0 ? 'true' : undefined}>{count}</span> : null}
+    {hint ? <InfoTip text={hint} /> : null}
+    {badge ?? null}
+    {action ? <span className="sa-section-action">{action}</span> : null}
+  </>
+  const bodyId = collapsible && id ? `${id}-body` : undefined
   return <section className="sa-section" id={id}>
-    <h2 className="sa-section-title" aria-label={typeof title === 'string' ? title : undefined}>
-      {icon ? <span className="sa-section-icon">{controlIcon(icon, 15)}</span> : null}
-      <span className="sa-section-name">{title}</span>
-      {count !== undefined && count !== null
-        ? <span className="sa-count" data-empty={Number(count) === 0 ? 'true' : undefined}>{count}</span> : null}
-      {hint ? <InfoTip text={hint} /> : null}
-      {badge ?? null}
-      {action ? <span className="sa-section-action">{action}</span> : null}
-    </h2>
-    {children}
+    {collapsible
+      ? <h2 className="sa-section-title" aria-label={typeof title === 'string' ? title : undefined}>
+        <button type="button" className="sa-section-toggle" aria-expanded={open ? 'true' : 'false'}
+          aria-controls={bodyId} onClick={() => onToggle?.(!open)} title={toggleLabel}>
+          {heading}<span className="sa-section-chevron" aria-hidden="true" />
+        </button>
+      </h2>
+      : <h2 className="sa-section-title" aria-label={typeof title === 'string' ? title : undefined}>{heading}</h2>}
+    {collapsible ? <div className="sa-section-body" id={bodyId} hidden={!open}>{children}</div> : children}
   </section>
 }
 
