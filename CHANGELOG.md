@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.1.13] — 2026-11-24
+
+把 Claude Code CLI 会话接进面板：CLI worker 不再是一次性黑盒，运行中可以看、跑完可以接着聊、还能直接接管到终端。
+
+### 运行时可见（CLI worker 的实时 trace）
+
+- `lib/live/worker-cli.js`：`runProcess` 增加 `onStdout` 观测点，`runCliWorker` 增加 `onTrace` 与行缓冲，把 stream-json 的每一行即时解析成 trace 条目（新增导出 `streamedEvents`）；进程退出时冲刷最后一行（CLI 常不带尾随换行，`result` 就在缓冲里）。解析结果仍是权威来源，`run.trace` 的最终内容不变。
+- `lib/live/executor.js`：CLI 分支把 `onTrace` 接到 `liveTrace.push`，与进程内 DSH worker 同一条 §12 实时链路——CLI 运行期间详情页不再空白，直到回合结束才有 trace。
+
+### 跨轮续接（同一条 Claude Code 会话）
+
+- `cliInvocation` 支持 `resume`（claude 加 `--resume <id>`，与 `--append-system-prompt`/`--json-schema`/权限参数并存，已用本机 claude 2.1.329 实测：续接后返回同一 `session_id`、记得上一轮的答案）。
+- 自动修复轮次 `resume` 主回合的会话：修复时不再从一段「刚写完什么都不记得」的新对话开始。Codex 暂无核实的续接方式，不加参数。
+
+### 在终端接管
+
+- 新增 `lib/live/worker-terminal.js` + Host 路由 `POST /superagent/api/engine/workers/terminal`：为当前 GUI 会话开一个侧边终端（worktree 目录、120x32），输入 `claude --resume <id>`；没有可续接的 id 时开一个新的 `claude`。首个按键即由人接管，和自己在终端里开一样。
+- 会话标识按 `/^[A-Za-z0-9_-]{1,128}$/` 校验后才拼进 shell 命令行；缺会话 / 会话未运行 / 无终端服务 / 超出终端上限都返回带原因的 4xx，而不是 500。
+- 客户端：`PanelProvider` 新增 `currentSessionId`（取自 `sidebarRight.mounted`，点击时读取），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
+
+### 验证
+
+- `lib/live/worker-cli.test.js` 28/28（新增 resume argv、续接透传、流式 trace 三例）；新增 `lib/live/worker-terminal.test.js` 6/6（接管参数与策略、无 id 开新会话、注入形态 id 拒绝、缺会话/无服务/超上限、写入失败关闭终端）。
+- `render-check`：新增 claude 运行夹具，断言「claude 运行显示接管按钮、Codex 与 DSH 运行不显示」。
+- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。
+
 ## [1.1.12] — 2026-11-24
 
 ### 设置 → 仓库改为列表

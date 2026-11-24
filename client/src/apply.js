@@ -16,10 +16,20 @@ export function SidebarIcon({ size }) {
   return h(SuperagentIcon, { size })
 }
 
+/** The GUI Session this panel is shown in, as far as the client can tell. The sidebar is bound to that Session, so its
+ *  mounted id is the one a host action must act on; it is read on click, not captured, because the person can switch. */
+export function currentSessionIdOf(ctx) {
+  try {
+    const mounted = ctx.get?.('sidebarRight')?.mounted?.getSnapshot?.()
+    return typeof mounted === 'string' ? mounted : ''
+  } catch { return '' }
+}
+
 export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(createSessionOpener(ctx), [ctx])
-  return h(App, { openSession, t })
+  const currentSessionId = useCallback(() => currentSessionIdOf(ctx), [ctx])
+  return h(App, { openSession, t, currentSessionId })
 }
 
 /** Client half: the sidebar icon plus the panel in the `main` slot.

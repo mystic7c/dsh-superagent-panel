@@ -149,6 +149,16 @@ const nowIso = new Date().toISOString()
       resolvedAt: nowIso },
     steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
     changedPaths: [] })
+  // A Claude Code run keeps a resumable conversation in its worktree, so its row can hand it to a sidebar terminal;
+  // no other backend can, which is what the row checks below pin down. Oldest of the three, so nothing above changes.
+  engine.state.runs.push({ id: 'run_demo_claude', ticketId: demoId, status: 'dry-run', dryRun: true,
+    startedAt: new Date(Date.now() - 40 * 60_000).toISOString(), completedAt: new Date(Date.now() - 39 * 60_000).toISOString(),
+    repoId: primaryRepoId, worktree: '/tmp/superagent-worktrees/tkt_demo_accept',
+    bot: { id: 'generalist', source: 'default', reason: '默认 Bot generalist（executor.bot）',
+      candidates: ['generalist'], capability: ['edit'], capabilitySource: 'probe', verifiedAt: nowIso,
+      configDigest: 'digest-demo', resolvedAt: nowIso },
+    steps: [], worker: { text: 'Claude Code 跑过一轮', backend: 'claude',
+      sessionId: '11111111-2222-3333-4444-555555555555' }, changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -729,6 +739,16 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
   check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
     && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
+  // The Claude Code run left a conversation behind: the row offers to reopen it in a sidebar terminal. A Codex or DSH
+  // run has nothing to resume (a thread id is not a Claude session), so those rows keep no such control.
+  const claudeRunRow = rootElement.querySelector('#sa-run-run_demo_claude')
+  check('a Claude Code run offers to reopen its conversation in a terminal',
+    Boolean(claudeRunRow?.querySelector('.sa-run-terminal')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a Codex run never offers a Claude terminal',
+    Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-terminal'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a DSH run never offers a Claude terminal',
+    Boolean(rootElement.querySelector('#sa-run-run_demo')) && !rootElement.querySelector('#sa-run-run_demo .sa-run-terminal'),
+    rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
   // §7.5/§13.1: the row says which bot ran, who chose it, and what evidence backs its capabilities.
   const botRow = rootElement.querySelector('#sa-run-run_demo .sa-run-bot')
   check('a run names the bot that ran it and why (§7.5)',
