@@ -81,6 +81,7 @@ export const TEXT = {
     eval: ['评估', 'Eval'],
     bots: ['Bot', 'Bots'],
     execution: ['执行', 'Execution'],
+    sessions: ['会话', 'Sessions'],
     pilot: ['试运行', 'Pilot'],
     settings: ['设置', 'Settings'],
   },

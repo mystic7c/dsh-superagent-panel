@@ -899,10 +899,13 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-toast-error { color: var(--sa-danger-text, var(--dsw-alias-state-error-primary)); }
 /* The Claude Code TUI the panel hosts itself. It floats over the page so a run row stays readable next to it; the
    screen is xterm's own canvas, so only the frame around it follows the panel's tokens. */
-.sa-terminal { position: fixed; right: var(--sa-sp-24, 24px); bottom: var(--sa-sp-24, 24px); z-index: 1100;
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(760px, calc(100vw - var(--sa-sp-32, 32px) * 2));
-  height: min(520px, 62vh); border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px);
-  background: var(--sa-surface-raised); box-shadow: var(--dsw-elevation-prominent); overflow: hidden; }
+.sa-terminal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; width: 100%; height: 100%;
+  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface-raised);
+  overflow: hidden; }
+/* Floating variant for a host surface without a place to put a pane; the sessions page uses the inline one. */
+.sa-terminal.is-floating { position: fixed; right: var(--sa-sp-24, 24px); bottom: var(--sa-sp-24, 24px); z-index: 1100;
+  width: min(760px, calc(100vw - var(--sa-sp-32, 32px) * 2)); height: min(520px, 62vh);
+  box-shadow: var(--dsw-elevation-prominent); }
 .sa-terminal-bar { display: flex; align-items: center; gap: var(--sa-sp-8, 8px); padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px);
   border-bottom: 1px solid var(--sa-line); background: var(--sa-surface-raised); color: var(--sa-label-tertiary);
   font-size: var(--sa-fs-meta, 12px); }
@@ -914,9 +917,33 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-terminal-screen { min-height: 0; padding: var(--sa-sp-4, 4px) 0 0 var(--sa-sp-4, 4px); background: var(--sa-surface-raised); }
 .sa-terminal-screen .xterm { height: 100%; }
 .sa-terminal-error { margin: 0; padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-top: 1px solid var(--sa-line); }
-/* One narrow column: the pane would cover the page it describes. */
 @container (max-width: 760px) {
-  .sa-terminal { left: var(--sa-sp-8, 8px); right: var(--sa-sp-8, 8px); width: auto; height: 52vh; }
+  .sa-terminal.is-floating { left: var(--sa-sp-8, 8px); right: var(--sa-sp-8, 8px); width: auto; height: 52vh; }
+}
+/* Sessions: the Host's own shape — a session list on the left, the conversation on the right. */
+.sa-sessions { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: var(--sa-sp-16, 16px);
+  height: max(420px, calc(100vh - 260px)); min-height: 0; }
+.sa-sessions-list { min-height: 0; overflow: auto; border-right: 1px solid var(--sa-line);
+  padding-right: var(--sa-sp-8, 8px); }
+.sa-session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-session-row { display: flex; align-items: baseline; gap: var(--sa-sp-8, 8px); width: 100%; text-align: left;
+  padding: var(--sa-sp-8, 8px); border: 1px solid transparent; border-radius: var(--sa-r-md, 8px); background: none;
+  color: inherit; font: inherit; cursor: pointer; }
+.sa-session-row:hover { background: var(--sa-fill-subtle, var(--dsw-alias-bg-l2)); }
+.sa-session-row[aria-current='true'] { background: var(--sa-fill-selected, var(--dsw-alias-bg-l3));
+  border-color: var(--sa-line-strong, var(--sa-line)); }
+.sa-session-row:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
+.sa-session-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.sa-session-ticket { font-size: var(--sa-fs-body, 13px); color: var(--dsw-alias-label-primary); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.sa-session-meta { flex: 0 0 auto; font-size: var(--sa-fs-meta, 12px); color: var(--sa-label-tertiary); }
+.sa-sessions-pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.sa-sessions-pane > .sa-terminal { flex: 1 1 auto; }
+.sa-session-open { margin-top: var(--sa-sp-12, 12px); }
+@container (max-width: 900px) {
+  .sa-sessions { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .sa-sessions-list { border-right: 0; }
+  .sa-sessions-pane > .sa-terminal { height: 420px; }
 }
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);

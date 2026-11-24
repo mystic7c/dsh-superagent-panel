@@ -22,18 +22,19 @@
 - 客户端：`PanelProvider` 新增 `currentSessionId`（点击时读取：`sidebarRight.mounted`，面板占着主栏时它为空，退回工作区自己的选择记录 `dsh.sessions.current`），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
 - 同一个运行再点一次会回到已经在跑的那个终端（按标题认领，`reused: true`），不会占用宿主仅有的几个 agent 终端位、也不会在同一个会话上再起一个 Claude Code。
 
-### 终端就长在面板里
+### 终端就长在面板里（「会话」页）
 
-- 终端不再是右侧栏的标签页：`client/src/terminal.js` 直接渲染在运行行下方展开的 `.sa-terminal` 浮层里（标题栏 + xterm 屏 + 关闭），宿主只提供 `TerminalView` 模型，屏幕由面板自己的 `@xterm/xterm` + `@xterm/addon-fit` 画。xterm 是动态 `import()` 的，静态检查（`check-keys`/`render-check` 在 Node 里跑）不会因为它的 UMD 头崩。
-- 帧协议按宿主的写法接：`snapshot` 先 `reset()` 再按 `info.cols/rows` 定尺寸、`output` 直接写，写完 `acknowledge(revision)`；`ResizeObserver` 走 `fitGrid`（按 `environment.maxCols/maxRows` 夹紧）把容器尺寸同步回宿主，人打字经 `view.write(data, true)` 交回 PTY。
-- 刚开的终端本窗口的 roster 还是旧缓存，第一次 `refresh()` 会 `missingTerminal`：改成退避重试（最多 8 次、间隔 350ms），不再让「已打开但看不到」变成失败态。
-- `view.state` 的订阅通知不带参数，直接 `setState(snapshot)` 不生效：改为订阅里递增计数器、渲染时读 `getSnapshot()`，连接状态与画面才会跟着动。
+- 新增「会话」页（页签在「执行」与「设置」之间）：左边是这个工作区的 Claude Code CLI 会话列表，右边是它的终端——和宿主自己的「左列表 + 右对话」一个形状，不再用盖在工单上的浮层。
+- 列表来自引擎的 runs（`worker.backend === 'claude'`），按会话去重（修复轮与主回合同一个 `session_id`，不会变成两行）；一行显示工单标题、会话短 id 与时间。选中一条，右边就是它的终端；从运行行点「在终端接管」会直接跳到这条会话并把终端打开（`route.open=1`，只自动开一次）。
+- 终端本身是面板自己的渲染：`client/src/terminal.js` 用 `@xterm/xterm` + `@xterm/addon-fit`（动态 `import()`，Node 里的静态检查不会因为它的 UMD 头崩），宿主只当模型——`snapshot` 先 `reset()` 再按 `info.cols/rows` 定尺寸、`output` 直接写，写完 `acknowledge(revision)`；`ResizeObserver` 走 `fitGrid`（按 `environment.maxCols/maxRows` 夹紧）把容器尺寸同步回宿主，人打字经 `view.write(data, true)` 交回 PTY。
+- 刚开的终端本窗口的 roster 还是旧缓存，第一次 `refresh()` 会 `missingTerminal`：改成退避重试（最多 8 次、间隔 350ms）。`view.state` 的订阅通知不带参数，直接 `setState(snapshot)` 不生效：改为在订阅里递增计数器、渲染时读 `getSnapshot()`，连接状态与画面才跟着动。
+- 只有 UUID 形状的会话 id 才会续接（`cli --resume <value>` 会把别的值当**会话标题**去找），否则打开一个新会话并在界面上说明。
 
 ### 验证
 
 - `lib/live/worker-cli.test.js` 28/28（新增 resume argv、续接透传、流式 trace 三例）；新增 `lib/live/worker-terminal.test.js` 6/6（接管参数与策略、无 id 开新会话、注入形态 id 拒绝、缺会话/无服务/超上限、写入失败关闭终端）。
-- `render-check`：新增 claude 运行夹具，断言「claude 运行显示接管按钮、Codex 与 DSH 运行不显示」。
-- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：点「在终端接管」→ 面板内浮层出现、`connected`、屏上是 `claude --resume f46922bb-…` 恢复出的上一轮对话（PINEAPPLE 问答），可继续输入。
+- `render-check`：新增 claude 运行夹具，断言「claude 运行显示接管按钮、Codex 与 DSH 运行不显示」；另加会话页四条（按会话去重、只有 UUID 可续接、列表与打开控件、页签顺序）与帧协议三条。
+- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：运行行点「在终端接管」→ 会话页选中该会话并自动开终端、`connected`、屏上是 `claude --resume f46922bb-…` 恢复出的上一轮对话（PINEAPPLE 问答），可继续输入。
 
 ## [1.1.12] — 2026-11-24
 

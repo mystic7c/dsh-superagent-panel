@@ -18,6 +18,7 @@ import { LiveSourcePage } from "./source.js"
 import { LiveTriggerPage } from "./trigger.js"
 import { LiveEvalPage } from "./eval.js"
 import { LiveExecutionPage } from "./execution.js"
+import { LiveSessionsPage } from "./sessions.js"
 import { BotsCard, LiveSettingsPage } from "./settings.js"
 import { React, h, useCallback, useEffect, useLayoutEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
@@ -343,6 +344,7 @@ export function pageView(page) {
     case 'eval': return LiveEvalPage
     case 'bots': return BotsCard
     case 'execution': return LiveExecutionPage
+    case 'sessions': return LiveSessionsPage
     case 'settings': return LiveSettingsPage
     case 'overview': default: return LiveOverviewPage
   }

@@ -8,7 +8,6 @@ import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
 import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
-import { RunTerminalPane } from "./terminal.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
@@ -957,26 +956,13 @@ export function runRouteTag(t, run) {
  *  interface opens instead. The terminal itself is rendered here, not in the Host's right Sidebar: a person reading a
  *  run wants its conversation in the same place. */
 export function RunWorkerTerminal({ run }) {
-  const { t, call, currentSessionId, notify } = usePanel()
-  const [shown, setShown] = useState()
+  const { t, navigate } = usePanel()
   const backend = run?.worker?.backend
   const candidate = typeof run?.worker?.sessionId === 'string' ? run.worker.sessionId.trim() : ''
-  const resume = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(candidate) ? candidate : ''
   const cwd = typeof run?.worktree === 'string' ? run.worktree : ''
-  const { run: open, busy } = useAction(async () => {
-    const sessionId = currentSessionId()
-    const result = await call('POST engine/workers/terminal', { body: { sessionId, cwd, resume } })
-    setShown({ sessionId, terminalId: String(result?.terminalId ?? '') })
-    notify(t('openWorkerTerminalOpened'))
-    return result
-  })
   if (backend !== 'claude' || !cwd) return null
-  if (shown !== undefined) {
-    return <RunTerminalPane sessionId={shown.sessionId} terminalId={shown.terminalId}
-      title={`${t('runTerminalTitle')} · ${candidate ? liveShortId(candidate, 8) : cwd}`} onClose={() => setShown(undefined)} />
-  }
-  return <Button variant="ghost" size="sm" className="sa-run-terminal" disabled={busy}
-    title={`${t('openWorkerTerminalHint')}\n${cwd}`} onClick={() => void open()}>{t('openWorkerTerminal')}</Button>
+  return <Button variant="ghost" size="sm" className="sa-run-terminal" title={`${t('openWorkerTerminalHint')}\n${cwd}`}
+    onClick={() => navigate({ page: 'sessions', id: candidate, open: '1' })}>{t('openWorkerTerminal')}</Button>
 }
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw

@@ -489,7 +489,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
   PanelProvider,
   botPreview, botToForm, formToBot,
-  applyRenderFrame, fitGrid,
+  applyRenderFrame, fitGrid, claudeSessions,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -539,6 +539,8 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   formToBot: 'settings.js',
   applyRenderFrame: 'terminal.js',
   fitGrid: 'terminal.js',
+  claudeSessions: 'sessions.js',
+  RESUMABLE: 'sessions.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
   apiCall: 'api.js',
@@ -1811,8 +1813,8 @@ await sleep(700)
 const shortcutBack = [...rootElement.querySelectorAll('[role="tab"]')].find(node => node.getAttribute('aria-selected') === 'true')?.textContent?.trim()
 check('Alt+1 returns to the Overview tab', shortcutBack === '概览', String(shortcutBack))
 
-// Sticky chrome: header + seven tabs are outside the body scroller, and a route change starts at the top.
-check('header and seven tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 7
+// Sticky chrome: header + eight tabs are outside the body scroller, and a route change starts at the top.
+check('header and eight tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 8
   && Boolean(rootElement.querySelector('.sa-topbar .sa-head')), String(rootElement.querySelectorAll('.sa-topbar [role="tab"]').length))
 check('page body is the only scrolling container', Boolean(rootElement.querySelector('.sa-scroll > .sa-main')),
   'missing .sa-scroll > .sa-main')
@@ -1861,6 +1863,38 @@ check('a merged legacy push record no longer claims it is waiting for the PR',
   !pushText.includes('已推送，等待创建 PR') && !pushText.includes('PR 已创建') && pushText.includes('已合入目标分支'),
   pushText.slice(0, 400))
 check('push-mode MR card keeps the merged state after the PR entry link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
+
+// 1.1.13: a Claude Code worker's conversation is a page of its own — the sessions tab lists the CLI sessions and puts
+// the resumed terminal beside them. jsdom has no PTY, so this pins the list, the pick and the open control.
+console.log('STEP sessions')
+check('a Claude Code session list keeps one row per session, not one per run',
+  JSON.stringify(claudeSessions([{ id: 'a', worker: { backend: 'claude', sessionId: 'x' } },
+    { id: 'b', worker: { backend: 'claude', sessionId: 'x' } },
+    { id: 'c', worker: { backend: 'codex', sessionId: 'y' } }]).map(row => row.runId)) === '["a"]')
+check('only a UUID-shaped session id is resumed (a synthesized id would match a session title)',
+  JSON.stringify(claudeSessions([{ id: 'a', worker: { backend: 'claude', sessionId: 'worker-deadbeef' } },
+    { id: 'b', worker: { backend: 'claude', sessionId: '11111111-2222-3333-4444-555555555555' } }])
+    .map(row => row.resumable)) === '[false,true]')
+pushRoot.unmount()
+window.sessionStorage.setItem('superagent-panel/route',
+  JSON.stringify({ route: { page: 'sessions', id: '11111111-2222-3333-4444-555555555555' }, stack: [] }))
+const sessionsRoot = ReactDOM.createRoot(rootElement)
+sessionsRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const sessionRows = [...rootElement.querySelectorAll('.sa-session-row')]
+check('the sessions tab lists the Claude Code worker session',
+  sessionRows.length === 1
+    && (rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? '')
+      === '11111111-2222-3333-4444-555555555555',
+  `${sessionRows.length} row(s) · ${rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? 'no selection'}`)
+check('a picked session offers to open its terminal', Boolean(rootElement.querySelector('.sa-session-open')))
+check('the sessions tab sits between execution and settings',
+  [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(',')
+    === '概览,来源,触发,评估,Bot,执行,会话,设置',
+  [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(','))
+check('the sessions page no longer floats a terminal over the ticket',
+  rootElement.querySelectorAll('.sa-terminal').length === 0)
+sessionsRoot.unmount()
 
 // AC-07 deep link: the Eval log links to page/source?id=<signalId>. The raw row may be filtered out or already
 // cleaned up, so the page must resolve the signal and either locate it or say plainly that its text is gone.

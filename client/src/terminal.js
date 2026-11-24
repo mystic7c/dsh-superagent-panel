@@ -71,7 +71,7 @@ function useTerminalState(view) {
 }
 
 /** One live terminal: a toolbar with its title and control, and the screen itself. */
-export function RunTerminalPane({ sessionId, terminalId, title, onClose }) {
+export function RunTerminalPane({ sessionId, terminalId, title, onClose, inline = false }) {
   const { t, terminalView } = usePanel()
   const view = useMemo(() => terminalView?.(sessionId, terminalId), [terminalView, sessionId, terminalId])
   const state = useTerminalState(view)
@@ -150,7 +150,7 @@ export function RunTerminalPane({ sessionId, terminalId, title, onClose }) {
 
   const phase = state?.phase ?? 'loading'
   const problem = state?.error ?? state?.issue
-  return <section className="sa-terminal" data-phase={phase}>
+  return <section className={inline ? 'sa-terminal is-inline' : 'sa-terminal'} data-phase={phase}>
     <style>{xtermCss}</style>
     <header className="sa-terminal-bar">
       <span className="sa-terminal-title" translate="no">{title ?? t('runTerminalTitle')}</span>
