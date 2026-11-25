@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.17] — 2026-11-25
+
+### 人按的重跑接着上一轮的对话
+
+「追加并重跑」过去只保留工作树里的改动，worker 每次都是新会话：它得重新读一遍代码，也不知道自己上一轮为什么那么写。现在 `manual` / `revise` / `resume` 触发的 run 会续上一轮 run 的 worker 会话——同 worktree、同后端，Claude 还要会话文件仍在磁盘上；自动分派（`auto`）仍开新会话。
+
+- `lib/live/executor.js`：新增 `continuationOf({ previousRun, backend, log, exists })`；`executeTicketInner` 在占用 `ticket.runId` 之前读上一轮 run（`runOf`），把结论作为 `resume` 传给两个后端的主轮（CLI 走 `--resume`，DSH 走 `agents.resume`）；repair 轮仍然续自己这一轮的会话。换后端、会话文件丢失、首次运行三种情况都静默降级为新会话并记一行日志。
+- run 记录多一个 `worker.resumedFrom`；工单详情在 run 行上显示「续接上一轮」标签，鼠标悬停说明这次不是重新认识仓库。
+- `lib/live/worker-cli.js`：新增 `claudeSessionExists(sessionId)`——`claude --resume` 找不到会话会让整轮失败，所以续之前先确认 `~/.claude/projects/*/<sid>.jsonl` 还在。
+- 「追加并重跑」的提示改成「保留当前工作树的改动，也接着上一轮的对话改」。
+- `docs/worker-bots.md` 不变量 1 补一段：run 仍是会话边界，人触发的重跑是唯一有意的放宽，以及为什么。
+
+### 验证
+
+- `lib/live/executor.test.js` +2（`continuationOf` 的四条边界；`revise` 把上一轮会话交给 worker 并记进 `worker.resumedFrom`，首次运行不带 `resume`）；全量 753 pass；`render-check` 323 项 0 FAIL。
+
 ## [1.1.14] — 2026-11-24
 
 把 1.1.13 只做在 CLI 上的「修复轮续接」补到 DSH worker。
