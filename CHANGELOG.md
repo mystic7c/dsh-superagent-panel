@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.19] — 2026-11-25
+
+- 「会话」页现在会读回 **Claude Code 自己写的会话记录**（`~/.claude/projects/*/<session_id>.jsonl`）：
+  打开一条 CLI 会话时，之前问过什么、答了什么都在，不再是一片空白等你重新问。
+  - Host 新增 `GET engine/workers/transcript?sessionId=&limit=`（默认 40 条），只读，不写那个 JSONL。
+  - 只挑人读的东西：用户输入、助手文本、这一轮用过几次工具；`isMeta`/`isSidechain`/thinking/attachment/tool_result 跳过。
+  - 会话 id 不是 UUID、或本机找不到那个文件，都返回空列表而不是报错——读历史失败不该挡住聊天框。
+- 历史回合没有耗时，就说它做了什么：`完成 3 步`，不会再编一个 `完成 · 1s`。
+- 会话卡填满右栏，输入框贴在底边（之前两行对话时它会浮到半空）。
+
 ## [1.1.18] — 2026-11-25
 
 ### 滚动之后 ⋯ 菜单跟着主操作一起走

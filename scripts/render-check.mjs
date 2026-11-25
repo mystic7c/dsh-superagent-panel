@@ -1957,7 +1957,10 @@ check('a reply states how many steps it took, and a failed turn states why',
   chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)) === '完成 2 步 · 13s'
     && chatSummary({ toolCalls: 0, ms: 4200 }, (key, values) => localText(t, key, values)) === '完成 · 4s'
     && chatSummary({ error: 'claude exited with code 1', ms: 900 }, (key, values) => localText(t, key, values))
-      === '这次没跑完：claude exited with code 1',
+      === '这次没跑完：claude exited with code 1'
+    // A turn read back from Claude Code's history has no duration: report its steps, never a made-up "1s".
+    && chatSummary({ toolCalls: 3 }, (key, values) => localText(t, key, values)) === '3 步'
+    && chatSummary({ toolCalls: 0 }, (key, values) => localText(t, key, values)) === '',
   chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)))
 check('the sessions tab sits between execution and settings',
   [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(',')
