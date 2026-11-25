@@ -487,16 +487,23 @@ export function LiveSourcePage({ route }) {
     setSigStatus('skipped')
     scrollPanelTo(signalsRef.current)
   }
+  // A replay that lands on a Ticket navigates away; reloading this page first issued two requests nobody would see
+  // (review P3). The flag tells the shared reload to stand down for that one case.
+  const replayLeaving = useRef(false)
   const replay = useAction(async signal => {
     const result = await actions.replaySignal(signal.id)
     const ticket = result?.ticket
     if (ticket?.id) {
       notify(pt(t, 'src.signalReplayTicket'))
+      replayLeaving.current = true
       leaveTo({ page: 'execution', id: ticket.id })
       return
     }
     notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
-  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
+  }, { reload: async () => {
+    if (replayLeaving.current) { replayLeaving.current = false; return }
+    await Promise.all([reload(), signals.reload?.()])
+  } })
 
   if (!data) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 

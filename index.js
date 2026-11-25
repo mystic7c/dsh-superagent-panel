@@ -366,7 +366,9 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, `恢复配置失败：${error instanceof Error ? error.message : String(error)}`)
           }
         }
-        if (method === 'POST' && second === 'settings') {
+        // Exactly `POST engine/settings`: any deeper path is its own route (history/restore above) or unknown. Without
+        // this guard a POST to an unmapped settings sub-path was silently applied as a settings patch (review H19).
+        if (method === 'POST' && second === 'settings' && segments.length === 2) {
           const patch = body ?? {}
           // Group ↔ repository bindings must stay consistent: a bound chat has to be watched, and the repository has
           // to exist. Rejecting here keeps a half-written binding out of live.json.

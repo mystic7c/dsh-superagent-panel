@@ -81,6 +81,15 @@ export function KeyValues({ rows, className }) {
   </dl>
 }
 
+/** Scroll to an in-document target without touching `location.hash` (the panel owns that fragment). */
+function scrollToAnchor(url) {
+  try {
+    const id = decodeURIComponent(String(url).slice(1))
+    const target = typeof document === 'undefined' ? null : document.getElementById(id)
+    if (target) target.scrollIntoView({ block: 'start' })
+  } catch { /* a malformed fragment is a no-op, not a crash */ }
+}
+
 /** @param {{ parts?: any[], depth?: number }} props */
 export function Inlines({ parts, depth = 0 }) {
   return <>{parts.map((part, index) => part.kind === 'bold' ? <strong key={index}>{part.text}</strong>
@@ -89,6 +98,13 @@ export function Inlines({ parts, depth = 0 }) {
     // backticks literally. An autolinked URL's label is the URL itself, so a second parse yields the same link again:
     // nested rendering therefore stops after one level. Without that stop a bare URL recursed until the heap died.
     : part.kind === 'link' ? depth > 0 ? part.text
+      // An in-document target (`#section`) is not a URL: letting the browser follow it replaces the panel's `#sa=`
+      // fragment, which is how the panel mirrors its route — the view was lost on click (review P3).
+      : part.url.startsWith('#')
+        ? <a key={index} className="sa-inline-link" href={part.url} title={part.url}
+          onClick={(event) => { event.preventDefault(); scrollToAnchor(part.url) }}>
+          <Inlines parts={inlines(part.text)} depth={depth + 1} />
+        </a>
       : <a key={index} className="sa-inline-link" href={part.url} title={part.url} target="_blank" rel="noopener noreferrer">
         <Inlines parts={inlines(part.text)} depth={depth + 1} />
       </a>

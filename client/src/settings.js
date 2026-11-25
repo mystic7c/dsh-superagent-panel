@@ -374,8 +374,7 @@ Object.assign(PAGE_TEXT, {
     'In shadow mode the model only records an opinion; in hybrid it takes part in intake (repo_task opens, risky blocks, the rest goes to review). Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
   'st.rules': ['规则目录', 'Rule catalog'],
   'st.noRules': ['没有可显示的规则。', 'No rules to show.'],
-  'st.decisionsTotal': ['累计决定', 'Decisions so far'],
-  'st.decisions24h': ['最近 24 小时决定', 'Decisions in the last 24 hours'],
+  'st.evalOpenLedger': ['在评估页查看判定记录', 'See the decision ledger'],
 
   // ---- execution group ----
   'st.execEnabled': ['启用执行器', 'Executor enabled'],
@@ -2344,13 +2343,17 @@ export function LiveSettingsPage({ route }) {
       [pt(t, 'st.judgeModel'), decision.model || t('empty')],
       [pt(t, 'st.judgeToken'), configured(decision.tokenConfigured)],
       [pt(t, 'st.judgeCalls'), `${judge.calls ?? 0} / ${judge.ok ?? 0} / ${judge.errors ?? 0} / ${judge.skipped ?? 0}`],
-      [pt(t, 'st.decisionsTotal'), String(data.counts?.decisions ?? 0)],
-      [pt(t, 'st.decisions24h'), String(data.flow24h?.judged ?? 0)],
+      // The decision counts and their 24-hour window belong to the Eval ledger and the Overview summary; showing them
+      // here too meant three pages quoting the same number (review P3). One link instead.
     ]
     return <div className="sa-settings-group">
       {settingsHeading()}
       <Hint>{pt(t, 'st.evalHint')}</Hint>
       <KeyValues rows={rows} />
+      <div className="sa-actions">
+        <Button variant="ghost" size="sm" icon={<Icon name="decision" size={14} />}
+          onClick={() => navigate({ page: 'eval' })}>{pt(t, 'st.evalOpenLedger')}</Button>
+      </div>
       <Hint>{pt(t, 'st.judgeHint')}</Hint>
       <div className="sa-field">
         <span className="sa-field-head">{pt(t, 'st.rules')}</span>

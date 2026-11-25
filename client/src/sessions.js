@@ -163,7 +163,9 @@ export function LiveSessionsPage({ route }) {
     title: ticketOf(data?.tickets, row.ticketId)?.title ?? '',
   }))
   const [picked, setPicked] = useState('')
-  const [terminal, setTerminal] = useState('')
+  // The terminal belongs to the session it was opened for: one shared id kept the old terminal (and its title) on
+  // screen after switching sessions (review P3).
+  const [terminal, setTerminal] = useState({ id: '', sessionId: '' })
   const [drafts, setDrafts] = useState({})
   const [threads, setThreads] = useState({})
   const [sending, setSending] = useState({})
@@ -181,7 +183,7 @@ export function LiveSessionsPage({ route }) {
     })
     const terminalId = String(result?.terminalId ?? '')
     if (!terminalId) return false
-    setTerminal(terminalId)
+    setTerminal({ id: terminalId, sessionId: target.sessionId })
     return true
   })
   // The conversation is not this page's: Claude Code keeps the record, so opening a session shows its history.
@@ -259,19 +261,21 @@ export function LiveSessionsPage({ route }) {
     <p className="sa-hint sa-page-hint">{pt(t, 'sessions.hint')}</p>
     <div className="sa-sessions">
       <div className="sa-sessions-list">
-        <SessionsList rows={rows} selected={selected} onPick={setPicked} text={t} />
+        <SessionsList rows={rows} selected={selected} text={t}
+          onPick={next => { setPicked(next); setTerminal({ id: '', sessionId: '' }) }} />
       </div>
       <div className="sa-sessions-pane" data-session={selected}>
         {row === undefined
           ? <EmptyState icon="session" title={pt(t, 'sessions.pick')} />
-          : terminal
+          : terminal.id && terminal.sessionId === row.sessionId
             ? <div className="sa-session-terminal-pane">
               <div className="sa-session-terminal-bar">
                 <Button variant="ghost" size="sm" className="sa-session-back"
-                  onClick={() => setTerminal('')}>{pt(t, 'sessions.toChat')}</Button>
+                  onClick={() => setTerminal({ id: '', sessionId: '' })}>{pt(t, 'sessions.toChat')}</Button>
               </div>
-              <RunTerminalPane inline sessionId={guiSessionId} terminalId={terminal}
-                title={`${pt(t, 'sessions.session')} ${shortId(row.sessionId)}`} onClose={() => setTerminal('')} />
+              <RunTerminalPane inline sessionId={guiSessionId} terminalId={terminal.id}
+                title={`${pt(t, 'sessions.session')} ${shortId(row.sessionId)}`}
+                onClose={() => setTerminal({ id: '', sessionId: '' })} />
             </div>
             : <SessionChat row={row} thread={threads[row.sessionId]} draft={drafts[row.sessionId] ?? ''}
               busy={busy} text={t}
