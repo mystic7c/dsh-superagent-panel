@@ -22,7 +22,8 @@ export function loadClient(exportsMap, { react }) {
     platform: 'browser',
     target: 'es2022',
     external: ['react'],
-    loader: { '.js': 'jsx' },
+    // Same loader map as build-client.mjs: a stylesheet a dependency ships arrives as text.
+    loader: { '.js': 'jsx', '.css': 'text' },
     jsx: 'transform',
     jsxFactory: 'h',
     jsxFragment: 'React.Fragment',

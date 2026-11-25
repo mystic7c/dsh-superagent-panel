@@ -16,10 +16,45 @@ export function SidebarIcon({ size }) {
   return h(SuperagentIcon, { size })
 }
 
+/** The GUI Session this panel is shown in, as far as the client can tell; read on click, not captured, because the
+ *  person can switch Sessions between clicks.
+ *
+ *  `sidebarRight.mounted` names the on-screen Session only while the Conversation fills the main column — with this
+ *  panel open it does not. So the fallback is the workspace's own selection record (`dsh.sessions.current`, the same
+ *  value `UiWorkspace` persists and restores), which survives the panel taking the main column. */
+export function currentSessionIdOf(ctx) {
+  try {
+    const mounted = ctx.get?.('sidebarRight')?.mounted?.getSnapshot?.()
+    if (typeof mounted === 'string' && mounted) return mounted
+  } catch { /* service unavailable: fall through to the selection record */ }
+  try {
+    const raw = globalThis.localStorage?.getItem('dsh.sessions.current')
+    const selected = raw ? JSON.parse(raw)?.sessionId : undefined
+    return typeof selected === 'string' ? selected : ''
+  } catch { return '' }
+}
+
+/** Resolve the Host's terminal view for one terminal id: the model this panel renders and types into.
+ *
+ *  The view model is the Host's own (`ctx.webTerminals.view`), so the terminal keeps running across a panel remount and
+ *  the Host still owns the process; only the screen is ours. */
+export function terminalViewFactory(ctx) {
+  return (sessionId, terminalId) => {
+    if (!sessionId || !terminalId) return undefined
+    try {
+      const terminals = ctx.get?.('webTerminals')
+      if (!terminals?.view) return undefined
+      return terminals.view(sessionId, `superagent-worker-${terminalId}`, `superagent://worker/${terminalId}`, terminalId)
+    } catch { return undefined }
+  }
+}
+
 export function Mounted({ ctx }) {
   const t = useTranslator(ctx)
   const openSession = useCallback(createSessionOpener(ctx), [ctx])
-  return h(App, { openSession, t })
+  const currentSessionId = useCallback(() => currentSessionIdOf(ctx), [ctx])
+  const terminalView = useCallback(terminalViewFactory(ctx), [ctx])
+  return h(App, { openSession, t, currentSessionId, terminalView })
 }
 
 /** Client half: the sidebar icon plus the panel in the `main` slot.

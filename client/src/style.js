@@ -897,6 +897,82 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-modal-body { margin-top: 0; }
 .sa-modal-footer { margin-top: 0; display: flex; justify-content: flex-end; gap: var(--sa-sp-8); flex-wrap: wrap; }
 .sa-toast-error { color: var(--sa-danger-text, var(--dsw-alias-state-error-primary)); }
+/* The Claude Code TUI the panel hosts itself. It floats over the page so a run row stays readable next to it; the
+   screen is xterm's own canvas, so only the frame around it follows the panel's tokens. */
+.sa-terminal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; width: 100%; height: 100%;
+  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface-raised);
+  overflow: hidden; }
+/* Floating variant for a host surface without a place to put a pane; the sessions page uses the inline one. */
+.sa-terminal.is-floating { position: fixed; right: var(--sa-sp-24, 24px); bottom: var(--sa-sp-24, 24px); z-index: 1100;
+  width: min(760px, calc(100vw - var(--sa-sp-32, 32px) * 2)); height: min(520px, 62vh);
+  box-shadow: var(--dsw-elevation-prominent); }
+.sa-terminal-bar { display: flex; align-items: center; gap: var(--sa-sp-8, 8px); padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px);
+  border-bottom: 1px solid var(--sa-line); background: var(--sa-surface-raised); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-meta, 12px); }
+.sa-terminal-title { font-weight: 600; color: var(--dsw-alias-label-primary); }
+.sa-terminal-spacer { flex: 1 1 auto; }
+.sa-terminal-close { border: 0; background: none; color: var(--sa-link-text); font: inherit; cursor: pointer;
+  padding: var(--sa-sp-2, 2px) var(--sa-sp-4, 4px); border-radius: var(--sa-r-sm, 4px); }
+.sa-terminal-close:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
+.sa-terminal-screen { min-height: 0; padding: var(--sa-sp-4, 4px) 0 0 var(--sa-sp-4, 4px); background: var(--sa-surface-raised); }
+.sa-terminal-screen .xterm { height: 100%; }
+.sa-terminal-error { margin: 0; padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-top: 1px solid var(--sa-line); }
+@container (max-width: 760px) {
+  .sa-terminal.is-floating { left: var(--sa-sp-8, 8px); right: var(--sa-sp-8, 8px); width: auto; height: 52vh; }
+}
+/* Sessions: the Host's own shape — a session list on the left, the conversation on the right. */
+.sa-sessions { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: var(--sa-sp-16, 16px);
+  height: max(420px, calc(100vh - 260px)); min-height: 0; }
+.sa-sessions-list { min-height: 0; overflow: auto; border-right: 1px solid var(--sa-line);
+  padding-right: var(--sa-sp-8, 8px); }
+.sa-session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.sa-session-row { display: flex; align-items: baseline; gap: var(--sa-sp-8, 8px); width: 100%; text-align: left;
+  padding: var(--sa-sp-8, 8px); border: 1px solid transparent; border-radius: var(--sa-r-md, 8px); background: none;
+  color: inherit; font: inherit; cursor: pointer; }
+.sa-session-row:hover { background: var(--sa-fill-subtle, var(--dsw-alias-bg-l2)); }
+.sa-session-row[aria-current='true'] { background: var(--sa-fill-selected, var(--dsw-alias-bg-l3));
+  border-color: var(--sa-line-strong, var(--sa-line)); }
+.sa-session-row:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
+.sa-session-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.sa-session-ticket { font-size: var(--sa-fs-body, 13px); color: var(--dsw-alias-label-primary); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.sa-session-meta { flex: 0 0 auto; font-size: var(--sa-fs-meta, 12px); color: var(--sa-label-tertiary); }
+.sa-sessions-pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.sa-sessions-pane > .sa-terminal { flex: 1 1 auto; }
+.sa-session-open { margin-top: var(--sa-sp-12, 12px); }
+/* The conversation itself: a scrolling column of turns over a fixed composer, like the Host's own chat. */
+/* The card has to reach the bottom of the pane, or the composer floats up under a two-line conversation. */
+.sa-sessions-pane > .sa-section { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.sa-chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--sa-sp-12, 12px); flex: 1 1 auto;
+  min-height: 0; }
+.sa-chat-body { overflow: auto; padding: var(--sa-sp-8, 8px) 2px; display: flex; flex-direction: column;
+  gap: var(--sa-sp-16, 16px); }
+.sa-chat-start { margin: 0 0 var(--sa-sp-8, 8px); }
+.sa-chat-row { display: flex; flex-direction: column; gap: var(--sa-sp-4, 4px); min-width: 0; }
+.sa-chat-row.is-user { align-items: flex-end; }
+.sa-chat-row.is-agent { align-items: stretch; }
+.sa-chat-bubble { max-width: min(560px, 88%); padding: var(--sa-sp-8, 8px) var(--sa-sp-12, 12px);
+  border-radius: var(--sa-r-lg, 12px); background: var(--sa-fill-subtle, var(--dsw-alias-bg-l2));
+  color: var(--dsw-alias-label-primary); font-size: var(--sa-fs-body, 13px); line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.sa-chat-meta { margin: 0; font-size: var(--sa-fs-meta, 12px); color: var(--sa-label-tertiary); }
+.sa-chat-reply { min-width: 0; font-size: var(--sa-fs-body, 13px); line-height: 1.65;
+  color: var(--dsw-alias-label-primary); }
+.sa-chat-input { display: flex; gap: var(--sa-sp-8, 8px); align-items: flex-end; padding: var(--sa-sp-8, 8px);
+  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface, transparent); }
+.sa-chat-text { flex: 1 1 auto; min-height: 44px; max-height: 200px; resize: vertical; border: 0; outline: none;
+  background: none; color: var(--dsw-alias-label-primary); font: inherit; line-height: 1.5; }
+.sa-chat-text:focus-visible { outline: none; }
+.sa-session-terminal-pane { display: flex; flex-direction: column; gap: var(--sa-sp-8, 8px); flex: 1 1 auto;
+  min-height: 0; }
+.sa-session-terminal-bar { display: flex; justify-content: flex-end; }
+.sa-session-terminal-pane > .sa-terminal { flex: 1 1 auto; min-height: 320px; }
+@container (max-width: 900px) {
+  .sa-sessions { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .sa-sessions-list { border-right: 0; }
+  .sa-sessions-pane > .sa-terminal { height: 420px; }
+  .sa-chat-body { max-height: 60vh; }
+}
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);
   border-radius: var(--sa-r-md, 8px); background: var(--dsw-alias-toast-bg, var(--dsw-alias-bg-overlay));
