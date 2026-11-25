@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.16] — 2026-11-25
+
+### 交付边界从「提示词约定」变成 worktree 上的钩子
+
+此前「提交、推送、MR 归执行器」只是一句写在 system prompt 里的约定：三个后端都拿得到 shell，机器上有凭据就能自己 `git push`（Codex 是唯一例外，它没有网络）。现在每个工单 worktree 在创建时就装上 `pre-push` 钩子，任何推送都会被拒绝，执行器自己的推送带 `--no-verify`。
+
+- `lib/live/repo.js`：新增 `installPushGuard({ path })`，在 `prepareWorktree` 的新建与复用两条路径上都执行；钩子文件放在 git common dir 的 `sa-hooks/no-push/` 下（在 worktree 之外，不进 `git status`），通过 `extensions.worktreeConfig` + 每-worktree `core.hooksPath` 生效——不能直接写 `$GIT_COMMON_DIR/hooks`，那份钩子是所有 worktree 共享的，会连人自己的推送一起挡掉。
+- `pushBranch` 的推送参数加 `--no-verify`，dry run 的 argv 同步；执行器是唯一被允许交付的一方。
+- 单测：worker 的普通 `git push` 被拒且远端没收到分支、执行器的 `pushBranch` 仍然成功、复用 worktree 会补装钩子、worktree 的 `git status` 保持干净。
+- 已知上限：worker 有权改仓库配置，删掉 `core.hooksPath` 就能绕过。这道钩子防的是手滑（模型顺手推到 main），不是防越狱——真隔离要靠容器。写进 `docs/worker-bots.md` §9。
+
+### 验证
+
+- `node --test lib/live/repo.test.js` 18/18（含新增两条）；`node --test lib/live/*.test.js` 全绿。
+
 ## [1.1.12] — 2026-11-24
 
 ### 设置 → 仓库改为列表
