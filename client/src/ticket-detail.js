@@ -2159,6 +2159,12 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         </button>}
     </span>
 
+  // The ⋯ menu is the only way to reach verify/CI/publish/retry/stop, so it travels with whatever tier is on screen: the
+  // head while the head is visible, the sticky bar once the head has scrolled away (it used to leave the menu behind,
+  // out of view, with only the primary action still reachable).
+  const overflowAction = <Menu label={pt(t, 'menu.label')} items={menuItems} align="end"
+    text={primaryAction ? undefined : pt(t, 'menu.label')} />
+
   // The header's right corner is the Ticket's control cluster: sign-off note, the one state-following primary action,
   // then the ⋯ menu. The menu opens leftwards (align end) because it now sits at the right edge of the content.
   const headActions = <>
@@ -2172,8 +2178,8 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         {pt(t, 'menu.stop')}
       </Button>
       : null}
-    <Menu label={pt(t, 'menu.label')} items={menuItems} align="end"
-      text={primaryAction ? undefined : pt(t, 'menu.label')} />
+    {/* While the sticky bar carries the controls, this copy steps aside so the page never holds two of each. */}
+    {headStuck ? null : overflowAction}
   </>
 
   return <>
@@ -2203,7 +2209,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         data-active={activeJump === jump.id ? 'true' : undefined}
         aria-current={activeJump === jump.id ? 'location' : undefined}
         onClick={() => jumpTo(jump.id)}>{pt(t, jump.labelKey)}</button>)}</div>
-      {headStuck ? <div className="sa-detail-context-action">{primaryAction}</div> : null}
+      {headStuck ? <div className="sa-detail-context-action">{primaryAction}{overflowAction}</div> : null}
     </nav>
 
     {ticket.workflow ? <Section title={pt(t, 'wf.progress')}>
