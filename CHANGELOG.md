@@ -14,7 +14,71 @@
 ### 验证
 
 - `node --test lib/live/repo.test.js` 18/18（含新增两条）；`node --test lib/live/*.test.js` 全绿。
+## [1.1.15] — 2026-11-25
 
+### Claude Code CLI 不再被削成一个子集
+
+- 写回合改成 `--permission-mode bypassPermissions`，去掉 `--allowedTools` 与 `--disallowedTools`：既然把工单交给本机的 Claude Code，就用它自己的工具、它的 settings/hooks/MCP 与模型配置。之前的白名单只给了 `Read,Edit,Write,Glob,Grep,Bash`，并把联网、子 agent、Skill、Notebook、定时任务等一并禁掉——那不是在用 Claude Code，是在用一个残缺的它。`-p` 是非交互的，没有白名单时任何未预授权的工具不是「问一下」，而是直接拒绝，所以这一步必须走 bypassPermissions 才有满血能力。
+- 只读回合（评审、评估）保持 `plan` 模式 + `Read,Glob,Grep,Bash`：读 diff、跑测试够用，但不会改文件。
+- 交付边界没变：worker 拿到的仍是工单 worktree，提交、推送、MR、闸门与部署仍由执行器负责——`--append-system-prompt` 里的 brief 只在有内容时才加。
+- 声明表 `BACKEND_CAPABILITIES.claude` 的 `web` 由 `false` 改为 `true`（2026-11-25 冒烟：`WebFetch` 抓到页面标题才写），否则一个需要联网的工单还会被静态表误判为不可路由；未核验的后端仍由 `capabilityGaps` 拒绝，`引擎` 也不再拿 claude 的 web 当「缺能力」示例。
+- 设置页同步：worker 后端里 Claude 的说明改为「就是本机那个 Claude Code……工具不设限」，能力卡里 approval 写 `bypassPermissions（工具不设限）`、resume 改为 `--resume 续接同一会话`（1.1.13 起就支持，一直写着「一次性会话」）。
+- 测试：`worker-cli.test.js` 断言写回合没有白名单/黑名单、只读回合仍是 plan；`routing.test.js` 与 `api.test.js` 里以「claude 缺 web」为反例的三处断言换成现在的真实边界（未知后端、未启用的后端）。
+## [1.1.14] — 2026-11-24
+
+把 1.1.13 只做在 CLI 上的「修复轮续接」补到 DSH worker。
+
+### DSH worker 的修复轮续接
+
+- `lib/live/worker.js` 的 `runWorker` 新增 `resume`：给了持久化的会话 id 就走 `agents.resume({ resumeSessionId })`（宿主先加载对话），不再每轮 `agents.create` 开一个新会话。`setup` 照旧在新作用域里重建，所以 brief、工具守卫、审批策略、Bot 的 prompt sections 一个都不少。
+- `lib/live/executor.js`：自动修复轮传 `resume: run.worker?.sessionId`，与 CLI 分支同一条规则——修复时它记得自己上一轮读了什么、改了什么。
+- 两条兜底：宿主没有 `agents.resume`（旧 DSH）→ 记一行日志，照常开新会话；会话文件已不存在或被别的进程占着 → 同样退回新会话，不让「续不上」变成一个失败的 run。
+
+### 为什么 DSH 没有「在终端接管」
+
+DSH worker 的会话本来就是一等 Session：运行行的「打开 Session」就是接管，在 GUI 里能接着聊。本机也没有 TUI app（`dsh-tui` 不在安装包里，`~/.dsh/profiles` 只有 desktop/dev/headless/sdk/web），`dsh tui --resume` 直接报 profile 不存在；唯一能续跑持久化会话的是 `dsh --profile headless --session-id <id> "…"`，那是命令而不是终端。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：worker 新增三例（修复轮走 `agents.resume` 且重建 setup、宿主无 resume 时退回创建、resume 失败退回创建）。
+- `render-check`、`build-client --check`、`check-keys`、`npm run types`、`check:js` 全绿。
+## [1.1.13] — 2026-11-24
+
+把 Claude Code CLI 会话接进面板：CLI worker 不再是一次性黑盒，运行中可以看、跑完可以接着聊、还能直接接管到终端。
+
+### 运行时可见（CLI worker 的实时 trace）
+
+- `lib/live/worker-cli.js`：`runProcess` 增加 `onStdout` 观测点，`runCliWorker` 增加 `onTrace` 与行缓冲，把 stream-json 的每一行即时解析成 trace 条目（新增导出 `streamedEvents`）；进程退出时冲刷最后一行（CLI 常不带尾随换行，`result` 就在缓冲里）。解析结果仍是权威来源，`run.trace` 的最终内容不变。
+- `lib/live/executor.js`：CLI 分支把 `onTrace` 接到 `liveTrace.push`，与进程内 DSH worker 同一条 §12 实时链路——CLI 运行期间详情页不再空白，直到回合结束才有 trace。
+
+### 跨轮续接（同一条 Claude Code 会话）
+
+- `cliInvocation` 支持 `resume`（claude 加 `--resume <id>`，与 `--append-system-prompt`/`--json-schema`/权限参数并存，已用本机 claude 2.1.329 实测：续接后返回同一 `session_id`、记得上一轮的答案）。
+- 自动修复轮次 `resume` 主回合的会话：修复时不再从一段「刚写完什么都不记得」的新对话开始。Codex 暂无核实的续接方式，不加参数。
+
+### 在终端接管
+
+- 新增 `lib/live/worker-terminal.js` + Host 路由 `POST /superagent/api/engine/workers/terminal`：为当前 GUI 会话开一个侧边终端（worktree 目录、120x32），输入 `claude --resume <id>`；没有可续接的 id 时开一个新的 `claude`。首个按键即由人接管，和自己在终端里开一样。
+- 会话标识按 `/^[A-Za-z0-9_-]{1,128}$/` 校验后才拼进 shell 命令行；缺会话 / 会话未运行 / 无终端服务 / 超出终端上限都返回带原因的 4xx，而不是 500。
+- `cliInvocation` 只在会话 id 是 UUID 形状时才加 `--resume`：`claude --resume <value>` 会把未知值当**会话标题**去匹配，而流里没拿到 `session_id` 时会退化成 `worker-xxxxxxxx` 这种合成 id——以前理论上可能续到别人的会话，现在直接不加该参数。
+- 客户端：`PanelProvider` 新增 `currentSessionId`（点击时读取：`sidebarRight.mounted`，面板占着主栏时它为空，退回工作区自己的选择记录 `dsh.sessions.current`），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
+- 同一个运行再点一次会回到已经在跑的那个终端（按标题认领，`reused: true`），不会占用宿主仅有的几个 agent 终端位、也不会在同一个会话上再起一个 Claude Code。
+
+### 「会话」页：左边会话列表，右边对话
+
+- 新增「会话」页（页签在「执行」与「设置」之间），和宿主自己的形状一致：左边是这个仓库 Claude Code CLI worker 跑过的会话，右边是那条会话的对话——不是一块终端。
+- 对话是真的那条 CLI 会话：每条消息就是一次 `claude -p --resume <session_id>`（`POST /superagent/api/engine/workers/chat`），所以之前的上下文、它对仓库的了解都还在；回复由 CLI 的 stream-json 渲染成 markdown，上面一行写这次做了几步、花了多久（`完成 2 步 · 13s`），没跑完则写原因。
+- 列表来自引擎的 runs（`worker.backend === 'claude'`），按会话去重（修复轮与主回合同一个 `session_id`，不会变两行），一行显示工单标题、会话短 id 与时间；从运行行点「继续对话」直接落到这条会话。
+- 只有 UUID 形状的会话 id 才会续接（`claude --resume <value>` 会把别的值当**会话标题**去找），消息与工作区路径都在 Host 侧校验后才拼进 argv；一条消息最多一次跑 10 分钟，失败/超时作为一条带原因的回复留在对话里，不会静默消失。
+- 终端没有丢，只是退成逃生口：会话页右上「在终端里打开」还是那条 `claude --resume` 的 TUI（面板自己的 xterm 渲染，宿主只提供 PTY），给聊天框表达不了的场景用；「返回对话」回到聊天。
+- 终端渲染的细节（`client/src/terminal.js`）：`snapshot` 先 `reset()` 再按 `info.cols/rows` 定尺寸、`output` 直接写，写完 `acknowledge(revision)`；`ResizeObserver` 走 `fitGrid`（按 `environment.maxCols/maxRows` 夹紧）把容器尺寸同步回宿主；刚开的终端本窗口 roster 还是旧缓存，第一次 `refresh()` 会 `missingTerminal`，故退避重试（最多 8 次、间隔 350ms）；`view.state` 的订阅通知不带参数，用计数器重渲染、渲染时读 `getSnapshot()`。
+
+### 验证
+
+- `lib/live/worker-cli.test.js` 28/28（新增 resume argv、续接透传、流式 trace 三例）；新增 `lib/live/worker-terminal.test.js` 6/6（接管参数与策略、无 id 开新会话、注入形态 id 拒绝、缺会话/无服务/超上限、写入失败关闭终端）。
+- `lib/live/worker-chat.test.js` 6/6：一条消息＝一次续接的 CLI 回合（工作区、`bot: 'write'`、不带 schema）、无 id 开新会话、非 UUID 一律 400 且不 spawn、消息/目录/长度校验、CLI 失败如实报错、历史读取（thinking/sidechain/工具结果不进对话，工具调用计数，只留最近 N 条）。
+- `render-check`：新增 claude 运行夹具，断言「claude 运行显示『继续对话』、Codex 与 DSH 运行不显示」；另加会话页六条（按会话去重、只有 UUID 可续接、列表与选中、聊天框与终端入口、开场说明、步数与失败提示）与帧协议三条。
+- 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：运行行点「在终端接管」→ 会话页选中该会话并自动开终端、`connected`、屏上是 `claude --resume f46922bb-…` 恢复出的上一轮对话（PINEAPPLE 问答），可继续输入。
 ## [1.1.12] — 2026-11-24
 
 ### 设置 → 仓库改为列表
@@ -25,7 +89,6 @@
 ### 打包文件名
 
 - 新增 `npm run pack:release`（`scripts/pack-release.mjs`）：`npm pack` 的 scoped 文件名（`mystic7c-dsh-superagent-panel-<v>.tgz`）统一改成 `dsh-superagent-panel-<v>.tgz`，与 `local-install.mjs` 的默认查找、`docs/delivery.md`、`docs/self-development.md`、README 一致；不再需要 `--tarball` 绕过。
-
 ## [1.1.11] — 2026-11-24
 
 第十批：整体代码走查 + UI 体检（设计 A 27/40、检测 B 1 个 P1）后的修复，重点是把「哪条信息归哪个页面」重新钉死。
@@ -72,7 +135,6 @@
 - `node scripts/render-check.mjs` → **309 checks / ok:true / 0 fail / 1 skip**（唯一 skip 是本机没有可检查的 UAT 仓库卡）。
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
 - 独立实例逐页截图复核（7 页 + 工单详情），确认不再有重复的暂停横幅/配置清单/检查按钮。
-
 ## [1.1.10] — 2026-11-24
 
 第九批：把上一轮 UI 体检里明确留作「重新设计量级」的三条 P2 补完。
@@ -98,7 +160,6 @@
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`（24 modules, 548858 bytes）、`node scripts/check-keys.mjs`（1068 / 541 / 1518）全绿。
 - 独立实例（`/tmp/sa-r2`、独立端口、CDP 1280/390）逐条截图与 DOM 断言验证，见上。
 - 回归防护再次生效：写 CSS 注释时带了反引号，`build-client.mjs` 的模板字面量守卫直接报 `style.js: 47 comment open(s) vs 46 close(s)`，在进浏览器之前就拦住了。
-
 ## [1.1.9] — 2026-11-24
 
 第二轮整体审查（代码 + UI）后的第八批修复：客户端 12 条逻辑缺陷、Host / 引擎 20 条缺陷，以及两轮 UI 体检（设计 A 28/40、检测 B 0 个 P1）发现的可用性与无障碍问题。四条上批反馈的修复在本轮实测确认未回归。
@@ -139,7 +200,6 @@
 - `node scripts/render-check.mjs` → **311 checks / ok:true / 0 fail / 0 skip**。门槛里三条断言按新行为重写：列头在分组名之前、改动文件/时间线的溢出区域用 `hidden` 表达、路由聚焦接受 `sa-page-head-title`。
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`（1067 / 541 / 1517）全绿。
 - 独立实例实测（`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-r2`、独立端口、CDP 1280/390）：触发左栏折叠区高 0 → 展开 112px 且带「从 / 至」，首条线程上移到 y≈380；评估在 1280 无「更多筛选」、390 点开后 0 → 72px；执行页 390 的证据行带「证据 ·」前缀；详情页改动文件 5 + 1（折叠）/ 时间线 8 + 7（折叠）且 `aria-expanded` 与 `hidden` 一致；搜索输入框 `role=combobox`、14 个 option、↓ 后 `aria-activedescendant=sa-search-option-0` 且行有底色；设置页从 scrollTop 240 切「运行 / 仓库」后 Intro 与按钮仍在视口内。
-
 ## [1.1.8] — 2026-11-23
 
 整体代码 + UI 审查后的第七批修复：4 条使用中反馈（触发页线程栏被 160px 内滚动条夹住、评估页筛选空档消失、执行页按仓库分组缺「查看全部」且列头压住分组名、设置页切页签把说明和按钮顶出屏幕），加上客户端 12 条逻辑缺陷、Host 侧 12 条缺陷，以及两轮 UI 体检（设计 A / 检测 B）发现的 17 条可用性与无障碍问题。
@@ -187,7 +247,6 @@
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
 - 独立实例实测（`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-review`、独立端口、CDP 截图）：1280 触发页线程栏从 160px 内滚动改为整页滚动且分页器可见；评估页六颗档位 chip 在 0 命中时仍全部渲染；执行页列头在「已结束」/仓库名之上，`查看全部（71）` 在按仓库分组下同样出现并展开到 71 行；设置页从 scrollTop 240 切到「运行 / 仓库」后落在 scrollTop 12，Intro 与两个按钮仍在视口内；术语表 → Esc → Cmd+K 后焦点落在搜索输入框。
 - 回归防护：`scripts/build-client.mjs` 增加模板字面量守卫——CSS 注释里出现反引号会让 `PANEL_CSS` 提前结束（本次实际踩到：整站样式变成 `<style>NaN</style>`），现在构建直接报 `style.js: N comment open(s) vs M comment close(s)`。
-
 ## [1.1.7] — 2026-11-23
 
 整体审查后的第六批修复（P3 批量）：一次 429/5xx 就让整次执行变红、GitLab 的登录页被报成「JSON 无效」、流水线第二页的失败 job 看不见、超长 job 日志整份读进内存、判定模型的输入没有上限，以及面板侧「失败和成功长得一样」的六处细节。
@@ -212,7 +271,6 @@
 - `node scripts/render-check.mjs` → 311 checks / ok:true / 0 fail / 0 skip（新增两条：失败动作是 `role="alert"` 的 `.sa-toast-error`、该规则真的写在 CSS 里）。
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
 - 负向验证：去掉 `tone` 透传后 toast 检查拿到 `sa-toast role=status`；GitLab 写请求的 503 计数为 1（重试会重复建 MR）。
-
 ## [1.1.6] — 2026-11-23
 
 整体审查后的第五批修复（P2，Host 侧十二条）：并发写丢更新、孤儿工单每两分钟撞一次平台 API、信号日志只增不减、机器人自己的回复回流成候选、重放被双击成两张工单、UUID 事件永久重取、`tkt_1` 的工作树被当成 `tkt_10` 的、没有 base 时推送守卫不扫已提交的密钥、旧 MR 状态盖住新 MR、远端删掉分支后跳过 push、MR 建失败读成已交付、`/gate` 同步等到分钟级操作跑完。
@@ -238,7 +296,6 @@
 - `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip。
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
 - 负向验证：改动前 `setTicketAutomation` 的旧实现会让新断言读到 `intervalMinutes: 15`（排队中的 tick 写的 45 被覆盖）；移除 `handledEvents` 后第二次 poll 会重新记一条信号而不是 `already-handled`。
-
 ## [1.1.5] — 2026-11-23
 
 整体审查后的第四批修复（P2，客户端优先）：一次没回音的请求会把轮询队列永久卡住、等回答的工单在两个分组里各算一半、Bot 改名会留下一份旧副本、没选线程时每 30 秒请求一次 `thread/undefined`。
@@ -256,7 +313,6 @@
 - `node scripts/render-check.mjs` → 309 checks / ok:true / 0 fail / 0 skip（新增三条：改名只留一份、请求超时而不是永久挂起、无线程时不发请求）。
 - 负向验证：把 `timeoutMs` 改回 0 → 超时检查报 `still pending` 且整轮 exit 1；把排除条件改回只看 `bot.id` → 改名检查报 `["generalist","surgical","reviewer","mine","mine2"]`。
 - `npm run types`、`npm run check:js`、`node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs` 全绿。
-
 ## [1.1.4] — 2026-11-23
 
 整体审查后的第三批修复：全部落在界面契约上——弹窗不说明它要做什么、整行点击靠一层伪元素、页标题与「需求」各说一遍、路由切换把键盘用户丢在 `<body>`、品牌色铺到开关和设置左栏、以及十一条细则（字号、禁用态、术语表、时长与失败原因的读法）。
@@ -276,7 +332,6 @@
 - `node scripts/render-check.mjs` → 305 checks / ok:true / 0 fail / 0 skip（新增 15 条：行按钮持有主列、路由切换焦点、单 h1、弹窗 `aria-describedby` 与滚动锁、滚动释放、品牌色只在下划线、禁用态单一 opacity、信号触发器 cursor/焦点环、diff 字号、`requestIsTitle`、`durationText`、失败原因去重、危险确认语气）。
 - `node --test lib/live/*.test.js` → 688 pass / 0 fail；`npm run types`、`npm run check:js`、`node scripts/check-keys.mjs`、`node scripts/build-client.mjs --check` 全绿。
 - `DESIGN.md` 同步两处：Page 标题是每页唯一的 `h1` 且两行截断；One Accent Rule 明确开关与设置左栏的选中态用中性底色，品牌色留给页签下划线。
-
 ## [1.1.3] — 2026-11-23
 
 整体审查后的第二批修复：全部是「记录的数据与实际发生的事对不上」——轮询丢了消息还说同步完成、轮询链每保存一次设置就翻一倍、关掉的收件箱项再也不回来、停机时把没落盘的游标 ack 掉、后台批次失败无人接收、UAT 结果落在别的仓库卡上、详情页草稿跟着路由跑到别的工单。
@@ -298,7 +353,6 @@
 - `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs`：24 modules / 529880 bytes（`--check` up to date）；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
 
 ---
-
 ## [1.1.2] — 2026-11-23
 
 整体审查后的第一批修复，全部是「开关与守卫被绕过」这一类：执行器关着仍能交付、token 被静默删除、推送守卫漏大小写、并发保存丢配置、Bot 文件可覆盖 live.json、群消息可重复发送。
@@ -319,7 +373,6 @@
 - `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1505 page-local；`node scripts/build-client.mjs --check`：24 modules / 529684 bytes up to date（本次无客户端改动）；`npm run types`、`npm run check:js`、`node --check index.js`、`npm ci` 全绿。
 
 ---
-
 ## [1.1.1] — 2026-11-23
 
 交付之后才失败（MR 流水线红了、dev 部署 job 红了、MR 被关掉）的工单，在面板里点不动：行内只有「查看原因」，菜单里的「发布 MR」被状态白名单挡住，而「重试」即便跑起来也会复用那张**已经合并**的 MR，于是永远盯着旧 merge commit 的流水线。
@@ -340,7 +393,6 @@
 - 真实工单 `tkt_67d46ecb809d4ce4` 复现的链路：MR !70 在修复提交前自动合并，dev 流水线 533268 的 `agent-package` 因 skill/CLI 版本不一致失败，之后的 job 全 skipped；修复提交合入（MR !71，merge commit `31b3ba6`）后 dev 流水线 533279 的 `agent-package` 转绿。
 
 ---
-
 ## [1.1.0] — 2026-11-23
 
 Bot 从「设置里的一个分组」升级成顶层页签，位置在「执行」左边：先把「谁来做」定下来，再看队列。设置页回到只配置工作流本身，Bot 的定义、查看、编辑、核验全部集中在 Bot 页签。
@@ -360,7 +412,6 @@ Bot 从「设置里的一个分组」升级成顶层页签，位置在「执行�
 - 独立端口 + 独立状态目录（`DSH_SUPERAGENT_STATE_DIR=/tmp/...`）起实例，页面 200 且插件加载，无 Host 报错；测完已关闭。
 
 ---
-
 ## [1.0.24] — 2026-11-23
 
 Bot 编辑器的首次使用体验：20 个字段一次平铺，第一次用根本不知道该填什么，而且没有样式——`sa-bot-modal` / `sa-field-grid` 这些类名在 `style.js` 里根本没有规则，于是每个输入框占满整行。数据模型与契约不变，只动 `client/src/settings.js` 与 `client/src/style.js`。
@@ -378,7 +429,6 @@ Bot 编辑器的首次使用体验：20 个字段一次平铺，第一次用根�
 - `node scripts/check-keys.mjs`：1059 literal keys / 530 shared / 1504 page-local；`node scripts/build-client.mjs`：24 modules / 529570 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
 
 ---
-
 ## [1.0.23] — 2026-11-23
 
 P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但面板上既选不了阶段 Bot，也看不到某个阶段跑了谁。这一版只动 UI 与 `botsView` 的返回体，契约不变。
@@ -396,7 +446,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node scripts/check-keys.mjs`：1054 literal keys / 530 shared / 1499 page-local；`node scripts/build-client.mjs`：24 modules / 527565 bytes，`--check` up to date；`npm run types`、`npm run check:js`、`node --check index.js` 全绿。
 
 ---
-
 ## [1.0.22] — 2026-11-23
 
 `docs/worker-bots-spec.md` §18 的八个未决问题定下六条（D1–D5、D8），两条属于 CLI 后端的问题（D6 claude 联网、D7 codex 思考深度）推迟到 P4/P5。D6/D7 之外真正要改代码的只有三处，其余是把已经长成的行为写进契约。
@@ -419,7 +468,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - 自查：如果你有**只当执行器用**的自建 Bot 却没写 `requires`，它现在不会被自动选中（规则点名或手动指定仍可以）。给它补上真实需要的 `edit`/`exec`/`web` 即可。
 - `reviewer` 依旧只能当阶段 Bot；`executor.bot: "reviewer"` 不再让整单跑在它上面。
 - 代码没有改名，文件仍是 `worker-bots.json` `version: 2`。
-
 ## [1.0.21] — 2026-11-22
 
 `docs/worker-bots-spec.md` §10.2（阶段级 Bot 与阶段级预算）落地。此前 `stages` 只能写阶段名，一个 Bot 的所有阶段共用同一后端/模型/预算；现在某个阶段可以指定**另一个 Bot** 和它自己的预算，没指定的阶段继续用整单 Bot。
@@ -441,7 +489,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - 现有 Bot 文件无需迁移：`stages: ["implement","gates"]` 仍有效。阶段级写法是新增能力，不写就等于整单 Bot。
 - 阶段 Bot 必须自己核验通过（dsh 走探针，claude/codex 需要 `<stateDir>/backend-verify.json` 里的 smoke 证据），否则整个 run 拒单，不会悄悄退回整单 Bot。
-
 ## [1.0.20] — 2026-11-22
 
 用 dev 实例（`scripts/dev.mjs`，链接工作树、`DSH_SUPERAGENT_STATE_DIR=/tmp/sa-dev-state`）在真实宿主 0.2.2-rc.5 上实测 Bot 页，桌面 profile 未动。三个问题：两个把设置页打成 500，一个是探针在真机上永远测不出能力。
@@ -461,7 +508,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - 1.0.18/1.0.19 若在真实宿主上打开 Bot 页报 `cannot get property … without inject`，升级到本版即可；无需改配置。
 - 能力表仍只用于拒绝：composition 是宿主运行时声明，`routing.js` 的静态表不授权任何能力。
-
 ## [1.0.19] — 2026-11-22
 
 把「档位（profile）」整套命名换成 **Bot（bot）**（`docs/worker-bots-spec.md` 附录 C）：用户定义、面向一类固定重复工作的执行者。行为不变，但对操作员可见的每一条路径都换了名字，旧配置与旧 Bot 文件需要按附录 C 迁移。
@@ -485,7 +531,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - 自定义 Bot 需从 `worker-profiles.json`（`version: 1`）改名为 `worker-bots.json` 并把 `version` 改成 `2`；字段名不变，仅文件与版本号变化。
 - `live.json` 里旧的 `executor.profile` / `profilesFile` / `dispatch.rules[].profile` / `repos[].profile` 现在会被忽略（键不存在），请在设置页重新指认，或按附录 C 手改。
-
 ## [1.0.18] — 2026-11-22
 
 按 `docs/worker-bots-spec.md`（v3，即 1.0.15–1.0.17 期间评审过的 v2 规则，只改了「档位 → Bot」命名）做了一轮契约合规修复：1.0.17 的测试全绿，但闸门绿不等于契约符合 —— 对照 §3.2/§3.5/§3.7/§4.1/§9.3/§12 逐条核对后，有五处实现与规范相反，另有四处根本没接上。
@@ -527,7 +572,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - **未核验的后端不再能派单**：旧 `executor.workerBackend: 'codex'`（或 `claude`）配置现在需要先有一条 Bot + smoke 账本证据，否则拒绝并说明「没有可用 Bot」/「后端尚未核验」。这是 §3.7 的本意，但确实是行为变化。
 - 默认层/现拉层不再用静态能力表兜底；宿主 `agentPresets` 不可用时，DSH 后端同样按未核验处理。
 - 已知遗留：宿主不暴露版本，`stale` 只在设置了 `DSH_VERSION` 或注入 resolver 时可达；CLI 的增量事件（`onLine`）与 C1–C10 仍属于 P4/P5；阶段级 Bot（§10.2）未实现。
-
 ## [1.0.17] — 2026-11-21
 
 1.0.16 打开「设置 → 档位」直接把宿主打崩（`应用无法启动或已意外停止`，`dsh: fatal load failure`），1.0.15 的档位契约层因此完全不可用。
@@ -543,7 +587,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node --test lib/live/*.test.js` → **657 pass / 0 fail**（新增 3 条：宿主形状的 `tools` 服务按名探测且 `resolve` 调用次数为 0、只有 `definitions()` 也能探测、只有 `resolve` 的服务退化成未核验而不是崩溃）。
 - `npm run check`、`npm run check:js`、`node --check index.js`、`node scripts/check-keys.mjs`、`node scripts/render-check.mjs` 全绿（客户端未变）。
 - 属于 Host 半修复：装上新版本后需要**重启 DSH**（重载插件即可）才生效。
-
 ## [1.0.16] — 2026-11-21
 
 `tkt_f96ee85ca71d4577`：按 `docs/worker-profiles-spec.md` 落 **P2 派单层 + P3 面板 UI**。1.0.15 只交付了档位契约层与 DSH 参数，谁来选档位、选了之后记在哪、操作员怎么看和怎么换，都还缺。
@@ -579,7 +622,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node scripts/render-check.mjs` → **279 checks / ok true**（新增详情页档位摘要/能力来源/降级/未核验/仓库文件提示/换档下拉，以及设置页档位列表、内置档位不可编辑、未核验警示、编辑器预览、错误码就地显示、核验状态、规则档位缺失提示）。
 - `node scripts/build-client.mjs` 24 modules / 525,931 bytes；`check-keys` 1049 / 530 / 1494；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
 - 属于 Host 半 + 客户端改动：Host 半装上新版本后需要**重启 DSH**；客户端刷新页面即生效。
-
 ## [1.0.15] — 2026-11-21
 
 `tkt_2ee8c4b1fbf7429d`：按 `docs/worker-profiles-spec.md` 落 P0 契约层与 P1 DSH 参数。此前 worker 只有「后端 + preset」一层配置，没有可声明、可校验、可复现的档位（profile）概念。
@@ -606,7 +648,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node --test lib/live/*.test.js` → **631 pass / 0 fail**（新增 `worker-profile.test.js` 18 条、`backend-capability.test.js` 9 条，并扩展 config / worker / worker-cli / executor 的档位与 effort 断言）。
 - `node scripts/render-check.mjs` → **263 checks / ok true**；`build-client --check` 24 modules / 504,910 bytes（客户端未变）；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
 - 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
-
 ## [1.0.14] — 2026-11-18
 
 `tkt_68e399abfed64ae6` 的 `run_fb00585a0b08484a`：worker 06:31:13 正常结束、四个闸门（standards / backend / frontend / uat-sql-smoke）06:31:46.792 全绿，06:31:46.799 却以 **`其他原因：Workflow evidence is missing or stale; rerun the workflow`** 失败 —— 19 个文件留在工作树里没提交，分支 0 提交；随后点「发布」也在同一处失败。
@@ -623,7 +664,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - `node --test lib/live/*.test.js` → **592 pass / 0 fail**（新增 4 条：残留 blocked workflow 不拦普通运行、report 路由在 `workflowMode: on` 下也不被残留拦住、`workflowMode: off` 时发布忽略旧 digest、`workflowMode: on` 时发布仍拒绝过期证据）。
 - 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
-
 ## [1.0.13] — 2026-11-17
 
 `tkt_59a2d395723646b9` 的 `run_2ac91627b4374739`：`assess` 通过（判为 planned），`plan` 跑了 44 步、写出一份很完整的计划，却以 **`其他原因：invalid acceptance IDs`** 结束。
@@ -640,7 +680,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node --test lib/live/*.test.js` → **588 pass / 0 fail**（新增：计划把 AC 答成字符串时报 shape 错误、缺 id / 重复 id 各自点名；marker 断言含 Shape 与枚举写法）。
 - `node scripts/render-check.mjs` → **263 checks / ok true**；`build-client --check` 24 modules / 504,910 bytes（客户端未变）；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
 - 属于 Host 半改动：装上新版本后需要**重启 DSH** 才生效。
-
 ## [1.0.12] — 2026-11-17
 
 1.0.11 的「等推送再试一次」没救回来：`tkt_59a2d395723646b9` 的运行结束后再点，宿主仍答 `sessions.retain: unknown session workflow-run_2ac91627b4374739-plan-2` —— 而同一个 id 在新起进程的列表里是有的（651 行，含 plan-2 / assess-1 / 旧 assess-1）。
@@ -656,7 +695,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node scripts/render-check.mjs` → **263 checks / ok true**（新增两条：列表过期 → 一次 refresh 后直接打开；refresh 后仍没这行 → 不重试、报 unavailable 且带 `unknown session worker-void`）。
 - `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,910 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
 - 实机（dev 实例，真实 `~/.dsh/sessions`）：新拉取的列表 `phase:'ready'`、含 `workflow-run_2ac91627b4374739-plan-2` 与 `assess-1`；`ctx.get("sessions").refresh` 为函数。
-
 ## [1.0.11] — 2026-11-17
 
 1.0.10 之后仍然复现：`tkt_59a2d395723646b9` 的新运行（`run_2ac91627b4374739`）正在跑、它的 `assess` 会话也确实出现在左侧「未分组」，点 run ID 却还是「DSH 的会话列表里没有这个 Session」。
@@ -671,7 +709,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - `node scripts/render-check.mjs` → **261 checks / ok true**（新增三条：拒绝后等到列表推送到位即打开、列表始终没点名 → unavailable、提示语带宿主原因）。
 - `node --test lib/live/*.test.js` → **586 pass / 0 fail**；`build-client --check` 24 modules / 504,779 bytes；`check-keys` 991/529/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
-
 ## [1.0.10] — 2026-11-17
 
 两个都在 `tkt_59a2d395723646b9` 上暴露：staged 工作流的 `assess` 阶段把散文当 JSON 交回来，整条运行直接 failed；那条运行留下的 run ID 又在会话列表还没投影出这个会话时被 opener 判成「不存在」。
@@ -692,7 +729,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node --test lib/live/*.test.js` → **586 pass / 0 fail**（新增 `lib/live/workflow-worker.test.js` 5 条：schema 文案、裸/围栏/前言、嵌套与字符串花括号、散文报错文案、数组与标量；`review-json.test.js` 补 assess 也进 JSON 模式、implement 不进）。
 - `node scripts/render-check.mjs` → **258 checks / ok true**（新增「列表里没有该会话仍交给宿主」「列表永远不 ready 也照常跳」两条）。
 - `build-client --check` 24 modules / 504,064 bytes；`check-keys` 990/528/1421；`node --check index.js`、`npm run types`、`npm run check:js` 全绿。
-
 ## [1.0.9] — 2026-11-17
 
 一条：把「运行记录」里的 run ID 变成进执行器会话的门。此前 worker 的 DSH Session 在左侧「未分组」下能打开，但要从一次运行里看它跑的过程，只能自己去会话列表里一个个找。
@@ -720,7 +756,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
   - 修复前同一操作停在「选择一个工作区开始」落地页（对照证据见本轮排障）。
 - `node --test lib/live/*.test.js`：**580 pass / 0 fail**。
 - 其余闸门：`node --check index.js`、`build-client --check`（24 modules / 504,063 bytes）、`check-keys`（990/528/1421）、`npm run types`、`npm run check:js` 全绿。
-
 ## [1.0.8] — 2026-11-17
 
 两条：把「只读」从关键词升级为语境判断（工单 `tkt_e3c4b7ce8ddd4399` 只出报告、不落地需求的根因），并让一张工单能在标题/正文/追加要求里引用另一张工单，执行时自动带上被引用工单的报告。
@@ -744,7 +779,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node scripts/isolated-verify.mjs`：**PASS**（临时 DSH profile + 临时状态 + headless Chrome，随机端口独立启动；真实面板挂载、6 个页签、0 console error，未触碰运行中的面板与 `~/.dsh/superagent`）。
 - 其余闸门：`node --check index.js`、`build-client --check`（23 modules / 501,251 bytes）、`check-keys`（986/525/1421）、`npm run types`、`npm run check:js` 全绿。
 - 独立验证（真实状态只读）：`tkt_e3c4b7ce8ddd4399` 现在判 `dev/change/write`；草稿工单「按 tkt_e3c4b7ce8ddd4399 的报告落地」判 `change`、R3 不命中、worker task 已带 17,374 字符引用块；`live-state.json` 的 sha 前后一致（未写状态）。
-
 ## [1.0.7] — 2026-11-16
 
 仓库卫生：把 `impeccable` 的工作目录从版本控制的口子上挡掉，并写清 `.github/` 与 `DESIGN.md` 侧的契约产物各自该不该进仓库。
@@ -758,7 +792,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - **`AGENTS.md` 结构一节补两条**：`.github/` 下是功能性文件（`ci.yml` 就是分支保护引用的 required checks、
   `auto-pr.yml` 是交付桥），不进 `.gitignore`；`DESIGN.md` 与 `.impeccable/design.json` 是人读/机器读两半，
   `design.json` 是生成物，跟着 `DESIGN.md` 重生成。
-
 ## [1.0.6] — 2026-11-16
 
 渲染闸门原来是「看本机脸色」的：同一句 `node scripts/render-check.mjs`，本机跑 246 条、CI 跑 245 条，结果还不一样。
@@ -784,7 +817,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `DSH_SUPERAGENT_STATE_DIR=/tmp/<有 live.json 的目录>`：走外部状态并打印警告；目录不存在或没有 `live.json`：警告后回退 fixture。
 - 其余闸门不变：`node --check index.js`、`build-client --check`（23 modules / 501,251 bytes）、`check-keys` 986/525/1421、
   `npm run types`、`npm run check:js`、`node --test lib/live/*.test.js` 572 pass / 0 fail。
-
 ## [1.0.5] — 2026-11-16
 
 纯文档：把「怎么改这个仓库」从只有面板自开发一种角色，补成两种开发方式并列出共同的 GitFlow 硬线。
@@ -799,7 +831,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - **补一条「推之前用干净状态跑渲染闸门」**：`render-check` 在 `~/.dsh/superagent/live.json` 存在时读的是本机真实状态，
   干净 clone 与 CI 读 `test/fixtures/live.json`，两边结果可以不同——1.0.4 的 CI 红（本机 42 条决策、CI 只有 1 条）就是这么
   漏出去的。现在写明 `DSH_SUPERAGENT_STATE_DIR=$(mktemp -d) node scripts/render-check.mjs` 就是 CI 的条件。
-
 ## [1.0.4] — 2026-11-15
 
 一轮开发视角深挖审计（`verification/dev-audit-round2.md`）的 10 条缺陷，加上用户第二轮点检（`verification/ui-review-round2.md`）的 13 条修复与 5 条体验问题，合并发布。服务端修的是「并发/契约/生命周期」，界面修的是「刷新、筛选、命名与可达性」。
@@ -883,7 +914,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 
 - 禁用/重载插件仍可能中断在跑的工单（本次在停止后不再写盘，但不提供运行租约）；带筛选的深链依赖宿主不提前改写
   `query`，被改写时首屏只能回落到模块加载时捕获的那份参数。
-
 ## [1.0.3] — 2026-11-15
 
 一轮 11 条用户点检（`verification/ui-review-team.md`）加 4 条自查缺陷的修复，分「修复」（行为确实不对）和「体验」
@@ -954,7 +984,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
   `node scripts/render-check.mjs`（217 checks / 0 failed / 0 skipped）。
 - 真机（dev 实例）复验深链：F5 保留 `#sa={"page":"eval"}` 后 252ms 自动挂载并落在评估页，冷开
   `?token=…#sa=…` 同样挂载，console 0 error。
-
 ## [1.0.2] — 2026-11-14
 
 ### 文档
@@ -965,21 +994,12 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `DESIGN.md` 对齐代码：补「实现形态」段（ES 模块 + JSX、单一 CSS 模板字符串、token 定义在 `.sa-page`/`.sa-main`/`.sa-toast`）；
   修正三条与 `client/src/style.js` 不一致的说法——`.sa-md` 不再声称显式 opt out `tabular-nums`、列表行点击区
   是 `.sa-row-open` 自身撑满（没有 `::after` 覆盖层）、按钮变体就是四个 CSS 类。
-
-## [1.0.1] — 2026-11-14
-
-### 文档
-- `docs/delivery.md` 的「发布（维护者）」补全为四步：注释 tag → `npm pack` 并 `gh release create` 附 tarball →
-  `npm publish --access public`（先 `--dry-run` 看文件清单）→ `chore/backmerge-X.Y.Z` 回合并。
-- 起因：1.0.0 发布时 npm 发布这一步只有口头惯例，没有写在仓库里。
-
 ## [1.0.1] — 2026-11-14
 
 ### 文档
 - 分发渠道修正：1.0.0 **只**通过 GitHub Release 的 tarball 分发，npm 暂不发。README 的「安装」回到 tarball 优先、
   去掉 npm 安装示例；`docs/delivery.md` 的 npm 步骤标注为「暂未启用」并保留操作说明，等启用时照做即可。
 - `package.json` 保留 `publishConfig.access: public`、保持非 private：启用 npm 时不需要再改元数据。
-
 ## [1.0.0] — 2026-11-14
 
 第一个公开发布版本。仓库转为 public，通过 GitHub Release 的 tarball 分发（`package.json` 已去掉 `"private": true`
@@ -1002,7 +1022,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `check:js` 0（28 文件）、`types` 通过、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360、
   Host 554 pass / 0 fail、render-check 198 checks / 0 failed / 0 skipped、`isolated-verify` PASS（console errors 0）。
 - `npm pack` 后在干净临时目录 `npm i <tgz>` + `dsh plugin --profile <临时> add <tgz>` 可启动面板。
-
 ## [0.9.13] — 2026-11-14
 
 ### 修复
@@ -1018,7 +1037,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
   0 failed / 0 skipped**；其中「读完但数据为空」在没有修复时会渲染成「正在读取 diff…」，这条断言会失败。
 - `npm run check:js` 0、`--check` 23 modules / 481,428 bytes、`check-keys` 959/513/1360（新增一个 key）、
   Host 554 pass / 0 fail、`isolated-verify` PASS（console errors 0）。
-
 ## [0.9.12] — 2026-11-14
 
 ### 变更
@@ -1047,7 +1065,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node --test lib/live/*.test.js` → 554 pass / 0 fail。
 - `node scripts/render-check.mjs` → 194 checks / 0 failed / 0 skipped。
 - `node scripts/isolated-verify.mjs` → PASS，console errors 0，六个 tab 都在。
-
 ## [0.9.11] — 2026-11-14
 
 > 发布说明：v0.9.11 是 0.9.5–0.9.11 的汇总发布（checkJs 分档、删除旧管理层、交付桥前缀、Host 半全量入档），
@@ -1068,7 +1085,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `npm run check:js` 0 错误（清单 26 个文件）；`npm run types` 通过；`node --check index.js`。
 - `--check` 23 modules / 481,052 bytes；`check-keys` 958 / 513 / 1359。
 - Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`。
-
 ## [0.9.10] — 2026-11-14
 
 ### 变更
@@ -1092,7 +1108,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`。
 - `--check` 23 modules / 481,052 bytes（未动客户端）；`check-keys` 958 / 513 / 1359。
 - Host `554 pass / 0 fail`；render-check `194 / 0 failed / 0 skipped`；`isolated-verify` PASS（console errors 0）。
-
 ## [0.9.9] — 2026-11-14
 
 ### 变更
@@ -1109,21 +1124,18 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 ### 验证
 - `npm run check:js` 0 错误；`npm run types` 通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
 - `check-keys` 958 / 513 / 1359；Host 554 pass / 0 fail；render-check 194 / 0 failed。
-
 ## [0.9.8] — 2026-11-14
 
 ### 变更
 - `docs/delivery.md` 的分支前缀表补上 `fix/**`、`chore/**`、`docs/**`（与 0.9.7 的 `auto-pr.yml` 触发面一致）。
 - `ci.yml` 的 push 触发面补上 `docs/**`：此前 docs 分支只有 `auto-pr` 会跑，分支保护要求的 `test (22)`/`test (24)`
   不出现，PR 反而合不了。这条 `docs/**` 分支本身就是验证：推送后 `auto-pr` 自动开了 PR，CI 也照常跑。
-
 ## [0.9.7] — 2026-11-14
 
 ### 变更
 - `.github/workflows/auto-pr.yml` 的触发前缀补上 `chore/**` 与 `docs/**`（此前只有 `feature/**`、`fix/**`、
   `release/**`、`hotfix/**`）：这两类分支 push 后不会再只跑 CI、需要人手动 `gh pr create`。
 - `ci.yml` 的 push 触发早已含这两个前缀，现在两套工作流的触发面一致。
-
 ## [0.9.6] — 2026-11-14
 
 ### 变更
@@ -1147,7 +1159,6 @@ P6 的阶段编排 UI 补齐：§10.2 的数据通路在 1.0.21 就通了，但�
 - `node scripts/check-keys.mjs` 958 / 513 / 1359；`npm run types` 与 `npm run check:js` 均通过。
 - Host 测试 554 pass / 0 fail（少了 `store.test.js` 的 2 条）。
 - `node scripts/render-check.mjs` 194 checks / 0 failed / 0 skipped；`node scripts/isolated-verify.mjs` PASS，console errors 0。
-
 ## [0.9.5] — 2026-11-14
 
 ### 变更
@@ -1175,7 +1186,6 @@ CI 从第一天起就守住已清零的部分，剩下的按 `engine`/`executor`
 - Host 测试 556 pass / 0 fail。
 - `node scripts/render-check.mjs`（`DSH_SUPERAGENT_STATE_DIR=/tmp/rc-t1`）194 checks / 0 failed / 0 skipped。
 - `node scripts/isolated-verify.mjs` PASS，console errors 0。
-
 ## [0.9.4] — 2026-11-14
 
 ### 变更
@@ -1192,7 +1202,6 @@ CI 从第一天起就守住已清零的部分，剩下的按 `engine`/`executor`
 - `node scripts/dev.mjs --help` 能转发到 dsh；用临时 `DSH_SUPERAGENT_STATE_DIR` 实起一次实例：
   `GET /superagent/api/engine/status` → 200（`phase: disabled`，`x-superagent-request: 1` 头），
   停掉后端口关闭、进程退出。`--dump-config` 显示 `superagent-panel` 与 `dsh-web-app` 都在合成树里。
-
 ## [0.9.3] — 2026-11-14
 
 ### 变更
@@ -1206,7 +1215,6 @@ CI 从第一天起就守住已清零的部分，剩下的按 `engine`/`executor`
 
 ### 验证
 - 只改文档与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0 未变。
-
 ## [0.9.2] — 2026-11-14
 
 这是 v0.8.0 之后累计到 `main` 的发布：0.8.1 证据空态语义、0.8.2 CI 去人工 approve + README 带数据截图、
@@ -1223,7 +1231,6 @@ tarball，不进 npm。
 ### 验证
 - 本机 `node scripts/render-check.mjs`（Node 24.22.2）：194 checks / 0 failed / 0 skipped，exit 0。
 - `node --check index.js`、`--check`、`npm run types`、Host 556 pass 未变。
-
 ## [0.9.1] — 2026-11-14
 
 ### 变更
@@ -1233,7 +1240,6 @@ tarball，不进 npm。
 
 ### 验证
 - 只改 Markdown 与版本号：`node --check index.js`、`--check`、`npm run types`、Host 556 pass、render-check 194/0。
-
 ## [0.9.0] — 2026-11-14
 
 ### 新增
@@ -1255,7 +1261,6 @@ tarball，不进 npm。
 ### 验证
 - `npm run types`（tsc 5.9.3）通过；`node --check index.js`；`--check` 23 modules / 481,052 bytes；
   check-keys 958/513/1359；Host 556 pass；render-check 194 checks / 0 failed。
-
 ## [0.8.2] — 2026-11-14
 
 ### 变更
@@ -1270,7 +1275,6 @@ tarball，不进 npm。
 - `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass。
 - `node scripts/build-client.mjs --check`（产物未变）；check-keys 958/513/1359；render-check 194/0。
 - 截图来自隔离 DSH 实例（fixture 状态 + 通过 Host API 建的三条工单），console errors 0。
-
 ## [0.8.1] — 2026-11-14
 
 ### 修复
@@ -1288,7 +1292,6 @@ tarball，不进 npm。
 - `node --check index.js`；`node --test lib/store.test.js lib/live/*.test.js` 556 pass / 0 fail。
 - `node scripts/build-client.mjs --check`（产物未变，481,039 字节）；check-keys 958/513/1359。
 - `node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
-
 ## [0.8.0] — 2026-11-14
 
 ### 变更
@@ -1313,7 +1316,6 @@ tarball，不进 npm。
 - `node --check client/index.js`；check-keys 958/513/1359；Host 555 pass / 0 fail。
 - `node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0，六个页签齐全。
-
 ## [0.7.0] — 2026-11-14
 
 ### 变更
@@ -1336,7 +1338,6 @@ tarball，不进 npm。
 - `node scripts/check-keys.mjs`：958 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0，六个页签齐全。
-
 ## [0.6.0] — 2026-11-14
 
 ### 变更
@@ -1356,7 +1357,6 @@ tarball，不进 npm。
 - 真实浏览器（隔离 DSH 实例 + `test/fixtures/live.json` 夹具状态）验过：概览/设置各组、执行列表、工单详情
   （改动内容/验收/自动化/阶段链路/运行记录/时间线）、添加仓库对话框（13 字段 + 必填校验）、编辑仓库对话框、
   配置示例对话框，均无控制台报错。
-
 ## [0.5.7] — 2026-11-14
 
 ### 变更
@@ -1378,7 +1378,6 @@ tarball，不进 npm。
 - 真实浏览器（隔离实例 + 夹具状态）：设置页各组切换、添加仓库对话框（13 个字段、必填校验报「请填写此项。」并聚焦
   `sa-repo-field-id`）、编辑仓库对话框（12 个输入、闸门编辑）、配置示例对话框（`pre` 360 字）均正常渲染，无控制台报错。
   截图 `verification/browser-run-settings-0.5.7.png`、`verification/browser-run-add-repo-0.5.7.png`。
-
 ## [0.5.6] — 2026-11-14
 
 ### 变更
@@ -1395,7 +1394,6 @@ tarball，不进 npm。
 - `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0。
-
 ## [0.5.5] — 2026-11-14
 
 ### 变更
@@ -1412,7 +1410,6 @@ tarball，不进 npm。
 - `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0。
-
 ## [0.5.4] — 2026-11-14
 
 ### 变更
@@ -1428,7 +1425,6 @@ tarball，不进 npm。
 - `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0。
-
 ## [0.5.3] — 2026-11-14
 
 ### 变更
@@ -1445,7 +1441,6 @@ tarball，不进 npm。
 - `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
 - `node scripts/isolated-verify.mjs`：PASS，console errors 0，真实 DSH 里六个页签都在。
-
 ## [0.5.2] — 2026-11-14
 
 ### 变更
@@ -1461,7 +1456,6 @@ tarball，不进 npm。
 - `node --check client/index.js`；`node scripts/build-client.mjs --check`（22 片段，485,818 字节）。
 - `node scripts/check-keys.mjs`：967 literal keys / 513 shared / 1359 page-local，OK。
 - Host 测试 555 pass / 0 fail；`node scripts/render-check.mjs`：194 checks，0 failed，0 skipped。
-
 ## [0.5.1] — 2026-11-14
 
 ### 修复
@@ -1470,7 +1464,6 @@ tarball，不进 npm。
 
 ### 验证
 - `node --test lib/live/executor.test.js` 通过；全量 555 pass / 0 fail。
-
 ## [0.5.0] — 2026-11-14
 
 开源首发版本：把 0.4.39（开源准备 P0）与 0.4.40（客户端构建层 P1）合进一个可以对外发布的版本。
@@ -1489,7 +1482,6 @@ tarball，不进 npm。
 - `node scripts/build-client.mjs --check`、`node --check index.js`、`node scripts/check-keys.mjs`、
   Host 测试 555 pass / 0 fail、`node scripts/render-check.mjs` 194 checks / 0 fail / 0 skipped。
 - 以上在干净 clone（`npm ci`）与 GitHub Actions（node 22、node 24）上各跑过一遍。
-
 ## [0.4.40] — 2026-11-14
 
 开源准备（P1）：客户端构建层从"手写拼接"换成 esbuild 压缩，产物契约与运行时行为都不变。
@@ -1507,7 +1499,6 @@ tarball，不进 npm。
 - 干净状态目录：`node scripts/render-check.mjs` 194 checks / 0 fail / 0 skipped（压缩后的产物照常挂载）。
 - `npm ci` 干净 clone 上 `node scripts/build-client.mjs --check` 逐字节一致；Host 测试 555 pass / 0 fail；
   `node --check client/index.js` 通过；`scripts/check-keys.mjs` 不变。
-
 ## [0.4.39] — 2026-11-14
 
 开源准备（P0）：让一个干净 clone 能自查、能被外部贡献者读懂，并把仓库里的"内部习惯"与"外部契约"分开。
@@ -1539,7 +1530,6 @@ tarball，不进 npm。
 - `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`、
   `node --test lib/store.test.js lib/live/*.test.js`（555 pass）全部通过；本地与 `TZ=UTC` 两种时区各跑一遍。
 - GitHub Actions：PR #29 上 node 20/22 两条 job 全绿。
-
 ## [0.4.38] — 2026-11-13
 
 按 `/impeccable audit`（对着 DESIGN.md 契约跑的 16/20 审计）逐条修复。核心一条是 token 语义错用：`--dsw-alias-bg-overlay`
@@ -1560,7 +1550,6 @@ tarball，不进 npm。
   弹窗描述 8.03:1；`.sa-info` 与 sender chip 的 × 在 ±11px 处仍命中；390 / 600 / 760 三档容器无横向溢出。
 - `node --check index.js`、`build-client --check`（22 fragments，11682 行）、`check-keys`（967/513/1359）、
   `node --test`（555 pass）、`render-check`（194 checks / 0 fail）。
-
 ## [0.4.37] — 2026-11-13
 
 真浏览器点检（隔离 DSH web 实例 + 真实工单数据）发现的漏项：触发页的三个筛选分段把「条数」只写在 `title`
@@ -1575,7 +1564,6 @@ tarball，不进 npm。
 - `node scripts/build-client.mjs`（22 fragments，11672 行）、`node scripts/check-keys.mjs`（967 literal / 513 shared /
   1359 page-local）、`node --test lib/store.test.js lib/live/*.test.js`（555 pass）、`node scripts/render-check.mjs` 全绿；
   隔离实例里重载后 `.sa-segment` 的可访问名已含条数。
-
 ## [0.4.36] — 2026-11-13
 
 按 Web Interface Guidelines 全渲染层审查（89 条）与 CSS 设计审查（14 条）逐条修复；不改变页面信息架构，只修
@@ -1605,7 +1593,6 @@ tarball，不进 npm。
 `node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 11670 行）；`node scripts/check-keys.mjs`
 （967 literal / 513 shared / 1359 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
 `node scripts/render-check.mjs`（194 项检查全过）。审查清单与逐条状态见 `verification/ui-review-team.md`。
-
 ## [0.4.35] — 2026-11-13
 
 收口 0.4.34 遗留的运行质量口径、事件队列 ack/cursor、持久化掉电与证据排序问题。
@@ -1624,7 +1611,6 @@ tarball，不进 npm。
 `node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
 （938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（555 通过 0 失败）；
 `node scripts/render-check.mjs`（194 项检查全过）。
-
 ## [0.4.34] — 2026-11-13
 
 按代码评审与实机点击评审收口：修掉 URL 注入、干跑消费上下文、发布/回答的并发与干跑语义，补齐实机暴露的
@@ -1652,7 +1638,6 @@ i18n 与状态文案问题；数据加载不再把权限错误当成空状态。
 `node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10854 行）；`node scripts/check-keys.mjs`
 （938 literal / 513 shared / 1304 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（551 通过 0 失败）；
 `node scripts/render-check.mjs`（194 项检查全过）。
-
 ## [0.4.33] — 2026-11-13
 
 落地产品评审六项改进（AC-01…AC-12）并按七轮独立验收返工收口：路由贯穿分阶段执行、停止真正取消 worker 与
@@ -1675,7 +1660,6 @@ CLI 进程组、恢复时对远端推送对账、评测与来源深链可回溯�
 `node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments / 10826 行）；`node scripts/check-keys.mjs`
 （882 literal / 513 shared / 1295 page-local）；`node --test lib/store.test.js lib/live/*.test.js`（541 通过 0 失败）；
 `node scripts/render-check.mjs`（194 项检查全过，含仓库闸门保存后刷新的回归断言）。
-
 ## [0.4.32] — 2026-11-13
 
 Claude 验收报 `Unexpected end of JSON input`：不是模型没答，是读不到答案。`runProcess` 的 stdout 上限 8 MB 在
@@ -1697,7 +1681,6 @@ Claude 验收报 `Unexpected end of JSON input`：不是模型没答，是读不
 ### 验证
 `node --check index.js`；`node scripts/build-client.mjs --check`；`node scripts/check-keys.mjs`；
 `node --test lib/store.test.js lib/live/*.test.js`（449 通过 0 失败）。
-
 ## [0.4.31] — 2026-11-13
 
 独立验收现在可以选 DSH（独立只读会话），Claude 验收拿到 JSON schema，DSH 验收在 DeepSeek 路由上真正开
@@ -1725,7 +1708,6 @@ codex 传了 `--output-schema`）。
 `node --check index.js`；`node scripts/build-client.mjs --check`（最新）；
 `node scripts/check-keys.mjs`（775 literal / 513 shared / 1157 page-local）；
 `node --test lib/store.test.js lib/live/*.test.js`（446 通过 0 失败）；`node scripts/render-check.mjs`（exit 0）。
-
 ## [0.4.30] — 2026-11-13
 
 修掉三件事：设置页保存返工预算报 `unsupported setting: executor.maxRepairRounds`；独立验收后端不能切到 Claude；
@@ -1758,7 +1740,6 @@ DSH worker 无法按仓库指定 Agent 预设。
 `node --check index.js`；`node scripts/build-client.mjs --check`（22 fragments，最新）；
 `node scripts/check-keys.mjs`（773 literal / 513 shared / 1157 page-local）；
 `node --test lib/store.test.js lib/live/*.test.js`（442 通过 0 失败）；`node scripts/render-check.mjs`（exit 0，ok:true）。
-
 ## [0.4.29] — 2026-11-13
 
 分阶段流程停下来时不再只报「workflow blocked: blocked」，返工预算真正生效并且可以在设置里调大后接着返工。
@@ -1795,7 +1776,6 @@ DSH worker 无法按仓库指定 Agent 预设。
   预算耗尽时给出可读错误、调大后只多跑一轮 implement + review 并交付；`resumeInterruptedTicket` 仍拒但带原因；
   配置 0–6 边界；`workflowResumable` 对 failed review / 预算余额 / 其它状态的判定。
 - `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
-
 ## [0.4.28] — 2026-11-13
 
 分阶段执行失败后可以从失败的那一步继续，不再整条重跑。之前的「继续执行」只识别被插件重载中断的运行，
@@ -1829,7 +1809,6 @@ DSH worker 无法按仓库指定 Agent 预设。
   `executeTicket({ resumeWorkflow:true })` 在 planned 模式下只多调一次 review、implement 只跑一次、交付 dry-run，
   且新 run 继承闸门结果与实现摘要（续跑不会让运行记录变成空壳）。
 - `node scripts/render-check.mjs`：通过（ok=true，0 失败）。
-
 ## [0.4.27] — 2026-11-12
 
 新增可选分阶段 Worker：自动复杂度评估，或直接选择简单/方案驱动执行。复杂流程由 Codex 规划、Claude/DSH 实现、程序闸门、全新 Codex 会话验收组成，支持最多两轮返工与方案修订。默认关闭，保留现有路由行为。
@@ -1839,7 +1818,6 @@ DSH worker 无法按仓库指定 Agent 预设。
 - 设置页新增执行流程与实现后端，live.json 白名单及归一化同步支持；客户端产物已构建。
 - Host 425/425 通过；渲染检查通过；构建、i18n 与语法通过。隔离 DSH Host API 正常，但两次 Chrome 启动均未在 30 秒内暴露 CDP 端口，随后改用 ego lite，验证六个页面入口、Worker 控件保存与刷新持久化通过；发现并修复 settingsPatchOf 遗漏新字段，补对应渲染断言。
 - 边界：未做真实 CLI 模型调用/远程交付；当前失败后重跑流程，精确阶段恢复、CLI 实时流和执行中自动升级尚未接入。详见 docs/staged-workers.md。
-
 ## [0.4.26] — 2026-11-12
 
 移动端容器 500–600px 时，头部状态行与溢出菜单的触控区没有硬隔离：0.4.24 及更早版本里触发器是
@@ -1864,7 +1842,6 @@ DSH worker 无法按仓库指定 Agent 预设。
 - `node --test lib/store.test.js lib/live/*.test.js`：418 通过，0 失败
 - `node scripts/render-check.mjs`：148/148 通过，0 SKIP
 - `node scripts/isolated-verify.mjs`：由执行器运行（本工作树不创建 `verification/` 产物）
-
 ## [0.4.25] — 2026-11-12
 
 对超级智能体面板做了一轮 Impeccable 系统评分（Operate 模式；设计审查 + 1280/960/390 实机截图与
@@ -1918,7 +1895,6 @@ DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执�
 - `node scripts/render-check.mjs`：147/147 通过，0 SKIP
 - `node scripts/isolated-verify.mjs`：PASS（6 个 tab，0 console error；用 `CHROME_PATH` 包装脚本补
   `--no-sandbox --disable-crashpad`，否则本会话沙箱下 Chrome 在 `Runtime.enable` 超时）
-
 ## [0.4.24] — 2026-11-12
 
 群回复「接单 A7K2」用于人工推翻模型否决时，replay 会按规则重新判定并建单，但这条路径此前只建单、不执行
@@ -1947,7 +1923,6 @@ DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执�
 - `node --test lib/store.test.js lib/live/*.test.js`：418 通过，0 失败（0.4.24 新增 2 例、0.4.23 新增 3 例）
 - `node scripts/render-check.mjs`：143/143 通过（`ok: true`，0 SKIP）
 - `node scripts/isolated-verify.mjs`：PASS（6 个 tab、0 console error）。本会话的 DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑在 `Runtime.enable` 超时；用 `CHROME_PATH` 指向补 `--no-sandbox` 的临时包装脚本后通过
-
 ## [0.4.23] — 2026-11-12
 
 空闲看门狗只看 session 事件：`tool/call` 之后到 `tool/result` 之前没有任何事件，长 bash（如连续 12 次 render-check，约 5–6 分钟）必然超过 `workerIdleTimeoutMs`（默认 300000），worker 仍在跑却被判 `worker_lost` 并 cancel。本次让在途工具调用成为看门狗的活动窗口。
@@ -1966,7 +1941,6 @@ DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执�
 - `node --test lib/store.test.js lib/live/*.test.js`：416 通过，0 失败（`worker.test.js` 新增 3 例通过）
 - `node scripts/render-check.mjs`：143/143 通过，0 SKIP（首跑 1 例共享 harness 抖动，连续重跑全过）
 - `node scripts/isolated-verify.mjs`：PASS（6 个 tab、0 console error）。本会话的 DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑两次在 `Runtime.enable` 超时；用 `CHROME_PATH` 指向临时包装脚本补 `--no-sandbox` 后通过
-
 ## [0.4.22] — 2026-11-12
 
 本机安装态已切换为 `main` 分支打包产物：桌面 profile 的依赖是 `file:<tarball>`，`node_modules/@mystic7c/dsh-superagent-panel` 是 tarball 解包后的实体目录。但 `docs/self-development.md`、`AGENTS.md` 仍描述旧的 stable clone + `link:` 模型，且每次切换/回滚都要手工提取 tarball、改 profile manifest。本次把文档统一到打包模型，并新增可重复的本地打包安装脚本。
@@ -1983,7 +1957,6 @@ DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执�
 - `node scripts/local-install.mjs --dry-run --tarball ...0.4.22.tgz`：打印计划；profile `package.json` 哈希与 mtime 不变、无临时目录残留
 - 临时仓库 + 临时 profile 端到端：默认从 `../releases` 发现 tarball、备份、删除旧 symlink、解包实体目录 0.4.22、改写 dependency，重跑 `--verify` 通过；`--allow-branch` 在 `feature/x` 上按预期放宽
 - 6 个闸门：`node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments）、`node scripts/check-keys.mjs`（760/513/1134）、`node --test lib/store.test.js lib/live/*.test.js`（413/413）、`node scripts/render-check.mjs`（143/143、0 SKIP）、`node scripts/isolated-verify.mjs` PASS（本 worker 沙箱内 Chrome 需经 `CHROME_PATH` 包装脚本补 `--no-sandbox` 才能初始化，面板 6 tab、0 console error）
-
 ## [0.4.21] — 2026-11-12
 
 工单 tkt_16e724f48ddd41b0 的交付收尾。GitHub 仓库 `createMr: "push"` 的工单交付后，详情卡片的 MR 区显示
@@ -2021,46 +1994,6 @@ DOM/检测器证据），总分 33/40。评分暴露的是同一类问题：执�
 - `node scripts/isolated-verify.mjs` PASS（6 个 tab、0 console error）
 - 说明：worktree 起点早于 v0.4.20（Inlines 递归修复）与确定性 render fixture（PR #14），合并 `origin/develop`
   后按合并结果重跑以上检查；CHANGELOG 中 0.4.20 两条为 develop 已有历史
-
-## [0.4.20] — 2026-11-12
-
-render 闸门周期性假红，失败断言是「overview names the needs-you vs worth-a-look split when both are on screen」，
-最近一次与代码改动无关（只改了 `lib/live/worker.js` 等 Host 半），同一版本人工复跑有时又通过。根因是
-`scripts/render-check.mjs` 的 fixture 从操作者当时的 state 派生：Overview 的「值得留意」区块只在
-`ovWatchItems` 推导出 watch 项时渲染（24h 内失败 run、失败后被忽略的工单、error source、轮询滞后），
-`deskScope` 也随之消失；inbox 只有验收项、最近没有失败 run 时 watch 为空，断言必失败。metrics 路由的 stub 又把
-`failed` 固定为 0，无法补上 watch 项。DSH_HOME 指向空目录时另有 19 处失败，因为来源页、仓库/UAT、评估与触发页
-的断言依赖真实 live.json 与历史数据。
-
-### 内容
-- `scripts/render-check.mjs`：fixture 注入确定性的「值得留意」数据——一条 `status: 'failed'`、`startedAt`
-  为当前时间前 45 分钟的演示 run（`ticketId` 复用 `tkt_demo_accept`，`error` 固定为「演示：闸门 standards
-  未通过」），以及一张 `status: 'dismissed'` 且 `assignments[].report.state === 'failed'` 的演示工单
-  `tkt_demo_dismissed`；只改内存中的 engine.state，不写真实 state
-- `scripts/render-check.mjs`：把目标断言拆成两条——「值得留意」区块内至少一行且文案匹配
-  `/过去 24 小时 \d+ 次执行失败/`；split note 必须同时包含「需要你处理 = 」与「无需你动作」。pulse 句断言不再
-  依赖哪张执行中工单排在第一位（真实 state 里本 worker 的工单可能更新），改为校验「系统脉搏」/「在飞」/用时文案，
-  并单独断言 fixture 的执行中工单出现在「正在执行」区块
-- `scripts/render-check.mjs`：metrics stub 与注入的失败 run 对齐（`runs.failed = 1`、
-  `stopReasons['gate-failed'] = 1`、`failureReasons` 一条），避免 quality 卡片显示 0 失败而 watch 显示 1 次失败
-- `scripts/render-check.mjs`：新增 `skip(name, reason)` 机制，打印 `SKIP name — reason` 并在汇总 JSON 的
-  `skipped` 中计数，SKIP 不计 FAIL、不影响退出码；依赖本机配置/历史的检查组（UAT 链接、来源页 3 条、ebs
-  仓库选项、GitLab token 编辑器、评估页 7 条、触发/线程页 5 条）在配置或数据不可得时明确 SKIP
-- `scripts/render-check.mjs`：取消「真实 state 已有待验收工单就跳过注入」的分支，演示验收工单始终注入；
-  否则操作者 inbox 里另一张待验收工单会改变（甚至破坏）详情页走查打开的入口
-- 不改 `client/src/35-overview.js` 的产品逻辑：`deskScope` 只在 watch 存在时渲染是正确的
-
-### 验证
-- 真实 state：`node scripts/render-check.mjs` exit 0，141 条检查全过、0 SKIP；连续 3 次结果一致（均 141/141）
-- 空 state（`DSH_HOME` 指向新建临时空目录，stateDir 不存在）：exit 0，123 条通过 + 18 条 SKIP，0 FAIL；
-  连续 3 次一致
-- `node --check index.js`、`node scripts/build-client.mjs --check`（22 fragments，未改客户端）、
-  `node scripts/check-keys.mjs`（756 literal / 513 shared / 1131 page-local）、
-  `node --test lib/store.test.js lib/live/*.test.js`（406 通过）
-- `node scripts/isolated-verify.mjs` PASS（概览/来源/触发/评估/执行/设置 6 个 tab、0 console error）。本会话的
-  DSH 文件沙箱会挡住 Chrome 自带沙箱，裸跑两次都在 `Runtime.enable` 超时（最小 CDP 探针可复现）；本次用
-  `CHROME_PATH` 指向加 `--no-sandbox` 的包装脚本跑通，脚本本身未改
-
 ## [0.4.20] — 2026-11-12
 
 自开发状态里 threads 与 triggers 同时存在时，打开「触发」页会让渲染进程堆内存暴涨（render-check 可复现 OOM，
@@ -2074,7 +2007,6 @@ render 闸门周期性假红，失败断言是「overview names the needs-you vs
 - `scripts/render-check.mjs`：新增回归探针「a bare URL renders as one link without recursing」，直接挂载
   `MarkdownLite` 验证裸 URL 只渲染一个链接；`MarkdownLite` 从客户端片段中导出仅用于该检查
 - `client/index.js`：按新片段重建
-
 ## [0.4.19] — 2026-11-12
 
 工单 tkt_ed2bb9e10a3b46e2 的 run_3953a38ea58c476a 在 prepare-worktree 之后卡在 worker 步骤：worker 没有产出报告，
@@ -2114,7 +2046,6 @@ run 一直保持 `working`，只能重载插件让 reconcile 把 run 标成 `int
 - `node scripts/render-check.mjs` 本机 137/138；基线上同一个失败（`overview names the needs-you vs worth-a-look split`，
   本机 state 无 worth-a-look 项），与本次 Host 改动无关
 - `node scripts/isolated-verify.mjs` 本机在 `Runtime.enable timed out` 失败；基线同（Chrome/CDP 环境问题）
-
 ## [0.4.18] — 2026-11-12
 
 README 虽已在 0.4.17 把自开发细节移出，仍有 308 行：其中「hybrid 接单试点（0.3.4）」「评估确认（群消息复核，0.4.2）」
@@ -2140,7 +2071,6 @@ README 虽已在 0.4.17 把自开发细节移出，仍有 308 行：其中「hyb
 - `node --test lib/store.test.js lib/live/*.test.js` 398/398
 - `node scripts/render-check.mjs` 138/138
 - `node scripts/isolated-verify.mjs`
-
 ## [0.4.17] — 2026-11-12
 
 README.md 已到 418 行，自开发的全部操作细节（`live.json` 仓库配置与字段语义、GitFlow、6 个闸门表、交付流程、
@@ -2167,7 +2097,6 @@ README.md 已到 418 行，自开发的全部操作细节（`live.json` 仓库�
 - `node --test lib/store.test.js lib/live/*.test.js` 398/398
 - `node scripts/render-check.mjs`
 - `node scripts/isolated-verify.mjs`
-
 ## [0.4.16] — 2026-11-12
 
 README 的闸门表只写了 `isolated` 验证什么，没写闸门清单从哪来、本机需要什么依赖、失败时看什么；在没装 Chrome 的
@@ -2189,7 +2118,6 @@ README 的闸门表只写了 `isolated` 验证什么，没写闸门清单从哪�
 - `node --test lib/store.test.js lib/live/*.test.js` 398/398
 - `node scripts/render-check.mjs`
 - `node scripts/isolated-verify.mjs` 单独跑通
-
 ## [0.4.15] — 2026-11-12
 
 `render` 闸门在 jsdom + 共享 `/tmp/sa-harness` 上渲染客户端，证明不了「真实 DSH Web UI 里 Host 半 + 客户端能一起挂载」。
@@ -2203,7 +2131,6 @@ CLI 定位兼容 `DSH_NODE_EXECUTABLE` + `DSH_INSTALL_DIR`（executor gate 环�
 - 本机 `node scripts/isolated-verify.mjs` PASS（清空 `DSH_*` 环境变量后走 app-bundle 兜底）
 - `node --check index.js`、`node scripts/build-client.mjs --check`、`node scripts/check-keys.mjs`
 - Host 测试 398/398、`node scripts/render-check.mjs`
-
 ## [0.4.14] — 2026-11-12
 
 README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.json` 已到 0.4.13），「开发与验证」里的 Host 测试数量
@@ -2221,7 +2148,6 @@ README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.j
 - `node scripts/check-keys.mjs`
 - `node --test lib/store.test.js lib/live/*.test.js` 398/398
 - `node scripts/render-check.mjs`
-
 ## [0.4.13] — 2026-11-12
 
 自开发链路改用 GitFlow，并把自开发代码与本机日常安装彻底分开。此前仓库只有 `main`：工单 PR 以 `main` 为 base、
@@ -2241,7 +2167,6 @@ README 的数字与仓库实际状态脱节：顶部还写着 0.4.8（`package.j
 - `node --test lib/store.test.js lib/live/*.test.js`
 - `node scripts/render-check.mjs`
 - `node scripts/isolated-verify.mjs`（本机 Chrome；闸门上线后在真实工单上再验证一次）
-
 ## [0.4.12] — 2026-11-11
 
 README 补上「用面板开发本仓库（自开发）」一节：自开发链路已经跑通（工单 → 闸门 → 推送 → auto-pr → merge commit →
@@ -2266,7 +2191,6 @@ README 补上「用面板开发本仓库（自开发）」一节：自开发链�
   `node scripts/check-keys.mjs`（756 literal / 513 shared / 1131 page-local）通过
 - `node --test lib/store.test.js lib/live/*.test.js` 398/398
 - `node scripts/render-check.mjs` 138/138（无客户端改动，渲染回归不变）
-
 ## [0.4.11] — 2026-11-11
 
 第一张自开发工单的实测暴露了两个问题，都在这里修掉：GitHub 仓库带着 GitLab push options 推送会被服务端拒绝；
@@ -2286,7 +2210,6 @@ render 闸门失败时证据只剩 40KB JSON 的尾巴，看不到是哪条断�
 - `node --test` 398/398（新增 GitHub 仓库不带 options 推送、`usesPushOptionMr` 的两组断言）
 - 自开发工单实测链路：worker 修复 → 5 个闸门通过 → commit → push 两次被 GitHub 拒绝（带 push options）→ 人工 retry
   不带 options 成功 → Actions 自动开 PR #1 → merge commit 合入 `main` → 面板按 ancestry 判定 `merged` → 人工验收
-
 ## [0.4.10] — 2026-11-11
 
 修复 `metricsView` 时长夹具的 1ms 竞态（flaky）：`metricsView classifies runs, windows them and rolls up
@@ -2311,7 +2234,6 @@ durations/triggers/stop reasons (p2c §1)` 偶发失败——2026-11-10 的全�
 - `node --check index.js`、`build-client --check`、`check-keys` 通过
 - `render-check` 138/138，连续复跑 20 次均通过（含 `bash -lc` 登录 shell 的 node 24.14、8 路并发与 CPU 满载）；
   发布闸门曾报过一次 render exit 1，同一工作树/live 状态下未能复现，本轮不改客户端与闸门脚本
-
 ## [0.4.9] — 2026-11-11
 
 为「用面板开发面板」补齐 GitHub 交付侧的唯一缺口，并把仓库规则落成 worker 可直接读取的 `AGENTS.md`。
@@ -2330,7 +2252,6 @@ durations/triggers/stop reasons (p2c §1)` 偶发失败——2026-11-10 的全�
 ### 验证
 - `node --test` 397/397（新增 GitHub create-PR 解析用例）；`build-client --check`、`check-keys`、`render-check` 通过
 - 真实 GitHub 推送输出回归：`remote: Create a pull request ... /pull/new/...` 解析出 pending MR URL
-
 ## [0.4.8] — 2026-11-11
 
 Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的修正：先修三处界面与数据自相矛盾，再修窄屏、对比度与
@@ -2365,7 +2286,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
 - `build-client --check`、`check-keys` 通过；`impeccable detect --cdp` 六页面板内 findings 0（修前 1 条 low-contrast）
 - 实机复检 1280/960/390：概览 来源「已启用 1/3」+ 执行器「已停用」、执行页 7 个阶段 chip 与「已忽略」切片、
   工单详情闸门区显示 `ebs-deploy`/`ebs-access`、390 横幅图标同行、标签不压字
-
 ## [0.4.7] — 2026-11-11
 
 修复「运行记录」把交付时的阶段当成实时状态：`tkt_f6a66f97a4ab41fe` 的 MR 已合并、已部署 UAT 并验收，
@@ -2387,7 +2307,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
 - 回归：render-check 把演示工单的 run 固定成 `status:'ci-pending' + stopReason:'done'`（真机上该工单的形态），
   新增「已交付 run 写交付时阶段」「已结算 run 不转圈」两条断言，136/136；`node --test` 396/396；
   `build-client --check` 与 `check-keys` 通过
-
 ## [0.4.6] — 2026-11-09
 
 修复工单详情「工单动作」菜单显示成一块空白灰块：菜单按 `align="end"` 向左展开，越过 `.sa-scroll` 的横向
@@ -2397,7 +2316,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
   （`data-align` 改为实测方向），键盘操作与 `aria-*` 不变
 - 只在客户端，刷新面板页面即生效；`getComputedStyle` 通过 `ownerDocument.defaultView` 走，jsdom 下也不崩
 - 回归：render-check 135/135；`node --test` 396/396
-
 ## [0.4.5] — 2026-11-09
 
 修复「执行超时」在设置里只能看不能改：worker 超时后无法调大超时再重试。
@@ -2411,7 +2329,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
 - `node --test` 396/396
 - render-check 135/135
 - `npm run verify`：client 产物最新；752 literal keys / 513 shared / 1121 page-local 通过
-
 ## [0.4.4] — 2026-11-09
 
 修正 0.4.3 对 `tkt_969114d7aca74a45` 的结论：根因不是"worker 用了 subagent"，而是 **worker 在自己发起的
@@ -2426,7 +2343,6 @@ Impeccable 系统评分（28/40，含两路独立评估与实机检测）后的�
 - 兜底：最多 join 20 轮；abort 立即退出；`waitForChildren` 返回 false（idle resident child）不阻塞完成
 - 测试：`joinChildrenBeforeTurnEnd` 单测 ×3 + worker 注册/清理/join 测试 ×1
 - 验证：`node --test` 395/395；render-check 134/134；build-client --check、check-keys 通过
-
 ## [0.4.3] — 2026-11-09
 
 两件事：修复 worker 把"等待独立复核"当成最终执行总结（tkt_969114d7aca74a45），以及评估确认的配置进入设置页。
@@ -2452,7 +2368,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
   `review.expireHours`（枚举/小时数校验），设置页保存走同一原子写与配置回滚
 - render-check 增加「评估确认」分组与 rail 顺序检查
 - 验证：`node --test` 391/391；render-check 134/134；build-client --check、check-keys 通过
-
 ## [0.4.2] — 2026-11-09
 
 评估确认（群消息复核）：每条评估回发来源群，操作人回复「接单/忽略 + 短码」决定是否开单，并把判断写成信号
@@ -2470,7 +2385,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
   待回复/已回复计数，评估页显示人工结论标签
 - 新增 8 条 reviews 单测 + 10 条引擎 review 流程测试 + 1 条配置测试
 - 验证：`node --test` 390/390；render-check 133/133；build-client --check、check-keys 通过
-
 ## [0.4.1] — 2026-11-09
 
 修复 hybrid 线上漏单：2026-11-09 05:41 的一条真实需求
@@ -2486,7 +2400,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
   golden/real 上没有新增误开
 - 漏单的原始信号已用重放补建工单（replay 走规则判定，人工覆盖通道）
 - 验证：`node --test` 374/374；render-check 116/116；build-client --check、check-keys 通过
-
 ## [0.4.0] — 2026-11-09
 
 多 Worker 后端路由：原来 `executor.workerBackend` 只能选一个后端，现在可同时启用 DSH / Codex CLI / Claude Code CLI，并由路由按任务类型选择执行者与档位。
@@ -2510,7 +2423,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
 - `node --test` 374/374
 - render-check 133/133
 - `npm run verify`：client 产物最新；737 literal keys / 513 shared / 1102 page-local 通过
-
 ## [0.3.8] — 2026-11-09
 
 设置新增「Worker」页签：把 worker 后端与「运行后端能力」矩阵从「运行」组迁出，单独成组。
@@ -2527,7 +2439,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
 - `node --test` 355/355
 - render-check 131/131
 - `npm run verify`：client 产物最新；724 literal keys / 513 shared / 1064 page-local 通过
-
 ## [0.3.7] — 2026-11-09
 
 修复「发布 MR」时带 `passChangedFiles` 的闸门拿不到改动文件：发布路径直接跑 gate 的原始命令，没有像干跑那样把
@@ -2542,7 +2453,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
 ### 验证
 - `node --test` 355/355
 - `npm run verify`：client 产物最新；723 literal keys / 513 shared / 1062 page-local 通过
-
 ## [0.3.6] — 2026-11-09
 
 修复追加要求后「执行总结」显示上一轮的问题：`changesOf` 原来取 runs 列表里最后一条 worker 文本，而 runs 按最新在前，
@@ -2557,7 +2467,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
 - `node --test` 353/353
 - `render-check` 125/125
 - `npm run verify`：client 产物最新；723 literal keys / 513 shared / 1062 page-local 通过
-
 ## [0.3.5] — 2026-11-08
 
 工单详情支持「追加要求并自动重跑」：干跑结果不对时，操作员不必重新开单，也不用手工改 `live-state.json`。
@@ -2580,7 +2489,6 @@ trace 显示 worker 在会话里调用了 `subagent` 起异步复核、`list_age
 - `node --test` 353/353
 - `render-check` 123/123
 - `npm run verify`：client 产物最新；722 literal keys / 513 shared / 1061 page-local 通过
-
 ## [0.3.4] — 2026-11-08
 
 hybrid 接单试点：规则仍是第一道门，模型 `ticket-v1` 参与 R1 的"要不要开单"。
@@ -2594,7 +2502,6 @@ hybrid 接单试点：规则仍是第一道门，模型 `ticket-v1` 参与 R1 �
   面板评估页模型标签同时支持 shadow/hybrid 决策；设置→评估新增 hybrid 模式与调用/回退计数
 - 状态面 `eval.hybrid`（calls/fallbacks）、`eval.decision.riskAt`；poll 结果带 `hybrid.judged/ignored/fallbacks`
 - 验证：`node --test` 350/350；render-check 116/116；build-client --check、check-keys 通过
-
 ## [0.3.3] — 2026-11-08
 
 决策模型 shadow 的问题集从 `request-v2`（isRequest noul）换成 **`ticket-v1`**（一个 `choice` 五选一：
@@ -2612,7 +2519,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `shadow-collect.mjs` 重判时保留人工 `label`/`labeledAt`（此前换问题集会把 23 条标注清空，已修）
 - 面板评估页 shadow 标签的 tooltip 增加五类类别
 - 验证：`node --test` 342/342；render-check 116/116；build-client --check、check-keys 通过
-
 ## [0.3.2] — 2026-11-08
 
 决策模型 shadow（落地第一步）：接单判断仍由规则（R1–R3）决定，但引擎可以把每条候选消息交给一个 System One
@@ -2643,7 +2549,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `node --test` 341/341（本特性 29 条：judge 10、config +2、engine shadow +8、shadow collector +8、API token +1；
   其余为 0.3.1 diff 回归；渲染回归 116/116）
 - `npm run verify`：client 产物最新；702 literal keys / 513 shared / 1034 page-local 通过
-
 ## [0.3.1] — 2026-11-08
 
 工单详情补上「查看 diff」：此前只列改动文件和 worker 总结，patch 本身不可见，操作员无法在面板里核对 worker
@@ -2667,7 +2572,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `node --test` 333/333
 - `render-check` 115/115
 - `npm run verify`：client 产物最新；715 literal keys / 513 shared / 1047 page-local 通过
-
 ## [0.2.6] — 2026-11-08
 
 修复 R3 高风险主题的误判：`/生产|prod(uction)?/i` 做的是子串匹配，EBS 对象名 `Cux_Mtl_Sale_Products_Rpt`
@@ -2683,7 +2587,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 ### 验证
 - `node --test` 306/306（新增 1 条边界回归）
 - `npm run verify`：client 产物最新；687 literal keys / 513 shared / 1018 page-local 通过
-
 ## [0.2.5] — 2026-11-08
 
 工单详情页三批修正（评审 21 条：8 条 P0 / 8 条 P1 / 5 条 P2），见 `spec/critique-ticket-detail-2026-11-08.md`。
@@ -2717,7 +2620,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 ### 验证
 - `node --test` 305/305；`render-check` 107/107（新增：锚点含自动化、自动化折叠与脏保存、活动折叠进时间线、空闸门区不渲染、阶段链路无截断 id、改动内容两栏、头部标题行含验收说明与动作、文件列表收起/展开）；`build-client --check`、`check-keys` 通过
 - 视觉验收：1440/1024/768/390 + 深色 + 闸门阻塞/运行中/已验收三状态；页面高度（1440）从 ~4200px 降到 ~3050px
-
 ## [0.2.4] — 2026-11-08
 
 执行页视图控件的重做：分组方式 / 排序 / 显示已结束从「两个 260px 胶囊轨道 + 小灰标签 + 黑开关」的两行表单，收成一行真正的列表工具条。
@@ -2734,7 +2636,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `node --test` 305/305；`render-check` 95/95（新增：chip 内计数、两个取值按钮的当前值、开关仍在、评估/触发筛选同为 chip）；`build-client --check`、`check-keys` 通过
 - 真实浏览器（headless Chrome + 宿主主题 token + 真实 live 夹具）1440/1024/960/820/768/390 六档截图、深色主题、英文、菜单展开、按仓库分组、空列表八种状态逐一看过
 - 本轮宿主侧无改动；面板刷新页面即生效
-
 ## [0.2.3] — 2026-11-07
 
 第三轮收口：清掉 0.2.2 剩下的 P3，只做一致性、可读性和验证，不扩展功能。
@@ -2744,7 +2645,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - 删除 `SegmentedTabs` 中未被 CSS/标记消费的 `data-more` 测量状态，减少死代码
 - 390 设置分组行高 36→40，移动头部菜单触发目标 36→40；tabs/菜单保持更大命中区
 - 验证：1440 表单居中（body x≈560 / 760 宽）；720px 宽度无横向溢出；`prefers-reduced-motion: reduce` 匹配；深色主题切换后页面背景 `rgb(21,21,23)`、无横向溢出
-
 ## [0.2.2] — 2026-11-07
 
 第二轮设计复评后的修正：把 0.2.1 过度收缩的执行控件改成真正的紧凑工具栏，补齐窄屏导航的可见性，并统一关闭态。
@@ -2764,7 +2664,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `node --test` 305/305；`render-check` 90/90；`build-client --check`、`check-keys` 通过
 - 隔离 CDP：1024 执行首条 y≈507、390 首条 y≈794；390 设置 nav 两行；来源 1024 一列卡片；源/执行自动化条无溢出
 - 面板检测器仍为 0 条 `.sa-*`；仅 DSH 宿主 2 条既有项
-
 ## [0.2.1] — 2026-11-07
 
 设计评审后的操作面打磨：把"三个开关、四个说法"收敛成一个自动化状态，并修掉 1024/390 下的三处响应式断裂。
@@ -2785,7 +2684,6 @@ repo_task / octo_platform / chat / context / risky）。原因：旧问题把"�
 - `node --test` 305/305；`render-check` 90/90；`build-client --check` 与 `check-keys` 通过
 - 隔离 CDP：1440/1024/390 三档实测；检查了设置导航、执行工具栏、阶段筛选、触发紧凑布局、自动化条与确认启动、工单详情分区导航
 - 确定性检测器：复核面板 `.sa-*` findings（工具栏/导航/选中行），并保留 host chrome 两条既有项
-
 ## [0.2.0] — 2026-11-07
 
 首个产品化版本：把面板从"只读仪表盘"升级为可运营的主动型 agent 控制台。
