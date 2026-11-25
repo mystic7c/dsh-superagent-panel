@@ -33,43 +33,8 @@
 
 ### 验证
 
-- `node --test lib/live/*.test.js`：worker 新增三例（修复轮走 `agents.resume` 且重建 setup、宿主无 resume 时退回创建、resume 失败退回创建）。
-- `render-check`、`build-client --check`、`check-keys`、`npm run types`、`check:js` 全绿。
-
-## [1.1.13] — 2026-11-24
-
-把 Claude Code CLI 会话接进面板：CLI worker 不再是一次性黑盒，运行中可以看、跑完可以接着聊、还能直接接管到终端。
-
-### 运行时可见（CLI worker 的实时 trace）
-
-- `lib/live/worker-cli.js`：`runProcess` 增加 `onStdout` 观测点，`runCliWorker` 增加 `onTrace` 与行缓冲，把 stream-json 的每一行即时解析成 trace 条目（新增导出 `streamedEvents`）；进程退出时冲刷最后一行（CLI 常不带尾随换行，`result` 就在缓冲里）。解析结果仍是权威来源，`run.trace` 的最终内容不变。
-- `lib/live/executor.js`：CLI 分支把 `onTrace` 接到 `liveTrace.push`，与进程内 DSH worker 同一条 §12 实时链路——CLI 运行期间详情页不再空白，直到回合结束才有 trace。
-
-### 跨轮续接（同一条 Claude Code 会话）
-
-- `cliInvocation` 支持 `resume`（claude 加 `--resume <id>`，与 `--append-system-prompt`/`--json-schema`/权限参数并存，已用本机 claude 2.1.329 实测：续接后返回同一 `session_id`、记得上一轮的答案）。
-- 自动修复轮次 `resume` 主回合的会话：修复时不再从一段「刚写完什么都不记得」的新对话开始。Codex 暂无核实的续接方式，不加参数。
-
-### 在终端接管
-
-- 新增 `lib/live/worker-terminal.js` + Host 路由 `POST /superagent/api/engine/workers/terminal`：为当前 GUI 会话开一个侧边终端（worktree 目录、120x32），输入 `claude --resume <id>`；没有可续接的 id 时开一个新的 `claude`。首个按键即由人接管，和自己在终端里开一样。
-- 会话标识按 `/^[A-Za-z0-9_-]{1,128}$/` 校验后才拼进 shell 命令行；缺会话 / 会话未运行 / 无终端服务 / 超出终端上限都返回带原因的 4xx，而不是 500。
-- `cliInvocation` 只在会话 id 是 UUID 形状时才加 `--resume`：`claude --resume <value>` 会把未知值当**会话标题**去匹配，而流里没拿到 `session_id` 时会退化成 `worker-xxxxxxxx` 这种合成 id——以前理论上可能续到别人的会话，现在直接不加该参数。
-- 客户端：`PanelProvider` 新增 `currentSessionId`（点击时读取：`sidebarRight.mounted`，面板占着主栏时它为空，退回工作区自己的选择记录 `dsh.sessions.current`），运行行在 `worker.backend === 'claude'` 且有 worktree 时显示「在终端接管」按钮；DSH 运行仍走「打开 Session」，Codex 运行两者都没有。
-- 同一个运行再点一次会回到已经在跑的那个终端（按标题认领，`reused: true`），不会占用宿主仅有的几个 agent 终端位、也不会在同一个会话上再起一个 Claude Code。
-
-### 终端就长在面板里（「会话」页）
-
-- 新增「会话」页（页签在「执行」与「设置」之间）：左边是这个工作区的 Claude Code CLI 会话列表，右边是它的终端——和宿主自己的「左列表 + 右对话」一个形状，不再用盖在工单上的浮层。
-- 列表来自引擎的 runs（`worker.backend === 'claude'`），按会话去重（修复轮与主回合同一个 `session_id`，不会变成两行）；一行显示工单标题、会话短 id 与时间。选中一条，右边就是它的终端；从运行行点「在终端接管」会直接跳到这条会话并把终端打开（`route.open=1`，只自动开一次）。
-- 终端本身是面板自己的渲染：`client/src/terminal.js` 用 `@xterm/xterm` + `@xterm/addon-fit`（动态 `import()`，Node 里的静态检查不会因为它的 UMD 头崩），宿主只当模型——`snapshot` 先 `reset()` 再按 `info.cols/rows` 定尺寸、`output` 直接写，写完 `acknowledge(revision)`；`ResizeObserver` 走 `fitGrid`（按 `environment.maxCols/maxRows` 夹紧）把容器尺寸同步回宿主，人打字经 `view.write(data, true)` 交回 PTY。
-- 刚开的终端本窗口的 roster 还是旧缓存，第一次 `refresh()` 会 `missingTerminal`：改成退避重试（最多 8 次、间隔 350ms）。`view.state` 的订阅通知不带参数，直接 `setState(snapshot)` 不生效：改为在订阅里递增计数器、渲染时读 `getSnapshot()`，连接状态与画面才跟着动。
-- 只有 UUID 形状的会话 id 才会续接（`cli --resume <value>` 会把别的值当**会话标题**去找），否则打开一个新会话并在界面上说明。
-
-### 验证
-
 - `lib/live/worker-cli.test.js` 28/28（新增 resume argv、续接透传、流式 trace 三例）；新增 `lib/live/worker-terminal.test.js` 6/6（接管参数与策略、无 id 开新会话、注入形态 id 拒绝、缺会话/无服务/超上限、写入失败关闭终端）。
-- `lib/live/worker-chat.test.js` 5/5：一条消息＝一次续接的 CLI 回合（工作区、`bot: 'write'`、不带 schema）、无 id 开新会话、非 UUID 一律 400 且不 spawn、消息/目录/长度校验、CLI 失败如实报错。
+- `lib/live/worker-chat.test.js` 6/6：一条消息＝一次续接的 CLI 回合（工作区、`bot: 'write'`、不带 schema）、无 id 开新会话、非 UUID 一律 400 且不 spawn、消息/目录/长度校验、CLI 失败如实报错、历史读取（thinking/sidechain/工具结果不进对话，工具调用计数，只留最近 N 条）。
 - `render-check`：新增 claude 运行夹具，断言「claude 运行显示『继续对话』、Codex 与 DSH 运行不显示」；另加会话页六条（按会话去重、只有 UUID 可续接、列表与选中、聊天框与终端入口、开场说明、步数与失败提示）与帧协议三条。
 - 本机实测：真实 `claude` 走 `runCliWorker` 流式产出 `assistant`/`turn_end`，再用 `--resume` 续接同一 `session_id` 答出上一轮的 `PINEAPPLE`；dev 实例（独立端口 + 独立状态目录）上路由按 400/409 拒绝非法请求。接管全链路在浏览器里点通：运行行点「在终端接管」→ 会话页选中该会话并自动开终端、`connected`、屏上是 `claude --resume f46922bb-…` 恢复出的上一轮对话（PINEAPPLE 问答），可继续输入。
 
