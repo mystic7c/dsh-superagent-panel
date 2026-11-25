@@ -250,6 +250,7 @@ Claude 分支首轮 `--session-id <randomUUID()>`、返工轮 `--resume` + `--sy
 - 真实验证仍需 dev bot + 真实 CLI 登录；单测与 `render-check` 的页面挂载不等于生产验证。
 - 不用 claude / codex 各自的 `--worktree`：worktree、分支、提交都归执行器，两个 worktree 会让人分不清在提交哪一个。
 - 不做 CLI 沙箱：Claude 分支拿到的是 Bash + 网络，Bot 的 `tools.deny` 是「不给工具」，不是「给不了能力」（不变量 5、§11.2）。
+- 交付边界不是沙箱，是 worktree 的 `pre-push` 钩子：`installPushGuard` 给每个工单 worktree 装一个拒绝推送的钩子（`extensions.worktreeConfig` + 每-worktree `core.hooksPath`），三个后端一视同仁；执行器自己 `git push --no-verify`。worker 手动删掉这份配置仍能绕过——这是「防手滑」而不是「防越狱」，真隔离得靠容器。
 - 不抄 OpenMausBot 的 provider fleet / shadow 实例 / 预热会话 / 模型目录发现 / TTS / 云电脑：面板一个引擎进程只伺候一个工单池，没有 fleet 可管，抄过来就是无人维护的空壳。
 - 不做 Bot 调度器/触发器：Bot 只定义「这类活怎么干」，不定义「什么时候干」。排期归来源、触发与工单（§0、§3）。
 - 不做 Bot 市场、分享与自动发现：跨机器共享只走 P4 的显式导入/导出，机器人不等于可执行的他人配置（不变量 7）。
