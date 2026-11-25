@@ -1267,6 +1267,10 @@ const sourceText = text()
 if (sourcePageReady) {
   check('source page shows both repositories', repoLabels.every(label => sourceText.includes(label)), sourceText.slice(0, 260))
   check('source page groups IM and code repositories', sourceText.includes('IM 消息源') && sourceText.includes('代码仓库'), sourceText.slice(0, 260))
+  // The intake ledger is the page's main body: one record per message, and no second copy of the filtered messages.
+  check('source page drops the duplicate filtered-message section', !/被过滤消息/.test(sourceText), sourceText.slice(0, 260))
+  check('source page leads with the signal ledger', sourceText.indexOf('原始信号') < sourceText.indexOf('IM 消息源'),
+    JSON.stringify({ signals: sourceText.indexOf('原始信号'), im: sourceText.indexOf('IM 消息源') }))
   check('source cards use the two-up grid', rootElement.querySelectorAll('.sa-cards-2').length >= 2,
     String(rootElement.querySelectorAll('.sa-cards-2').length))
   // C-13: one repository's check used to be rendered on every repository card and asked the host for "whatever repo has
@@ -1528,13 +1532,17 @@ if (evalReady) {
   check('eval rows lead with the judged message', /依据这个SQL|SELECT Gcc|修复：|报表/.test(evalText), evalText.slice(0, 500))
   check('eval rows no longer leak a raw reason key', !/contextOnly/.test(evalText), evalText.slice(0, 500))
   check('eval keeps the rule-by-rule fold', evalText.includes('逐条规则'), evalText.slice(0, 300))
+  // The machine payload moved out of the UI for good: the rule table is the evidence, the JSON is not.
+  check('eval no longer dumps the raw decision payload', !/原始决定|Raw decision/.test(evalText), evalText.slice(0, 300))
   check('eval ticket short codes open their ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length >= 1,
     String(rootElement.querySelectorAll('.sa-main .sa-row-meta button.sa-mono.sa-textlink').length))
   check('eval rows identify their thread or ticket', rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length >= 1,
     String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
   check('eval rows show the shadow model opinion', evalText.includes('模型 93%') && evalText.includes('倾向接单'),
     evalText.slice(0, 500))
-  check('eval rows link directly to the run they caused', evalText.includes('运行 run_demo'), evalText.slice(0, 500))
+  // One way in instead of a run-id short link beside a ticket link (ui audit B): the row keeps 查看工单 and adds
+  // 查看运行, whose tooltip still carries the run id.
+  check('eval rows lead to the run they caused', evalText.includes('查看运行'), evalText.slice(0, 500))
   // One filter idiom on every page: kind, time window and the divergence/override view are segmented chip groups.
   check('eval filters keep chip groups for kind, window and view',
     rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length >= 4
@@ -1561,7 +1569,8 @@ if (evalReady) {
   await sleep(100)
 } else {
   for (const name of ['eval rows lead with the judged message', 'eval rows no longer leak a raw reason key',
-    'eval keeps the rule-by-rule fold', 'eval ticket short codes open their ticket', 'eval rows identify their thread or ticket',
+    'eval keeps the rule-by-rule fold', 'eval no longer dumps the raw decision payload',
+    'eval ticket short codes open their ticket', 'eval rows identify their thread or ticket',
     'eval rows show the shadow model opinion', 'eval filters are one row of chips (kind + time window)']) {
     skip(name, 'no decisions in this state, so the Eval page has no rows to check')
   }
@@ -1821,9 +1830,12 @@ if (threadReady) {
     String(rootElement.querySelectorAll('.sa-main .sa-pane-aside .sa-segment').length))
   const threadSections = [...rootElement.querySelectorAll('.sa-main .sa-section-title')]
     .map(node => (node.textContent ?? '').trim().replace(/\d+$/, ''))
+  // The detail is a conversation, not a second ledger: facts, the Tickets it produced, and the timeline. The graded
+  // decision ledger lives on the Eval page, which the facts section links to.
   check('thread detail no longer repeats a separate decision section',
-    !threadSections.includes('决定') && threadSections.includes('评估过程') && threadSections.includes('消息时间线'),
-    JSON.stringify(threadSections))
+    !threadSections.includes('决定') && !threadSections.includes('评估过程') && threadSections.includes('线程信息') &&
+      threadSections.includes('消息时间线'), JSON.stringify(threadSections))
+  check('thread detail links to the Eval ledger instead of copying it', /查看评估记录/.test(triggerText), triggerText.slice(0, 400))
   check('thread detail keeps the ticket jump in the evaluation flow', /打开工单/.test(triggerText), triggerText.slice(0, 400))
   check('thread timeline renders messages through the Markdown renderer', rootElement.querySelectorAll('.sa-event-text .sa-md').length >= 1,
     String(rootElement.querySelectorAll('.sa-event-text .sa-md').length))
@@ -1884,9 +1896,16 @@ clickByText('来源')
 await sleep(900)
 check('route change resets the body scroll', scroller.scrollTop === 0, String(scroller.scrollTop))
 const sourceFilterInputs = [...rootElement.querySelectorAll('.sa-main .sa-filters input')]
+// An empty ledger shows no filter row: four inputs and six chips over zero rows read as a broken page. Once anything
+// arrived (or a filter is already set) the full row is back, with the repository, reason and date fields the page
+// promises.
+const emptySourceLedger = /最近没有原始信号/.test(rootElement.querySelector('.sa-main')?.textContent ?? '')
 check('source offers repository, reason and date-range filters',
-  sourceFilterInputs.length >= 4 && sourceFilterInputs.filter(input => input.getAttribute('type') === 'date').length === 2,
-  JSON.stringify(sourceFilterInputs.map(input => input.getAttribute('aria-label') ?? input.getAttribute('type'))))
+  emptySourceLedger
+    ? sourceFilterInputs.length === 0
+    : sourceFilterInputs.length >= 4 && sourceFilterInputs.filter(input => input.getAttribute('type') === 'date').length === 2,
+  JSON.stringify({ emptyLedger: emptySourceLedger,
+    inputs: sourceFilterInputs.map(input => input.getAttribute('aria-label') ?? input.getAttribute('type')) }))
 const selectedTab = rootElement.querySelector('[role="tab"][aria-selected="true"]')
 selectedTab?.focus()
 selectedTab?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))

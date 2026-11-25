@@ -167,7 +167,11 @@ export function plainTitle(text) {
 /** A deep-linked or remembered page offset can point past the end of a shrinking result set. Returns the last page's
     offset when that happens, and `undefined` when the requested offset is fine (or the total is not known yet). */
 export function clampPageOffset(offset, total, pageSize) {
-  if (!Number.isFinite(offset) || !Number.isFinite(total) || total <= 0 || offset < total) return undefined
+  if (!Number.isFinite(offset) || !Number.isFinite(total)) return undefined
+  // An empty result set has exactly one page: an offset from a stale link or a shrinking filter returns to page 1
+  // instead of leaving the pager on a page that no longer exists (review P3).
+  if (total <= 0) return offset > 0 ? 0 : undefined
+  if (offset < total) return undefined
   return Math.max(0, Math.floor((total - 1) / pageSize) * pageSize)
 }
 

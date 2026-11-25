@@ -1855,6 +1855,16 @@ export function LiveSettingsPage({ route }) {
     </div>
   }
 
+  /** The bindings as the editor sees them: the unsaved draft first, the saved config second. */
+  const bindingDraft = () => {
+    const draft = drafts.source ?? {}
+    const watched = draft['octo.watchChatIds'] ?? octo.watchChatIds
+    return {
+      watched: Array.isArray(watched) ? watched : [],
+      titles: draft['octo.chatTitles'] ?? octo.chatTitles ?? {},
+      repos: draft['octo.chatRepos'] ?? octo.chatRepos ?? {},
+    }
+  }
   /** Stage a binding change in the source draft; the group's 保存 (with its risk confirmation) writes it. */
   const editBindings = (watched, titles, bindings) => {
     editField('source', 'octo.watchChatIds', watched, octo.watchChatIds ?? [])
@@ -1872,9 +1882,11 @@ export function LiveSettingsPage({ route }) {
     }
     setBindingError(undefined)
     const repoId = bindingForm.repoId || defaultRepoId
-    const watched = [...new Set([...(octo.watchChatIds ?? []), chatId])]
-    const titles = { ...(octo.chatTitles ?? {}), ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
-    const bindings = { ...(octo.chatRepos ?? {}), [chatId]: repoId }
+    // Merge onto the draft, not the saved file: a second chat added before 保存 used to drop the first unsaved binding.
+    const current = bindingDraft()
+    const watched = [...new Set([...current.watched, chatId])]
+    const titles = { ...current.titles, ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
+    const bindings = { ...current.repos, [chatId]: repoId }
     editBindings(watched, titles, bindings)
     closeBindingForm()
   }
@@ -2208,10 +2220,7 @@ export function LiveSettingsPage({ route }) {
     const pollSeconds = 'pollSeconds' in draft ? draft.pollSeconds : String(config.pollSeconds ?? '')
     // Bindings are a source-group draft like every other setting here: writing them straight to live.json bypassed
     // both the dirty indicator and the high-risk confirmation in the save bar (review M-4).
-    const chatIds = Array.isArray(draft['octo.watchChatIds'] ?? octo.watchChatIds)
-      ? (draft['octo.watchChatIds'] ?? octo.watchChatIds) : []
-    const chatTitles = draft['octo.chatTitles'] ?? octo.chatTitles ?? {}
-    const chatRepos = draft['octo.chatRepos'] ?? octo.chatRepos ?? {}
+    const { watched: chatIds, titles: chatTitles, repos: chatRepos } = bindingDraft()
     const chatNames = chatIds.map(id => chatTitles[id] ?? id)
     const senders = senderValuesOf(draft)
     const cursors = engine.channelCursors ?? {}
@@ -2269,13 +2278,17 @@ export function LiveSettingsPage({ route }) {
           ? <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
             {chatIds.map(chatId => <div key={chatId} className="sa-switch-row">
               <div className="sa-switch-row-text">
-                <span>{octo.chatTitles?.[chatId] ?? chatId}</span>
-                <span className="sa-mono sa-hint" translate="no">{String(chatId)}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  title={chatTitles[chatId] ?? String(chatId)}>{chatTitles[chatId] ?? chatId}</span>
+                {/* A 32-character chat key wrapped mid-hash on a phone; one ellipsised line keeps the row readable and the
+                    full key stays in the tooltip. */}
+                <span className="sa-mono sa-hint" translate="no" title={String(chatId)}
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(chatId)}</span>
               </div>
               {/* The control row never wraps: the repository select and its 移除 button stay on one line (critique §27). */}
               <div className="sa-actions" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
                 <div style={{ flex: '0 1 240px', minWidth: 0 }}>
-                  <Select label={pt(t, 'st.bindingRepo')} value={octo.chatRepos?.[chatId] ?? defaultRepoId}
+                  <Select label={pt(t, 'st.bindingRepo')} value={chatRepos[chatId] ?? defaultRepoId}
                     options={repoOptions}
                     onChange={next => editBindings(chatIds, chatTitles, { ...chatRepos, [chatId]: next })} />
                 </div>

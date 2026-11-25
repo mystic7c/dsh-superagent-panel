@@ -9,7 +9,7 @@ import { API, Icon, clampPageOffset, plainTitle } from "./util.js"
 import { reasonLabel, when } from "./i18n.js"
 import { Button, IconButton, InfoTip, Input, SegmentedControl, StatusIcon, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel } from "./api.js"
-import { EmptyState, ErrorState, Folded, Hint, RawValue, Section, Skeleton, When } from "./widgets.js"
+import { EmptyState, ErrorState, Folded, Hint, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { initialPageQuery, remember, rememberPageState } from "./router.js"
 import { useLiveResource } from "./live-model.js"
@@ -38,6 +38,7 @@ Object.assign(PAGE_TEXT, {
   'ev.emptyFilterHint': ['换个决定类型，或清除筛选。', 'Try another decision kind, or clear the filter.'],
   'ev.clearFilter': ['清除筛选', 'Clear filters'],
   'ev.openTicket': ['查看工单', 'Open Ticket'],
+  'ev.openRun': ['查看运行', 'Open the run'],
   'ev.sameDecision': ['相同判断 {count} 次', 'Same judgement ×{count}'],
   'ev.dismiss': ['忽略', 'Dismiss'],
   'ev.dismissHint': ['引擎还没有「忽略未完成评估」的接口，这里只展示记录，不会发请求。',
@@ -45,7 +46,8 @@ Object.assign(PAGE_TEXT, {
   'ev.noReason': ['没有记录原因。', 'No reason recorded.'],
   'ev.noPreview': ['（没有消息内容）', '(no message content)'],
   'ev.detail': ['决定详情', 'Decision detail'],
-  'ev.raw': ['原始决定', 'Raw decision'],
+  'ev.threadOnly': ['只显示这个线程的判定。', 'Showing the decisions of one Thread only.'],
+  'ev.threadClear': ['显示全部线程', 'Show every Thread'],
   'ev.noRules': ['这次评估没有记录规则结果。', 'This Eval recorded no rule results.'],
   'ev.offsetClamped': ['你打开的位置从第 {from} 条开始，超出共 {total} 条的范围；已显示最后一页。',
     'The link pointed to item {from}, beyond the {total} decisions recorded; the last page is shown instead.'],
@@ -225,26 +227,21 @@ export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []
             : null,
           evalModelTag(t, decision),
           decision.at ? h(When, { at: decision.at }) : null,
+          // One way into the work, not five: the ticket ids and run ids used to sit in the meta line as cryptic short
+          // links (run_2006…) beside a 查看工单 button that led to the same page (ui audit B). The ids stay in the title.
           ticketIds.length
-            ? h(Fragment, null,
-              ticketIds.map(id => h('button', { key: id, type: 'button', className: 'sa-mono sa-textlink', title: id,
-                onClick: () => navigate({ page: 'execution', id }) }, liveShortId(id, 8))),
-              h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) },
-                pt(t, 'ev.openTicket')))
+            ? h(Button, { variant: 'ghost', size: 'sm', title: ticketIds.join('\n'),
+              onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) }, pt(t, 'ev.openTicket'))
             : null,
-          runLinks.length
-            ? h('span', { className: 'sa-row-meta' },
-              runLinks.map(link => h('button', { key: link.runId ?? link.ticketId, type: 'button',
-                className: 'sa-mono sa-textlink',
-                title: link.runId ? `${pt(t, 'ev.run')} · ${link.runId}` : link.ticketId,
-                onClick: () => navigate({ page: 'execution', id: link.ticketId, ...(link.runId ? { run: link.runId } : {}) }) },
-              link.runId ? `${pt(t, 'ev.run')} ${liveShortId(link.runId, 8)}` : liveShortId(link.ticketId, 8))))
+          runLinks.length && runLinks[0].runId
+            ? h(Button, { variant: 'ghost', size: 'sm', title: runLinks[0].runId,
+              onClick: () => navigate({ page: 'execution', id: runLinks[0].ticketId, run: runLinks[0].runId }) },
+            pt(t, 'ev.openRun'))
             : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
         unavailable ? h('p', { id: dismissHintId, className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,
         h(Folded, { summary: rules.length ? pt(t, 'thread.rulesDetail') : pt(t, 'ev.detail') },
-          rules.length ? h(ThreadRuleRows, { rules }) : h(Hint, null, pt(t, 'ev.noRules')),
-          h(RawValue, { label: pt(t, 'ev.raw'), json: decision }))),
+          rules.length ? h(ThreadRuleRows, { rules }) : h(Hint, null, pt(t, 'ev.noRules')))),
       unavailable ? h('div', { className: 'sa-row-actions' },
         h(Button, { variant: 'ghost', size: 'sm', disabled: true, 'aria-describedby': dismissHintId }, pt(t, 'ev.dismiss')),
         h(InfoTip, { text: pt(t, 'ev.dismissHint'), warn: true })) : null))
@@ -321,8 +318,10 @@ export function clampEvalOffset(offset, total, pageSize = EVAL_PAGE_SIZE) {
   return clampPageOffset(offset, total, pageSize)
 }
 
-export function LiveEvalPage() {
+export function LiveEvalPage({ route }) {
   const { t, navigate } = usePanel()
+  // A Thread link scopes this ledger to that Thread (a route field, so a reload or a pasted #sa= link keeps it).
+  const thread = String(route?.thread ?? '')
   // R2-01/R2-08/R2-15: the URL (shared or reloaded link, offset included) wins; otherwise the tab's remembered slice,
   // with the load-time query string covering a host that consumed its own parameter before the panel mounted.
   const initial = useRef(initialPageQuery('eval', evalUrlState, EVAL_DEFAULTS))
@@ -384,7 +383,7 @@ export function LiveEvalPage() {
   }, [])
   const { data, error, loading, reload } = useLiveResource('engine/decisions',
     { kind, window: range, q, repo: repoFilter, reason: reasonFilter,
-      from: dateBound(from), to: dateBound(to, true), view, offset, limit: EVAL_PAGE_SIZE })
+      from: dateBound(from), to: dateBound(to, true), threadKey: thread, view, offset, limit: EVAL_PAGE_SIZE })
   const refresh = useCallback(() => { void reload() }, [reload])
   // Opening a Ticket/thread/signal leaves the page; remember where the list was so going back lands on the same row.
   const openFromEval = useCallback(route => {
@@ -412,14 +411,17 @@ export function LiveEvalPage() {
   // R2-14: an offset from a pasted link (or a shrinking result set) can point past the end. The list then rendered a
   // "filter matched nothing" empty state with no pagination, which is a lie: the filters are fine, the page is not.
   // Clamp to the last page once the total is known and say what happened instead.
-  const loadedTotal = Number.isFinite(data?.total) ? data.total : (Array.isArray(data?.items) ? data.items.length : 0)
+  // A host may serialise the count as a string; Number.isFinite('79') is false, so the page then claimed the length of
+  // one page as the total (review P3).
+  const countOf = value => { const count = Number(value); return Number.isFinite(count) ? count : undefined }
+  const loadedTotal = countOf(data?.total) ?? (Array.isArray(data?.items) ? data.items.length : 0)
   // The note belongs to the offset that produced it: `from` is what the link asked for, `at` the page shown. A filter
   // change resets `offset` to 0, which no longer equals `at`, so the note clears itself instead of hanging above a
   // list that is already correct (review P3).
   const [clamped, setClamped] = useState(undefined)
   useEffect(() => {
     const lastPage = clampEvalOffset(offset, loadedTotal)
-    if (!data || lastPage === undefined) return
+    if (!data || lastPage === undefined || lastPage === offset) return
     setClamped({ from: offset, at: lastPage })
     setOffset(lastPage)
   }, [data, loadedTotal, offset])
@@ -429,7 +431,7 @@ export function LiveEvalPage() {
 
   const items = Array.isArray(data.items) ? data.items : []
   const counts = data.counts ?? {}
-  const total = Number.isFinite(data.total) ? data.total : items.length
+  const total = countOf(data.total) ?? items.length
   const pageFrom = items.length ? offset + 1 : 0
   const pageTo = Math.min(offset + items.length, total)
   const hasPrev = offset > 0
@@ -473,11 +475,20 @@ export function LiveEvalPage() {
             onChange: event => setFrom(event?.target?.value ?? '') }),
           h('span', { className: 'sa-hint' }, pt(t, 'ev.toShort')),
           h(Input, { type: 'date', value: to, label: pt(t, 'ev.to'),
-            onChange: event => setTo(event?.target?.value ?? '') }))),
+            onChange: event => setTo(event?.target?.value ?? '') })),
+        from && to && from > to
+          ? h('p', { className: 'sa-hint', role: 'status', style: { flexBasis: '100%' } }, t('dateRangeReversed'))
+          : null),
       h('div', { className: 'sa-actions' },
         h(IconButton, { icon: h(Icon, { name: 'refresh', size: 16 }), label: pt(t, 'ev.refresh'), title: pt(t, 'ev.refresh'), onClick: refresh }))),
     error ? h(ErrorState, { error, onRetry: reload }) : null,
     h(Section, { title: pt(t, 'ev.title'), count: total },
+      // A link from a Thread narrows this ledger to that Thread; say so and keep the way back next to it, otherwise the
+      // shortened list reads as missing history.
+      thread
+        ? h('p', { className: 'sa-hint' }, pt(t, 'ev.threadOnly'), ' ',
+          h(Button, { variant: 'ghost', size: 'sm', onClick: () => navigate({ page: 'eval' }) }, pt(t, 'ev.threadClear')))
+        : null,
       clamped && offset === clamped.at
         ? h(Hint, null, pt(t, 'ev.offsetClamped', { from: clamped.from + 1, total }))
         : null,

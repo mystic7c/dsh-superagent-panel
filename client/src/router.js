@@ -90,7 +90,9 @@ export function remember(location) {
   writeHashState(ROUTE_HASH, location.route)
 }
 /** Header back-button label: a record id reads as its noun, otherwise the destination tab. */
-export const routeLabel = (t, route) => route.id ? t(route.page === 'trigger' ? 'term.thread' : 'term.ticket') : t(`tab.${route.page}`)
+export const routeLabel = (t, route) => route.id
+  ? t(route.page === 'trigger' ? 'term.thread' : route.page === 'source' ? 'term.signal' : 'term.ticket')
+  : t(`tab.${route.page}`)
 export const detailOf = (route, page) => route.page === page && route.id ? route.id : undefined
 
 /* U-08: filters are view state of ONE page, not of the panel. Each page declares the query parameters it owns, and a

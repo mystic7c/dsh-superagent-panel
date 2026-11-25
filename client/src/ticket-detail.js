@@ -2,7 +2,7 @@ import { Icon, executorSessionId, safeHttpUrl, scrollPanelTo, shortId } from "./
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, Select, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
-import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./widgets.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
@@ -1243,8 +1243,17 @@ export function AutomationCard({ ticket, onSaved }) {
   const intervalRef = useRef(null)
   const atRef = useRef(null)
   const maxExecutionsRef = useRef(null)
-  // Re-sync only when the stored config actually changed (a poll of unchanged data never wipes a half-typed form).
-  useEffect(() => { setForm(automationFormOf(automation)) }, [signature])
+  // Re-sync only when the stored config actually changed AND the form is still untouched: a poll that returned a config
+  // edited elsewhere used to wipe a half-typed form (review P3). `synced` is the snapshot the form was last filled from.
+  const synced = useRef(automationFormOf(automation))
+  useEffect(() => {
+    const next = automationFormOf(automation)
+    setForm(previous => {
+      if (JSON.stringify(previous) !== JSON.stringify(synced.current)) return previous
+      synced.current = next
+      return next
+    })
+  }, [signature])
   // A Ticket without a stored config still needs an entry point to opt in; only the terminal "put away" states hide
   // the card (a dismissed/closed Ticket will never run again by schedule).
   const update = patch => { setForm(previous => ({ ...previous, ...patch })); setFieldErrors({}) }
@@ -2438,11 +2447,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       <TicketTimeline ticket={ticket} runs={runs} />
     </Section>
 
-    {/* Secondary evidence and the raw escape hatch stay at the bottom. */}
+    {/* Secondary evidence stays at the bottom: the authorization basis and the rule table. */}
     <Folded summary={pt(t, 'ticket.auth')}>
       <KeyValues rows={authRows} />
       {rules.length ? <Folded summary={pt(t, 'thread.rulesDetail')}><ThreadRuleRows rules={rules} /></Folded> : null}
     </Folded>
-    <RawValue label={pt(t, 'ticket.raw')} json={data} />
   </>
 }

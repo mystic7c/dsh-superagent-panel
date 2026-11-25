@@ -425,8 +425,11 @@ export function CopyButton({ value, label }) {
         area.style.opacity = '0'
         document.body.appendChild(area)
         area.select()
-        document.execCommand('copy')
+        // The legacy command returns false when the browser refuses it (no user gesture, or a sandbox); reporting
+        // "copied" anyway made the button lie (review P2).
+        const copied = document.execCommand('copy')
         area.remove()
+        if (!copied) return
       }
       setCopied(true)
       clearTimeout(timer.current)

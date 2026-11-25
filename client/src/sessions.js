@@ -91,7 +91,7 @@ const ticketOf = (tickets, id) => Array.isArray(tickets)
   ? tickets.find(ticket => ticket?.id === id)
   : tickets?.[id]
 
-export function SessionsList({ rows, selected, onPick }) {
+export function SessionsList({ rows, selected, onPick, text }) {
   return <ul className="sa-session-list">
     {rows.map(row => <li key={row.sessionId}>
       <button type="button" className="sa-session-row" aria-current={row.sessionId === selected ? 'true' : undefined}
@@ -100,7 +100,7 @@ export function SessionsList({ rows, selected, onPick }) {
           <span className="sa-session-ticket">{row.title || row.ticketId || row.runId}</span>
           <span className="sa-mono sa-hint">{shortId(row.sessionId)}</span>
         </span>
-        <span className="sa-session-meta">{when(row.at)}</span>
+        <span className="sa-session-meta">{when(row.at, text.lang)}</span>
       </button>
     </li>)}
   </ul>
@@ -141,8 +141,12 @@ export function SessionChat({ row, thread, draft, busy, onDraft, onSend, onTermi
           placeholder={pt(text, 'sessions.placeholder')} disabled={busy || !row.resumable}
           onChange={event => onDraft(event.target.value)}
           onKeyDown={event => {
-            // Enter sends, Shift+Enter breaks the line — a chat box, not a document editor.
-            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void onSend() }
+            // Enter sends, Shift+Enter breaks the line — a chat box, not a document editor. An IME is the exception:
+            // the Enter that commits a candidate (isComposing, or the legacy keyCode 229) must reach the IME, or the
+            // half-composed message is sent and the candidate is never committed.
+            if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing || event.keyCode === 229) return
+            event.preventDefault()
+            void onSend()
           }} />
         <Button variant="primary" size="sm" className="sa-chat-send" type="submit"
           disabled={busy || !row.resumable || !draft.trim()}>{pt(text, 'sessions.send')}</Button>
@@ -255,7 +259,7 @@ export function LiveSessionsPage({ route }) {
     <p className="sa-hint sa-page-hint">{pt(t, 'sessions.hint')}</p>
     <div className="sa-sessions">
       <div className="sa-sessions-list">
-        <SessionsList rows={rows} selected={selected} onPick={setPicked} />
+        <SessionsList rows={rows} selected={selected} onPick={setPicked} text={t} />
       </div>
       <div className="sa-sessions-pane" data-session={selected}>
         {row === undefined

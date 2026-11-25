@@ -132,15 +132,15 @@ Object.assign(PAGE_TEXT, {
     unknownMode: ['未知方式（{mode}）', 'Unknown mode ({mode})'],
     default: ['默认', 'Default'], mixed: ['多仓库', 'Multiple repositories'] },
   // ---- thread detail ----
-  thread: { facts: ['线程信息', 'Thread facts'], eval: ['评估过程', 'Evaluation'], decision: ['决定', 'Decision'],
+  thread: { facts: ['线程信息', 'Thread facts'], tickets: ['产生的工单', 'Produced Tickets'], decision: ['决定', 'Decision'],
     timeline: ['消息时间线', 'Message timeline'], fieldKey: ['线程', 'Thread'], fieldSource: ['来源', 'Source'],
     fieldChannel: ['渠道 ID', 'Channel id'], fieldCreated: ['创建', 'Created'], fieldLast: ['最近活动', 'Last activity'],
-    fieldTriggers: ['消息', 'Messages'], fieldTickets: ['工单', 'Tickets'], noEval: ['还没有评估记录。', 'No evaluation yet.'],
+    fieldTriggers: ['消息', 'Messages'], fieldTickets: ['工单', 'Tickets'],
     noDecision: ['还没有决定。', 'No decision yet.'], noMessages: ['这个线程还没有消息。', 'This thread has no messages yet.'],
     latestDecision: ['最近决定', 'Latest decision'], reason: ['原因', 'Reason'], rules: ['规则', 'Rules'],
     openTicket: ['打开工单', 'Open Ticket'], decisionsTitle: ['决定历史', 'Decisions'],
     rulesHit: ['{hit} 通过 / {miss} 未通过', '{hit} passed / {miss} not passed'],
-    factsRaw: ['事实原始值', 'Raw facts'], noSelection: ['从左侧选择一个线程', 'Pick a thread on the left'],
+    noSelection: ['从左侧选择一个线程', 'Pick a thread on the left'],
     noSelectionHint: ['选中线程后，这里会展示事实、评估、决定与消息去向。',
       'Pick a thread to see its facts, evaluation, decision and where each message went.'],
     noTicketProduced: ['这个决定没有产生工单。', 'This decision produced no Ticket.'],
@@ -991,16 +991,18 @@ export function TicketRow({ ticket, page = 'execution', actions, reload, compact
   const externalHref = primary?.kind === 'external' ? safeHttpUrl(primary.href) : ''
   // A real link, not window.open: middle-click, Cmd-click and copy-link keep working, and it is keyboard reachable
   // (`.sa-btn` is class-based, so an <a> with the same classes renders as the same primary button).
+  // The row's next step is a secondary button, not a filled accent: a ledger of forty rows painted forty brand buttons
+  // and the page had no single primary action left (One Accent Rule). The Ticket page keeps the filled one.
   const primaryButton = !primary ? null
     : primary.kind === 'external'
       ? externalHref
-        ? <a className="sa-btn sa-btn-primary sa-btn-sm" href={externalHref} target="_blank"
+        ? <a className="sa-btn sa-btn-outline sa-btn-sm" href={externalHref} target="_blank"
           rel="noopener noreferrer" style={{ textDecoration: 'none' }}
           onClick={event => event.stopPropagation()}>{pt(t, primary.labelKey)}</a>
         // An unsafe URL never becomes a link; the same action degrades to opening the detail.
-        : <Button variant="primary" size="sm"
+        : <Button variant="outline" size="sm"
           onClick={event => { event.stopPropagation(); open() }}>{pt(t, primary.labelKey)}</Button>
-      : <Button variant="primary" size="sm"
+      : <Button variant="outline" size="sm"
         disabled={Boolean(busyOf[primary.kind]) || (primary.kind === 'publish' && !canPublish)}
         onClick={event => { event.stopPropagation(); branches[primary.kind]() }}>{pt(t, primary.labelKey)}</Button>
   const allItems = [

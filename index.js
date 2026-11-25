@@ -729,6 +729,8 @@ export function apply(ctx, config = {}) {
             q: url.searchParams.get('q') ?? '', repoId: url.searchParams.get('repo') ?? '',
             reason: url.searchParams.get('reason') ?? '',
             from: url.searchParams.get('from') ?? '', to: url.searchParams.get('to') ?? '',
+            // One Thread's decisions: the Trigger detail links here instead of printing the ledger a second time.
+            threadKey: url.searchParams.get('threadKey') ?? '',
             view: url.searchParams.get('view') ?? 'all',
             offset: Number(url.searchParams.get('offset') ?? 0), limit: Number(url.searchParams.get('limit') ?? 50) }))
           return

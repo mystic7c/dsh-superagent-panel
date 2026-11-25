@@ -87,7 +87,8 @@ export function GlobalStatus() {
   // The array wins over the host's scalar because a host can report a stale `blocking` total while the rows are live
   // (Overview reads the same payload, and the header must not disagree with the section below it).
   const blockingRows = Array.isArray(data.inbox?.items) ? data.inbox.items.filter(item => item.blocking === true).length : 0
-  const pending = data.inbox ? blockingRows || Number(data.inbox.blocking ?? 0) : needsYouCount(data)
+  const pending = data.inbox ? (Array.isArray(data.inbox.items) ? blockingRows : Number(data.inbox.blocking ?? 0))
+    : needsYouCount(data)
   const active = Number(data.load?.running ?? 0)
   const setup = setupStateOf(data)
   // When only the last switch (engine) is left, Overview owns the single "start automation" action; a second
@@ -358,7 +359,9 @@ export function Pages({ route }) {
   </div>
 }
 
-/** Keep one page crash from blanking the whole panel: show the error text and a reload button instead. */
+/** Keep one page crash from blanking the whole panel: show the error text and a reload button instead. The caller keys
+    this boundary by the page, so moving to another tab remounts it with a clean slate — one broken page used to leave
+    every page on the error screen until a full reload (review P2). */
 export class PanelBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null } }
   static getDerivedStateFromError(error) { return { error } }
@@ -466,7 +469,7 @@ export function PanelShell({ location, openTab }) {
         {/* The body is the only scroll container, and a plain overflow div is not keyboard-scrollable in Safari: make it a
             named region so it can take focus and arrow keys/page keys reach the page body. */}
         <div ref={scroller} className="sa-scroll" tabIndex={0} role="region" aria-label={pt(t, 'shell.scrollLabel')}>
-          <PanelBoundary><Pages route={location.route} /></PanelBoundary>
+          <PanelBoundary key={location.route.page}><Pages route={location.route} /></PanelBoundary>
         </div>
         <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
