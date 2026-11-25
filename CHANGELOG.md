@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.15] — 2026-11-25
+
+### Claude Code CLI 不再被削成一个子集
+
+- 写回合改成 `--permission-mode bypassPermissions`，去掉 `--allowedTools` 与 `--disallowedTools`：既然把工单交给本机的 Claude Code，就用它自己的工具、它的 settings/hooks/MCP 与模型配置。之前的白名单只给了 `Read,Edit,Write,Glob,Grep,Bash`，并把联网、子 agent、Skill、Notebook、定时任务等一并禁掉——那不是在用 Claude Code，是在用一个残缺的它。`-p` 是非交互的，没有白名单时任何未预授权的工具不是「问一下」，而是直接拒绝，所以这一步必须走 bypassPermissions 才有满血能力。
+- 只读回合（评审、评估）保持 `plan` 模式 + `Read,Glob,Grep,Bash`：读 diff、跑测试够用，但不会改文件。
+- 交付边界没变：worker 拿到的仍是工单 worktree，提交、推送、MR、闸门与部署仍由执行器负责——`--append-system-prompt` 里的 brief 只在有内容时才加。
+- 声明表 `BACKEND_CAPABILITIES.claude` 的 `web` 由 `false` 改为 `true`（2026-11-25 冒烟：`WebFetch` 抓到页面标题才写），否则一个需要联网的工单还会被静态表误判为不可路由；未核验的后端仍由 `capabilityGaps` 拒绝，`引擎` 也不再拿 claude 的 web 当「缺能力」示例。
+- 设置页同步：worker 后端里 Claude 的说明改为「就是本机那个 Claude Code……工具不设限」，能力卡里 approval 写 `bypassPermissions（工具不设限）`、resume 改为 `--resume 续接同一会话`（1.1.13 起就支持，一直写着「一次性会话」）。
+- 测试：`worker-cli.test.js` 断言写回合没有白名单/黑名单、只读回合仍是 plan；`routing.test.js` 与 `api.test.js` 里以「claude 缺 web」为反例的三处断言换成现在的真实边界（未知后端、未启用的后端）。
 ## [1.1.14] — 2026-11-24
 
 把 1.1.13 只做在 CLI 上的「修复轮续接」补到 DSH worker。
