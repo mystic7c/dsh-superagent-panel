@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.14] — 2026-11-24
+
+把 1.1.13 只做在 CLI 上的「修复轮续接」补到 DSH worker。
+
+### DSH worker 的修复轮续接
+
+- `lib/live/worker.js` 的 `runWorker` 新增 `resume`：给了持久化的会话 id 就走 `agents.resume({ resumeSessionId })`（宿主先加载对话），不再每轮 `agents.create` 开一个新会话。`setup` 照旧在新作用域里重建，所以 brief、工具守卫、审批策略、Bot 的 prompt sections 一个都不少。
+- `lib/live/executor.js`：自动修复轮传 `resume: run.worker?.sessionId`，与 CLI 分支同一条规则——修复时它记得自己上一轮读了什么、改了什么。
+- 两条兜底：宿主没有 `agents.resume`（旧 DSH）→ 记一行日志，照常开新会话；会话文件已不存在或被别的进程占着 → 同样退回新会话，不让「续不上」变成一个失败的 run。
+
+### 为什么 DSH 没有「在终端接管」
+
+DSH worker 的会话本来就是一等 Session：运行行的「打开 Session」就是接管，在 GUI 里能接着聊。本机也没有 TUI app（`dsh-tui` 不在安装包里，`~/.dsh/profiles` 只有 desktop/dev/headless/sdk/web），`dsh tui --resume` 直接报 profile 不存在；唯一能续跑持久化会话的是 `dsh --profile headless --session-id <id> "…"`，那是命令而不是终端。
+
+### 验证
+
+- `node --test lib/live/*.test.js`：worker 新增三例（修复轮走 `agents.resume` 且重建 setup、宿主无 resume 时退回创建、resume 失败退回创建）。
+- `render-check`、`build-client --check`、`check-keys`、`npm run types`、`check:js` 全绿。
+
 ## [1.1.13] — 2026-11-24
 
 把 Claude Code CLI 会话接进面板：CLI worker 不再是一次性黑盒，运行中可以看、跑完可以接着聊、还能直接接管到终端。
