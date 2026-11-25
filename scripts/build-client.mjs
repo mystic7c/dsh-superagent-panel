@@ -74,7 +74,9 @@ const result = esbuild.buildSync({
   platform: 'browser',
   target: 'es2022',
   external: ['react', 'react-dom', 'react/jsx-runtime'],
-  loader: { '.js': 'jsx' },
+  // `.css` arrives as text so a stylesheet a dependency ships (xterm's) becomes a string we inject at runtime;
+  // the panel's own styling stays one template literal in style.js.
+  loader: { '.js': 'jsx', '.css': 'text' },
   jsx: 'transform',
   jsxFactory: 'h',
   jsxFragment: 'React.Fragment',

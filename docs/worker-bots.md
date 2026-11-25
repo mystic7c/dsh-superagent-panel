@@ -54,8 +54,8 @@ Bot 是用户定义、面向**一类相对固定、会反复出现的工作**的
 | 决策模型 | `eval.decision` + `lib/live/judge.js:93` `createSystemOneJudge()`（endpoint/model/tokenFile/timeoutMs） | 现在只判「要不要开单」，不判「交给谁」 |
 | 工作流 | `lib/live/workflow.js:2` 五阶段 + key/digest/返工预算/续跑 | 阶段硬编码，不能编排 |
 | CLI 进程契约 | `worker-cli.js:37` `cliInvocation()` | 工单全文进 argv（`ps` 可读、有长度上限）；Claude 分支不隔离宿主 MCP/settings/hooks/CLAUDE.md；Codex `--ephemeral` 会话不可续；CLI 只有 25 分钟总超时，没有 idle 超时 |
-| 会话续传 | `executor.js:1536`、`:2429` 已把 `sessionId` 传进 `runCliWorker`，`cliInvocation` 从不使用 | 返工轮各自新开 CLI 会话，把整套 brief 重讲一遍，也就重新烧一遍 |
-| 运行中观测 | `run.trace` 只在 `executor.js:1553`、`:1649`、`:2501` 回合结束后写入 | worker 跑着的时候 UI 一片空白；被杀/超时的 run 一条 trace 都没有 |
+| 会话续传 | 1.1.13 起 `cliInvocation(..., { resume })` 走 `--resume`，修复轮续接主回合的 Claude Code 会话（`~/.claude/projects/<cwd>/<id>.jsonl`）；Codex 仍无核实的续接方式 | staged 工作流的 CLI 阶段仍未串会话；跨 run（换工单/换 worktree）不续，cwd 变了上游也找不到那条记录 |
+| 运行中观测 | 1.1.13 起 CLI 分支也接 `liveTrace.push`（`runCliWorker` 的 `onTrace` + `streamedEvents`），跑着就能看；收尾仍以完整解析为准 | 被 SIGKILL 的 run 仍可能只有半截 trace；超时/中断的收尾事件未补 |
 
 ## 3. Bot 模型
 
