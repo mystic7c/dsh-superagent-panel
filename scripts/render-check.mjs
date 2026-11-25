@@ -1627,6 +1627,15 @@ const viewText = viewPickers.map(node => (node.textContent ?? '').replace(/\s+/g
 check('view bar states grouping and ordering as labelled pickers',
   viewPickers.length === 2 && /分组按阶段/.test(viewText) && /排序最近更新/.test(viewText), viewText)
 check('view bar keeps the include-ended switch', Boolean(rootElement.querySelector('.sa-main .sa-list-bar .sa-switch')), '')
+// The ended history had three reveals (a switch, a 展开已结束 button, and a 查看全部 cap button); the switch is now the
+// only include-control and the cap reveal says what it adds (review A, round 1.2.2).
+check('the include-ended switch is the only ended reveal',
+  /显示已结束/.test(rootElement.querySelector('.sa-main .sa-list-bar')?.textContent ?? '')
+  && ![...rootElement.querySelectorAll('.sa-main button')].some(node => /展开已结束|查看全部（/.test(node.textContent ?? '')),
+  rootElement.querySelector('.sa-main .sa-list-bar')?.textContent?.slice(0, 120) ?? 'no view bar')
+check('manual ticket entry sits in the executor header, not in a row of its own',
+  Boolean([...rootElement.querySelectorAll('.sa-main .sa-section-action button')]
+    .find(node => (node.textContent ?? '').trim() === '手工建单')), '')
 check('view pickers open a menu with the other choice', viewPickers.every(node => node.getAttribute('aria-haspopup') === 'menu'),
   JSON.stringify(viewPickers.map(node => node.getAttribute('aria-haspopup'))))
 const doneBadge = [...rootElement.querySelectorAll('.sa-exec-queue .sa-section-title .sa-hint')]
