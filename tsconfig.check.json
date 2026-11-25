@@ -22,6 +22,8 @@
   },
   "files": [
     "types/dsh.d.ts",
+    "types/assets.d.ts",
+    "client/src/terminal.js",
     "index.js",
     "lib/util.js",
     "lib/live/repo.js",

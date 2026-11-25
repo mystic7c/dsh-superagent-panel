@@ -31,6 +31,7 @@ Bot 是用户定义、面向**一类相对固定、会反复出现的工作**的
 后面所有设计都从这八条推，冲突时以不变量为准。
 
 1. **会话的边界是 run，不是工单**。每单一个 worktree、一份可追责的 run；run 之内（主轮 → 返工轮 → staged 各阶段）在同一 worktree 上续传同一个 CLI 会话是允许且推荐的（§11.3），跨 run 一律新会话、新上下文。判据只有一条：run 内的续传不得跨过 worktree 或闸门边界。Bot 复用的是**定义**（身份、能力、预算、阶段）；run 之间复用的也仍然只是定义，不是上下文——上下文只在 run 内续（§11.3）。
+   **人触发的重跑是唯一的有意放宽**（1.1.17）：`manual` / `revise` / `resume` 触发的 run 会续上一轮 run 的 worker 会话（`continuationOf`：同 worktree、同后端、Claude 还要会话文件仍在磁盘上），自动分派（`auto`）仍开新会话。理由：人按「追加并重跑」时的意思就是「接着刚才那个改」，工单正文带不走「上一轮为什么这么写」。
 2. **Bot 是声明，不是代码**。白名单式归一化（照 `lib/live/config.js` 的 `mergeConfig`），不认识的键丢弃；Bot 里不能写任意脚本。
 3. **能力必须可推导、可校验**。Bot 声明 `requires`，保存期与分派期各用**探针结果**校验一次（`agentPresets.resolve` 的工具面 + `web` 服务 ready；`BACKEND_CAPABILITIES` 只作为没有探针时的拒绝依据）。能力不足或后端未核验的 Bot 不允许被选中，也不允许被保存成「看起来能用」。
 4. **每次运行回答三个问题**：谁跑的（`botId`）、为什么是它（`reason`）、它当时有什么能力（`capability` 快照存档）。缺任一项视为观测缺陷。
@@ -54,8 +55,8 @@ Bot 是用户定义、面向**一类相对固定、会反复出现的工作**的
 | 决策模型 | `eval.decision` + `lib/live/judge.js:93` `createSystemOneJudge()`（endpoint/model/tokenFile/timeoutMs） | 现在只判「要不要开单」，不判「交给谁」 |
 | 工作流 | `lib/live/workflow.js:2` 五阶段 + key/digest/返工预算/续跑 | 阶段硬编码，不能编排 |
 | CLI 进程契约 | `worker-cli.js:37` `cliInvocation()` | 工单全文进 argv（`ps` 可读、有长度上限）；Claude 分支不隔离宿主 MCP/settings/hooks/CLAUDE.md；Codex `--ephemeral` 会话不可续；CLI 只有 25 分钟总超时，没有 idle 超时 |
-| 会话续传 | `executor.js:1536`、`:2429` 已把 `sessionId` 传进 `runCliWorker`，`cliInvocation` 从不使用 | 返工轮各自新开 CLI 会话，把整套 brief 重讲一遍，也就重新烧一遍 |
-| 运行中观测 | `run.trace` 只在 `executor.js:1553`、`:1649`、`:2501` 回合结束后写入 | worker 跑着的时候 UI 一片空白；被杀/超时的 run 一条 trace 都没有 |
+| 会话续传 | 1.1.13 起 `cliInvocation(..., { resume })` 走 `--resume`，修复轮续接主回合的 Claude Code 会话（`~/.claude/projects/<cwd>/<id>.jsonl`）；Codex 仍无核实的续接方式 | staged 工作流的 CLI 阶段仍未串会话；跨 run（换工单/换 worktree）不续，cwd 变了上游也找不到那条记录 |
+| 运行中观测 | 1.1.13 起 CLI 分支也接 `liveTrace.push`（`runCliWorker` 的 `onTrace` + `streamedEvents`），跑着就能看；收尾仍以完整解析为准 | 被 SIGKILL 的 run 仍可能只有半截 trace；超时/中断的收尾事件未补 |
 
 ## 3. Bot 模型
 
@@ -249,6 +250,7 @@ Claude 分支首轮 `--session-id <randomUUID()>`、返工轮 `--resume` + `--sy
 - 真实验证仍需 dev bot + 真实 CLI 登录；单测与 `render-check` 的页面挂载不等于生产验证。
 - 不用 claude / codex 各自的 `--worktree`：worktree、分支、提交都归执行器，两个 worktree 会让人分不清在提交哪一个。
 - 不做 CLI 沙箱：Claude 分支拿到的是 Bash + 网络，Bot 的 `tools.deny` 是「不给工具」，不是「给不了能力」（不变量 5、§11.2）。
+- 交付边界不是沙箱，是 worktree 的 `pre-push` 钩子：`installPushGuard` 给每个工单 worktree 装一个拒绝推送的钩子（`extensions.worktreeConfig` + 每-worktree `core.hooksPath`），三个后端一视同仁；执行器自己 `git push --no-verify`。worker 手动删掉这份配置仍能绕过——这是「防手滑」而不是「防越狱」，真隔离得靠容器。
 - 不抄 OpenMausBot 的 provider fleet / shadow 实例 / 预热会话 / 模型目录发现 / TTS / 云电脑：面板一个引擎进程只伺候一个工单池，没有 fleet 可管，抄过来就是无人维护的空壳。
 - 不做 Bot 调度器/触发器：Bot 只定义「这类活怎么干」，不定义「什么时候干」。排期归来源、触发与工单（§0、§3）。
 - 不做 Bot 市场、分享与自动发现：跨机器共享只走 P4 的显式导入/导出，机器人不等于可执行的他人配置（不变量 7）。

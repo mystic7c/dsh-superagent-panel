@@ -149,6 +149,18 @@ const nowIso = new Date().toISOString()
       resolvedAt: nowIso },
     steps: [], worker: { text: '旧一轮的总结不应该出现在改动内容里', backend: 'codex', sessionId: 'thread-demo-old' },
     changedPaths: [] })
+  // A Claude Code run keeps a resumable conversation in its worktree, so its row can hand it to a sidebar terminal;
+  // no other backend can, which is what the row checks below pin down. Oldest of the three, so nothing above changes.
+  engine.state.runs.push({ id: 'run_demo_claude', ticketId: demoId, status: 'dry-run', dryRun: true,
+    startedAt: new Date(Date.now() - 40 * 60_000).toISOString(), completedAt: new Date(Date.now() - 39 * 60_000).toISOString(),
+    repoId: primaryRepoId, worktree: '/tmp/superagent-worktrees/tkt_demo_accept',
+    bot: { id: 'generalist', source: 'default', reason: '默认 Bot generalist（executor.bot）',
+      candidates: ['generalist'], capability: ['edit'], capabilitySource: 'probe', verifiedAt: nowIso,
+      configDigest: 'digest-demo', resolvedAt: nowIso },
+    steps: [], worker: { text: 'Claude Code 跑过一轮', backend: 'claude',
+      sessionId: '11111111-2222-3333-4444-555555555555',
+      // A human rerun that continued an earlier conversation: the row must say so (1.1.17).
+      resumedFrom: '99999999-8888-7777-6666-555555555555' }, changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -479,6 +491,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
   PanelProvider,
   botPreview, botToForm, formToBot,
+  applyRenderFrame, fitGrid, claudeSessions, chatSummary,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -526,6 +539,11 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   botPreview: 'settings.js',
   botToForm: 'settings.js',
   formToBot: 'settings.js',
+  applyRenderFrame: 'terminal.js',
+  fitGrid: 'terminal.js',
+  claudeSessions: 'sessions.js',
+  RESUMABLE: 'sessions.js',
+  chatSummary: 'sessions.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
   apiCall: 'api.js',
@@ -546,6 +564,13 @@ const t = (key, values) => {
   return String(template).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match)
 }
 t.lang = 'zh'
+/** Page-local text the way a page fragment reads it (PAGE_TEXT first, then the shared dictionary). */
+const localText = (translateTo, key, values) => {
+  const pair = PAGE_TEXT[key]
+  let template = pair ? pair[0] : (DICTS.zh[key] ?? key)
+  if (values === undefined) return template
+  return String(template).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match)
+}
 
 const errors = []
 const originalError = console.error
@@ -729,6 +754,22 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   check('a DSH run shows its run ID as a Session link', Boolean(sessionLink), sessionLink?.textContent ?? 'no link')
   check('a CLI run never offers a Harness Session link', Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-runid-open')
     && Boolean(cliRunRow.querySelector('.sa-copy-btn')), cliRunRow?.textContent?.slice(0, 120) ?? 'no run row')
+  // The Claude Code run left a conversation behind: the row offers to reopen it in a sidebar terminal. A Codex or DSH
+  // run has nothing to resume (a thread id is not a Claude session), so those rows keep no such control.
+  const claudeRunRow = rootElement.querySelector('#sa-run-run_demo_claude')
+  check('a Claude Code run offers to continue its conversation in the panel',
+    Boolean(claudeRunRow?.querySelector('.sa-run-chat')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a run that continued an earlier conversation says so',
+    /续接上一轮/.test(claudeRunRow?.querySelector('.sa-row-title')?.textContent ?? ''),
+    claudeRunRow?.querySelector('.sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a run that started fresh does not claim to have continued anything',
+    !/续接上一轮/.test(rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent ?? ''),
+    rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a Codex run never offers to continue a Claude conversation',
+    Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-chat'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a DSH run never offers to continue a Claude conversation',
+    Boolean(rootElement.querySelector('#sa-run-run_demo')) && !rootElement.querySelector('#sa-run-run_demo .sa-run-chat'),
+    rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
   // §7.5/§13.1: the row says which bot ran, who chose it, and what evidence backs its capabilities.
   const botRow = rootElement.querySelector('#sa-run-run_demo .sa-run-bot')
   check('a run names the bot that ran it and why (§7.5)',
@@ -1832,8 +1873,8 @@ await sleep(700)
 const shortcutBack = [...rootElement.querySelectorAll('[role="tab"]')].find(node => node.getAttribute('aria-selected') === 'true')?.textContent?.trim()
 check('Alt+1 returns to the Overview tab', shortcutBack === '概览', String(shortcutBack))
 
-// Sticky chrome: header + seven tabs are outside the body scroller, and a route change starts at the top.
-check('header and seven tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 7
+// Sticky chrome: header + eight tabs are outside the body scroller, and a route change starts at the top.
+check('header and eight tabs live in the fixed topbar', rootElement.querySelectorAll('.sa-topbar [role="tab"]').length === 8
   && Boolean(rootElement.querySelector('.sa-topbar .sa-head')), String(rootElement.querySelectorAll('.sa-topbar [role="tab"]').length))
 check('page body is the only scrolling container', Boolean(rootElement.querySelector('.sa-scroll > .sa-main')),
   'missing .sa-scroll > .sa-main')
@@ -1882,6 +1923,49 @@ check('a merged legacy push record no longer claims it is waiting for the PR',
   !pushText.includes('已推送，等待创建 PR') && !pushText.includes('PR 已创建') && pushText.includes('已合入目标分支'),
   pushText.slice(0, 400))
 check('push-mode MR card keeps the merged state after the PR entry link', pushText.includes('已合入目标分支'), pushText.slice(0, 400))
+
+// 1.1.13: a Claude Code worker's conversation is a page of its own — the sessions tab lists the CLI sessions and puts
+// the resumed terminal beside them. jsdom has no PTY, so this pins the list, the pick and the open control.
+console.log('STEP sessions')
+check('a Claude Code session list keeps one row per session, not one per run',
+  JSON.stringify(claudeSessions([{ id: 'a', worker: { backend: 'claude', sessionId: 'x' } },
+    { id: 'b', worker: { backend: 'claude', sessionId: 'x' } },
+    { id: 'c', worker: { backend: 'codex', sessionId: 'y' } }]).map(row => row.runId)) === '["a"]')
+check('only a UUID-shaped session id is resumed (a synthesized id would match a session title)',
+  JSON.stringify(claudeSessions([{ id: 'a', worker: { backend: 'claude', sessionId: 'worker-deadbeef' } },
+    { id: 'b', worker: { backend: 'claude', sessionId: '11111111-2222-3333-4444-555555555555' } }])
+    .map(row => row.resumable)) === '[false,true]')
+pushRoot.unmount()
+window.sessionStorage.setItem('superagent-panel/route',
+  JSON.stringify({ route: { page: 'sessions', id: '11111111-2222-3333-4444-555555555555' }, stack: [] }))
+const sessionsRoot = ReactDOM.createRoot(rootElement)
+sessionsRoot.render(React.createElement(App, { openSession: async () => {}, t }))
+await sleep(900)
+const sessionRows = [...rootElement.querySelectorAll('.sa-session-row')]
+check('the sessions tab lists the Claude Code worker session',
+  sessionRows.length === 1
+    && (rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? '')
+      === '11111111-2222-3333-4444-555555555555',
+  `${sessionRows.length} row(s) · ${rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? 'no selection'}`)
+check('a picked session is a conversation: the same session, a chat box, and the way into the TUI',
+  Boolean(rootElement.querySelector('.sa-chat')) && Boolean(rootElement.querySelector('.sa-chat-text'))
+    && Boolean(rootElement.querySelector('.sa-chat-send')) && Boolean(rootElement.querySelector('.sa-session-terminal')),
+  rootElement.querySelector('.sa-sessions-pane')?.textContent?.slice(0, 200) ?? 'no pane')
+check('the chat says it continues the CLI session instead of starting over',
+  Boolean(rootElement.querySelector('.sa-chat-start')), rootElement.querySelector('.sa-chat-start')?.textContent ?? 'missing')
+check('a reply states how many steps it took, and a failed turn states why',
+  chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)) === '完成 2 步 · 13s'
+    && chatSummary({ toolCalls: 0, ms: 4200 }, (key, values) => localText(t, key, values)) === '完成 · 4s'
+    && chatSummary({ error: 'claude exited with code 1', ms: 900 }, (key, values) => localText(t, key, values))
+      === '这次没跑完：claude exited with code 1',
+  chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)))
+check('the sessions tab sits between execution and settings',
+  [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(',')
+    === '概览,来源,触发,评估,Bot,执行,会话,设置',
+  [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(','))
+check('the sessions page no longer floats a terminal over the ticket',
+  rootElement.querySelectorAll('.sa-terminal').length === 0)
+sessionsRoot.unmount()
 
 // AC-07 deep link: the Eval log links to page/source?id=<signalId>. The raw row may be filtered out or already
 // cleaned up, so the page must resolve the signal and either locate it or say plainly that its text is gone.
@@ -2683,6 +2767,32 @@ console.log('STEP pure projections')
     !asked.some(call => call.includes('thread/undefined')), JSON.stringify(asked.slice(0, 4)))
   root.unmount()
   host.remove()
+}
+
+// The panel's own terminal screen: the Host stream only advances when every render frame is written AND acknowledged,
+// so the frame path is worth driving without a browser.
+{
+  const writes = []
+  const fake = {
+    reset: () => writes.push('reset'),
+    resize: (cols, rows) => writes.push(`resize ${cols}x${rows}`),
+    write: (data, done) => { writes.push(`write ${String(data).slice(0, 7)}`); done() },
+  }
+  const snapshot = { revision: 4, frame: { type: 'snapshot', screen: 'screen-bytes', info: { cols: 100, rows: 30 } } }
+  const applied = applyRenderFrame(fake, snapshot, () => writes.push('ack 4'))
+  check('a snapshot frame replaces the screen, matches the Host grid and acknowledges it',
+    applied && writes.join(' | ') === 'reset | resize 100x30 | write screen- | ack 4', writes.join(' | '))
+  writes.length = 0
+  applyRenderFrame(fake, { revision: 5, frame: { type: 'output', data: 'later-bytes' } }, () => writes.push('ack 5'))
+  check('an output frame appends without resetting the screen',
+    writes.join(' | ') === 'write later-b | ack 5', writes.join(' | '))
+  const grid = []
+  const fitted = fitGrid({ resize: (cols, rows) => grid.push(`term ${cols}x${rows}`) },
+    { proposeDimensions: () => ({ cols: 220, rows: 80 }) },
+    { environment: { maxCols: 200, maxRows: 60 } },
+    { resize: (cols, rows) => grid.push(`host ${cols}x${rows}`) })
+  check('the emulator grid is clamped to what the Host accepts and reported back',
+    fitted && grid.join(' | ') === 'term 200x60 | host 200x60', grid.join(' | '))
 }
 
 check('no render/runtime errors', errors.length === 0, errors.slice(0, 3).join(' | '))

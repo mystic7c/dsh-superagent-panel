@@ -143,11 +143,16 @@ export function Toast({ text, tone, toastKey, onDone, holdMs = 4000 }) {
 
 export const stay = () => {}
 export const noSession = async () => {}
+/** The GUI Session the panel is shown in; a host that cannot name one still loads the panel (see `currentSessionId`). */
+export const noSessionId = () => ''
+/** The Host terminal model for one terminal id; a host without terminal views answers undefined. */
+export const noTerminalView = () => undefined
 /**
  * One provider for the whole panel: the typed caller, routing callbacks, session opener and the toast.
  * `route` is passed down as well so a page can tell a list view from a deep-linked detail view.
  */
-export function PanelProvider({ t, openSession = noSession, navigate = stay, back = stay, backLabel = '', route, children }) {
+export function PanelProvider({ t, openSession = noSession, currentSessionId = noSessionId, terminalView = noTerminalView,
+  navigate = stay, back = stay, backLabel = '', route, children }) {
   const copy = useRef(t)
   copy.current = t
   const call = useMemo(() => caller(key => copy.current(key)), [])
@@ -158,8 +163,9 @@ export function PanelProvider({ t, openSession = noSession, navigate = stay, bac
   // the first one's dismiss timer and could vanish early.
   const toastSeq = useRef(0)
   const notify = useCallback((text, tone) => setToast({ text, tone, id: (toastSeq.current += 1) }), [])
-  const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route }),
-    [t, call, navigate, back, backLabel, openSession, notify, route])
+  const context = useMemo(() => ({ t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId,
+    terminalView }),
+  [t, call, navigate, back, backLabel, openSession, notify, route, currentSessionId, terminalView])
   return h(Panel.Provider, { value: context },
     h('style', null, PANEL_CSS),
     children,

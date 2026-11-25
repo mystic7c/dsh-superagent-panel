@@ -138,8 +138,11 @@ Object.assign(PAGE_TEXT, {
 
   // ---- P2: append requirements and rerun on the same worktree ---------------------------------------------------
   'ticket.revisionTitle': ['追加要求（重跑）', 'Add a requirement (rerun)'],
-  'ticket.revisionHint': ['会保留当前工作树的改动，按追加要求重跑一遍干跑；跑完再看新 diff，确认后再发布。',
+  'ticket.revisionHint': ['保留当前工作树的改动，也接着上一轮的对话改；跑完再看新 diff，确认后再发布。',
     'Keeps the current worktree changes and reruns the Ticket as a dry run; review the new diff, then publish.'],
+  'ticket.resumedTag': ['续接上一轮', 'Continued'],
+  'ticket.resumedHint': ['这次运行接着上一轮的会话改，不是重新认识一遍仓库。',
+    'This run kept the earlier conversation instead of meeting the repository again.'],
   'ticket.revisionPlaceholder': ['哪里不对、要改成什么、验收标准…', 'What is wrong, what to change, how it will be accepted…'],
   'ticket.revisionSubmit': ['追加并重跑', 'Add and rerun'],
   'ticket.revisionRequired': ['先写要追加的要求', 'Write the requirement first'],
@@ -945,6 +948,26 @@ export function runRouteTag(t, run) {
     title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>{text}</Tag>
 }
 
+/** A CLI run leaves a conversation behind: `claude --resume <id>` is the same Claude Code session, so the run row can
+    hand it to a sidebar terminal in the run's worktree and the person gets the real TUI. A DSH run already opens its
+    Session, and any other backend has nothing to resume, so both render nothing. The id is checked against what a
+    session id can contain because the host puts it on a shell command line; when it is not one, the terminal still
+    opens — a fresh `claude` in the worktree is better than a dead control. */
+/** "Keep talking to this run's Claude Code session": the run row hands the person to the Sessions page with that
+ *  conversation selected, where the chat box continues the very same CLI session.
+ *
+ *  The button only appears for a run that actually came from the CLI — an in-process DSH worker has a Session the
+ *  interface opens instead, and any other backend left nothing to continue. */
+export function RunWorkerChat({ run }) {
+  const { t, navigate } = usePanel()
+  const backend = run?.worker?.backend
+  const candidate = typeof run?.worker?.sessionId === 'string' ? run.worker.sessionId.trim() : ''
+  const cwd = typeof run?.worktree === 'string' ? run.worktree : ''
+  if (backend !== 'claude' || !cwd) return null
+  return <Button variant="ghost" size="sm" className="sa-run-chat" title={`${t('openWorkerChatHint')}\n${cwd}`}
+    onClick={() => navigate({ page: 'sessions', id: candidate })}>{t('openWorkerChat')}</Button>
+}
+
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
     text is on hover; gates live in their own section; a worker trace folds out under its run). */
 export function TicketRunRows({ runs, choices = [], onRerun }) {
@@ -972,10 +995,15 @@ export function TicketRunRows({ runs, choices = [], onRerun }) {
             </Tag>
             : null}
           {run.dryRun ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+          {/* The worker picked up the conversation this run is rerunning instead of meeting the repository again. */}
+          {typeof run.worker?.resumedFrom === 'string'
+            ? <Tag tone="quiet" title={pt(t, 'ticket.resumedHint')}>{pt(t, 'ticket.resumedTag')}</Tag>
+            : null}
           {run.startedAt ? <TicketStamp at={run.startedAt} /> : null}
           {/* The run ID is the way into its execution when a DSH Session carried it; a CLI runner has no session this
               UI can open, so that row keeps the copy affordance instead. */}
           {executorSessionId(run) ? <RunSessionLink run={run} /> : <CopyButton value={String(run.id)} label={liveShortId(run.id)} />}
+          <RunWorkerChat run={run} />
         </div>
         <div className="sa-row-meta">
           {run.branch ? <span className="sa-mono">{run.branch}</span> : null}
