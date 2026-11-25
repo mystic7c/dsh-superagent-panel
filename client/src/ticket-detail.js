@@ -950,19 +950,19 @@ export function runRouteTag(t, run) {
     Session, and any other backend has nothing to resume, so both render nothing. The id is checked against what a
     session id can contain because the host puts it on a shell command line; when it is not one, the terminal still
     opens — a fresh `claude` in the worktree is better than a dead control. */
-/** The takeover control: start the real Claude Code CLI on this run's conversation inside the panel, or stop showing it.
+/** "Keep talking to this run's Claude Code session": the run row hands the person to the Sessions page with that
+ *  conversation selected, where the chat box continues the very same CLI session.
  *
  *  The button only appears for a run that actually came from the CLI — an in-process DSH worker has a Session the
- *  interface opens instead. The terminal itself is rendered here, not in the Host's right Sidebar: a person reading a
- *  run wants its conversation in the same place. */
-export function RunWorkerTerminal({ run }) {
+ *  interface opens instead, and any other backend left nothing to continue. */
+export function RunWorkerChat({ run }) {
   const { t, navigate } = usePanel()
   const backend = run?.worker?.backend
   const candidate = typeof run?.worker?.sessionId === 'string' ? run.worker.sessionId.trim() : ''
   const cwd = typeof run?.worktree === 'string' ? run.worktree : ''
   if (backend !== 'claude' || !cwd) return null
-  return <Button variant="ghost" size="sm" className="sa-run-terminal" title={`${t('openWorkerTerminalHint')}\n${cwd}`}
-    onClick={() => navigate({ page: 'sessions', id: candidate, open: '1' })}>{t('openWorkerTerminal')}</Button>
+  return <Button variant="ghost" size="sm" className="sa-run-chat" title={`${t('openWorkerChatHint')}\n${cwd}`}
+    onClick={() => navigate({ page: 'sessions', id: candidate })}>{t('openWorkerChat')}</Button>
 }
 
 /** Run records, newest first: status, stop reason, start time, branch/commit and the failure cause in plain words (the raw
@@ -996,7 +996,7 @@ export function TicketRunRows({ runs, choices = [], onRerun }) {
           {/* The run ID is the way into its execution when a DSH Session carried it; a CLI runner has no session this
               UI can open, so that row keeps the copy affordance instead. */}
           {executorSessionId(run) ? <RunSessionLink run={run} /> : <CopyButton value={String(run.id)} label={liveShortId(run.id)} />}
-          <RunWorkerTerminal run={run} />
+          <RunWorkerChat run={run} />
         </div>
         <div className="sa-row-meta">
           {run.branch ? <span className="sa-mono">{run.branch}</span> : null}

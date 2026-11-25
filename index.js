@@ -15,6 +15,7 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   resumeInterruptedTicket, answerTicket, ticketBusyAction, ticketBusyMessage,
   PUBLISHABLE_STATUSES } from './lib/live/executor.js'
 import { openWorkerTerminal } from './lib/live/worker-terminal.js'
+import { chatWithClaude } from './lib/live/worker-chat.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
@@ -432,6 +433,12 @@ export function apply(ctx, config = {}) {
         // state; an opened terminal is the person's from their first keystroke.
         if (method === 'POST' && second === 'workers' && third === 'terminal') {
           send(res, 200, await openWorkerTerminal({ ctx, body, log: line => ctx.logger?.info?.('superagent %s', line) }))
+          return
+        }
+        // One message to a Claude Code conversation, answered by one non-interactive CLI turn: the panel renders the
+        // returned stream as a chat (assistant text + the tool calls it made) instead of a terminal screen.
+        if (method === 'POST' && second === 'workers' && third === 'chat') {
+          send(res, 200, await chatWithClaude({ body, log: line => ctx.logger?.info?.('superagent %s', line) }))
           return
         }
         if (method === 'POST' && second === 'reload') {

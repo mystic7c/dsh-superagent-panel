@@ -940,10 +940,36 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-sessions-pane { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 .sa-sessions-pane > .sa-terminal { flex: 1 1 auto; }
 .sa-session-open { margin-top: var(--sa-sp-12, 12px); }
+/* The conversation itself: a scrolling column of turns over a fixed composer, like the Host's own chat. */
+.sa-chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--sa-sp-12, 12px); flex: 1 1 auto;
+  min-height: 0; }
+.sa-chat-body { overflow: auto; padding: var(--sa-sp-8, 8px) 2px; display: flex; flex-direction: column;
+  gap: var(--sa-sp-16, 16px); }
+.sa-chat-start { margin: 0 0 var(--sa-sp-8, 8px); }
+.sa-chat-row { display: flex; flex-direction: column; gap: var(--sa-sp-4, 4px); min-width: 0; }
+.sa-chat-row.is-user { align-items: flex-end; }
+.sa-chat-row.is-agent { align-items: stretch; }
+.sa-chat-bubble { max-width: min(560px, 88%); padding: var(--sa-sp-8, 8px) var(--sa-sp-12, 12px);
+  border-radius: var(--sa-r-lg, 12px); background: var(--sa-fill-subtle, var(--dsw-alias-bg-l2));
+  color: var(--dsw-alias-label-primary); font-size: var(--sa-fs-body, 13px); line-height: 1.6;
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+.sa-chat-meta { margin: 0; font-size: var(--sa-fs-meta, 12px); color: var(--sa-label-tertiary); }
+.sa-chat-reply { min-width: 0; font-size: var(--sa-fs-body, 13px); line-height: 1.65;
+  color: var(--dsw-alias-label-primary); }
+.sa-chat-input { display: flex; gap: var(--sa-sp-8, 8px); align-items: flex-end; padding: var(--sa-sp-8, 8px);
+  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface, transparent); }
+.sa-chat-text { flex: 1 1 auto; min-height: 44px; max-height: 200px; resize: vertical; border: 0; outline: none;
+  background: none; color: var(--dsw-alias-label-primary); font: inherit; line-height: 1.5; }
+.sa-chat-text:focus-visible { outline: none; }
+.sa-session-terminal-pane { display: flex; flex-direction: column; gap: var(--sa-sp-8, 8px); flex: 1 1 auto;
+  min-height: 0; }
+.sa-session-terminal-bar { display: flex; justify-content: flex-end; }
+.sa-session-terminal-pane > .sa-terminal { flex: 1 1 auto; min-height: 320px; }
 @container (max-width: 900px) {
   .sa-sessions { grid-template-columns: minmax(0, 1fr); height: auto; }
   .sa-sessions-list { border-right: 0; }
   .sa-sessions-pane > .sa-terminal { height: 420px; }
+  .sa-chat-body { max-height: 60vh; }
 }
 .sa-toast { position: fixed; left: 50%; bottom: var(--sa-sp-24, 24px); transform: translateX(-50%); z-index: 1200;
   max-width: min(560px, calc(100vw - var(--sa-sp-32, 32px) * 2)); padding: var(--sa-sp-8, 8px) var(--sa-sp-16, 16px);

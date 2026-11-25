@@ -489,7 +489,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
   PanelProvider,
   botPreview, botToForm, formToBot,
-  applyRenderFrame, fitGrid, claudeSessions,
+  applyRenderFrame, fitGrid, claudeSessions, chatSummary,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
   App: 'shell.js',
@@ -541,6 +541,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   fitGrid: 'terminal.js',
   claudeSessions: 'sessions.js',
   RESUMABLE: 'sessions.js',
+  chatSummary: 'sessions.js',
   PanelState: 'api.js',
   ApiError: 'api.js',
   apiCall: 'api.js',
@@ -561,6 +562,13 @@ const t = (key, values) => {
   return String(template).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match)
 }
 t.lang = 'zh'
+/** Page-local text the way a page fragment reads it (PAGE_TEXT first, then the shared dictionary). */
+const localText = (translateTo, key, values) => {
+  const pair = PAGE_TEXT[key]
+  let template = pair ? pair[0] : (DICTS.zh[key] ?? key)
+  if (values === undefined) return template
+  return String(template).replace(/\{(\w+)\}/g, (match, name) => Object.hasOwn(values, name) ? String(values[name]) : match)
+}
 
 const errors = []
 const originalError = console.error
@@ -747,12 +755,12 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   // The Claude Code run left a conversation behind: the row offers to reopen it in a sidebar terminal. A Codex or DSH
   // run has nothing to resume (a thread id is not a Claude session), so those rows keep no such control.
   const claudeRunRow = rootElement.querySelector('#sa-run-run_demo_claude')
-  check('a Claude Code run offers to take its conversation over in the panel\'s own terminal',
-    Boolean(claudeRunRow?.querySelector('.sa-run-terminal')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
-  check('a Codex run never offers a Claude terminal',
-    Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-terminal'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
-  check('a DSH run never offers a Claude terminal',
-    Boolean(rootElement.querySelector('#sa-run-run_demo')) && !rootElement.querySelector('#sa-run-run_demo .sa-run-terminal'),
+  check('a Claude Code run offers to continue its conversation in the panel',
+    Boolean(claudeRunRow?.querySelector('.sa-run-chat')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a Codex run never offers to continue a Claude conversation',
+    Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-chat'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a DSH run never offers to continue a Claude conversation',
+    Boolean(rootElement.querySelector('#sa-run-run_demo')) && !rootElement.querySelector('#sa-run-run_demo .sa-run-chat'),
     rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
   // §7.5/§13.1: the row says which bot ran, who chose it, and what evidence backs its capabilities.
   const botRow = rootElement.querySelector('#sa-run-run_demo .sa-run-bot')
@@ -1887,7 +1895,18 @@ check('the sessions tab lists the Claude Code worker session',
     && (rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? '')
       === '11111111-2222-3333-4444-555555555555',
   `${sessionRows.length} row(s) · ${rootElement.querySelector('.sa-sessions-pane')?.getAttribute('data-session') ?? 'no selection'}`)
-check('a picked session offers to open its terminal', Boolean(rootElement.querySelector('.sa-session-open')))
+check('a picked session is a conversation: the same session, a chat box, and the way into the TUI',
+  Boolean(rootElement.querySelector('.sa-chat')) && Boolean(rootElement.querySelector('.sa-chat-text'))
+    && Boolean(rootElement.querySelector('.sa-chat-send')) && Boolean(rootElement.querySelector('.sa-session-terminal')),
+  rootElement.querySelector('.sa-sessions-pane')?.textContent?.slice(0, 200) ?? 'no pane')
+check('the chat says it continues the CLI session instead of starting over',
+  Boolean(rootElement.querySelector('.sa-chat-start')), rootElement.querySelector('.sa-chat-start')?.textContent ?? 'missing')
+check('a reply states how many steps it took, and a failed turn states why',
+  chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)) === '完成 2 步 · 13s'
+    && chatSummary({ toolCalls: 0, ms: 4200 }, (key, values) => localText(t, key, values)) === '完成 · 4s'
+    && chatSummary({ error: 'claude exited with code 1', ms: 900 }, (key, values) => localText(t, key, values))
+      === '这次没跑完：claude exited with code 1',
+  chatSummary({ toolCalls: 2, ms: 13000 }, (key, values) => localText(t, key, values)))
 check('the sessions tab sits between execution and settings',
   [...rootElement.querySelectorAll('[role="tab"]')].map(node => node.textContent).join(',')
     === '概览,来源,触发,评估,Bot,执行,会话,设置',
