@@ -18,6 +18,7 @@ import { LiveSourcePage } from "./source.js"
 import { LiveTriggerPage } from "./trigger.js"
 import { LiveEvalPage } from "./eval.js"
 import { LiveExecutionPage } from "./execution.js"
+import { LiveSessionsPage } from "./sessions.js"
 import { BotsCard, LiveSettingsPage } from "./settings.js"
 import { React, h, useCallback, useEffect, useLayoutEffect, useRef, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
@@ -343,6 +344,7 @@ export function pageView(page) {
     case 'eval': return LiveEvalPage
     case 'bots': return BotsCard
     case 'execution': return LiveExecutionPage
+    case 'sessions': return LiveSessionsPage
     case 'settings': return LiveSettingsPage
     case 'overview': default: return LiveOverviewPage
   }
@@ -473,7 +475,7 @@ export function PanelShell({ location, openTab }) {
 }
 
 /** Root panel component: route history above the single status poll and the provider that shares it. */
-export function App({ openSession, t }) {
+export function App({ openSession, t, currentSessionId, terminalView }) {
   const [location, setLocation] = useState(initialLocation)
   useEffect(() => { remember(location) }, [location])
   // U-08: a page owns its own filter parameters. Switching tabs drops the ones that belong to the page we left, so a URL
@@ -504,7 +506,8 @@ export function App({ openSession, t }) {
     ? { route: current.stack.at(-1), stack: current.stack.slice(0, -1) }
     : { route: current.route.id ? { page: current.route.page } : HOME, stack: [] }), [move])
   const openTab = useCallback(tab => move(() => ({ stack: [], route: { page: tab } })), [move])
-  return <PanelProvider t={t} openSession={openSession} navigate={navigate} back={back} route={location.route}
+  return <PanelProvider t={t} openSession={openSession} terminalView={terminalView} currentSessionId={currentSessionId} navigate={navigate} back={back}
+    route={location.route}
     backLabel={routeLabel(t, location.stack.at(-1) ?? (location.route.id ? { page: location.route.page } : HOME))}>
     <PanelShell location={location} openTab={openTab} />
   </PanelProvider>
