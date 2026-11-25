@@ -933,6 +933,50 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   }
   check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
+{
+  // jsdom has no layout, so the sticky bar (which appears once the head scrolls under the nav) is forced by stubbing the
+  // two rects its measure() reads. The menu used to stay behind in the scrolled-away head: the primary action moved into
+  // the sticky bar and verify/CI/publish/retry became unreachable without scrolling back up.
+  // The client schedules that measurement on the bare `requestAnimationFrame`; jsdom exposes it on the window, not on the
+  // scope the bundle is evaluated in.
+  const hadRaf = typeof globalThis.requestAnimationFrame === 'function'
+  if (!hadRaf) {
+    globalThis.requestAnimationFrame = callback => setTimeout(() => callback(Date.now()), 0)
+    globalThis.cancelAnimationFrame = id => clearTimeout(id)
+  }
+  const headNode = rootElement.querySelector('.sa-page-head')
+  const scrollNode = rootElement.querySelector('.sa-scroll')
+  const restore = []
+  const rectFor = (node, rect) => {
+    const original = node.getBoundingClientRect
+    restore.push(() => { node.getBoundingClientRect = original })
+    node.getBoundingClientRect = () => ({ ...rect, x: rect.left, y: rect.top, toJSON() { return rect } })
+  }
+  if (headNode && scrollNode) {
+    rectFor(headNode, { top: -400, bottom: -40, height: 360, left: 0, right: 900, width: 900 })
+    rectFor(scrollNode, { top: 0, bottom: 700, height: 700, left: 0, right: 900, width: 900 })
+    scrollNode.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+    for (let i = 0; i < 4; i += 1) await sleep(20)
+  }
+  const bar = rootElement.querySelector('.sa-detail-nav .sa-detail-context-action')
+  check('the scrolled-away head hands the ⋯ menu to the sticky bar, not just the primary action',
+    Boolean(bar?.querySelector('.sa-menu-trigger')),
+    bar?.textContent?.slice(0, 120) ?? 'no sticky action cluster')
+  check('the head and the sticky bar never both carry the ⋯ menu',
+    rootElement.querySelectorAll('.sa-menu-trigger').length >= 1
+    && !(rootElement.querySelector('.sa-page-head .sa-menu-trigger') && bar?.querySelector('.sa-menu-trigger')),
+    String(rootElement.querySelectorAll('.sa-menu-trigger').length))
+  // Back to the head on screen: measure() ignores a zero-height head, so restoring the real rects alone would leave the
+  // bar stuck for every later assertion on the page head.
+  if (headNode && scrollNode) {
+    const visible = { top: 0, bottom: 360, height: 360, left: 0, right: 900, width: 900 }
+    headNode.getBoundingClientRect = () => ({ ...visible, x: 0, y: 0, toJSON() { return visible } })
+    scrollNode.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+    for (let i = 0; i < 4; i += 1) await sleep(20)
+  }
+  for (const undo of restore) undo()
+  if (!hadRaf) { delete globalThis.requestAnimationFrame; delete globalThis.cancelAnimationFrame }
+}
 check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
 check('jump nav names the request block (R2-09)', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '需求'),
