@@ -138,8 +138,11 @@ Object.assign(PAGE_TEXT, {
 
   // ---- P2: append requirements and rerun on the same worktree ---------------------------------------------------
   'ticket.revisionTitle': ['追加要求（重跑）', 'Add a requirement (rerun)'],
-  'ticket.revisionHint': ['会保留当前工作树的改动，按追加要求重跑一遍干跑；跑完再看新 diff，确认后再发布。',
+  'ticket.revisionHint': ['保留当前工作树的改动，也接着上一轮的对话改；跑完再看新 diff，确认后再发布。',
     'Keeps the current worktree changes and reruns the Ticket as a dry run; review the new diff, then publish.'],
+  'ticket.resumedTag': ['续接上一轮', 'Continued'],
+  'ticket.resumedHint': ['这次运行接着上一轮的会话改，不是重新认识一遍仓库。',
+    'This run kept the earlier conversation instead of meeting the repository again.'],
   'ticket.revisionPlaceholder': ['哪里不对、要改成什么、验收标准…', 'What is wrong, what to change, how it will be accepted…'],
   'ticket.revisionSubmit': ['追加并重跑', 'Add and rerun'],
   'ticket.revisionRequired': ['先写要追加的要求', 'Write the requirement first'],
@@ -992,6 +995,10 @@ export function TicketRunRows({ runs, choices = [], onRerun }) {
             </Tag>
             : null}
           {run.dryRun ? <Tag tone="outline">{pt(t, 'ticket.dryTag')}</Tag> : null}
+          {/* The worker picked up the conversation this run is rerunning instead of meeting the repository again. */}
+          {typeof run.worker?.resumedFrom === 'string'
+            ? <Tag tone="quiet" title={pt(t, 'ticket.resumedHint')}>{pt(t, 'ticket.resumedTag')}</Tag>
+            : null}
           {run.startedAt ? <TicketStamp at={run.startedAt} /> : null}
           {/* The run ID is the way into its execution when a DSH Session carried it; a CLI runner has no session this
               UI can open, so that row keeps the copy affordance instead. */}

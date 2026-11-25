@@ -158,7 +158,9 @@ const nowIso = new Date().toISOString()
       candidates: ['generalist'], capability: ['edit'], capabilitySource: 'probe', verifiedAt: nowIso,
       configDigest: 'digest-demo', resolvedAt: nowIso },
     steps: [], worker: { text: 'Claude Code 跑过一轮', backend: 'claude',
-      sessionId: '11111111-2222-3333-4444-555555555555' }, changedPaths: [] })
+      sessionId: '11111111-2222-3333-4444-555555555555',
+      // A human rerun that continued an earlier conversation: the row must say so (1.1.17).
+      resumedFrom: '99999999-8888-7777-6666-555555555555' }, changedPaths: [] })
 }
 // A working Ticket makes the "in progress" desk block and header count deterministic for this check.
 const demoWorkId = 'tkt_demo_running'
@@ -757,6 +759,12 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   const claudeRunRow = rootElement.querySelector('#sa-run-run_demo_claude')
   check('a Claude Code run offers to continue its conversation in the panel',
     Boolean(claudeRunRow?.querySelector('.sa-run-chat')), claudeRunRow?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a run that continued an earlier conversation says so',
+    /续接上一轮/.test(claudeRunRow?.querySelector('.sa-row-title')?.textContent ?? ''),
+    claudeRunRow?.querySelector('.sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
+  check('a run that started fresh does not claim to have continued anything',
+    !/续接上一轮/.test(rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent ?? ''),
+    rootElement.querySelector('#sa-run-run_demo .sa-row-title')?.textContent?.slice(0, 160) ?? 'no run row')
   check('a Codex run never offers to continue a Claude conversation',
     Boolean(cliRunRow) && !cliRunRow.querySelector('.sa-run-chat'), cliRunRow?.textContent?.slice(0, 160) ?? 'no run row')
   check('a DSH run never offers to continue a Claude conversation',
