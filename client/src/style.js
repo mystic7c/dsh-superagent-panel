@@ -941,6 +941,8 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-sessions-pane > .sa-terminal { flex: 1 1 auto; }
 .sa-session-open { margin-top: var(--sa-sp-12, 12px); }
 /* The conversation itself: a scrolling column of turns over a fixed composer, like the Host's own chat. */
+/* The card has to reach the bottom of the pane, or the composer floats up under a two-line conversation. */
+.sa-sessions-pane > .sa-section { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
 .sa-chat { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--sa-sp-12, 12px); flex: 1 1 auto;
   min-height: 0; }
 .sa-chat-body { overflow: auto; padding: var(--sa-sp-8, 8px) 2px; display: flex; flex-direction: column;

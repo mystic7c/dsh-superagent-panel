@@ -39,6 +39,7 @@ Object.assign(PAGE_TEXT, {
   'sessions.sending': ['正在回复…', 'Replying…'],
   'sessions.steps': ['完成 {count} 步 · {seconds}s', '{count} steps · {seconds}s'],
   'sessions.stepsNone': ['完成 · {seconds}s', 'Done · {seconds}s'],
+  'sessions.stepsOnly': ['{count} 步', '{count} steps'],
   'sessions.failed': ['这次没跑完：{reason}', 'This turn did not finish: {reason}'],
   'sessions.toTerminal': ['在终端里打开', 'Open in terminal'],
   'sessions.toChat': ['返回对话', 'Back to chat'],
@@ -77,7 +78,11 @@ export function claudeSessions(runs) {
     because the stream's own text says what changed, not how many steps it took to get there. */
 export function chatSummary(message, text) {
   if (message?.error) return text('sessions.failed', { reason: message.error })
-  const seconds = Math.max(1, Math.round((message?.ms ?? 0) / 1000))
+  // A turn read back from Claude Code's own history carries no duration: say what it did, not how fast.
+  if (typeof message?.ms !== 'number') {
+    return message?.toolCalls ? text('sessions.stepsOnly', { count: message.toolCalls }) : ''
+  }
+  const seconds = Math.max(1, Math.round(message.ms / 1000))
   return message?.toolCalls ? text('sessions.steps', { count: message.toolCalls, seconds })
     : text('sessions.stepsNone', { seconds })
 }
@@ -106,6 +111,7 @@ export function SessionChat({ row, thread, draft, busy, onDraft, onSend, onTermi
   const input = useRef(/** @type {any} */ (null))
   const body = useRef(/** @type {any} */ (null))
   const messages = thread?.messages ?? []
+  const summaryText = message => chatSummary(message, (key, values) => pt(text, key, values))
   // A reply arrives long after it was asked for: keep the newest line in view instead of at the top of the scroll.
   useEffect(() => {
     const node = body.current
@@ -123,7 +129,7 @@ export function SessionChat({ row, thread, draft, busy, onDraft, onSend, onTermi
             <div className="sa-chat-bubble">{message.text}</div>
           </div>
           : <div key={index} className="sa-chat-row is-agent">
-            <p className="sa-chat-meta">{chatSummary(message, (key, values) => pt(text, key, values))}</p>
+            {summaryText(message) ? <p className="sa-chat-meta">{summaryText(message)}</p> : null}
             {message.text ? <div className="sa-chat-reply"><MarkdownLite text={message.text} /></div> : null}
           </div>)}
         {busy ? <div className="sa-chat-row is-agent">
@@ -174,6 +180,25 @@ export function LiveSessionsPage({ route }) {
     setTerminal(terminalId)
     return true
   })
+  // The conversation is not this page's: Claude Code keeps the record, so opening a session shows its history.
+  const loaded = useRef({})
+  useEffect(() => {
+    if (row === undefined || loaded.current[row.sessionId] === true) return
+    loaded.current[row.sessionId] = true
+    void (async () => {
+      try {
+        const history = await call('GET engine/workers/transcript', { query: { sessionId: row.sessionId } })
+        const messages = Array.isArray(history?.messages) ? history.messages : []
+        if (messages.length === 0) return
+        setThreads(current => current[row.sessionId] === undefined
+          ? { ...current, [row.sessionId]: { messages } }
+          : current)
+      } catch {
+        // No history to show is not an error worth a toast: the chat box still works from here.
+        loaded.current[row.sessionId] = false
+      }
+    })()
+  }, [call, row])
   const send = useCallback(async () => {
     if (row === undefined || busy) return false
     const message = String(drafts[row.sessionId] ?? '').trim()

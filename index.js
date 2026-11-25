@@ -15,7 +15,7 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   resumeInterruptedTicket, answerTicket, ticketBusyAction, ticketBusyMessage,
   PUBLISHABLE_STATUSES } from './lib/live/executor.js'
 import { openWorkerTerminal } from './lib/live/worker-terminal.js'
-import { chatWithClaude } from './lib/live/worker-chat.js'
+import { chatWithClaude, readTranscript } from './lib/live/worker-chat.js'
 import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
@@ -433,6 +433,15 @@ export function apply(ctx, config = {}) {
         // state; an opened terminal is the person's from their first keystroke.
         if (method === 'POST' && second === 'workers' && third === 'terminal') {
           send(res, 200, await openWorkerTerminal({ ctx, body, log: line => ctx.logger?.info?.('superagent %s', line) }))
+          return
+        }
+        // The parts of a CLI conversation a person actually reads, so the chat box opens on the real history instead of
+        // an empty pane. Read-only: the JSONL Claude Code wrote is the record, this never writes to it.
+        if (method === 'GET' && second === 'workers' && third === 'transcript') {
+          send(res, 200, readTranscript({
+            sessionId: url.searchParams.get('sessionId') ?? '',
+            limit: Number(url.searchParams.get('limit') ?? 40) || 40,
+          }))
           return
         }
         // One message to a Claude Code conversation, answered by one non-interactive CLI turn: the panel renders the
