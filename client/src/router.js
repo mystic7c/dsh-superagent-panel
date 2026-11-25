@@ -8,7 +8,7 @@ import { when } from "./i18n.js"
 import { Panel, same } from "./api.js"
 import { App, Header } from "./shell.js"
 import { React, h } from "./react.js"
-export const TABS = ['overview', 'source', 'trigger', 'eval', 'bots', 'execution', 'settings']
+export const TABS = ['overview', 'source', 'trigger', 'eval', 'bots', 'execution', 'sessions', 'settings']
 export const HOME = { page: 'overview' }
 export const ROUTE_ID_MAX = 200
 export const ROUTE_KEY = 'superagent-panel/route'
