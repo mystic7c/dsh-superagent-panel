@@ -1047,49 +1047,49 @@ Object.assign(PAGE_TEXT, {
   'st.botsBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
   'st.botsBackendNone': ['无', 'none'],
   'st.botsBackendVerify': ['重新核验', 'Verify'],
-  'st.botsEditorTitle': ['编辑 Bot', 'Edit bot'],
   'st.botsEdit': ['编辑 Bot', 'Edit bot'],
   'st.botsEditorNew': ['新建 Bot', 'New bot'],
   'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
   'st.botsDetailStages': ['阶段', 'Stages'],
   'st.botsDetailRequires': ['能力', 'Capabilities'],
-  'st.botsDetailDeny': ['禁止工具', 'Denied tools'],
-  'st.botsDetailMcp': ['MCP 服务器', 'MCP servers'],
-  'st.botsDetailTimeout': ['超时（毫秒）', 'Timeout (ms)'],
+  'st.botsDetailTools': ['工具边界', 'Tool limits'],
+  'st.botsCreate': ['创建', 'Create'],
+  'st.botsCreateHint': ['先建一个能跑的 Bot：名字、一句话用途、用哪个后端。能力、阶段、工具、预算创建后随时能在右侧改，默认跟随执行器。',
+    'Start with a Bot that runs: a name, one line of purpose, and the engine. Capabilities, stages, tools and budget stay editable afterwards and follow the executor by default.'],
+  'st.botsInheritHint': ['预设、模型、工具边界、预算与阶段编排都跟随「设置 → 运行」；需要给某个 Bot 单独覆盖时改 JSON。',
+    'Preset, model, tool limits, budget and stage wiring follow 设置 → 运行; override one Bot through its JSON.'],
   'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
     'Saving validates against the backend evidence; error codes are shown right here.'],
   'st.botsAdvanced': ['高级设置', 'Advanced'],
-  'st.botsAdvancedHint': ['模型 · 能力 · 工具 · 阶段 · 预算（默认都不填）', 'Model, capabilities, tools, stages, budget (empty by default)'],
-  'st.botsAdvancedSet': ['已设置 {count} 项', '{count} set'],
-  'st.botsFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
   'st.botsFieldName': ['名称', 'Name'],
   'st.botsFieldDescription': ['一句话说明（它接什么活）', 'One line: what it takes on'],
   'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随工作流默认。', 'The bot works to this prompt; empty follows the workflow default.'],
   'st.botsFieldBackend': ['后端', 'Backend'],
   'st.botsFieldPreset': ['预设', 'Preset'],
-  'st.botsFieldModelProvider': ['模型 provider', 'Model provider'],
   'st.botsFieldModel': ['模型', 'Model'],
-  'st.botsFieldRequires': ['需要的能力', 'Required capabilities'],
-  'st.botsFieldStages': ['阶段（有序，必须含 implement 与 gates）', 'Stages (ordered; must include implement and gates)'],
-  'st.botsFieldDeny': ['额外禁止的工具（逗号分隔）', 'Extra denied tools (comma separated)'],
-  'st.botsFieldAllowMcp': ['允许的 MCP 服务器（留空=不限制）', 'Allowed MCP servers (empty = no restriction)'],
+  'st.botsFieldRequires': ['它能做什么', 'What it may do'],
+  'st.botsCapEdit': ['能改文件', 'Edits files'],
+  'st.botsCapExec': ['能跑命令', 'Runs commands'],
+  'st.botsCapWeb': ['能联网', 'Uses the web'],
+  'st.botsRequiresHint': ['自动派单按这三项匹配：工单需要什么，就只派给声明了这些能力的 Bot。一个都不选＝它只当阶段工具，不接整单活。', 'Dispatch matches on these: a Ticket only goes to a Bot that declares what the work needs. None selected = stage tool only, never a whole Ticket.'],
+  'st.botsStagesAuto': ['跟随执行器（全部阶段）', 'Follow the executor (all stages)'],
+  'st.botsStagesQuick': ['快速：实现 → 验收', 'Quick: implement → gates'],
+  'st.botsStagesStandard': ['标准：评估 → 计划 → 实现 → 验收 → 复核', 'Standard: assess → plan → implement → gates → review'],
+  'st.botsStagesReview': ['实现后复核：实现 → 验收 → 复核', 'With review: implement → gates → review'],
+  'st.botsStagesCustom': ['自定义…', 'Custom…'],
+  'st.botsBudgetOverride': ['单独设置超时与返工', 'Override timeouts and repairs'],
+  'st.botsBudgetHint': ['默认跟随「设置 → 运行」，只有这个 Bot 需要不同节奏时才打开。', 'Follows 设置 → 运行 unless this Bot needs its own pace.'],
+  'st.stageAssess': ['评估', 'Assess'],
+  'st.stagePlan': ['计划', 'Plan'],
+  'st.stageImplement': ['实现', 'Implement'],
+  'st.stageGates': ['验收', 'Gates'],
+  'st.stageReview': ['复核', 'Review'],
   'st.botsFieldRole': ['角色提示词', 'Role prompt'],
-  'st.botsFieldMust': ['必须遵守（每行一条）', 'Must rules (one per line)'],
-  'st.botsFieldTimeout': ['超时毫秒', 'Timeout (ms)'],
-  'st.botsFieldIdle': ['空闲超时毫秒', 'Idle timeout (ms)'],
-  'st.botsFieldRepairs': ['修复轮数', 'Repair rounds'],
   'st.botsPreview': ['预览它能拿到什么', 'Preview what it gets'],
   'st.botsPreviewUnverified': ['后端 {backend} 未核验：这个 Bot 只能预览，不能保存。',
     'Backend {backend} is unverified: this bot can be previewed but not saved.'],
-  'st.botsPreviewCaps': ['能力', 'Capabilities'],
-  'st.botsPreviewDeny': ['禁止的工具', 'Denied tools'],
-  'st.botsPreviewMcp': ['可用的 MCP', 'Allowed MCP'],
-  'st.botsPreviewStages': ['阶段', 'Stages'],
   'st.botsPreviewEmpty': ['—', '—'],
   'st.botsStagesAll': ['全部内置阶段', 'all built-in stages'],
-  'st.botsStageBot': ['阶段 Bot（留空=用整单 Bot）', 'Stage bot (empty = the whole-ticket bot)'],
-  'st.botsStageBudget': ['阶段超时毫秒（留空=跟随 Bot）', 'Stage timeout in ms (empty = follow the bot)'],
-  'st.botsPresetDefault': ['（宿主默认）', '(host default)'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
    Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
@@ -1101,6 +1101,36 @@ export const BOT_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
 export const BOT_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
 export const BOT_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
 export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
+
+/** Plain names for the three capabilities: the store keeps `edit/exec/web`, the editor never prints the token. */
+export const BOT_CAPABILITY_LABELS = Object.freeze({
+  edit: 'st.botsCapEdit', exec: 'st.botsCapExec', web: 'st.botsCapWeb',
+})
+export const BOT_STAGE_LABELS = Object.freeze({
+  assess: 'st.stageAssess', plan: 'st.stagePlan', implement: 'st.stageImplement', gates: 'st.stageGates',
+  review: 'st.stageReview',
+})
+/** The four workflow shapes worth naming, plus `custom` once per-stage switches are involved. */
+export const BOT_STAGE_MODES = Object.freeze({
+  auto: [],
+  quick: ['implement', 'gates'],
+  standard: ['assess', 'plan', 'implement', 'gates', 'review'],
+  review: ['implement', 'gates', 'review'],
+})
+/** Which named shape the current stage list is (any stage-level spec counts as custom, so its rows stay visible). */
+/** A display name becomes the internal id: lowercase kebab, and the caller appends a suffix when it is taken. */
+export const slugOf = name => String(name ?? '').toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
+
+export const stageModeOf = ({ stages = [], stageSpecs = {} } = {}) => {
+  if (Object.keys(stageSpecs ?? {}).length) return 'custom'
+  if (!stages.length) return 'auto'
+  for (const [mode, list] of Object.entries(BOT_STAGE_MODES)) {
+    if (mode === 'auto') continue
+    if (list.length === stages.length && list.every((stage, index) => stage === stages[index])) return mode
+  }
+  return 'custom'
+}
 
 export const emptyBotForm = () => ({
   id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
@@ -1180,27 +1210,16 @@ export function formToBot(form) {
   if (form.stages.length) {
     // Keep a stage-level bot/budget this form cannot edit, so saving a Bot never silently drops §10.2 settings.
     bot.stages = form.stages.map(name => {
-      const spec = isPlainObject(form.stageSpecs)?.[name]
+      // `isPlainObject(x)?.[name]` used to read a property off the boolean, so every save silently dropped the
+      // stage-level bot and budget (fixed 1.2.6; the gate only passed because a *new* Bot's save carried the old
+      // store through untouched).
+      const spec = isPlainObject(form.stageSpecs) ? form.stageSpecs[name] : undefined
       return spec ? { stage: name, ...spec } : name
     })
   }
   return bot
 }
 
-/** §13.2 "预览它能拿到什么": the effective deny list, MCP prefixes, capability set and stages, computed client-side. */
-export function botPreview(t, form, backendState) {
-  const capabilities = BOT_CAPABILITY_OPTIONS
-    .filter(capability => backendState?.capabilities?.[capability] === true && (form.requires.length === 0
-      || form.requires.includes(capability)))
-  const mcp = listOf(form.allowMcp).map(server => `mcp__${server}__*`)
-  return {
-    capabilities,
-    unverified: !backendState || (backendState.state !== 'verified' && backendState.source !== 'smoke'),
-    deny: listOf(form.deny),
-    mcp,
-    stages: form.stages.length ? form.stages : [pt(t, 'st.botsStagesAll')],
-  }
-}
 
 /** The store list, the backend evidence and the editor: one component so the group needs no live.json draft. */
 export function BotsCard() {
@@ -1209,7 +1228,6 @@ export function BotsCard() {
   const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
   const [editor, setEditor] = useState(undefined)
   // The editor opens on identity + prompt only; the rest is one disclosure away (§13.2 keeps every field reachable).
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
@@ -1248,24 +1266,28 @@ export function BotsCard() {
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
   // §10.2: a stage may name a bot and its own timeout. Empty means "follow the whole-ticket bot", so the key is
   // dropped instead of saved as an empty object the schema would reject.
-  const setStageSpec = (stage, patch) => {
-    if (!editor) return
-    const specs = { ...(editor.form.stageSpecs ?? {}) }
-    const next = { ...(specs[stage] ?? {}), ...patch }
-    if (!next.bot) delete next.bot
-    if (!next.budget || !Object.keys(next.budget).length) delete next.budget
-    if (next.bot || next.budget) specs[stage] = next
-    else delete specs[stage]
-    editField('stageSpecs', specs)
+  const openEditor = bot => {
+    setSaveError(undefined)
+    setEditor({ form: botToForm(bot), id: bot?.id })
   }
-  const openEditor = bot => { setSaveError(undefined); setAdvancedOpen(false); setEditor({ form: botToForm(bot), id: bot?.id }) }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
     if (!editor) return
     setSaving(true)
     setSaveError(undefined)
     try {
-      const bot = formToBot(editor.form)
+      // New Bots name themselves: the operator types a name, the id is derived and de-duplicated (§13.2).
+      let bot = formToBot(editor.form)
+      if (!editor.id) {
+        const base = slugOf(editor.form.name) || `bot-${Date.now().toString(36).slice(-4)}`
+        let candidate = base
+        let suffix = 2
+        while (bots.some(item => item.id === candidate)) {
+          candidate = `${base}-${suffix}`
+          suffix += 1
+        }
+        bot = formToBot({ ...editor.form, id: candidate })
+      }
       // Exclude both the saved id and the one this editor opened: renaming a Bot must not leave the old one behind.
       // `bots` is the *display* list (built-ins + store). A built-in id in this document makes the host reject the
       // whole save ("内置 Bot 不可编辑"), so only stored bots may round-trip.
@@ -1273,6 +1295,7 @@ export function BotsCard() {
         .map(item => stripBotForSave(item))
       const saved = await actions.saveBots([...others, bot])
       if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
+      if (!editor.id) setPickedId(bot.id)
       setEditor(undefined)
     } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
   }
@@ -1292,12 +1315,7 @@ export function BotsCard() {
     } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
   }
   const capabilityOf = bot => capabilitiesOfForm(bot, backends[bot.backend])
-  const preview = editor ? botPreview(t, editor.form, backends[editor.form.backend]) : undefined
   // What the collapsed row advertises: fields that moved off the first screen and already carry a value.
-  const advancedCount = editor ? [editor.form.preset, editor.form.modelProvider && editor.form.modelModel,
-    editor.form.requires.length, editor.form.stages.length, editor.form.deny, editor.form.allowMcp, editor.form.must,
-    editor.form.timeoutMs, editor.form.idleTimeoutMs, editor.form.maxRepairRounds,
-    Object.keys(editor.form.stageSpecs ?? {}).length].filter(Boolean).length : 0
   const problem = saveError
   const selected = bots.find(bot => bot.id === pickedId) ?? bots[0]
   // Picking a Bot always shows that Bot: an open editor is closed first, exactly as its 取消 button would.
@@ -1305,122 +1323,71 @@ export function BotsCard() {
   const detailForm = selected ? botToForm(selected) : undefined
   const detailRows = selected ? [
     [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
-    [pt(t, 'st.botsFieldPreset'), detailForm.preset || pt(t, 'st.botsPreviewEmpty')],
-    [pt(t, 'st.botsFieldModel'), detailForm.modelProvider && detailForm.modelModel
-      ? `${detailForm.modelProvider} · ${detailForm.modelModel}` : pt(t, 'st.botsPreviewEmpty')],
-    [pt(t, 'st.botsDetailStages'), detailForm.stages.length ? detailForm.stages.join(' → ') : pt(t, 'st.botsStagesAll')],
-    [pt(t, 'st.botsDetailRequires'), detailForm.requires.join(', ') || pt(t, 'st.botsBackendNone')],
-    [pt(t, 'st.botsDetailDeny'), detailForm.deny || pt(t, 'st.botsPreviewEmpty')],
-    [pt(t, 'st.botsDetailMcp'), detailForm.allowMcp || pt(t, 'st.botsPreviewEmpty')],
-    [pt(t, 'st.botsDetailTimeout'), detailForm.timeoutMs || pt(t, 'st.botsPreviewEmpty')],
-    [pt(t, 'st.botsFieldRepairs'), detailForm.maxRepairRounds || pt(t, 'st.botsPreviewEmpty')],
+    ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
+    ...(detailForm.modelProvider && detailForm.modelModel
+      ? [[pt(t, 'st.botsFieldModel'), `${detailForm.modelProvider} · ${detailForm.modelModel}`]] : []),
+    // The detail pane speaks the same language as the editor: named shapes and 「能改文件」, never raw tokens.
+    [pt(t, 'st.botsDetailStages'), (() => {
+      const mode = stageModeOf(detailForm)
+      if (mode === 'auto') return pt(t, 'st.botsStagesAll')
+      if (mode === 'custom') return detailForm.stages.map(stage => pt(t, BOT_STAGE_LABELS[stage] ?? stage)).join(' → ')
+      return pt(t, `st.botsStages${mode[0].toUpperCase()}${mode.slice(1)}`)
+    })()],
+    [pt(t, 'st.botsDetailRequires'),
+      detailForm.requires.map(capability => pt(t, BOT_CAPABILITY_LABELS[capability] ?? capability)).join('、')
+        || pt(t, 'st.botsBackendNone')],
+    ...(detailForm.deny || detailForm.allowMcp
+      ? [[pt(t, 'st.botsDetailTools'), [detailForm.deny, detailForm.allowMcp].filter(Boolean).join(' · ')]] : []),
+    ...(detailForm.timeoutMs || detailForm.idleTimeoutMs || detailForm.maxRepairRounds
+      ? [[pt(t, 'st.botsBudgetOverride'),
+        [detailForm.timeoutMs, detailForm.idleTimeoutMs, detailForm.maxRepairRounds].filter(Boolean).join(' / ')]]
+      : []),
   ] : []
   // No heading action: the editor's own row already ends with 取消 / 保存, and a second 取消 in the corner read as a
   // different command (1.2.4).
+  // Five questions a human can answer: who it is, what it is for, which engine runs it, what it may do, how it should
+  // behave. Everything else — preset, model, tools, budget, stage wiring — follows 设置 → 运行 unless a legacy Bot
+  // already carries it, in which case the save path keeps it untouched.
   const editorPane = editor ? <Section
     title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
     <div className="sa-bots-editor-body sa-bots-editor">
       <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
-      {/* First-run surface: who the bot is, which backend runs it, what it takes on. Every other field keeps its
-          store default and lives behind 「高级设置」 — same fields, one disclosure away, so nothing is lost. */}
       <div className="sa-field-grid">
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
           <Input value={editor.form.name}
             onChange={event => editField('name', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldId')}</span>
-          <Input value={editor.form.id} onChange={event => editField('id', event.target.value)} /></label>
-        <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
-          <Input value={editor.form.description} onChange={event => editField('description', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
           <Select value={editor.form.backend} onChange={value => editField('backend', value)}
             options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
+        <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
+          <Input value={editor.form.description} onChange={event => editField('description', event.target.value)} /></label>
+      </div>
+      {/* Capability tokens are developer vocabulary; the operator answers what this bot may do. */}
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
+        <div className="sa-check-row">
+          {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} className="sa-check">
+            <Switch checked={editor.form.requires.includes(capability)}
+              onChange={next => editField('requires', next
+                ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
+            {pt(t, BOT_CAPABILITY_LABELS[capability])}</label>)}
+        </div>
+        <p className="sa-hint">{pt(t, 'st.botsRequiresHint')}</p>
       </div>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
         <textarea className="sa-textarea" rows={4} value={editor.form.role}
           aria-label={pt(t, 'st.botsFieldRole')} placeholder={pt(t, 'st.botsFieldRoleHint')}
           onChange={event => editField('role', event.target.value)} /></label>
-      <DisclosureRow open={advancedOpen} onToggle={() => setAdvancedOpen(current => !current)}
-        title={pt(t, 'st.botsAdvanced')}
-        collapsedContent={advancedCount
-          ? pt(t, 'st.botsAdvancedSet', { count: advancedCount }) : pt(t, 'st.botsAdvancedHint')}>
-        <div className="sa-disclosure-body">
-          <div className="sa-field-grid">
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
-              {presetIds.length
-                ? <Select value={editor.form.preset} onChange={value => editField('preset', value)}
-                  options={[{ value: '', label: pt(t, 'st.botsPresetDefault') },
-                    ...presetIds.map(id => ({ value: id, label: id }))]} />
-                : <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} />}</label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
-              <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-              <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
-          </div>
-          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
-            {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
-              <Switch checked={editor.form.requires.includes(capability)}
-                onChange={next => editField('requires', next
-                  ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
-              {capability}</label>)}
-          </div>
-          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldStages')}</span>
-            {BOT_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
-              <Switch checked={editor.form.stages.includes(stage)}
-                onChange={next => editField('stages', next
-                  ? BOT_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
-                  : editor.form.stages.filter(item => item !== stage))} />
-              {stage}</label>)}
-          </div>
-          {/* §10.2: which bot runs which stage, and that stage's own timeout. `gates` has no row: the executor runs it. */}
-          {editor.form.stages.filter(stage => stage !== 'gates').map(stage => {
-            const spec = isPlainObject(editor.form.stageSpecs?.[stage]) ? editor.form.stageSpecs[stage] : {}
-            const budget = isPlainObject(spec.budget) ? spec.budget : {}
-            return <div className="sa-field-grid" key={`stage-${stage}`} data-testid={`sa-bot-stage-${stage}`}>
-              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBot')} · ${stage}`}</span>
-                <Select value={String(spec.bot ?? '')} options={[{ value: '', label: pt(t, 'st.botsPreviewEmpty') },
-                  ...botIds.map(id => ({ value: id, label: id }))]}
-                  onChange={value => setStageSpec(stage, { bot: value || undefined })} /></label>
-              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBudget')} · ${stage}`}</span>
-                <Input value={budget.timeoutMs === undefined ? '' : String(budget.timeoutMs)}
-                  onChange={event => {
-                    const text = String(event.target.value).trim()
-                    setStageSpec(stage, { budget: text === '' ? undefined : { ...budget, timeoutMs: Number(text) } })
-                  }} /></label>
-            </div>
-          })}
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
-            <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
-            <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldMust')}</span>
-            <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
-          <div className="sa-field-grid">
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldTimeout')}</span>
-              <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldIdle')}</span>
-              <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRepairs')}</span>
-              <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
-          </div>
-          {preview ? <div className="sa-field" data-testid="sa-bot-preview">
-            <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
-            {preview.unverified
-              ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
-                {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
-              : null}
-            <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],
-              [pt(t, 'st.botsPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-              [pt(t, 'st.botsPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-              [pt(t, 'st.botsPreviewStages'), preview.stages.join(' → ')]]} />
-          </div> : null}
-        </div>
-      </DisclosureRow>
+      <p className="sa-hint">{pt(t, 'st.botsInheritHint')}</p>
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
-    <div className="sa-actions">
-      <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
-      <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
-    </div>
+      <div className="sa-actions">
+        <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={saving || String(editor.form.name ?? '').trim() === ''}
+          onClick={() => { void save() }}>
+          {saving ? t('saving') : editor.id ? t('save') : pt(t, 'st.botsCreate')}
+        </Button>
+      </div>
     </div>
   </Section> : null
   return <>
@@ -1479,6 +1446,7 @@ export function BotsCard() {
               <div className="sa-settings-stack">
                 {selected.description ? <p className="sa-hint">{selected.description}</p> : null}
                 <KeyValues rows={detailRows} />
+                <p className="sa-hint">{pt(t, 'st.botsInheritHint')}</p>
                 <div className="sa-field">
                   <span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
                   <p className="sa-hint sa-role-text">{detailForm.role || pt(t, 'st.botsPreviewEmpty')}</p>
@@ -1502,7 +1470,8 @@ export function BotsCard() {
                 {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
               </div>
               <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
-                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
+                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true)
+                  .map(capability => pt(t, BOT_CAPABILITY_LABELS[capability])).join('、')
                   || pt(t, 'st.botsBackendNone') })}</p>
             </div>
             <Button size="sm" variant="ghost" disabled={verifying === backend}

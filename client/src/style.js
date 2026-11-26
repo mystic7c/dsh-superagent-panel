@@ -649,6 +649,9 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 /* A number/time field is as wide as its value, not the card (T20). */
 .sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
+/* Capability pickers read as one sentence of choices, not as three stacked form rows (1.2.6). */
+.sa-check-row { display: flex; flex-wrap: wrap; gap: var(--sa-sp-16); }
+.sa-check { display: inline-flex; align-items: center; gap: var(--sa-sp-8); min-height: 32px; font-size: var(--sa-fs-body); }
 .sa-switch-row-text { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-input { box-sizing: border-box; display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 32px; min-width: 0;
   padding: 0 var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm);

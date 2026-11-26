@@ -490,7 +490,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
   PanelProvider,
-  botPreview, botToForm, formToBot,
+  botToForm, formToBot,
   applyRenderFrame, fitGrid, claudeSessions, chatSummary,
   createSessionOpener, openSessionMessage,
   inject: pluginInject } = loadClient({
@@ -536,7 +536,6 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   failureReasonTextOf: 'overview.js',
   LiveSettingsPage: 'settings.js',
   BotsCard: 'settings.js',
-  botPreview: 'settings.js',
   botToForm: 'settings.js',
   formToBot: 'settings.js',
   applyRenderFrame: 'terminal.js',
@@ -2575,37 +2574,21 @@ console.log('STEP pure projections')
     const editMine = [...(detailPane()?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
     editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
-    // The first screen stays small: stage/budget/tool fields sit behind 高级设置 and are not even mounted until it opens.
-    check('the bot editor keeps advanced fields behind a disclosure (§13.2)',
-      !host.querySelector('[data-testid="sa-bot-stage-review"]')
-        && /高级设置/.test(host.querySelector('.sa-bots-editor')?.textContent ?? ''),
-      host.querySelector('.sa-bots-editor')?.textContent?.slice(0, 200) ?? 'no modal')
-    const advancedToggle = [...host.querySelectorAll('.sa-bots-editor .sa-disclosure-row')]
-      .find(node => /高级设置/.test(node.textContent ?? ''))
-    advancedToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    await sleep(120)
-    const reviewRow = host.querySelector('[data-testid="sa-bot-stage-review"]')
-    const reviewSelect = reviewRow?.querySelector('select')
-    const reviewInput = reviewRow?.querySelector('input')
-    check('the bot editor edits a stage-level bot and its budget (§10.2)',
-      reviewSelect?.value === 'reviewer' && reviewInput?.value === '600000'
-        && !host.querySelector('[data-testid="sa-bot-stage-gates"]'),
-      `select=${reviewSelect?.value ?? 'none'} budget=${reviewInput?.value ?? 'none'} row=${reviewRow?.textContent?.slice(0, 80) ?? 'none'}`)
-    const cancelEdit = [...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '取消')
-    cancelEdit?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    await sleep(100)
-    const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建 Bot')
-    newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    await sleep(120)
-    const modalText = () => [...host.querySelectorAll('.sa-bots-editor')].map(node => node.textContent).join('')
-    ;[...host.querySelectorAll('.sa-bots-editor .sa-disclosure-row')]
-      .find(node => /高级设置/.test(node.textContent ?? ''))
-      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    await sleep(120)
-    check('the editor previews what the bot would get (§13.2)',
-      /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
-    check('the editor warns that an unverified backend cannot be saved (AC-B1)',
-      /未核验/.test(modalText()), modalText().slice(0, 240))
+    // §13.2 (1.2.6): the editor is five human fields. Preset, model, tools, budget and stage wiring are not editable
+    // per Bot any more — they follow 设置 → 运行, which is what the hint below the role box says.
+    const editorText = () => host.querySelector('.sa-bots-editor')?.textContent ?? ''
+    // 2 text inputs (name, one line) + 1 engine select + 1 role textarea + the three capability switches.
+    const editorControls = () => [...host.querySelectorAll('.sa-bots-editor input:not([type="checkbox"]), .sa-bots-editor select, .sa-bots-editor textarea')]
+    check('the bot editor asks only who it is and what it may do (1.2.6)',
+      /名称/.test(editorText()) && /一句话说明/.test(editorText()) && /它能做什么/.test(editorText())
+        && /角色提示词/.test(editorText())
+        && !host.querySelector('.sa-bots-editor .sa-disclosure-row')
+        && !host.querySelector('[data-testid="sa-bot-stage-review"]')
+        && editorControls().length === 4
+        && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length === 3,
+      `${editorControls().length} controls :: ${editorText().slice(0, 200)}`)
+    check('the editor says the rest follows 设置 → 运行',
+      /跟随/.test(editorText()), editorText().slice(-160))
     const saveButton = [...host.querySelectorAll('.sa-bots-editor button')]
       .find(node => (node.textContent ?? '').trim() === '保存')
     saveButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
@@ -2613,10 +2596,16 @@ console.log('STEP pure projections')
     check('a rejected save shows the host error code in place (§13.2)',
       /BOT_BACKEND_UNVERIFIED/.test(botsText()), botsText().slice(0, 300))
     const afterReject = lists.at(-1) ?? []
-    check('a stage-level bot and budget round-trip through the editor (§10.2)',
-      afterReject.some(bot => Array.isArray(bot.stages) && bot.stages.some(entry =>
-        entry.stage === 'review' && entry.bot === 'reviewer' && entry.budget?.timeoutMs === 600000)),
-      JSON.stringify(afterReject.map(bot => bot.stages)).slice(0, 240))
+    // The editor cannot edit stage wiring or the budget any more, so the save path must carry the stored values back
+    // untouched — the 1.2.6 bug dropped them because `isPlainObject(x)?.[name]` read a property off a boolean.
+    const legacy = afterReject.find(bot => bot.id === 'mine')
+    check('saving a Bot keeps stage-level wiring this editor no longer edits (1.2.6)',
+      Array.isArray(legacy?.stages) && legacy.stages.some(entry =>
+        entry && entry.stage === 'review' && entry.bot === 'reviewer' && entry.budget?.timeoutMs === 600000),
+      JSON.stringify(legacy?.stages).slice(0, 240))
+    check('saving a Bot keeps the tool and skill limits it no longer shows (1.2.6)',
+      legacy?.tools?.deny?.includes('write') && legacy?.skills?.prefer?.includes('ponytail'),
+      JSON.stringify({ tools: legacy?.tools, skills: legacy?.skills }).slice(0, 200))
     check('a save sends the store without host-added keys (§4.2)',
       afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
       JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))
@@ -2632,20 +2621,22 @@ console.log('STEP pure projections')
       .find(node => (node.textContent ?? '').trim() === '编辑')
       ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(160)
-    const renameInput = [...host.querySelectorAll('.sa-bots-editor input')].find(node => node.value === 'mine')
+    // Renaming edits the row it opened: the id is derived (never typed), so the store must still hold exactly one Bot.
+    const renameInput = [...host.querySelectorAll('.sa-bots-editor input')].find(node => node.value === '我的 Bot')
     const renameKey = renameInput ? Object.keys(renameInput).find(key => key.startsWith('__reactProps$')) : undefined
-    if (!renameKey) skip('renaming a Bot replaces it instead of adding a second one', 'the id input was not found')
+    if (!renameKey) skip('renaming a Bot replaces it instead of adding a second one', 'the name input was not found')
     else {
-      renameInput[renameKey].onChange?.({ target: { value: 'mine2' } })
+      renameInput[renameKey].onChange?.({ target: { value: '我的 Bot 2' } })
       await sleep(120)
       ;[...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '保存')
         ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
       await sleep(160)
       const renamed = lists.at(-1) ?? []
       check('renaming a Bot replaces it instead of adding a second one (P2)',
-        renamed.some(bot => bot.id === 'mine2') && !renamed.some(bot => bot.id === 'mine')
+        renamed.some(bot => bot.id === 'mine' && bot.name === '我的 Bot 2')
+          && renamed.filter(bot => bot.id === 'mine').length === 1
           && !renamed.some(bot => BUILTINS.includes(bot.id)),
-        JSON.stringify(renamed.map(bot => bot.id)))
+        JSON.stringify(renamed.map(bot => [bot.id, bot.name])))
     }
     // A verified backend accepts the same store: remount so the group loads the verified evidence.
     root.unmount()
@@ -2668,16 +2659,24 @@ console.log('STEP pure projections')
       const key = input ? Object.keys(input).find(name => name.startsWith('__reactProps$')) : undefined
       if (key) input[key].onChange?.({ target: { value } })
     }
+    check('creating a Bot asks only who it is and which backend runs it',
+      /创建/.test(host.querySelector('.sa-bots-editor')?.textContent ?? '')
+        && !host.querySelector('.sa-bots-editor .sa-disclosure-row')
+        && host.querySelectorAll('.sa-bots-editor input:not([type="checkbox"])').length === 2
+        && host.querySelectorAll('.sa-bots-editor select').length === 1,
+      host.querySelector('.sa-bots-editor')?.textContent?.slice(0, 200) ?? 'no editor')
     setInput(formInputs[0], '探针 Bot')
-    setInput(formInputs[1], 'probe')
+    setInput(formInputs[1], '帮我跑冒烟测试')
     await sleep(120)
-    ;[...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '保存')
+    ;[...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '创建')
       ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(180)
     const created = lists.at(-1) ?? []
+    const minted = created.find(bot => bot.name === '探针 Bot')
     check('creating a Bot sends only the store, so the host does not reject it as a built-in edit (1.2.5)',
-      created.some(bot => bot.id === 'probe') && !created.some(bot => BUILTINS.includes(bot.id)),
-      JSON.stringify(created.map(bot => bot.id)).slice(0, 200))
+      Boolean(minted) && /^[a-z0-9-]{2,32}$/.test(String(minted?.id ?? ''))
+        && !created.some(bot => BUILTINS.includes(bot.id)),
+      JSON.stringify(created.map(bot => [bot.id, bot.name])).slice(0, 240))
     verifiedRoot.unmount()
     host.remove()
   }
