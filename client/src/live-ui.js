@@ -1,5 +1,5 @@
 /* Shared live semantics for the six pages: Chinese status vocabulary, ticket rows and groups, the 24h funnel,
-   the executor load strip, the seven-stage rail, gate summary and the pure status helpers every page reads.
+   the executor load strip, gate summary and the pure status helpers every page reads.
    Pages must never translate a raw engine status themselves — they call ticketStatus/decisionKindView/dispositionView
    and render the returned label key through `pt`. */
 
@@ -59,8 +59,6 @@ Object.assign(PAGE_TEXT, {
     redeliver: ['重新交付', 'Re-deliver'] },
   disposition: { queued: ['排队', 'Queued'], evaluating: ['评估中', 'Evaluating'], delivered: ['已送达', 'Delivered'],
     fanout: ['扇出', 'Fanned out'], filtered: ['被过滤', 'Filtered'] },
-  rail: { trigger: ['触发', 'Trigger'], eval: ['评估', 'Eval'], ticket: ['工单', 'Ticket'], execution: ['执行', 'Execution'],
-    gate: ['闸门', 'Gates'], mr: ['MR', 'MR'], uat: ['UAT', 'UAT'], retried: ['重试后完成', 'Completed after retry'] },
   gate: { standards: ['规范', 'Standards'], backend: ['后端', 'Backend'], frontend: ['前端', 'Frontend'],
     none: ['还没有闸门结果。', 'No gate result yet.'] },
   result: { uatOk: ['UAT 通过', 'UAT passed'], failed: ['执行失败', 'Failed'], ciPending: ['等待 CI', 'CI pending'],
@@ -164,14 +162,14 @@ Object.assign(PAGE_TEXT, {
     pipelineSkipped: ['已跳过', 'Skipped'], pipelineManual: ['手动', 'Manual'],
     autoMerged: ['已合并', 'Merged'], autoRequested: ['已请求', 'Requested'], autoFailed: ['失败', 'Failed'],
     checkedAt: ['检查时间', 'Checked at'], deployJob: ['部署', 'Deploy'], deployStatus: ['部署状态', 'Deploy status'],
-    actions: ['工单动作', 'Ticket actions'], stages: ['阶段链路', 'Stage rail'], retry: ['重试执行', 'Retry run'], stop: ['停止工单', 'Stop ticket'],
+    actions: ['工单动作', 'Ticket actions'], retry: ['重试执行', 'Retry run'], stop: ['停止工单', 'Stop ticket'],
     dryRun: ['干跑执行', 'Dry run'], publish: ['发布 MR', 'Publish MR'], refreshCi: ['刷新 CI', 'Refresh CI'],
     verify: ['核对合并/UAT', 'Verify merge/UAT'], originLink: ['来源触发', 'Origin trigger'],
     retryUnavailable: ['执行器未启用，只能干跑。', 'The executor is disabled; dry run only.'],
     stopUnavailable: ['当前没有可停止的执行。', 'There is no active run to stop.'],
     stopping: ['正在停止…', 'Stopping…'], stopConfirm: ['请求停止这个工单？已完成的动作会保留，之后不会再提交、推送或发布。',
       'Stop this Ticket? Finished actions stay as evidence; nothing else is committed, pushed or published.'],
-    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前阶段边界停止）',
+    stopDone: ['已请求停止（排队中的工单会直接结束；执行中的会在当前步骤边界停止）',
       'Stop requested (a queued Ticket ends now; a running one stops at the next stage boundary).'],
     publishUnavailable: ['缺少推送权限、执行器未启用、没有远端令牌，或工单状态还不能发布。',
       'Push is not allowed, the executor is off, the remote token is missing, or the Ticket is not at a publishable state.'],
@@ -302,12 +300,6 @@ Object.assign(PAGE_TEXT, {
     resumeDone: ['已恢复处理。', 'Processing resumed.'],
     configReloaded: ['配置已重载。', 'Configuration reloaded.'],
   },
-  // Stage rail: the colour-coded icon is aria-hidden, so each step also prints its state word (WIG 1.4.1).
-  'railState.done': ['完成', 'Done'],
-  'railState.ongoing': ['进行中', 'Ongoing'],
-  'railState.warning': ['有警告', 'Warning'],
-  'railState.error': ['失败', 'Failed'],
-  'railState.idle': ['未开始', 'Not started'],
   // Polled ticket list: announce the count that changed, never the whole list (WIG A6).
   'list.status': ['共 {count} 张工单', '{count} tickets'],
   // Manual create form: a placeholder is not a label (WIG B).
@@ -318,7 +310,7 @@ Object.assign(PAGE_TEXT, {
 })
 
 export const TEXT_GROUPS = ['pilotPhase', 'pilotRunStatus', 'pilotTicketStatus', 'pilotGate',
-  'ticketState', 'group', 'primary', 'disposition', 'rail', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
+  'ticketState', 'group', 'primary', 'disposition', 'gate', 'result', 'shell', 'menu', 'row', 'flow', 'load',
   'problem', 'problemAction', 'repo', 'thread', 'ticket', 'ticket.event', 'ticket.step', 'actions', 'toast',
   'runTrigger', 'runStop', 'runState', 'automation']
 for (const group of TEXT_GROUPS) {
@@ -848,18 +840,7 @@ export const FAILURE_LABELS = [
   { pattern: /CLI not found|cli was not found|ENOENT|not logged in|signed out/i, key: 'detail.errorCli' },
   { pattern: /timed out|timeout/i, key: 'detail.errorTimeout' },
   { pattern: /gate failed|gates? (did not pass|failed)/i, key: 'detail.errorGate' },
-  // The staged workflow reports `workflow blocked: <reason>` verbatim; the reason is a host sentence, so it is
-  // translated when it is one of the known causes and otherwise kept as the detail of a Chinese conclusion (U-11).
-  { pattern: /workflow blocked:\s*([\s\S]+)/i, key: 'detail.errorWorkflowBlocked',
-    values: (match, t) => ({ detail: workflowBlockedDetail(t, match?.[1]) }) },
 ]
-/** Known staged-workflow block reasons → a short sentence; anything else keeps the host text as the detail. */
-export const WORKFLOW_BLOCKED_LABELS = [{ pattern: /review still requested changes/i, key: 'detail.workflowReview' }]
-export function workflowBlockedDetail(t, raw) {
-  const text = String(raw ?? '').trim()
-  const known = WORKFLOW_BLOCKED_LABELS.find(item => item.pattern.test(text))
-  return known ? pt(t, known.key) : text
-}
 export const FAILURE_RAW_LIMIT = 120
 /** True when the text is one of the known failure causes (used to map step messages too, not only run.error). */
 export const failureKnown = text => FAILURE_LABELS.some(item => item.pattern.test(String(text ?? '')))
@@ -1422,63 +1403,6 @@ export function GateSummary({ ticket }) {
       </span>
     })}
   </div>
-}
-
-/** Seven stages of one ticket: 触发 → 评估 → 工单 → 执行 → 闸门 → MR → UAT. */
-export function StageRail({ ticket, detail = false }) {
-  const { t } = usePanel()
-  const origin = ticket.origin ?? {}
-  const links = ticket.links ?? {}
-  const { run, gates } = latestGatesOf(ticket)
-  const mergeRequest = links.mergeRequest ?? {}
-  const verification = links.verification ?? {}
-  const deployment = links.deployment ?? {}
-  const uatOk = Boolean(verification.uat?.ok || deployment.uat?.ok)
-  const merged = Boolean(verification.merged) || mergeRequest.state === 'merged'
-  const mrVisible = Boolean(mergeRequest.iid || mergeRequest.webUrl || merged)
-  const gateFailed = gates.some(gate => gate.exitCode !== 0 || gate.timedOut)
-  const gateDone = gates.length > 0 && !gateFailed
-  const gatePassed = gates.filter(gate => gate.exitCode === 0 && !gate.timedOut).length
-  const executed = Boolean(run || links.commit || links.branch)
-  // A Ticket can fail a run and still land: the MR is merged, the UAT verified or a person accepted it. The rail must
-  // not show a bare ✗ execution next to ✔ MR/✔ UAT — it says the failure was recovered by a retry.
-  const runFailed = run?.status === 'failed' || (!run && ticket.status === 'failed')
-  const recovered = runFailed && (merged || uatOk || links.acceptance?.ok === true
-    || ['merged', 'deployed'].includes(ticket.status))
-  const stages = [
-    // The rail answers "where is it" in words; the ids behind the first two stages are one fold down in the
-    // authorization block, not something to print under every step (T14).
-    { key: 'trigger', state: origin.triggerId ? 'done' : 'idle', result: '' },
-    { key: 'eval', state: origin.decisionId ? 'done' : 'idle', result: '' },
-    { key: 'ticket', state: 'done', result: '' },
-    { key: 'execution', state: ticket.status === 'working' ? 'ongoing' : runFailed ? (recovered ? 'warning' : 'error')
-      : executed ? 'done' : 'idle',
-      result: recovered ? pt(t, 'rail.retried') : run ? runView(t, run).label : '' },
-    { key: 'gate', state: gateFailed ? 'error' : gateDone ? 'done' : ticket.status === 'working' ? 'ongoing' : 'idle',
-      result: gates.length ? `${gatePassed}/${gates.length}` : '' },
-    { key: 'mr', state: merged ? 'done' : mrVisible ? (ticket.status === 'closed' ? 'warning' : 'ongoing') : 'idle',
-      result: mergeRequest.iid ? `#${mergeRequest.iid}${mergeRequest.state ? ` · ${providerStateText(t, MR_STATE_KEYS, mergeRequest.state)}` : ''}`
-        : merged ? pt(t, 'ticket.mergedYes') : mrVisible ? pt(t, !mergeRequest.iid && (mergeRequest.pending === true || Boolean(mergeRequest.webUrl)) ? 'row.evidencePrWaiting' : 'row.evidencePr') : '' },
-    { key: 'uat', state: uatOk ? 'done' : ticket.status === 'deploy-failed' ? 'error' : (ticket.status === 'deployed' || ticket.status === 'deploy-pending') ? 'ongoing' : 'idle',
-      result: verification.uat ? (verification.uat.ok ? liveText('可访问', 'reachable') : liveText('不可访问', 'unreachable'))
-        : deployment.uat ? (deployment.uat.ok ? liveText('部署可访问', 'deployed & reachable') : liveText('不可访问', 'unreachable')) : '' },
-  ]
-  return <ol className={detail ? 'sa-rail sa-rail-detail' : 'sa-rail'}>
-    {/* The stage name carries no state: the state icon is aria-hidden and colour-coded, so each step also prints its
-        state word (done/ongoing/warning/error/idle) in the result slot. Never colour-only (WIG 1.4.1). */}
-    {stages.map(stage => {
-      const Dot = detail ? 'span' : 'div'
-      return <li key={stage.key} className="sa-rail-step" data-state={stage.state}>
-        <Dot className="sa-rail-dot">
-          <StatusIcon state={stage.state} size={14} />
-          <span className="sa-rail-label">{pt(t, `rail.${stage.key}`)}</span>
-          <span className="sa-rail-result">
-            {[pt(t, `railState.${stage.state}`), detail ? stage.result : ''].filter(Boolean).join(' · ')}
-          </span>
-        </Dot>
-      </li>
-    })}
-  </ol>
 }
 
 /** Merge request card: iid/link, state, pipeline, auto-merge and target branch, from what the ticket recorded. */

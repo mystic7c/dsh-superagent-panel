@@ -16,7 +16,6 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   PUBLISHABLE_STATUSES } from './lib/live/executor.js'
 import { openWorkerTerminal } from './lib/live/worker-terminal.js'
 import { chatWithClaude, readTranscript } from './lib/live/worker-chat.js'
-import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
 // the host's own type packages, so reading and checking it does not tie the plugin to one DSH release.
@@ -126,12 +125,6 @@ const segmentsOf = (url) => {
  */
 export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
-  // DeepSeek JSON Output for review turns (lib/live/review-json.js); a host without the extension registry still runs,
-  // the reviewer just answers free-form JSON and the workflow parses that.
-  if (!registerReviewJsonMode(ctx, line => ctx.logger?.warn?.(`superagent review json mode: ${line}`))) {
-    ctx.logger?.debug?.('superagent review json mode: deepseekLlmApiExtensions is unavailable')
-  }
-
   // The live engine is the plugin: it only starts when live.json exists and enabled=true. Every route below it is
   // the engine's own API; there is no second "demo" document behind it.
   let engine

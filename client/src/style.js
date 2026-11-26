@@ -843,24 +843,6 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 /* The Ticket jump sits right after the disposition reason it belongs to; pushing it to the far edge of a 1200px pane
    read as a row-level action instead of a footnote on one message (1.2.3). */
 .sa-event-actions { margin-left: var(--sa-sp-8); display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
-.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
-  margin: 0; padding: 0; list-style: none; }
-/* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
-   columns whose labels scatter across the page width. */
-.sa-rail-detail { align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); }
-.sa-rail-detail .sa-rail-step { flex: 0 0 auto; min-width: 0; flex-direction: row; align-items: center; gap: var(--sa-sp-4); }
-.sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: '›'; color: var(--sa-label-tertiary); }
-.sa-rail-detail .sa-rail-dot { min-height: 0; gap: var(--sa-sp-4); }
-.sa-rail-detail .sa-rail-result { font-size: var(--sa-fs-meta); }
-.sa-rail-step { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 76px; flex: 1 1 76px; }
-.sa-rail-dot { display: inline-flex; align-items: center; gap: var(--sa-sp-4); min-height: 16px; }
-.sa-rail-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
-.sa-rail-step[data-state='done'] .sa-rail-label { color: var(--dsw-alias-label-secondary); }
-.sa-rail-step[data-state='ongoing'] .sa-rail-label { color: var(--dsw-alias-label-primary); font-weight: 600; }
-.sa-rail-step[data-state='error'] .sa-rail-label { color: var(--sa-danger-text); }
-.sa-rail-step[data-state='warning'] .sa-rail-label { color: var(--sa-warn-text); }
-.sa-rail-result { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--dsw-alias-label-secondary);
-  overflow-wrap: normal; word-break: keep-all; }
 .sa-gates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sa-sp-2) var(--sa-sp-12);
   font-size: var(--sa-fs-meta); line-height: 1.4; }
 .sa-gate { display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
@@ -1111,7 +1093,6 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
   /* Phones: the metadata grid and the two evidence cards become one column; 768 keeps both two-up. */
   .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
-  .sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: none; }
 }
 @container (max-width: 560px) {
   .sa-list-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }

@@ -1,3 +1,7 @@
+> **v1.3.0 起分阶段执行已移除**：`executor.workflowMode` / `implementer` / `reviewer`、`bot.stages`、阶段级 Bot 与阶段级预算、
+> workflow 续跑与 review JSON 模式全部删除；工单只有一种执行形态（一次 worker → 闸门 → 提交/推送/MR → 验收）。
+> 本文 §10、§18 D1、附录中与 `stages` 有关的描述仅作历史记录，代码不再实现它们。
+
 # Worker Bot 规范（Worker Bots Specification）
 
 状态：**草案 v3**（评审用）。v3 只改「叫什么、怎么分层」：实体从「档位（profile）」改名为 **Bot（bot）**，随之改名的有字段、配置键、错误码、文件名与 UI 文案，迁移映射见附录 C；§3–§18 的规则不变。

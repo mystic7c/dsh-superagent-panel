@@ -118,12 +118,6 @@ const nowIso = new Date().toISOString()
       verification: { merged: true, changed: true, at: nowIso, uat: { ok: true, status: 200, checkedAt: nowIso } },
       mergeRequest: { iid: 1, webUrl: 'https://example.test/mr/1', state: 'merged' },
       deployment: { status: 'success', deployJob: { name: 'deploy_dev', status: 'success' } } },
-    workflow: { status: 'completed', stages: [
-      { key: 'wf-1', role: 'assess', status: 'completed', backend: 'dsh', result: {} },
-      { key: 'wf-2', role: 'implement', status: 'completed', backend: 'dsh', result: {} },
-      { key: 'wf-3', role: 'gates', status: 'completed', backend: 'host', result: {} },
-      { key: 'wf-4', role: 'review', status: 'completed', backend: 'claude', bot: 'rechecker', result: {} },
-    ] },
   }
   engine.state.state.ticketOrder.push(demoId)
   const stepNames = ['prepare-worktree', 'worker', 'changed-paths', 'bootstrap:pnpm', 'gate:standards', 'gate:backend',
@@ -485,7 +479,7 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   // U-05…U-11 (one source of truth for the wording): the risk-change diff, the page query whitelist, the signal body
   // row component, the reason/failure vocabulary and the source/repo label projections.
   riskChangesOf, prunePageQuery, RawSignalRows, Panel, signalReasonText, failureLabel, runTriggerLabel, repoFactRows,
-  workflowBlockedDetail, openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
+  openLinkedPanel, openLinkedPanelWhenReady, initialPageQuery, rememberPageState,
   hostOfUrl, hostName, reasonLabel, publishableStatusOf, primaryActionOf, ticketStatus, clampEvalOffset, Menu,
   ticketDismissable, HistoryChanges, requestIsTitle, durationText, ConfirmButton, Modal, ticketVisibleJumps,
   AutomationBar, failureReasonTextOf, LiveSettingsPage, PanelState, BotsCard, ApiError, apiCall, ThreadDetail, usePanel,
@@ -514,7 +508,6 @@ const { App, translate, DICTS, PAGE_TEXT, MarkdownLite, diffPlaceholderKey, PANE
   PanelProvider: 'api.js',
   signalReasonText: 'source.js',
   failureLabel: 'live-ui.js',
-  workflowBlockedDetail: 'live-ui.js',
   runTriggerLabel: 'live-ui.js',
   repoFactRows: 'settings.js',
   initialPageQuery: 'router.js',
@@ -710,7 +703,7 @@ acceptButtons[0]?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }
 await sleep(1200)
 // The evidence card fetches the Host comparison after the rounds load; give that round-trip one more tick.
 await sleep(400)
-check('去验收 opens the ticket detail', text().includes('阶段链路') && text().includes('权限依据'),
+check('去验收 opens the ticket detail', text().includes('权限依据') && text().includes('验收'),
   text().slice(0, 200))
 {
   const pageHead = rootElement.querySelector('.sa-page-head')
@@ -723,7 +716,7 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   const detailText = text()
   const sectionTitles = [...rootElement.querySelectorAll('.sa-main .sa-section-title')]
     .map(node => (node.textContent ?? '').trim().replace(/\s+/g, '').replace(/\d+$/, ''))
-  const order = ['改动内容', '验收', '阶段链路', '闸门结果', '运行记录', '时间线']
+  const order = ['改动内容', '验收', '闸门结果', '运行记录', '时间线']
   const positions = order.map(label => sectionTitles.indexOf(label))
   check('detail sections follow the requested order', positions.every((position, index) => position >= 0 && (index === 0 || position > positions[index - 1])),
     JSON.stringify({ sectionTitles, positions }))
@@ -971,7 +964,7 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
     check('a Session list this host cannot describe never blocks the jump',
       calls.join(',') === 'worker-plain', JSON.stringify(calls))
   }
-  check('detail nav keeps all eight jumps (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 8,
+  check('detail nav keeps every jump (request, automation and the timeline included) in a dedicated cluster', rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-jumps .sa-detail-jump').length))
 {
   // jsdom has no layout, so the sticky bar (which appears once the head scrolls under the nav) is forced by stubbing the
@@ -1017,7 +1010,7 @@ check('去验收 opens the ticket detail', text().includes('阶段链路') && te
   for (const undo of restore) undo()
   if (!hadRaf) { delete globalThis.requestAnimationFrame; delete globalThis.cancelAnimationFrame }
 }
-check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 8,
+check('long ticket detail offers in-page jump navigation', rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length === 7,
   String(rootElement.querySelectorAll('.sa-detail-nav .sa-detail-jump').length))
 check('jump nav names the request block (R2-09)', [...rootElement.querySelectorAll('.sa-detail-jump')].some(node => (node.textContent ?? '').trim() === '需求'),
   [...rootElement.querySelectorAll('.sa-detail-jump')].map(node => node.textContent).join(','))
@@ -1077,15 +1070,6 @@ check('delivery evidence compares acceptance requirements across rounds',
   /UC-DEMO-005/.test(detailText), detailText.slice(-600))
 check('a truncated patch is visible on the evidence card',
   /patch 已截断/.test(detailText), detailText.slice(-600))
-check('stage rail prints results, not truncated ids',
-  !/[a-z]{3}_[a-z0-9]{2}…/.test(rootElement.querySelector('#sa-ticket-stages')?.textContent ?? ''),
-  rootElement.querySelector('#sa-ticket-stages')?.textContent?.slice(0, 160) ?? 'no rail')
-// §10.2 record: a stage that ran on another bot names that bot in its row, so a mixed-backend ticket is readable
-// without opening the store.
-check('a stage that ran on another bot names it (§10.2)',
-  /claude \(rechecker\)/.test(rootElement.textContent ?? '')
-    && (rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.length === 1,
-  String((rootElement.textContent ?? '').match(/claude \(rechecker\)/g)?.join(' | ') ?? 'no stage bot'))
 {
   // R2-09: the request is promoted to its own expanded section above the changes, instead of a disclosure folded
   // into the right-hand column of "what changed".
@@ -1329,18 +1313,16 @@ clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
 const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
-check('worker settings patch retains workflow fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' })) === JSON.stringify({ 'executor.workflowMode': 'auto', 'executor.implementer': 'claude', 'executor.reviewer': 'claude', 'executor.workerPreset': 'cordis' }))
-check('worker group exposes staged workflow and implementer controls', workerText.includes('自动评估难度') && workerText.includes('Codex 规划与独立验收') && Boolean(rootElement.querySelector('select[aria-label="实现后端"]')))
-// A control without a visible label is not discoverable (regression: the reviewer/preset fields shipped unlabelled).
-check('staged workflow controls carry visible labels',
-  ['分阶段执行', '实现后端', '独立验收后端', 'Worker 预设（DSH）'].every(label => workerText.includes(label))
-    && Boolean(rootElement.querySelector('select[aria-label="独立验收后端"]'))
-    && Boolean(rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')),
+check('worker settings patch retains the worker fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workerPreset': 'cordis' })) === JSON.stringify({ 'executor.workerPreset': 'cordis' }))
+// 1.3.0 removed staged execution: the worker group must not grow those three controls back.
+check('worker group has no staged-execution controls',
+  !/分阶段执行|实现后端|独立验收后端/.test(workerText)
+    && !rootElement.querySelector('select[aria-label="实现后端"]')
+    && !rootElement.querySelector('select[aria-label="独立验收后端"]'),
   workerText.slice(0, 400))
-check('staged backend options follow the enabled backends',
-  [...rootElement.querySelectorAll('.sa-main select[aria-label="实现后端"] option')].map(option => option.value).join(',') === 'dsh,claude'
-    && [...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value).join(',') === 'codex,claude,dsh',
-  JSON.stringify([...rootElement.querySelectorAll('.sa-main select[aria-label="独立验收后端"] option')].map(option => option.value)))
+check('worker preset keeps its visible label',
+  workerText.includes('Worker 预设（DSH）') && Boolean(rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')),
+  workerText.slice(0, 400))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
 check('worker group carries the routing mode control',
   Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),
@@ -2260,13 +2242,9 @@ console.log('STEP pure projections')
     reasonSamples.botSender === '发送者是机器人' && reasonSamples.modelSkip === '模型判断这不是本仓库的任务'
       && reasonSamples.unknown === '未识别原因（技术标识：no-such-code）',
     JSON.stringify(reasonSamples))
-  const blockedFailure = failureLabel(t, 'ticket tkt_1 workflow blocked: review still requested changes after 2 rounds')
   const unknownFailure = failureLabel(t, 'TypeError: something exploded deep inside')
-  check('a workflow block and an unknown error lead with a Chinese conclusion (U-11)',
-    blockedFailure.includes('分阶段流程被阻塞') && blockedFailure.includes('独立审查仍要求修改')
-      && unknownFailure.startsWith('其他原因')
-      && workflowBlockedDetail(t, 'review still requested changes') === '独立审查仍要求修改（返工轮次已用完）',
-    JSON.stringify({ blockedFailure, unknownFailure }))
+  check('an unknown error leads with a Chinese conclusion (U-11)',
+    unknownFailure.startsWith('其他原因'), JSON.stringify({ unknownFailure }))
 
   // U-09: the run trigger is a state, not a button, and every value the host emits has a Chinese label.
   const triggerLabels = ['manual', 'auto', 'retry', 'resume'].map(trigger => runTriggerLabel(t, { trigger }))
@@ -2467,9 +2445,6 @@ console.log('STEP pure projections')
   check('failure causes read in Chinese, including stop reasons (N2-04)',
     failureReasonTextOf(t, 'stopped') === '人工终止' && failureReasonTextOf(t, 'worker_lost') === 'worker 失联',
     JSON.stringify([failureReasonTextOf(t, 'stopped'), failureReasonTextOf(t, 'worker_lost')]))
-  check('a workflow-blocked cause is spelled out, not shown as an English blob (N2-04)',
-    /分阶段流程被阻塞/.test(failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)')),
-    failureReasonTextOf(t, 'workflow blocked: review still requested changes after 6 repair round(s) (7 findings)'))
   check('an unknown failure code is labelled as a technical id (N2-04)',
     failureReasonTextOf(t, 'mystery_code') === '技术标识：mystery_code', failureReasonTextOf(t, 'mystery_code'))
 
@@ -2511,7 +2486,7 @@ console.log('STEP pure projections')
   // §13.2/AC-B1: the bots group lists the store, keeps the built-ins on top and refuses to save against an
   // unverified backend — the error code is shown in place, next to the sentence, never swallowed.
   {
-    const builtin = (id, name) => ({ id, name, description: '', backend: 'dsh', requires: [], stages: ['implement', 'gates'] })
+    const builtin = (id, name) => ({ id, name, description: '', backend: 'dsh', requires: [] })
     const stored = [builtin('generalist', '通用'), builtin('surgical', '小修'), builtin('reviewer', '审阅者'),
       { id: 'mine', name: '我的 Bot', backend: 'dsh', requires: ['edit'], tools: { deny: ['write'] },
         skills: { prefer: ['ponytail'] }, prompt: { role: '只做最小改动' },
@@ -2599,10 +2574,11 @@ console.log('STEP pure projections')
     // The editor cannot edit stage wiring or the budget any more, so the save path must carry the stored values back
     // untouched — the 1.2.6 bug dropped them because `isPlainObject(x)?.[name]` read a property off a boolean.
     const legacy = afterReject.find(bot => bot.id === 'mine')
-    check('saving a Bot keeps stage-level wiring this editor no longer edits (1.2.6)',
-      Array.isArray(legacy?.stages) && legacy.stages.some(entry =>
-        entry && entry.stage === 'review' && entry.bot === 'reviewer' && entry.budget?.timeoutMs === 600000),
-      JSON.stringify(legacy?.stages).slice(0, 240))
+    // 1.3.0 retired staged execution: a store that still names stages is normalised away by the host, and the panel
+    // must not send the dead field back.
+    check('a retired stages declaration is not round-tripped (1.3.0)',
+      legacy !== undefined && !('stages' in legacy),
+      JSON.stringify(legacy && Object.keys(legacy)).slice(0, 240))
     check('saving a Bot keeps the tool and skill limits it no longer shows (1.2.6)',
       legacy?.tools?.deny?.includes('write') && legacy?.skills?.prefer?.includes('ponytail'),
       JSON.stringify({ tools: legacy?.tools, skills: legacy?.skills }).slice(0, 200))

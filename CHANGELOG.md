@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.3.0] — 2026-11-26
+
+### 删掉分阶段执行：工单只有一种执行形态
+
+`分阶段 Worker`（`executor.workflowMode = off|auto|simple|planned`，assess → plan → implement → gates → review 流水线、
+阶段级 Bot 与阶段级预算、从失败阶段续跑、review 的 DeepSeek JSON 输出）整套删除。现在一单就是：一次 worker 执行 →
+仓库程序闸门 → 提交/推送/MR → 验收。返工仍由闸门自动修复与「返工预算」负责，dry run、停止/继续、证据与验收、
+publish 的守卫全部保留。
+
+**删掉的代码**（约 1.9k 行含测试）：
+- `lib/live/workflow.js`、`workflow-worker.js`、`review-json.js` 及其测试（714 → 716 行数净减 45 个用例：44 个分阶段
+  用例删除、1 个新增「退休的 stages 字段仍能被加载并丢弃」）。
+- `executor.js`：`executeWorkflow` 分支、`stageBots`、`botStages`/`stageNamesOf`、两处 `review_stale` 指纹检查、
+  `resumeWorkflow` 参数、`resumableWorkflowOf`；验收要求改从 `ticket.revisions` 取，指纹改用 `run.headSha`。
+- `repos.js`：`workflowResumable()` 与随工单下发的 `workflowResumable` 字段，以及按仓库覆盖的 `reviewer` 配置。
+- `config.js` / `live-json.js`：`executor.workflowMode`、`executor.implementer`、`executor.reviewer` 三个键。
+- `index.js`：review JSON 模式注册。
+- `worker-bot.js`：`stages` / 阶段对象 / 阶段级校验与 `stageNamesOf`；`surgical` 改为「一次实现并过 gates」，
+  `reviewer` 去掉「只能放阶段位」。旧 Bot 文件里的 `stages` 在规范化时静默丢弃，加载不会报错。
+- 面板：工单详情的「阶段链路」整块（`StageRail`、逐阶段折叠、阶段 Bot 标注）、设置 → Worker 的三个分阶段下拉、
+  60 条相关文案、`.sa-rail*` 样式；`executorSessionId` 不再从阶段条目里找会话。
+- `docs/staged-workers.md` 删除；README 目录项移除；`worker-bots.md` / `worker-bots-spec.md` 顶部标注 §10 仅作历史。
+
+**保留下来了**（回归验证跑通）：闸门与自动修复、返工预算、dry run、停止/继续与检查点续跑、验收轮次与证据卡、
+publish 守卫、路由与 Bot 派单（`requires` 为空仍只作候选排除）、Bot 编辑器的五个输入框。
+
+门禁：`render-check` 334 条全过、`node --test lib/live/*.test.js` 716 通过、`check-keys` / `types` / `check:js` 全绿、
+bundle 852071 B。真实实例上逐页复核：工单详情、设置 → Worker、执行页、Bot 页均正常渲染，干跑与「发布 MR」流程未受影响。
+
 ## [1.2.6] — 2026-11-26
 
 ### Bot 只剩五个输入框，其余全部跟随执行器

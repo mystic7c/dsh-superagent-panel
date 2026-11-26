@@ -78,7 +78,6 @@ node scripts/render-check.mjs          # jsdom 渲染回归
 | [docs/intake-and-eval.md](docs/intake-and-eval.md) | 评估模式、阈值、预算与 shadow 配置 |
 | [docs/feature-maturity.md](docs/feature-maturity.md) | 功能成熟度分级与已知边界 |
 | [docs/self-development.md](docs/self-development.md) | 用面板开发本仓库（自开发流程） |
-| [docs/staged-workers.md](docs/staged-workers.md) | 分阶段 worker 配置 |
 | [docs/delivery.md](docs/delivery.md) | 分支模型、交付桥与发布 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本变更 |
 

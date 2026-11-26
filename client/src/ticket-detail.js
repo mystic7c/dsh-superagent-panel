@@ -6,25 +6,10 @@ import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyV
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
-import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
+import { GateSummary, MergeRequestCard, RunSessionLink, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
-Object.assign(PAGE_TEXT, {
-  'wf.progress': ['执行流程', 'Execution workflow'],
-  'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
-  'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
-  'wf.review': ['独立验收', 'Independent review'],
-  // Host workflow state and stage status are backend enums; render them through these keys (unknown values stay raw).
-  'wf.statePending': ['待开始', 'Pending'], 'wf.stateRunning': ['进行中', 'Running'],
-  'wf.stateAssess': ['评估中', 'Assessing'], 'wf.statePlan': ['规划中', 'Planning'],
-  'wf.stateImplement': ['实现中', 'Implementing'], 'wf.stateGates': ['闸门检查中', 'Checking gates'],
-  'wf.stateReview': ['评审中', 'Reviewing'], 'wf.stateBlocked': ['已阻塞', 'Blocked'],
-  'wf.stateReady': ['已就绪', 'Ready'],
-  'wf.stagePending': ['等待', 'Pending'], 'wf.stageRunning': ['进行中', 'Running'],
-  'wf.stageCompleted': ['已完成', 'Completed'], 'wf.stageFailed': ['失败', 'Failed'],
-  'wf.stageBlocked': ['已阻塞', 'Blocked'],
-})
 Object.assign(PAGE_TEXT, {
   // §13.1: a run says which bot ran it, who chose it and what the choice was based on.
   'detail.botLabel': ['Bot', 'Bot'],
@@ -56,7 +41,7 @@ Object.assign(PAGE_TEXT, {
     'The repository bot file is ignored (bots come from the state dir only): {path}; reading {store}'],
 })
 
-/* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
+/* Ticket detail (spec 6.5 / 7.4): changes → acceptance → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
    plus a ⋯ menu; destructive ones always confirm (retry, publish MR, accept/reject).
    Data: GET engine/ticket/:id (host increments, contract §4), refreshed every 10s. */
@@ -95,11 +80,8 @@ Object.assign(PAGE_TEXT, {
   'detail.errorCli': ['本地 CLI 缺失或未登录。', 'The local CLI is missing or not signed in.'],
   'detail.errorTimeout': ['执行超时。', 'The run timed out.'],
   'detail.errorGate': ['闸门未通过。', 'A gate failed.'],
-  // U-11: a staged workflow block and any unrecognised host error keep their English sentence as the *detail* of a
-  // Chinese conclusion, and the untruncated text is folded below (`detail.rawError`).
-  'detail.errorWorkflowBlocked': ['分阶段流程被阻塞：{detail}', 'The staged workflow was blocked: {detail}'],
-  'detail.workflowReview': ['独立审查仍要求修改（返工轮次已用完）',
-    'The independent review still requested changes (repair budget spent)'],
+  // U-11: any unrecognised host error keeps its English sentence as the *detail* of a Chinese conclusion, and the
+  // untruncated text is folded below (`detail.rawError`).
   'detail.errorOther': ['其他原因：{cause}', 'Other cause: {cause}'],
   'detail.rawError': ['技术详情', 'Technical details'],
   'detail.copyTicketId': ['复制工单 ID', 'Copy Ticket ID'],
@@ -308,9 +290,6 @@ Object.assign(PAGE_TEXT, {
     'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
-  'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
-  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只从停下的那一步继续（失败的一步，或验收要求修改后的下一轮返工），通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
-    'Finished assessment, implementation and gates are kept: only the stage where it stopped runs again (the failed one, or the next repair round after a rejection), then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -362,7 +341,6 @@ Object.assign(PAGE_TEXT, {
   'detail.confirmPublish': ['发布并开 MR', 'Publish and open MR'],
   'detail.confirmStop': ['终止工单', 'Stop Ticket'],
   'detail.confirmDismiss': ['忽略并删除分支', 'Dismiss and delete branch'],
-  'detail.confirmResume': ['从断点继续', 'Resume from checkpoint'],
   'detail.confirmGateRelease': ['放行闸门', 'Release gate'],
   'detail.confirmAcceptPass': ['确认验收通过', 'Accept delivery'],
   'detail.confirmAcceptFail': ['确认打回', 'Reject delivery'],
@@ -1193,21 +1171,6 @@ export function failureHint(t, error, steps) {
   return pt(t, 'detail.failedGeneric')
 }
 
-/** Host workflow state → localized text; an unknown value stays visible instead of leaking a backend enum (audit P2). */
-export const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
-  plan: 'wf.statePlan', implement: 'wf.stateImplement', gates: 'wf.stateGates', review: 'wf.stateReview',
-  blocked: 'wf.stateBlocked', ready: 'wf.stateReady' }
-export const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
-  failed: 'wf.stageFailed', blocked: 'wf.stageBlocked' }
-export function ticketWorkflowStateLabel(t, status) {
-  const key = WORKFLOW_STATE_KEYS[String(status ?? '')]
-  return key ? pt(t, key) : String(status ?? '—')
-}
-export function ticketWorkflowStageLabel(t, status) {
-  const key = WORKFLOW_STAGE_KEYS[String(status ?? '')]
-  return key ? pt(t, key) : String(status ?? '—')
-}
-
 /** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
 export const AUTOMATION_MODES = ['off', 'heartbeat', 'schedule']
 
@@ -1425,7 +1388,6 @@ export const DETAIL_JUMPS = [
   { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
   { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
   { id: 'sa-automation', labelKey: 'auto.section' },
-  { id: 'sa-ticket-stages', labelKey: 'ticket.stages' },
   { id: 'sa-ticket-gates', labelKey: 'ticket.gates' },
   { id: 'sa-ticket-runs', labelKey: 'ticket.runs' },
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
@@ -1890,8 +1852,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
     || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
-  // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
-  const workflowResumable = failed && ticket.workflowResumable === true
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
   const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
@@ -1902,14 +1862,9 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       scrollPanelTo('sa-answer', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
     : failed
     ? canRun
-      // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
-      ? workflowResumable
-        ? <ConfirmButton label={pt(t, 'detail.resume')} title={pt(t, 'detail.resumeWorkflowTitle')}
-          message={pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="play"
-          confirmLabel={pt(t, 'detail.confirmResume')} onConfirm={async () => { await resume.run() }} />
-        : <ConfirmButton label={pt(t, 'ticket.retry')} title={pt(t, 'retryTitle')}
-          message={pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="refresh"
-          confirmLabel={pt(t, 'detail.confirmRetry')} onConfirm={async () => { await retry.run() }} />
+      ? <ConfirmButton label={pt(t, 'ticket.retry')} title={pt(t, 'retryTitle')}
+        message={pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="refresh"
+        confirmLabel={pt(t, 'detail.confirmRetry')} onConfirm={async () => { await retry.run() }} />
       // A disabled control still has to say why; the reason is a focusable InfoTip next to it, not a title tooltip.
       : <>
         <Button variant="primary" size="sm" disabled>{pt(t, 'ticket.retry')}</Button>
@@ -2221,18 +2176,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       {headStuck ? <div className="sa-detail-context-action">{primaryAction}{overflowAction}</div> : null}
     </nav>
 
-    {ticket.workflow ? <Section title={pt(t, 'wf.progress')}>
-      {/* The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked". */}
-      <p>{ticketWorkflowStateLabel(t, ticket.workflow.status)}
-        {ticket.workflow.detail ? <span className="sa-hint">{` · ${ticket.workflow.detail}`}</span> : null}</p>
-      {(ticket.workflow.stages ?? []).map((stage, index) => <Folded
-        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'}${stage.bot ? ` (${stage.bot})` : ''} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
-        <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-          {stage.error ?? JSON.stringify(stage.result ?? {}, null, 2)}
-        </pre>
-      </Folded>)}
-    </Section> : null}
-
     {/* R2-09: the request is read first, expanded by default; it used to be folded inside "what changed", which hid
         the one thing a Ticket is about behind a disclosure on the far side of the grid. A Ticket whose body is just
         its title printed the same paragraph twice (the head already shows it), so that case renders the head alone. */}
@@ -2418,8 +2361,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         operator can opt in; dismissed/closed Tickets do not offer scheduling). */}
     {['dismissed', 'closed'].includes(ticket.status) ? null : <AutomationCard ticket={ticket} onSaved={refreshAll} />}
 
-    {/* 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default). */}
-    <Section id="sa-ticket-stages" title={pt(t, 'ticket.stages')}><StageRail ticket={{ ...ticket, runs }} detail /></Section>
+    {/* 3. gate results, 4. run records, 5. timeline (older events folded by default). */}
     {hasGateResults
       ? <Section id="sa-ticket-gates" title={pt(t, 'ticket.gates')}>
         <TicketGateResults ticket={{ ...ticket, runs }} record={acceptanceRecord} />

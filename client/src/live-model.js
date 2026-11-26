@@ -94,7 +94,7 @@ export function useEngineActions(call) {
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
-    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
+    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next step boundary.
     stopTicket: (id, { note } = /** @type {any} */ ({})) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),

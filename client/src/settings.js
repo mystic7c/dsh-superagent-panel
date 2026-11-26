@@ -10,19 +10,10 @@ import { apply } from "./apply.js"
 import { React, h, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
-  'wf.title': ['分阶段执行', 'Staged execution'],
-  'wf.off': ['关闭（沿用单 worker）', 'Off (single worker)'],
-  'wf.auto': ['自动评估难度', 'Assess complexity automatically'],
-  'wf.simple': ['直接实现', 'Direct implementation'],
-  'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
-  'wf.implementer': ['实现后端', 'Implementation backend'],
-  'wf.reviewer': ['独立验收后端', 'Independent review backend'],
-  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行：Codex / Claude Code 的 CLI 会话，或 DSH 的独立只读会话。', 'Runs assessment, planning and the final review read-only: a Codex / Claude Code CLI session, or an independent read-only DSH session.'],
   'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
   'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
   'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
     'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
-  'wf.hint': ['自动模式先由验收后端只读评估；复杂任务按 规划 → 实现 → 闸门 → 独立验收 执行。返工预算在「运行」里调。', 'Auto mode uses a read-only assessment by the review backend; complex tasks run planning, implementation, gates and independent review. The repair budget lives under Run.'],
   // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
   'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
   'st.routeDeliverable': ['交付目标', 'Deliverable'],
@@ -468,8 +459,8 @@ Object.assign(PAGE_TEXT, {
   'st.create': ['建单', 'Create Ticket'],
   'st.created': ['已建单', 'Ticket created'],
   'st.repairBudget': ['返工预算', 'Repair budget'],
-  'st.repairBudgetHint': ['0–6 轮，默认 2。分阶段流程里验收要求修改时最多自动返工几轮；用完会停下并说明原因，调大后可点「继续执行」接着返工。',
-    'Rounds from 0 to 6, default 2. How many implement→gates→review rounds a staged workflow may spend when its independent review keeps asking for changes; when spent the workflow stops and says why, and raising it lets Continue run the next round.'],
+  'st.repairBudgetHint': ['0–6 轮，默认 2。闸门失败时最多自动返工几轮；用完会停下并说明原因。',
+    'Rounds from 0 to 6, default 2. How many times a failing gate may send the worker back for repairs; when spent the run stops and says why.'],
   'st.repairBudgetInvalid': ['返工预算需为 0–6 的整数。', 'Repair budget must be an integer from 0 to 6.'],
 
   // ---- prompt group ----
@@ -669,8 +660,7 @@ export function settingsPatchOf(group, draft) {
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer',
-        'executor.reviewer', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -774,11 +764,6 @@ export const ROUTE_BACKENDS = [
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
 ]
-/** Staged-flow backends, mirroring lib/live/config.js: the implementer is the in-process DSH worker or Claude,
-    the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
-    enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
-export const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
-export const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
 export const ROUTE_WORK_TYPES = [
   { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
   { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
@@ -1018,8 +1003,8 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 
 Object.assign(PAGE_TEXT, {
   'st.botsTitle': ['Bot 列表', 'Worker bots'],
-  'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型、工具与阶段。内置三个 Bot 不可编辑，可复制后改。',
-    'A bot decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
+  'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型与工具。内置三个 Bot 不可编辑，可复制后改。',
+    'A bot decides which backend, preset, model and tools a run may use. The built-ins cannot be edited — copy one instead.'],
   'st.botsFile': ['Bot 文件', 'Bot file'],
   'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
     'The bot file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
@@ -1050,20 +1035,19 @@ Object.assign(PAGE_TEXT, {
   'st.botsEdit': ['编辑 Bot', 'Edit bot'],
   'st.botsEditorNew': ['新建 Bot', 'New bot'],
   'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
-  'st.botsDetailStages': ['阶段', 'Stages'],
   'st.botsDetailRequires': ['能力', 'Capabilities'],
   'st.botsDetailTools': ['工具边界', 'Tool limits'],
   'st.botsCreate': ['创建', 'Create'],
-  'st.botsCreateHint': ['先建一个能跑的 Bot：名字、一句话用途、用哪个后端。能力、阶段、工具、预算创建后随时能在右侧改，默认跟随执行器。',
-    'Start with a Bot that runs: a name, one line of purpose, and the engine. Capabilities, stages, tools and budget stay editable afterwards and follow the executor by default.'],
-  'st.botsInheritHint': ['预设、模型、工具边界、预算与阶段编排都跟随「设置 → 运行」；需要给某个 Bot 单独覆盖时改 JSON。',
-    'Preset, model, tool limits, budget and stage wiring follow 设置 → 运行; override one Bot through its JSON.'],
+  'st.botsCreateHint': ['先建一个能跑的 Bot：名字、一句话用途、用哪个后端。能力、工具、预算创建后随时能在右侧改，默认跟随执行器。',
+    'Start with a Bot that runs: a name, one line of purpose, and the engine. Capabilities, tools and budget stay editable afterwards and follow the executor by default.'],
+  'st.botsInheritHint': ['预设、模型、工具边界与预算都跟随「设置 → 运行」；需要给某个 Bot 单独覆盖时改 JSON。',
+    'Preset, model, tool limits and budget follow 设置 → 运行; override one Bot through its JSON.'],
   'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
     'Saving validates against the backend evidence; error codes are shown right here.'],
   'st.botsAdvanced': ['高级设置', 'Advanced'],
   'st.botsFieldName': ['名称', 'Name'],
   'st.botsFieldDescription': ['一句话说明（它接什么活）', 'One line: what it takes on'],
-  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随工作流默认。', 'The bot works to this prompt; empty follows the workflow default.'],
+  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随执行器默认。', 'The bot works to this prompt; empty follows the executor default.'],
   'st.botsFieldBackend': ['后端', 'Backend'],
   'st.botsFieldPreset': ['预设', 'Preset'],
   'st.botsFieldModel': ['模型', 'Model'],
@@ -1071,25 +1055,14 @@ Object.assign(PAGE_TEXT, {
   'st.botsCapEdit': ['能改文件', 'Edits files'],
   'st.botsCapExec': ['能跑命令', 'Runs commands'],
   'st.botsCapWeb': ['能联网', 'Uses the web'],
-  'st.botsRequiresHint': ['自动派单按这三项匹配：工单需要什么，就只派给声明了这些能力的 Bot。一个都不选＝它只当阶段工具，不接整单活。', 'Dispatch matches on these: a Ticket only goes to a Bot that declares what the work needs. None selected = stage tool only, never a whole Ticket.'],
-  'st.botsStagesAuto': ['跟随执行器（全部阶段）', 'Follow the executor (all stages)'],
-  'st.botsStagesQuick': ['快速：实现 → 验收', 'Quick: implement → gates'],
-  'st.botsStagesStandard': ['标准：评估 → 计划 → 实现 → 验收 → 复核', 'Standard: assess → plan → implement → gates → review'],
-  'st.botsStagesReview': ['实现后复核：实现 → 验收 → 复核', 'With review: implement → gates → review'],
-  'st.botsStagesCustom': ['自定义…', 'Custom…'],
+  'st.botsRequiresHint': ['自动派单按这三项匹配：工单需要什么，就只派给声明了这些能力的 Bot。', 'Dispatch matches on these: a Ticket only goes to a Bot that declares what the work needs.'],
   'st.botsBudgetOverride': ['单独设置超时与返工', 'Override timeouts and repairs'],
   'st.botsBudgetHint': ['默认跟随「设置 → 运行」，只有这个 Bot 需要不同节奏时才打开。', 'Follows 设置 → 运行 unless this Bot needs its own pace.'],
-  'st.stageAssess': ['评估', 'Assess'],
-  'st.stagePlan': ['计划', 'Plan'],
-  'st.stageImplement': ['实现', 'Implement'],
-  'st.stageGates': ['验收', 'Gates'],
-  'st.stageReview': ['复核', 'Review'],
   'st.botsFieldRole': ['角色提示词', 'Role prompt'],
   'st.botsPreview': ['预览它能拿到什么', 'Preview what it gets'],
   'st.botsPreviewUnverified': ['后端 {backend} 未核验：这个 Bot 只能预览，不能保存。',
     'Backend {backend} is unverified: this bot can be previewed but not saved.'],
   'st.botsPreviewEmpty': ['—', '—'],
-  'st.botsStagesAll': ['全部内置阶段', 'all built-in stages'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
    Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
@@ -1099,47 +1072,22 @@ Object.assign(PAGE_TEXT, {
 export const BOT_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
 /** The three built-ins ship with the plugin (§4.5): always available, never editable, copy to change (§13.2). */
 export const BOT_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
-export const BOT_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
 export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
 
 /** Plain names for the three capabilities: the store keeps `edit/exec/web`, the editor never prints the token. */
 export const BOT_CAPABILITY_LABELS = Object.freeze({
   edit: 'st.botsCapEdit', exec: 'st.botsCapExec', web: 'st.botsCapWeb',
 })
-export const BOT_STAGE_LABELS = Object.freeze({
-  assess: 'st.stageAssess', plan: 'st.stagePlan', implement: 'st.stageImplement', gates: 'st.stageGates',
-  review: 'st.stageReview',
-})
-/** The four workflow shapes worth naming, plus `custom` once per-stage switches are involved. */
-export const BOT_STAGE_MODES = Object.freeze({
-  auto: [],
-  quick: ['implement', 'gates'],
-  standard: ['assess', 'plan', 'implement', 'gates', 'review'],
-  review: ['implement', 'gates', 'review'],
-})
-/** Which named shape the current stage list is (any stage-level spec counts as custom, so its rows stay visible). */
 /** A display name becomes the internal id: lowercase kebab, and the caller appends a suffix when it is taken. */
 export const slugOf = name => String(name ?? '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
 
-export const stageModeOf = ({ stages = [], stageSpecs = {} } = {}) => {
-  if (Object.keys(stageSpecs ?? {}).length) return 'custom'
-  if (!stages.length) return 'auto'
-  for (const [mode, list] of Object.entries(BOT_STAGE_MODES)) {
-    if (mode === 'auto') continue
-    if (list.length === stages.length && list.every((stage, index) => stage === stages[index])) return mode
-  }
-  return 'custom'
-}
-
 export const emptyBotForm = () => ({
   id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
   reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
-  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [], stageSpecs: {},
+  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '',
 })
 
-/** A stage entry is either a name or a §10.2 object; the form edits the name, the spec rides along untouched. */
-const stageNameOf = entry => (typeof entry === 'string' ? entry : entry?.stage)
 const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
@@ -1164,10 +1112,6 @@ export function botToForm(bot) {
     timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
     idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
     maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
-    stages: Array.isArray(bot?.stages) ? bot.stages.map(stageNameOf).filter(stage => BOT_STAGE_OPTIONS.includes(stage)) : [],
-    stageSpecs: Object.fromEntries((Array.isArray(bot?.stages) ? bot.stages : [])
-      .filter(entry => entry && typeof entry === 'object' && (entry.bot || entry.budget))
-      .map(entry => [entry.stage, { ...(entry.bot ? { bot: entry.bot } : {}), ...(entry.budget ? { budget: entry.budget } : {}) }])),
   }
 }
 
@@ -1207,16 +1151,6 @@ export function formToBot(form) {
     if (Number.isFinite(value)) budget[key] = value
   }
   if (Object.keys(budget).length) bot.budget = budget
-  if (form.stages.length) {
-    // Keep a stage-level bot/budget this form cannot edit, so saving a Bot never silently drops §10.2 settings.
-    bot.stages = form.stages.map(name => {
-      // `isPlainObject(x)?.[name]` used to read a property off the boolean, so every save silently dropped the
-      // stage-level bot and budget (fixed 1.2.6; the gate only passed because a *new* Bot's save carried the old
-      // store through untouched).
-      const spec = isPlainObject(form.stageSpecs) ? form.stageSpecs[name] : undefined
-      return spec ? { stage: name, ...spec } : name
-    })
-  }
   return bot
 }
 
@@ -1326,13 +1260,6 @@ export function BotsCard() {
     ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
     ...(detailForm.modelProvider && detailForm.modelModel
       ? [[pt(t, 'st.botsFieldModel'), `${detailForm.modelProvider} · ${detailForm.modelModel}`]] : []),
-    // The detail pane speaks the same language as the editor: named shapes and 「能改文件」, never raw tokens.
-    [pt(t, 'st.botsDetailStages'), (() => {
-      const mode = stageModeOf(detailForm)
-      if (mode === 'auto') return pt(t, 'st.botsStagesAll')
-      if (mode === 'custom') return detailForm.stages.map(stage => pt(t, BOT_STAGE_LABELS[stage] ?? stage)).join(' → ')
-      return pt(t, `st.botsStages${mode[0].toUpperCase()}${mode.slice(1)}`)
-    })()],
     [pt(t, 'st.botsDetailRequires'),
       detailForm.requires.map(capability => pt(t, BOT_CAPABILITY_LABELS[capability] ?? capability)).join('、')
         || pt(t, 'st.botsBackendNone')],
@@ -1346,8 +1273,8 @@ export function BotsCard() {
   // No heading action: the editor's own row already ends with 取消 / 保存, and a second 取消 in the corner read as a
   // different command (1.2.4).
   // Five questions a human can answer: who it is, what it is for, which engine runs it, what it may do, how it should
-  // behave. Everything else — preset, model, tools, budget, stage wiring — follows 设置 → 运行 unless a legacy Bot
-  // already carries it, in which case the save path keeps it untouched.
+  // behave. Everything else — preset, model, tools, budget — follows 设置 → 运行 unless a legacy Bot already carries
+  // it, in which case the save path keeps it untouched.
   const editorPane = editor ? <Section
     title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
     <div className="sa-bots-editor-body sa-bots-editor">
@@ -1494,7 +1421,7 @@ export function BotsCard() {
 /** Strip host-added keys before re-saving a listed bot: only the store's own fields may round-trip. */
 function stripBotForSave(bot) {
   const keys = ['id', 'name', 'description', 'backend', 'model', 'preset', 'requires', 'edit', 'exec', 'web', 'tools',
-    'skills', 'prompt', 'budget', 'stages']
+    'skills', 'prompt', 'budget']
   const out = {}
   for (const key of keys) if (bot?.[key] !== undefined) out[key] = bot[key]
   return out
@@ -2447,7 +2374,7 @@ export function LiveSettingsPage({ route }) {
     const gateText = gates.length ? gates.map(gate => settingsGateLabel(t, gate)).join(t('listSeparator')) : t('empty')
     const timeout = Number(executor.timeoutMs)
     const timeoutMinutes = Number.isFinite(timeout) ? Math.round(timeout / 60000) : 25
-    // One budget shared by gate auto-repair and the staged review loop (0..6, default 2).
+    // The gate auto-repair budget (0..6, default 2).
     const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
@@ -2531,9 +2458,6 @@ export function LiveSettingsPage({ route }) {
     const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
     const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
-    const stagedOptions = (choices, current) => choices
-      .filter(choice => enabled.includes(choice.value) || choice.value === current)
-      .map(choice => ({ ...choice, disabled: !enabled.includes(choice.value) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
     const setRouting = next => editRouting({ ...routing, ...next })
@@ -2576,23 +2500,6 @@ export function LiveSettingsPage({ route }) {
       {settingsHeading()}
       <Hint>{pt(t, 'st.workerHint')}</Hint>
       <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'wf.title')}</span>
-        <Select label={pt(t, 'wf.title')} disabled={frozen}
-          value={draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off'}
-          options={['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) }))}
-          onChange={value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off')} />
-        <Hint>{pt(t, 'wf.hint')}</Hint>
-        <span className="sa-field-head">{pt(t, 'wf.implementer')}</span>
-        <Select label={pt(t, 'wf.implementer')} disabled={frozen}
-          value={draft['executor.implementer'] ?? executor.implementer ?? 'dsh'}
-          options={stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh')}
-          onChange={value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh')} />
-        <span className="sa-field-head">{pt(t, 'wf.reviewer')}</span>
-        <Select label={pt(t, 'wf.reviewer')} disabled={frozen}
-          value={draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'}
-          options={stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex')}
-          onChange={value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex')} />
-        <Hint>{pt(t, 'wf.reviewerHint')}</Hint>
         <span className="sa-field-head">{pt(t, 'wf.workerPreset')}</span>
         <Input value={draft['executor.workerPreset'] ?? executor.workerPreset ?? ''} disabled={frozen}
           placeholder={pt(t, 'wf.workerPresetPlaceholder')} aria-label={pt(t, 'wf.workerPreset')}
