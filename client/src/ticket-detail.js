@@ -14,23 +14,22 @@ Object.assign(PAGE_TEXT, {
   // §13.1: a run says which bot ran it, who chose it and what the choice was based on.
   'detail.botLabel': ['Bot', 'Bot'],
   'detail.botAdhoc': ['现拉（{id}）', 'Synthesised ({id})'],
-  'detail.botSource.explicit': ['手动指定', 'Manual'],
-  'detail.botSource.rule': ['规则', 'Rule'],
-  'detail.botSource.model': ['决策模型', 'Judge model'],
-  'detail.botSource.default': ['默认', 'Default'],
-  'detail.botSource.adhoc': ['现拉', 'Synthesised'],
-  'detail.botDegraded.explicit': ['指定的 Bot 不可用', 'The requested bot is unusable'],
-  'detail.botDegraded.model': ['决策模型回答无效，已回退', 'The judge answered invalidly; fell back'],
-  'detail.botDegraded.null': ['决策模型没有选出 Bot', 'The judge chose none'],
-  'detail.botDegraded.budget': ['本轮回合的分派预算已用完', 'Dispatch budget for this poll is spent'],
+  'detail.botSource.explicit-ticket': ['1 显式 · 工单手动指定', '1 explicit · picked on the Ticket'],
+  'detail.botSource.explicit-repo': ['1 显式 · 仓库指定', '1 explicit · named by the repository'],
+  'detail.botSource.pick': ['2 挑选 · 决策模型', '2 pick · judge model'],
+  'detail.botSource.default': ['3 默认 · executor.bot', '3 default · executor.bot'],
+  'detail.botDegraded.pick-unavailable': ['决策模型不可用，已回退默认 Bot', 'Judge unavailable; fell back to the default bot'],
+  'detail.botDegraded.pick-failed': ['模型调用失败，已回退默认 Bot', 'Judge call failed; fell back to the default bot'],
+  'detail.botDegraded.pick-invalid': ['模型选了候选之外的 Bot，已回退默认 Bot', 'Judge picked a bot outside the candidates; fell back'],
+  'detail.botDegraded.pick-none': ['模型认为都不合适，已回退默认 Bot', 'Judge found none suitable; fell back to the default bot'],
+  'detail.botDegraded.no-candidate': ['没有后端可用的 Bot，已回退默认 Bot', 'No bot had an available backend; fell back to the default bot'],
   'detail.botDegraded.other': ['降级：{code}', 'Degraded: {code}'],
   'detail.botDegradedHint': ['这次运行用的不是首选 Bot，原因见右侧说明。', 'This run did not use its first-choice bot; the reason is beside it.'],
-  'detail.botCapability': ['能力：{caps}（{source}{at}）', 'Capabilities: {caps} ({source}{at})'],
-  'detail.botCapabilityNone': ['能力：无（后端未核验）', 'Capabilities: none (backend unverified)'],
-  'detail.botCapabilitySource.probe': ['探针', 'probe'],
-  'detail.botCapabilitySource.smoke': ['冒烟核验', 'smoke check'],
-  'detail.botCapabilitySource.fallback': ['降级默认表，未核验', 'conservative default, unverified'],
-  'detail.botUnverified': ['后端 {backend} 未核验，需先 smoke 核验。', 'Backend {backend} is unverified; run a smoke check first.'],
+  'detail.dispatchCandidates': ['候选：{ids}', 'Candidates: {ids}'],
+  'detail.dispatchNoCandidates': ['候选：无（后端都不可用）', 'Candidates: none (no backend available)'],
+  'detail.dispatchCache': ['缓存命中，未调模型', 'cache hit — no model call'],
+  'detail.dispatchSkipped': ['未进候选：{list}', 'Skipped: {list}'],
+  'detail.dispatchBecause': ['理由：{text}', 'Because: {text}'],
   'detail.botSave': ['存为 Bot', 'Save as bot'],
   'detail.botSaveReady': ['已填入「设置 → Bot」的编辑器，确认后手动保存。', 'Loaded into Settings → Bots; review and save it yourself.'],
   'detail.botRerun': ['换 Bot 重跑', 'Rerun with bot'],
@@ -850,51 +849,50 @@ export function TicketActivities({ activities }) {
   </>
 }
 
-/** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§13.1 item 5). */
-export const BOT_DEGRADED = { 'explicit-unusable': 'detail.botDegraded.explicit', model: 'detail.botDegraded.model',
-  'model-null': 'detail.botDegraded.null', 'model-budget': 'detail.botDegraded.budget' }
+/** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§2.4). */
+export const BOT_DEGRADED = { 'pick-unavailable': 'detail.botDegraded.pick-unavailable',
+  'pick-failed': 'detail.botDegraded.pick-failed', 'pick-invalid': 'detail.botDegraded.pick-invalid',
+  'pick-none': 'detail.botDegraded.pick-none', 'no-candidate': 'detail.botDegraded.no-candidate' }
 
-/** One run's dispatch record (§7.5): which bot, who chose it and why, and the capability evidence behind it. */
+/**
+ * One run's dispatch record (1.5.0 §2.5): the three layers with the layer that hit, the candidates as they stood,
+ * what the judge answered and why, and — when the answer was not a pick — the degradation code in plain words.
+ * The counterfactual the doc asks for is the candidate list plus the because: what the judge was offered and said.
+ */
 export function RunBot({ run, choices = [], onRerun }) {
-  const { t, navigate, notify } = usePanel()
+  const { t, notify } = usePanel()
   const [choice, setChoice] = useState('')
   const bot = run?.bot && typeof run.bot === 'object' ? run.bot : undefined
-  if (!bot || !bot.id) return null
-  const id = String(bot.id)
-  const adhoc = String(bot.source ?? '') === 'adhoc' || id.startsWith('adhoc:')
-  const source = pt(t, `detail.botSource.${String(bot.source ?? 'default')}`)
-  const degraded = typeof bot.degraded === 'string' && bot.degraded
-    ? pt(t, BOT_DEGRADED[bot.degraded] ?? 'detail.botDegraded.other', { code: bot.degraded })
+  const dispatch = run?.dispatch && typeof run.dispatch === 'object' ? run.dispatch : undefined
+  const id = String(bot?.id ?? dispatch?.picked ?? '')
+  if (!id) return null
+  const source = String(dispatch?.source ?? bot.source ?? 'default')
+  const because = String(dispatch?.because ?? bot.because ?? bot.reason ?? '')
+  const candidates = Array.isArray(dispatch?.candidates) ? dispatch.candidates : Array.isArray(bot.candidates) ? bot.candidates : []
+  const skipped = Array.isArray(dispatch?.skipped) ? dispatch.skipped : Array.isArray(bot.skipped) ? bot.skipped : []
+  const degradedCode = dispatch?.degraded ?? bot.degraded
+  const degraded = typeof degradedCode === 'string' && degradedCode
+    ? pt(t, BOT_DEGRADED[degradedCode] ?? 'detail.botDegraded.other', { code: degradedCode })
     : ''
-  const capabilities = Array.isArray(bot.capability) ? bot.capability : []
-  const capabilitySource = pt(t, `detail.botCapabilitySource.${String(bot.capabilitySource ?? 'fallback')}`)
-  // The capability line names when the evidence was taken; an absent or unparseable stamp simply renders none.
-  const verifiedAt = typeof bot.verifiedAt === 'string' && Number.isFinite(Date.parse(bot.verifiedAt))
-    ? fullTime(bot.verifiedAt, timeLocale(t.lang)) : ''
-  const unverified = bot.capabilitySource !== 'probe' && bot.capabilitySource !== 'smoke'
+  const cacheHit = dispatch?.cacheHit === true || bot.cacheHit === true
   const options = choices.filter(item => typeof item === 'string' && item !== id)
-  const save = () => {
-    if (!bot.resolved) return
-    try { window.sessionStorage.setItem('superagent-panel/bot-draft', JSON.stringify(bot.resolved)) } catch { /* private mode */ }
-    notify(pt(t, 'detail.botSaveReady'))
-    navigate({ page: 'bots' })
-  }
   return <div className="sa-run-bot" data-degraded={degraded ? 'true' : undefined}>
     <p className="sa-row-meta">
       <Tag tone="outline">{pt(t, 'detail.botLabel')}</Tag>
-      <span>{adhoc ? pt(t, 'detail.botAdhoc', { id }) : id}</span>
-      <span className="sa-hint">{`${source} · ${String(bot.reason ?? '')}`}</span>
+      <span>{id}</span>
+      <span className="sa-hint">{source ? pt(t, `detail.botSource.${source}`) : ''}</span>
+      {cacheHit ? <Tag tone="quiet">{pt(t, 'detail.dispatchCache')}</Tag> : null}
       {degraded ? <Tag tone="warning" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
     </p>
+    {because ? <p className="sa-hint">{pt(t, 'detail.dispatchBecause', { text: because })}</p> : null}
     <p className="sa-hint">
-      {capabilities.length
-        ? pt(t, 'detail.botCapability', { caps: capabilities.join(', '), source: capabilitySource,
-          at: verifiedAt ? ` / ${verifiedAt}` : '' })
-        : pt(t, 'detail.botCapabilityNone')}
+      {candidates.length
+        ? pt(t, 'detail.dispatchCandidates', { ids: candidates.join('、') })
+        : pt(t, 'detail.dispatchNoCandidates')}
     </p>
-    {unverified
-      ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
-        {pt(t, 'detail.botUnverified', { backend: String(bot.backend ?? bot.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
+    {skipped.length
+      ? <p className="sa-hint">{pt(t, 'detail.dispatchSkipped', {
+        list: skipped.map(item => `${item.id}（${item.reason || item.state}）`).join('；') })}</p>
       : null}
     <p className="sa-row-meta">
       {onRerun
@@ -906,7 +904,6 @@ export function RunBot({ run, choices = [], onRerun }) {
             {pt(t, 'detail.botRerun')}</Button>
         </>
         : null}
-      {bot.resolved ? <Button size="sm" variant="ghost" onClick={save}>{pt(t, 'detail.botSave')}</Button> : null}
     </p>
   </div>
 }

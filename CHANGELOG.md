@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.5.0] — 2026-11-26
+
+### 派单只筛一条硬事实：后端此刻可用；选谁由模型读 Bot 自己写的 whenToUse
+
+1.4 的派单是四层（显式 > 规则 > 决策模型 > 现拉 ad-hoc），每一层都先过一遍「能力声明」：Bot 要勾 `edit/exec/web`
+并写 `requires`，用户要维护规则表与路由模式；「Claude 能不能联网」这种环境事实被做成了设置项。实际需要的是反过来的：
+**Bot 只描述「我是谁、什么样的活派给我」**，引擎只筛一条硬事实——它自己的后端此刻可用——然后让一次模型调用读每个候选
+的 `whenToUse` 回答「这单给谁」。危险行为本来就不该靠派单拦，留在闸门、沙箱与拒绝规则。
+
+**Bot 契约 v3**（`lib/live/worker-bot.js`）
+- 字段收敛为 `id / name / description(≤120) / whenToUse(≤300) / backend / model / preset / skills / prompt.role / budget`；
+  删掉 `requires`、`tools`、`prompt.must`（旧文件里的这些键进 `droppedKeys`，启动日志列一次）。
+- 内置只剩 `generalist`（通用实现）与 `reviewer`（只审不改，产出报告）两个；`surgical` 进入 `REMOVED_BOT_IDS`，
+  指向它的 `executor.bot`、`repos[].bot` 与 `ticket.botOverride` 加载时丢弃并落默认 Bot，不报错。
+- 首次读到 v2 文件：备份为 `worker-bots.json.bak`（旧版读 v3 会丢 `whenToUse`，回滚只能靠这份备份），写回 v3；
+  迁移被拒时 v2 文件原样保留。迁移在引擎启动时执行，不依赖 `live.json` 是否已存在（Bot 文件是独立的）。
+
+**派单**（`lib/live/dispatch.js` 重写）
+- 候选 = 所有 Bot 中「自己后端此刻可用」的（dsh 看预设能否解析，CLI 看冒烟证据与版本）；不做第二层过滤。
+- 层次：显式（`ticket.botOverride` > `repos[].bot`，命中即用，即使后端不可用也不静默换人）→ 单候选直接命中 →
+  600s 缓存 → 一次决策模型调用（沿用 `eval.decision` 与 `dispatch.maxPerPoll`）→ 默认 `executor.bot`。
+- 五种降级显式记录、可见：`pick-unavailable` / `pick-failed` / `pick-invalid` / `pick-none` / `no-candidate`。
+- `run.dispatch` 存当时候选集合、命中层、`because`、`cacheHit` 与降级；`run.bot` 一并记快照，改 Bot 不改写历史。
+
+**后端可用性**（`lib/live/backend-capability.js` 重写，338 → 约 200 行）
+- 四态 + 一句原因：`available` / `unverified`（没有冒烟证据）/ `checking`（CLI 版本变了，复核期间跳过派单）/ `missing`（CLI 不在）。
+- dsh 用进程内预设探针（免费）；CLI 用 `<command> --version`（30s 缓存）比对 `backend-verify.json` 的冒烟证据。
+- 保存后端配置后自动核验一次，引擎启动时逐后端核验并写一行日志；人工只在失败时介入。
+
+**删掉的代码**：规则表与 `dispatch.mode`（`DISPATCH_RULES`、`ruleWarningsOf`、规则 UI 与文案）、ad-hoc 现拉 Bot 合成、
+能力矩阵与探针证据链（`TOOL_CAPABILITIES`、`capabilityStateOf`、`probeBackend`）、路由的能力筛选与 `route.unsupported`、
+「降级后端」（执行中不重试，后端不可用按派单规则回退默认 Bot 并记原因）。
+
+**面板**
+- Bot 页：五项编辑器（名称 / 后端 / 一句话说明 / 什么时候派给它 / 角色提示词）+ 折叠的高级设置；详情栏只读预算、
+  「谁会把活派给它」、最近表现（最近 20 单通过率 / 返工 / 闸门通过率 / 中位耗时 / 最近一次）、`adhoc:<hash>` 待沉淀
+  （≥3 次可一键预填，不自动写入）；后端三卡改成四态 + 原因 + CLI 路径 + 核验时间。
+- 执行页：三层逐条理由、模型读到的候选、没进候选的后端与原因、`cacheHit` 与五类降级标签。
+- 设置：新增只读「派单」页签（候选/挑选/何时不调模型/失败怎么办/危险行为在哪拦/两种显式指定）；Worker 组删能力矩阵
+  与降级后端，只留启用开关与默认后端；模型与后端三卡改四态。
+- 顺手修掉三处旧账：高级设置的折叠行没有标题、编辑 Bot 会静默删掉存量 `budget`、Bot 页读统计失败时被吞成「没有证据」。
+
+**门禁**：`node --test lib/live/*.test.js` 732 通过、`render-check` 342 通过 / 0 失败 / 1 跳过（既有 UAT 跳过）、
+`check-keys` 1031 + 557 + 1473、`types` / `check:js` / `build-client --check` 全绿、bundle 852582 B。
+
 ## [1.4.0] — 2026-11-26
 
 ### 设置 → Worker 只剩「启用哪些后端、谁做默认」

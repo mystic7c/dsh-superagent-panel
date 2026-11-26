@@ -76,6 +76,8 @@ export function useEngineActions(call) {
       { id, body: { dryRun, wait, ...(bot ? { bot } : {}) }, ...wait ? { timeoutMs: 0 } : {} }),
     // Worker bots live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
     bots: () => call('GET engine/bots'),
+    botStats: () => call('GET engine/bots/stats'),
+    config: () => call('GET engine/config'),
     saveBots: bots => call('POST engine/bots', { body: { bots } }),
     verifyBotBackend: backend => call('POST engine/bots/verify', { body: { backend } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),

@@ -180,6 +180,7 @@ Object.assign(PAGE_TEXT, {
   'settingsGroup.review': ['评估确认', 'Review'],
   'settingsGroup.run': ['运行', 'Runtime'],
   'settingsGroup.worker': ['Worker', 'Worker'],
+  'settingsGroup.dispatch': ['派单', 'Dispatch'],
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
@@ -245,8 +246,10 @@ Object.assign(PAGE_TEXT, {
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式、闸门与超时。改完保存后立即生效；手工建单在「执行」页，worker 后端在「Worker」分组。',
     'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
-  'st.workerHint': ['启用哪些后端，以及没有特别指定时由哪个后端执行。默认后端跑不了这类活时才会轮到降级后端。',
-    'Which backends are available, and which one runs when nothing says otherwise. The fallback only takes over when the default cannot do the work.'],
+  'st.workerHint': ['启用哪些后端，以及预览与兜底用哪个后端。真正执行的后端由派单选中的 Bot 自己决定。',
+    'Enable the backends you have and pick the one used for previews and fallbacks. The backend that actually runs a Ticket comes from the dispatched Bot.'],
+  'st.fallbackGone': ['没有「降级后端」了：执行中不重试；后端不可用时按派单规则回退默认 Bot，并在这次运行里写明原因。',
+    'There is no fallback backend any more: a run is never retried on another one. An unavailable backend falls back to the default bot through dispatch and the reason is recorded on the run.'],
   'st.defaultBackend': ['默认后端', 'Default backend'],
   'st.defaultBackendHint': ['一单该由谁执行，就看这里；它跑不了这类活时才会轮到降级后端。',
     'This is who runs a Ticket; the fallback only takes over when it cannot do the work.'],
@@ -255,6 +258,36 @@ Object.assign(PAGE_TEXT, {
   'st.enabledBackends': ['启用的后端', 'Enabled backends'],
   'st.enabledBackendsHint': ['至少启用一个。启用的后端既可以在默认/降级里选，也可以被 Bot 指定；CLI 后端需要本机已登录。',
     'Enable at least one. An enabled backend can be the default, the fallback, or a Bot\u2019s own backend; CLI backends need a local login.'],
+  'st.dispatchHint': ['派单只筛一条硬事实——后端此刻可用；选谁由决策模型读 Bot 自己写的「什么时候派给它」回答。',
+    'Dispatch filters on one hard fact — the backend can take work right now — and a judge model picks the bot by reading its own when-to-use note.'],
+  'st.dispatchHow': ['怎么决定', 'How it decides'],
+  'st.dispatchCandidates': ['候选：所有 Bot 里，它自己的后端此刻可用的那些。不看预算、不看能力声明。',
+    'Candidates: every bot whose own backend is available right now. Budgets and capability declarations are not filters.'],
+  'st.dispatchCandidatesText': ['后端可用即可；预算紧、只写报告的 Bot 也在候选里。',
+    'Available is the only filter; a tight budget or a report-only bot still competes.'],
+  'st.dispatchPick': ['挑选：一次模型调用，把候选的说明与工单标题正文给它；它答 {"botId","because"} 或 {"botId":null}。',
+    'Pick: one model call sees each candidate\u2019s note and the Ticket text, and answers {"botId","because"} or {"botId":null}.'],
+  'st.dispatchPickText': ['模型读到候选的 name/description/whenToUse 与工单标题正文（截断 4000 字）。',
+    'The model sees each candidate\u2019s name, description, when-to-use note and the Ticket text (cut at 4000 characters).'],
+  'st.dispatchNoModel': ['不调模型：显式指定已命中、候选只有 1 个、或同一工单 {cacheSeconds} 秒内缓存命中。',
+    'No model call: an explicit choice hit, only one candidate, or the same Ticket within the {cacheSeconds}s cache.'],
+  'st.dispatchNoModelText': ['缓存按候选集合与它们各自的说明 + 工单标题正文算；说明一改，旧答案就失效。',
+    'The cache key covers the candidate set with their notes plus the Ticket text, so editing a note invalidates it.'],
+  'st.dispatchFallback': ['失败怎么办：模型不可用/失败/答了候选之外/认为都不合适 → 一律回退默认 Bot，并把降级原因记在这次运行里。',
+    'Failures: unavailable, failed, answered outside the candidates, or found none suitable all fall back to the default bot and the reason is recorded on that run.'],
+  'st.dispatchFallbackText': ['降级不会静默：执行页写明原因，Bot 统计里也看得到。',
+    'Degradation is never silent: the run page names the reason and the bot stats count it.'],
+  'st.dispatchDanger': ['危险行为在哪拦：闸门（standards/backend/frontend）、沙箱与拒绝规则。派单不申请权限，UI 也不承诺隔离。',
+    'Dangerous actions are stopped by the gates, the sandbox and the deny rules. Dispatch grants no permission and the UI promises no isolation.'],
+  'st.dispatchDangerText': ['只写报告的 Bot 由执行器置只读：改动不落盘、不提交、不推送。',
+    'A report-only bot runs read-only: nothing is written, committed or pushed.'],
+  'st.dispatchExplicit': ['两种显式指定：仓库指定（repos[].bot）与工单手动指定（ticket.botOverride），永远先于挑选。',
+    'Two explicit choices: the repository\u2019s bot and the Ticket\u2019s one-run override; both come before the pick.'],
+  'st.dispatchExplicitText': ['显式指定即使后端此刻不可用也不会被静默换人——执行器会带着原因拒绝。',
+    'An explicit choice is never silently swapped even if its backend is unavailable \u2014 the executor refuses with the reason.'],
+  'st.dispatchDefaultNote': ['默认 Bot（{id}）在「Bot」页改；后端可用性在「Worker」组看。',
+    'The default bot ({id}) is changed on the Bot page; backend availability lives in the Worker group.'],
+  'st.dispatchOpenBots': ['打开 Bot 页', 'Open the Bot page'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
   'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址在上方仓库列表里逐行编辑。',
@@ -496,6 +529,7 @@ export const SETTINGS_GROUPS = [
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
+  { id: 'dispatch', labelKey: 'settingsGroup.dispatch', icon: 'decision', reference: true },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
@@ -742,6 +776,7 @@ export const ROUTE_BACKENDS = [
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
 ]
+/** Static backend contract; the live question (can it take work right now) lives on the Bot page. */
 export const WORKER_CAPABILITIES = [
   { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
     stream: { yes: true },
@@ -765,46 +800,6 @@ export const WORKER_CAPABILITIES = [
     report: { yes: false },
   } },
 ]
-
-/** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
-export function WorkerCapabilityCard({ currentBackend }) {
-  const { t, navigate } = usePanel()
-  const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
-  return <div className="sa-field">
-    <span className="sa-field-head">{pt(t, 'st.capTitle')}</span>
-    <Hint>{pt(t, 'st.capHint')}</Hint>
-    {/* The static contract above and the live backend check on the Bot page answer different questions; say so once
-        here instead of letting the two tables look like two owners of the same fact. */}
-    <p className="sa-hint">{pt(t, 'st.capLive')}
-      {' '}<button type="button" className="sa-textlink" onClick={() => navigate({ page: 'bots' })}>
-        {pt(t, 'st.capLiveLink')}</button></p>
-    <table className="sa-glossary sa-capabilities">
-      <thead><tr>
-        <th>{pt(t, 'st.capBackend')}</th>
-        {WORKER_CAP_COLUMNS.map(column => <th key={column.key}>{pt(t, column.labelKey)}</th>)}
-      </tr></thead>
-      <tbody>{WORKER_CAPABILITIES.map(entry => {
-        const active = entry.backend === current
-        return <tr key={entry.backend} data-current={active ? 'true' : undefined}
-          style={active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined}>
-          <th scope="row">
-            <span className="sa-actions" style={{ gap: 'var(--sa-sp-4)' }}>
-              <span>{pt(t, entry.nameKey)}</span>
-              {active ? <Tag tone="info">{pt(t, 'st.capCurrent')}</Tag> : null}
-            </span>
-          </th>
-          {WORKER_CAP_COLUMNS.map(column => {
-            const cell = entry.capabilities[column.key] ?? { yes: false }
-            return <td key={column.key}>
-              <Tag tone={cell.yes ? 'success' : 'neutral'}>{pt(t, cell.yes ? 'st.capYes' : 'st.capNo')}</Tag>
-              {cell.noteKey ? <div className="sa-hint">{pt(t, cell.noteKey)}</div> : null}
-            </td>
-          })}
-        </tr>
-      })}</tbody>
-    </table>
-  </div>
-}
 
 export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
   token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
@@ -964,90 +959,98 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 }
 
 Object.assign(PAGE_TEXT, {
-  'st.botsTitle': ['Bot 列表', 'Worker bots'],
-  'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型与工具。内置三个 Bot 不可编辑，可复制后改。',
-    'A bot decides which backend, preset, model and tools a run may use. The built-ins cannot be edited — copy one instead.'],
+  'st.botsTitle': ['Bot', 'Bots'],
+  'st.botsHint': ['Bot 只描述「我是谁、什么样的活派给我」。派单只筛一条硬事实：后端此刻可用；选谁由模型读下面的「什么时候派给它」回答。',
+    'A Bot only says who it is and what kind of work belongs to it. Dispatch filters on one hard fact — the backend can run now — and the model reads "when to send it work" below to choose.'],
   'st.botsFile': ['Bot 文件', 'Bot file'],
-  'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
-    'The bot file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
+  'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会回退默认 Bot，修好文件后重试。',
+    'The bot file cannot be read ({code}): {message}. Dispatch falls back to the default bot until it is repaired.'],
   'st.botsDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
     'Unknown fields were dropped: {keys}. The rest of the bot was kept.'],
-  'st.botsRuleWarn': ['分派规则 #{index} 指向不存在的 Bot {bot}，该条会被跳过。',
-    'Dispatch rule #{index} names a bot that does not exist ({bot}); the rule is skipped.'],
   'st.botsBuiltin': ['内置 Bot', 'Built-in bots'],
-  'st.botsBuiltinNote': ['内置三个 Bot 始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
+  'st.botsBuiltinNote': ['内置两个 Bot 始终可用，不写入文件，也不能删除。',
+    'The two built-ins are always available, are never written to the file and cannot be deleted.'],
   'st.botsBuiltinTag': ['内置', 'built-in'],
   'st.botsCopy': ['复制为 JSON', 'Copy as JSON'],
-  // Sits right next to 「复制为 JSON」, so the same verb read as the same action. This one creates an editable copy.
   'st.botsDuplicate': ['另存为副本', 'Save a copy'],
   'st.botsDelete': ['删除', 'Delete'],
   'st.botsDeleteTitle': ['删除 Bot', 'Delete bot'],
-  'st.botsDeleteMessage': ['删除 Bot {id}？引用它的规则和显式指定会失效。', 'Delete bot {id}? Rules and explicit choices that name it will stop working.'],
+  'st.botsDeleteMessage': ['删除 Bot {id}？仓库或工单上显式指定它的地方会失效，落回正常派单。',
+    'Delete bot {id}? Repositories and Tickets that name it fall back to normal dispatch.'],
   'st.botsDeleteConfirm': ['删除', 'Delete'],
   'st.botsNew': ['新建 Bot', 'New bot'],
-  'st.botsBackends': ['后端核验状态', 'Backend verification'],
-  'st.botsBackendsHint': ['未核验或版本变化的后端不能保存新 Bot，也不会进入分派候选集。',
-    'An unverified backend (or one whose version changed) cannot back a new bot and never enters the dispatch candidate set.'],
-  'st.botsBackend.verified': ['已核验', 'verified'],
-  'st.botsBackend.stale': ['版本已变，需要重新核验', 'version changed — verify again'],
-  'st.botsBackend.unverified': ['未核验', 'unverified'],
-  'st.botsBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
-  'st.botsBackendNone': ['无', 'none'],
-  'st.botsBackendVerify': ['重新核验', 'Verify'],
+  'st.botsBackends': ['后端与派单', 'Backends and dispatch'],
+  'st.botsBackendsHint': ['只有「派单可用」的后端会让它的 Bot 进入候选。核验在保存后端配置或引擎启动时自动跑一次，失败才需要手动介入。',
+    'Only a backend marked "available" puts its bots in the candidate set. Verification runs when the backend settings are saved and once at engine start; manual checks are for failures.'],
+  'st.botsBackend.available': ['派单可用', 'available'],
+  'st.botsBackend.unverified': ['没有证据，暂不进入候选', 'no evidence yet'],
+  'st.botsBackend.checking': ['版本变了，复核期间不派单', 'version changed — not dispatched while re-checking'],
+  'st.botsBackend.missing': ['CLI 不在', 'CLI missing'],
+  'st.botsBackendPath': ['CLI：{path}', 'CLI: {path}'],
+  'st.botsBackendVerify': ['核验', 'Verify'],
   'st.botsEdit': ['编辑 Bot', 'Edit bot'],
   'st.botsEditorNew': ['新建 Bot', 'New bot'],
   'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
-  'st.botsDetailRequires': ['能力', 'Capabilities'],
-  'st.botsDetailTools': ['工具边界', 'Tool limits'],
   'st.botsCreate': ['创建', 'Create'],
-  'st.botsCreateHint': ['先建一个能跑的 Bot：名字、一句话用途、用哪个后端。能力、工具、预算创建后随时能在右侧改，默认跟随执行器。',
-    'Start with a Bot that runs: a name, one line of purpose, and the engine. Capabilities, tools and budget stay editable afterwards and follow the executor by default.'],
-  'st.botsInheritHint': ['预设、模型、工具边界与预算都跟随「设置 → 运行」；需要给某个 Bot 单独覆盖时改 JSON。',
-    'Preset, model, tool limits and budget follow 设置 → 运行; override one Bot through its JSON.'],
-  'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
-    'Saving validates against the backend evidence; error codes are shown right here.'],
-  'st.botsAdvanced': ['高级设置', 'Advanced'],
+  'st.botsEditorHint': ['名称、后端、一句话说明、什么时候派给它、角色提示词——五项。预算不在编辑器里，详情里只读显示继承值。',
+    'Five fields: name, backend, one-line description, when to send it work, and the role prompt. Budget has no input — the detail page shows the inherited values read-only.'],
   'st.botsFieldName': ['名称', 'Name'],
-  'st.botsFieldDescription': ['一句话说明（它接什么活）', 'One line: what it takes on'],
-  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随执行器默认。', 'The bot works to this prompt; empty follows the executor default.'],
+  'st.botsFieldDescription': ['一句话说明', 'One line'],
+  'st.botsFieldDescriptionHint': ['给人扫列表看的，不超过 120 字。', 'For a human scanning the list; up to 120 characters.'],
+  'st.botsFieldWhenToUse': ['什么时候派给它', 'When to send it work'],
+  'st.botsFieldWhenToUseHint': ['写清接什么活、不接什么活，不超过 300 字。派单模型只读这一段来判断归属。',
+    'Say what it takes and what it does not; up to 300 characters. The picking model reads only this paragraph.'],
   'st.botsFieldBackend': ['后端', 'Backend'],
+  'st.botsFieldRole': ['角色提示词', 'Role prompt'],
+  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随执行器默认。', 'The bot works to this prompt; empty follows the executor default.'],
+  'st.botsAdvanced': ['高级设置', 'Advanced'],
   'st.botsFieldPreset': ['预设', 'Preset'],
   'st.botsFieldModel': ['模型', 'Model'],
-  'st.botsFieldRequires': ['它能做什么', 'What it may do'],
-  'st.botsCapEdit': ['能改文件', 'Edits files'],
-  'st.botsCapExec': ['能跑命令', 'Runs commands'],
-  'st.botsCapWeb': ['能联网', 'Uses the web'],
-  'st.botsRequiresHint': ['自动派单按这三项匹配：工单需要什么，就只派给声明了这些能力的 Bot。', 'Dispatch matches on these: a Ticket only goes to a Bot that declares what the work needs.'],
-  'st.botsBudgetOverride': ['单独设置超时与返工', 'Override timeouts and repairs'],
-  'st.botsBudgetHint': ['默认跟随「设置 → 运行」，只有这个 Bot 需要不同节奏时才打开。', 'Follows 设置 → 运行 unless this Bot needs its own pace.'],
-  'st.botsFieldRole': ['角色提示词', 'Role prompt'],
-  'st.botsPreview': ['预览它能拿到什么', 'Preview what it gets'],
-  'st.botsPreviewUnverified': ['后端 {backend} 未核验：这个 Bot 只能预览，不能保存。',
-    'Backend {backend} is unverified: this bot can be previewed but not saved.'],
+  'st.botsFieldPrefer': ['偏好 Skill', 'Preferred skills'],
+  'st.botsFieldSkillsPolicy': ['Skill 策略', 'Skill policy'],
+  'st.botsInheritHint': ['预设、模型与 Skill 都跟随「设置 → 运行」；需要给这个 Bot 单独覆盖时才填。',
+    'Preset, model and skills follow 设置 → 运行; fill these only to override them for this bot.'],
+  'st.botsBudget': ['预算（只读，继承自设置）', 'Budget (read-only, inherited)'],
+  'st.botsBudgetTimeout': ['超时', 'Timeout'],
+  'st.botsBudgetIdle': ['空闲超时', 'Idle timeout'],
+  'st.botsBudgetRepairs': ['最多返工', 'Max repairs'],
+  'st.botsBudgetInherit': ['跟随设置', 'From settings'],
+  'st.botsClaims': ['谁会把活派给它', 'Who sends it work'],
+  'st.botsClaimsDefault': ['默认 Bot：派单失败或候选为空时兜底。', 'Default bot: catches the run when a pick fails or no candidate is available.'],
+  'st.botsClaimsRepo': ['仓库指定：{repos}。命中即用，不再调模型。', 'Repositories name it: {repos}. An explicit choice skips the model.'],
+  'st.botsClaimsTicket': ['工单手动指定：执行页「用这个 Bot 跑一次」，只影响这一次 run。',
+    'Picked on a Ticket: "run once with this bot" affects that run only.'],
+  'st.botsClaimsNone': ['没有仓库指定它；工单上可以手动指定。', 'No repository names it; a Ticket can still name it for one run.'],
+  'st.botsStats': ['最近表现', 'Recent performance'],
+  'st.botsStatsPass': ['通过率', 'Pass rate'],
+  'st.botsStatsRepairs': ['平均返工', 'Avg repairs'],
+  'st.botsStatsGate': ['闸门通过率', 'Gate pass rate'],
+  'st.botsStatsMedian': ['中位耗时', 'Median duration'],
+  'st.botsStatsLast': ['最近一次', 'Last run'],
+  'st.botsStatsEmpty': ['还没有它跑过的记录（最近 20 单）。', 'No runs yet (last 20).'],
+  'st.botsStatsRuns': ['最近 {count} 单', 'last {count} runs'],
+  'st.botsPending': ['待沉淀', 'Worth saving'],
+  'st.botsPendingHint': ['这些是 1.4 时代现拉的临时 Bot，同一个名字跑过至少三次。点一下预填编辑器，保存后才成为正式 Bot。',
+    'These are ad-hoc bots from 1.4 that ran at least three times. Click one to prefill the editor; it becomes a real Bot only when saved.'],
+  'st.botsPendingCount': ['跑过 {count} 次', '{count} runs'],
   'st.botsPreviewEmpty': ['—', '—'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
-   Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
-   file the engine actually reads — a repository's own worker-bots.json is ignored on purpose (§4.1).
+   Bots (1.5.0 §5): identity + whenToUse + role. The store lives under the state dir, so this page edits the file the
+   engine actually reads — a repository's own worker-bots.json is ignored on purpose.
    --------------------------------------------------------------------------------------------------------------- */
 
 export const BOT_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
-/** The three built-ins ship with the plugin (§4.5): always available, never editable, copy to change (§13.2). */
-export const BOT_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
-export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
+/** The two built-ins ship with the plugin: always available, never editable, copy to change. */
+export const BOT_BUILTIN_IDS = ['generalist', 'reviewer']
 
-/** Plain names for the three capabilities: the store keeps `edit/exec/web`, the editor never prints the token. */
-export const BOT_CAPABILITY_LABELS = Object.freeze({
-  edit: 'st.botsCapEdit', exec: 'st.botsCapExec', web: 'st.botsCapWeb',
-})
 /** A display name becomes the internal id: lowercase kebab, and the caller appends a suffix when it is taken. */
 export const slugOf = name => String(name ?? '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
 
 export const emptyBotForm = () => ({
-  id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
-  reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
-  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '',
+  id: '', name: '', description: '', whenToUse: '', backend: 'dsh', preset: '', modelProvider: '',
+  modelModel: '', reasoningEffort: 'auto', prefer: '', skillsPolicy: 'prompt', role: '', budget: undefined,
 })
 
 const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -1055,116 +1058,121 @@ const isPlainObject = value => value !== null && typeof value === 'object' && !A
 /** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
 export function botToForm(bot) {
   const model = bot?.model && typeof bot.model === 'object' ? bot.model : {}
-  const tools = bot?.tools && typeof bot.tools === 'object' ? bot.tools : {}
   const skills = bot?.skills && typeof bot.skills === 'object' ? bot.skills : {}
   const prompt = bot?.prompt && typeof bot.prompt === 'object' ? bot.prompt : {}
-  const budget = bot?.budget && typeof bot.budget === 'object' ? bot.budget : {}
   return {
     ...emptyBotForm(),
     id: String(bot?.id ?? ''), name: String(bot?.name ?? ''), description: String(bot?.description ?? ''),
-    backend: String(bot?.backend ?? 'dsh'), preset: String(bot?.preset ?? ''),
+    whenToUse: String(bot?.whenToUse ?? ''), backend: String(bot?.backend ?? 'dsh'), preset: String(bot?.preset ?? ''),
     modelProvider: String(model.provider ?? ''), modelModel: String(model.model ?? ''),
     reasoningEffort: String(model.reasoningEffort ?? 'auto'),
-    requires: Array.isArray(bot?.requires) ? bot.requires.filter(capability => BOT_CAPABILITY_OPTIONS.includes(capability)) : [],
-    deny: (Array.isArray(tools.deny) ? tools.deny : []).join(', '),
-    allowMcp: (Array.isArray(tools.allowMcp) ? tools.allowMcp : []).join(', '),
     prefer: (Array.isArray(skills.prefer) ? skills.prefer : []).join(', '),
     skillsPolicy: String(skills.policy ?? 'prompt'),
-    role: String(prompt.role ?? ''), must: (Array.isArray(prompt.must) ? prompt.must : []).join('\n'),
-    timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
-    idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
-    maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
+    role: String(prompt.role ?? ''),
+    // The editor shows no budget inputs; the stored override rides along untouched so a save cannot erase it.
+    budget: isPlainObject(bot?.budget) ? bot.budget : undefined,
   }
 }
 
 const listOf = value => String(value ?? '').split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
-const countOf = value => { const text = String(value ?? '').trim(); return text === '' ? undefined : Number(text) }
 
 /** Form → bot. Empty fields are omitted so the store only carries what the operator actually set. */
 export function formToBot(form) {
   const bot = { id: String(form.id ?? '').trim().toLowerCase(), name: String(form.name ?? '').trim(),
     backend: String(form.backend ?? 'dsh') }
   if (form.description) bot.description = form.description
+  if (form.whenToUse) bot.whenToUse = form.whenToUse
   if (form.preset) bot.preset = form.preset.trim()
   const model = {}
   if (form.modelProvider) model.provider = form.modelProvider.trim()
   if (form.modelModel) model.model = form.modelModel.trim()
   if (form.reasoningEffort && form.reasoningEffort !== 'auto') model.reasoningEffort = form.reasoningEffort
   if (model.provider && model.model) bot.model = model
-  if (form.requires.length) bot.requires = [...form.requires]
-  const tools = {}
-  const deny = listOf(form.deny)
-  if (deny.length) tools.deny = deny
-  if (String(form.allowMcp ?? '').trim()) tools.allowMcp = listOf(form.allowMcp)
-  if (Object.keys(tools).length) bot.tools = tools
   const skills = {}
   const prefer = listOf(form.prefer)
   if (prefer.length) skills.prefer = prefer
   if (form.skillsPolicy && form.skillsPolicy !== 'prompt') skills.policy = form.skillsPolicy
   if (Object.keys(skills).length) bot.skills = skills
-  const prompt = {}
-  if (form.role) prompt.role = form.role
-  const must = listOf(form.must)
-  if (must.length) prompt.must = must
-  if (Object.keys(prompt).length) bot.prompt = prompt
-  const budget = {}
-  for (const [key, value] of [['timeoutMs', countOf(form.timeoutMs)], ['idleTimeoutMs', countOf(form.idleTimeoutMs)],
-    ['maxRepairRounds', countOf(form.maxRepairRounds)]]) {
-    if (Number.isFinite(value)) budget[key] = value
-  }
-  if (Object.keys(budget).length) bot.budget = budget
+  if (form.role) bot.prompt = { role: form.role }
+  if (form.budget) bot.budget = form.budget
   return bot
 }
 
+const formatDuration = ms => {
+  if (!Number.isFinite(ms)) return undefined
+  if (ms < 60_000) return `${Math.round(ms / 1000)} 秒`
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} 分`
+  return `${Math.round(ms / 3_600_000)} 小时`
+}
+const formatPercent = ratio => Number.isFinite(ratio) ? `${Math.round(ratio * 100)}%` : undefined
 
-/** The store list, the backend evidence and the editor: one component so the group needs no live.json draft. */
+/** The backend card's badge tone: only `available` is green; everything else explains why it is skipped. */
+const backendToneOf = state => state === 'available' ? 'done' : state === 'missing' ? 'warn' : 'quiet'
+
+/** One Bot's recent-run aggregate; empty until the first run, and never invented. */
+function BotStats({ t, stats }) {
+  if (!stats || !stats.runs) return <p className="sa-hint">{pt(t, 'st.botsStatsEmpty')}</p>
+  const rows = [
+    [pt(t, 'st.botsStatsPass'), formatPercent(stats.passRate)],
+    [pt(t, 'st.botsStatsRepairs'), String(stats.avgRepairs ?? 0)],
+    [pt(t, 'st.botsStatsGate'), formatPercent(stats.gatePassRate)],
+    [pt(t, 'st.botsStatsMedian'), formatDuration(stats.medianMs)],
+    [pt(t, 'st.botsStatsLast'), stats.lastAt ? when(stats.lastAt) : undefined],
+  ].filter(([, value]) => value !== undefined && value !== '')
+  return <>
+    <p className="sa-hint">{pt(t, 'st.botsStatsRuns', { count: stats.runs })}</p>
+    <KeyValues rows={rows} />
+  </>
+}
+
+/** The Bot page: list on the left, five-field detail on the right, then the backends and the pending ad-hoc bots. */
 export function BotsCard() {
   const { t } = usePanel()
   const { actions } = usePanelData()
   const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
   const [editor, setEditor] = useState(undefined)
-  // The editor opens on identity + prompt only; the rest is one disclosure away (§13.2 keeps every field reachable).
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
-  // Master-detail: the picked Bot drives the right pane; the store list itself carries no per-row actions.
   const [pickedId, setPickedId] = useState('')
+  const [advanced, setAdvanced] = useState(false)
   const seq = useRef(0)
   const load = async () => {
     const seqNow = ++seq.current
     try {
-      const data = await actions.bots()
-      if (seq.current === seqNow) setState({ busy: false, data, error: undefined })
+      const [view, stats, config] = await Promise.all([
+        actions.bots(),
+        actions.botStats(),
+        actions.config(),
+      ])
+      if (seq.current === seqNow) setState({ busy: false, data: { view, stats, config }, error: undefined })
     } catch (failure) {
       if (seq.current === seqNow) setState({ busy: false, data: undefined, error: failure })
     }
   }
   useEffect(() => { void load() }, [])
-  // "存为 Bot" on the Ticket page hands its synthesised bot over through sessionStorage (§8.4): review, then save.
+  // An old "存为 Bot" hand-off still lands here: review the draft, then save it as a normal Bot.
   useEffect(() => {
     let draft
     try { draft = window.sessionStorage.getItem('superagent-panel/bot-draft') } catch { draft = undefined }
     if (!draft) return
     try {
       const parsed = JSON.parse(draft)
-      if (parsed && typeof parsed === 'object') setEditor({ form: botToForm(parsed), id: parsed.id, resolved: parsed })
+      if (parsed && typeof parsed === 'object') setEditor({ form: botToForm(parsed), id: parsed.id })
     } catch { /* a corrupt draft is simply not preloaded */ }
     try { window.sessionStorage.removeItem('superagent-panel/bot-draft') } catch { /* private mode */ }
   }, [])
   if (state.error) return <ErrorState error={state.error} onRetry={() => { void load() }} />
   if (!state.data) return <Skeleton rows={4} />
-  const view = state.data
+  const { view, stats, config } = state.data
   const bots = Array.isArray(view.bots) ? view.bots : []
   const presetIds = Array.isArray(view.presets) ? view.presets : []
-  const botIds = bots.map(bot => bot.id)
   const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
   const builtinOf = bot => BOT_BUILTIN_IDS.includes(bot?.id)
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
-  // §10.2: a stage may name a bot and its own timeout. Empty means "follow the whole-ticket bot", so the key is
-  // dropped instead of saved as an empty object the schema would reject.
-  const openEditor = bot => {
+  const openEditor = (bot, prefill) => {
     setSaveError(undefined)
-    setEditor({ form: botToForm(bot), id: bot?.id })
+    setEditor({ form: botToForm(bot ?? prefill), id: bot?.id })
   }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
@@ -1172,35 +1180,26 @@ export function BotsCard() {
     setSaving(true)
     setSaveError(undefined)
     try {
-      // New Bots name themselves: the operator types a name, the id is derived and de-duplicated (§13.2).
       let bot = formToBot(editor.form)
       if (!editor.id) {
         const base = slugOf(editor.form.name) || `bot-${Date.now().toString(36).slice(-4)}`
         let candidate = base
         let suffix = 2
-        while (bots.some(item => item.id === candidate)) {
-          candidate = `${base}-${suffix}`
-          suffix += 1
-        }
+        while (bots.some(item => item.id === candidate)) candidate = `${base}-${suffix++}`
         bot = formToBot({ ...editor.form, id: candidate })
       }
-      // Exclude both the saved id and the one this editor opened: renaming a Bot must not leave the old one behind.
-      // `bots` is the *display* list (built-ins + store). A built-in id in this document makes the host reject the
-      // whole save ("内置 Bot 不可编辑"), so only stored bots may round-trip.
       const others = bots.filter(item => !builtinOf(item) && item.id !== bot.id && item.id !== editor.id)
         .map(item => stripBotForSave(item))
-      const saved = await actions.saveBots([...others, bot])
-      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
+      await actions.saveBots([...others, bot])
       if (!editor.id) setPickedId(bot.id)
       setEditor(undefined)
+      await load()
     } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
   }
   const remove = async bot => {
-    // Swallowing the failure made ConfirmButton treat the delete as done and close the dialog while the Bot was still
-    // there. Re-throw so the dialog stays open with the reason next to it.
     try {
-      const saved = await actions.saveBots(bots.filter(item => !builtinOf(item) && item.id !== bot.id).map(stripBotForSave))
-      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
+      await actions.saveBots(bots.filter(item => !builtinOf(item) && item.id !== bot.id).map(stripBotForSave))
+      await load()
     } catch (failure) { setSaveError(failure); throw failure }
   }
   const verify = async backend => {
@@ -1210,92 +1209,90 @@ export function BotsCard() {
       await load()
     } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
   }
-  const capabilityOf = bot => capabilitiesOfForm(bot, backends[bot.backend])
-  // What the collapsed row advertises: fields that moved off the first screen and already carry a value.
-  const problem = saveError
   const selected = bots.find(bot => bot.id === pickedId) ?? bots[0]
-  // Picking a Bot always shows that Bot: an open editor is closed first, exactly as its 取消 button would.
   const pick = id => { setPickedId(id); setEditor(undefined); setSaveError(undefined) }
   const detailForm = selected ? botToForm(selected) : undefined
-  const detailRows = selected ? [
-    [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
-    ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
-    ...(detailForm.modelProvider && detailForm.modelModel
-      ? [[pt(t, 'st.botsFieldModel'), `${detailForm.modelProvider} · ${detailForm.modelModel}`]] : []),
-    [pt(t, 'st.botsDetailRequires'),
-      detailForm.requires.map(capability => pt(t, BOT_CAPABILITY_LABELS[capability] ?? capability)).join('、')
-        || pt(t, 'st.botsBackendNone')],
-    ...(detailForm.deny || detailForm.allowMcp
-      ? [[pt(t, 'st.botsDetailTools'), [detailForm.deny, detailForm.allowMcp].filter(Boolean).join(' · ')]] : []),
-    ...(detailForm.timeoutMs || detailForm.idleTimeoutMs || detailForm.maxRepairRounds
-      ? [[pt(t, 'st.botsBudgetOverride'),
-        [detailForm.timeoutMs, detailForm.idleTimeoutMs, detailForm.maxRepairRounds].filter(Boolean).join(' / ')]]
-      : []),
-  ] : []
-  // No heading action: the editor's own row already ends with 取消 / 保存, and a second 取消 in the corner read as a
-  // different command (1.2.4).
-  // Five questions a human can answer: who it is, what it is for, which engine runs it, what it may do, how it should
-  // behave. Everything else — preset, model, tools, budget — follows 设置 → 运行 unless a legacy Bot already carries
-  // it, in which case the save path keeps it untouched.
-  const editorPane = editor ? <Section
-    title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
+  const repoClaims = (Array.isArray(config?.repos) ? config.repos : [])
+    .filter(repo => repo.bot === selected?.id).map(repo => repo.id)
+  const defaultBot = config?.executor?.bot ?? 'generalist'
+  const statsOf = stats?.bots?.[selected?.id]
+  const pending = Array.isArray(stats?.pending) ? stats.pending : []
+  // Five questions, no capability toggles: who it is, what it is for, when to send it work, which backend, and how it
+  // should behave. Budget and claims stay read-only so the editor never duplicates the settings pages.
+  const editorPane = editor ? <Section title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
     <div className="sa-bots-editor-body sa-bots-editor">
       <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
       <div className="sa-field-grid">
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
-          <Input value={editor.form.name}
+          <Input value={editor.form.name} maxLength={40}
             onChange={event => editField('name', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
           <Select value={editor.form.backend} onChange={value => editField('backend', value)}
             options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
         <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
-          <Input value={editor.form.description} onChange={event => editField('description', event.target.value)} /></label>
+          <Input value={editor.form.description} maxLength={120}
+            onChange={event => editField('description', event.target.value)} /></label>
       </div>
-      {/* Capability tokens are developer vocabulary; the operator answers what this bot may do. */}
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
-        <div className="sa-check-row">
-          {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} className="sa-check">
-            <Switch checked={editor.form.requires.includes(capability)}
-              onChange={next => editField('requires', next
-                ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
-            {pt(t, BOT_CAPABILITY_LABELS[capability])}</label>)}
-        </div>
-        <p className="sa-hint">{pt(t, 'st.botsRequiresHint')}</p>
-      </div>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldWhenToUse')}</span>
+        <textarea className="sa-textarea" rows={3} maxLength={300} value={editor.form.whenToUse}
+          aria-label={pt(t, 'st.botsFieldWhenToUse')} placeholder={pt(t, 'st.botsFieldWhenToUseHint')}
+          onChange={event => editField('whenToUse', event.target.value)} /></label>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
         <textarea className="sa-textarea" rows={4} value={editor.form.role}
           aria-label={pt(t, 'st.botsFieldRole')} placeholder={pt(t, 'st.botsFieldRoleHint')}
           onChange={event => editField('role', event.target.value)} /></label>
+      <DisclosureRow title={pt(t, 'st.botsAdvanced')} open={advanced}
+        onToggle={() => setAdvanced(value => !value)} />
+      {advanced ? <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
+          <Input value={editor.form.preset} list="sa-bot-presets"
+            onChange={event => editField('preset', event.target.value)} /></label>
+        {presetIds.length
+          ? <datalist id="sa-bot-presets">{presetIds.map(id => <option key={id} value={id} />)}</datalist>
+          : null}
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+          <Input value={editor.form.modelProvider} placeholder="provider"
+            onChange={event => editField('modelProvider', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head"> </span>
+          <Input value={editor.form.modelModel} placeholder="model"
+            onChange={event => editField('modelModel', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+          <Input value={editor.form.prefer} onChange={event => editField('prefer', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldSkillsPolicy')}</span>
+          <Select value={editor.form.skillsPolicy} onChange={value => editField('skillsPolicy', value)}
+            options={[{ value: 'prompt', label: 'prompt' }, { value: 'preset', label: 'preset' }]} /></label>
+      </div> : null}
       <p className="sa-hint">{pt(t, 'st.botsInheritHint')}</p>
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
       <div className="sa-actions">
         <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
-        <Button variant="primary" disabled={saving || String(editor.form.name ?? '').trim() === ''}
+        <Button variant="primary" disabled={saving || String(editor.form.name ?? '').trim() === ''
+          || String(editor.form.whenToUse ?? '').trim() === ''}
           onClick={() => { void save() }}>
           {saving ? t('saving') : editor.id ? t('save') : pt(t, 'st.botsCreate')}
         </Button>
       </div>
     </div>
   </Section> : null
+  const detailRows = selected ? [
+    [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
+    [pt(t, 'st.botsFieldWhenToUse'), detailForm.whenToUse || pt(t, 'st.botsPreviewEmpty')],
+    ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
+    ...(detailForm.modelProvider && detailForm.modelModel
+      ? [[pt(t, 'st.botsFieldModel'), `${detailForm.modelProvider} · ${detailForm.modelModel}`]] : []),
+    [pt(t, 'st.botsBudget'),
+      `${pt(t, 'st.botsBudgetTimeout')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetIdle')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetRepairs')} ${pt(t, 'st.botsBudgetInherit')}`],
+  ] : []
   return <>
     <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
-      {/* Master-detail: the store is a list on the left, the picked Bot fills the right pane. A flat stack of rows each
-          carrying its own action cluster made reading one Bot mean scrolling past four (§13.2, review A). */}
       {view.code
         ? <p className="sa-hint sa-info-warn">
           {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
-        </p>
-        : null}
+        </p> : null}
       {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
         ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
         : null}
-      {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
-        <p key={`${warning.index}-${warning.bot}`} className="sa-hint sa-info-warn">
-          {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
-        </p>
-      ))}
       <div className="sa-panes">
         <div className="sa-pane sa-pane-aside">
           <ul className="sa-list sa-bot-list">
@@ -1307,6 +1304,7 @@ export function BotsCard() {
                     <span>{bot.name ?? bot.id}</span>
                     <span className="sa-mono sa-hint">{bot.id}</span>
                   </div>
+                  {bot.description ? <div className="sa-row-meta">{bot.description}</div> : null}
                 </div>
               </button>
             </li>)}
@@ -1318,7 +1316,6 @@ export function BotsCard() {
         <div className="sa-pane sa-bots-detail">
           {editorPane ?? (selected
             ? <Section title={selected.name ?? selected.id}
-              /* Only 内置 stays in the heading: the capability tags repeated the 能力 row two lines below. */
               badge={builtinOf(selected) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
               action={<span className="sa-actions">
                 {builtinOf(selected)
@@ -1326,7 +1323,7 @@ export function BotsCard() {
                   : <Button size="sm" variant="outline" onClick={() => openEditor(selected)}>{t('edit')}</Button>}
                 <CopyButton value={JSON.stringify(stripBotForSave(selected), null, 2)} label={pt(t, 'st.botsCopy')} />
                 {builtinOf(selected)
-                  ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...selected, id: `${selected.id}-copy`,
+                  ? <Button size="sm" variant="ghost" onClick={() => openEditor(undefined, { ...selected, id: `${selected.id}-copy`,
                     name: `${selected.name ?? selected.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
                   : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
                     message={pt(t, 'st.botsDeleteMessage', { id: selected.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
@@ -1335,10 +1332,23 @@ export function BotsCard() {
               <div className="sa-settings-stack">
                 {selected.description ? <p className="sa-hint">{selected.description}</p> : null}
                 <KeyValues rows={detailRows} />
-                <p className="sa-hint">{pt(t, 'st.botsInheritHint')}</p>
                 <div className="sa-field">
                   <span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
                   <p className="sa-hint sa-role-text">{detailForm.role || pt(t, 'st.botsPreviewEmpty')}</p>
+                </div>
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsClaims')}</span>
+                  <p className="sa-hint">
+                    {selected.id === defaultBot ? <>{pt(t, 'st.botsClaimsDefault')}<br /></> : null}
+                    {repoClaims.length
+                      ? <>{pt(t, 'st.botsClaimsRepo', { repos: repoClaims.join('、') })}<br /></>
+                      : <>{pt(t, 'st.botsClaimsNone')}<br /></>}
+                    {pt(t, 'st.botsClaimsTicket')}
+                  </p>
+                </div>
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsStats')}</span>
+                  <BotStats t={t} stats={statsOf} />
                 </div>
               </div>
             </Section>
@@ -1349,19 +1359,18 @@ export function BotsCard() {
     <Section title={pt(t, 'st.botsBackends')} hint={pt(t, 'st.botsBackendsHint')}>
       <div className="sa-settings-stack">
         {BOT_BACKEND_OPTIONS.map(backend => {
-          const evidence = backends[backend] ?? { state: 'unverified' }
-          const verified = evidence.state === 'verified' || evidence.source === 'smoke'
+          const entry = backends[backend] ?? { state: 'unverified' }
           return <div key={backend} className="sa-row">
             <div className="sa-row-main">
               <div className="sa-row-title">
-                <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
-                <span>{pt(t, `st.botsBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
-                {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
+                <Tag tone={backendToneOf(entry.state)}>{backend}</Tag>
+                <span>{pt(t, `st.botsBackend.${entry.state ?? 'unverified'}`)}</span>
+                {entry.verifiedAt ? <When at={entry.verifiedAt} /> : null}
               </div>
-              <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
-                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true)
-                  .map(capability => pt(t, BOT_CAPABILITY_LABELS[capability])).join('、')
-                  || pt(t, 'st.botsBackendNone') })}</p>
+              <p className="sa-hint">
+                {entry.reason ? <>{entry.reason}</> : null}
+                {entry.cliPath ? <span className="sa-mono">{` · ${pt(t, 'st.botsBackendPath', { path: entry.cliPath })}`}</span> : null}
+              </p>
             </div>
             <Button size="sm" variant="ghost" disabled={verifying === backend}
               onClick={() => { void verify(backend) }}>{pt(t, 'st.botsBackendVerify')}</Button>
@@ -1369,28 +1378,35 @@ export function BotsCard() {
         })}
       </div>
     </Section>
-    {problem && problem.details?.code
-      ? <p className="sa-error" role="alert">{`${String(problem.details.code)}：${problem.message}`}
-        {Array.isArray(problem.details.problems) && problem.details.problems.length
-          ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
-          : null}</p>
-      : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
-    {/* A synthesised bot is review-only input: saving always goes through the button above (§8.4). */}
-    {editor?.resolved ? null : null}
+    {pending.length ? <Section title={pt(t, 'st.botsPending')} hint={pt(t, 'st.botsPendingHint')}>
+      <div className="sa-settings-stack">
+        {pending.map(item => <div key={item.id} className="sa-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title">
+              <span>{item.name}</span>
+              <span className="sa-mono sa-hint">{item.id}</span>
+              <span className="sa-hint">{pt(t, 'st.botsPendingCount', { count: item.count })}</span>
+            </div>
+            {item.description ? <div className="sa-row-meta">{item.description}</div> : null}
+          </div>
+          <Button size="sm" variant="outline" onClick={() => openEditor(undefined, {
+            name: item.name, description: item.description, whenToUse: item.whenToUse,
+            backend: item.backend, prompt: { role: item.role } })}>{t('edit')}</Button>
+        </div>)}
+      </div>
+    </Section> : null}
+    {saveError && !editor ? <p className="sa-error" role="alert">{saveError.details?.code
+      ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
   </>
 }
 
 /** Strip host-added keys before re-saving a listed bot: only the store's own fields may round-trip. */
 function stripBotForSave(bot) {
-  const keys = ['id', 'name', 'description', 'backend', 'model', 'preset', 'requires', 'edit', 'exec', 'web', 'tools',
-    'skills', 'prompt', 'budget']
+  const keys = ['id', 'name', 'description', 'whenToUse', 'backend', 'model', 'preset', 'skills', 'prompt', 'budget']
   const out = {}
   for (const key of keys) if (bot?.[key] !== undefined) out[key] = bot[key]
   return out
 }
-
-const capabilitiesOfForm = (bot, backendState) => BOT_CAPABILITY_OPTIONS
-  .filter(capability => (bot?.requires ?? []).includes(capability) && backendState?.capabilities?.[capability] === true)
 
 export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
@@ -2461,16 +2477,39 @@ export function LiveSettingsPage({ route }) {
             options={backendOptions} onChange={next => setRouting({ defaultBackend: next })} />
           <Hint>{pt(t, 'st.defaultBackendHint')}</Hint>
         </div>
-        <div className="sa-field" style={{ flex: '1 1 220px', minWidth: 0 }}>
-          <span className="sa-field-head">{pt(t, 'st.fallbackBackend')}</span>
-          <Select label={pt(t, 'st.fallbackBackend')} disabled={frozen} value={fallback}
-            options={[{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions]}
-            onChange={next => setRouting({ fallback: next ? [next] : [] })} />
-        </div>
       </div>
-      {/* P2-5: static capability matrix, read-only; highlights the default backend. */}
-      <WorkerCapabilityCard currentBackend={defaultBackend} />
+      <Hint>{pt(t, 'st.fallbackGone')}</Hint>
       {saveBarFor('worker')}
+    </div>
+  }
+
+  /**
+   * 「派单」— the read-only explanation (§5.7). Dispatch is not a setting any more: this page says how the engine
+   * decides, what never reaches the model, what happens when the model cannot answer, and where dangerous actions are
+   * stopped instead. The only editable facts are the default bot (Bot page) and backend availability (Worker group).
+   */
+  const renderDispatch = () => {
+    const dispatch = executor.dispatch && typeof executor.dispatch === 'object' ? executor.dispatch : {}
+    const defaultBot = String(executor.bot ?? 'generalist')
+    const facts = [
+      ['st.dispatchCandidates', { default: defaultBot }],
+      ['st.dispatchPick', { cacheSeconds: String(dispatch.cacheSeconds ?? 600) }],
+      ['st.dispatchNoModel', {}],
+      ['st.dispatchFallback', {}],
+      ['st.dispatchDanger', {}],
+      ['st.dispatchExplicit', {}],
+    ]
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.dispatchHint')}</Hint>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.dispatchHow')}</span>
+        <KeyValues rows={facts.map(([key, params]) => [pt(t, key), pt(t, `${key}Text`, params)])} />
+      </div>
+      <p className="sa-hint">{pt(t, 'st.dispatchDefaultNote', { id: defaultBot })}</p>
+      <div className="sa-actions">
+        <Button size="sm" variant="outline" onClick={() => navigate({ page: 'bots' })}>{pt(t, 'st.dispatchOpenBots')}</Button>
+      </div>
     </div>
   }
 
@@ -2523,6 +2562,7 @@ export function LiveSettingsPage({ route }) {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()
+    if (active === 'dispatch') return renderDispatch()
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()
