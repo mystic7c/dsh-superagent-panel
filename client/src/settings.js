@@ -1267,7 +1267,10 @@ export function BotsCard() {
     try {
       const bot = formToBot(editor.form)
       // Exclude both the saved id and the one this editor opened: renaming a Bot must not leave the old one behind.
-      const others = bots.filter(item => item.id !== bot.id && item.id !== editor.id).map(item => stripBotForSave(item))
+      // `bots` is the *display* list (built-ins + store). A built-in id in this document makes the host reject the
+      // whole save ("内置 Bot 不可编辑"), so only stored bots may round-trip.
+      const others = bots.filter(item => !builtinOf(item) && item.id !== bot.id && item.id !== editor.id)
+        .map(item => stripBotForSave(item))
       const saved = await actions.saveBots([...others, bot])
       if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
       setEditor(undefined)
@@ -1277,7 +1280,7 @@ export function BotsCard() {
     // Swallowing the failure made ConfirmButton treat the delete as done and close the dialog while the Bot was still
     // there. Re-throw so the dialog stays open with the reason next to it.
     try {
-      const saved = await actions.saveBots(bots.filter(item => item.id !== bot.id).map(stripBotForSave))
+      const saved = await actions.saveBots(bots.filter(item => !builtinOf(item) && item.id !== bot.id).map(stripBotForSave))
       if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
     } catch (failure) { setSaveError(failure); throw failure }
   }

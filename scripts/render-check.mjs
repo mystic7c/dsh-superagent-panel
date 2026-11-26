@@ -2532,9 +2532,18 @@ console.log('STEP pure projections')
     const store = state => ({ file: join(stateDir, 'worker-bots.json'), exists: true, builtin: false, version: 2,
       bots: stored, backends: backendsOf(state), enabledBackends: ['dsh'],
       ruleWarnings: [{ code: 'DISPATCH_RULE_BOT_UNKNOWN', index: 1, bot: 'ghost' }] })
+    // The stub mirrors the host: a document that still carries a built-in id is rejected wholesale, which is what a
+    // payload built from the *display* list used to do (1.2.5).
+    const BUILTINS = ['generalist', 'surgical', 'reviewer']
     renderBots('unverified', { bots: async () => store('unverified'),
-      saveBots: async list => { lists.push(list); throw new ApiError('后端 dsh 未核验', 400,
-        { code: 'BOT_BACKEND_UNVERIFIED', problems: ['bot mine: backend dsh is unverified'] }) },
+      saveBots: async list => {
+        lists.push(list)
+        const builtinIds = list.filter(bot => BUILTINS.includes(bot.id)).map(bot => bot.id)
+        if (builtinIds.length) throw new ApiError(`内置 Bot 不可编辑：${builtinIds.join('；')}`, 400,
+          { code: 'BOT_SCHEMA_INVALID', problems: builtinIds.map(id => `内置 Bot 不可编辑：${id}`) })
+        throw new ApiError('后端 dsh 未核验', 400,
+          { code: 'BOT_BACKEND_UNVERIFIED', problems: ['bot mine: backend dsh is unverified'] })
+      },
       verifyBotBackend: async () => ({}) })
     await sleep(160)
     const botsText = () => host.textContent ?? ''
@@ -2611,6 +2620,9 @@ console.log('STEP pure projections')
     check('a save sends the store without host-added keys (§4.2)',
       afterReject.every(bot => !('capabilities' in bot) && !('environment' in bot)),
       JSON.stringify(afterReject.map(bot => Object.keys(bot))).slice(0, 200))
+    check('a save never sends a built-in Bot back to the host (1.2.5)',
+      afterReject.every(bot => !BUILTINS.includes(bot.id)),
+      JSON.stringify(afterReject.map(bot => bot.id)).slice(0, 200))
     // Renaming a Bot edits the row it opened: excluding only the *new* id left the old one in the store, so one
     // save turned one Bot into two.
     ;[...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
@@ -2631,7 +2643,8 @@ console.log('STEP pure projections')
       await sleep(160)
       const renamed = lists.at(-1) ?? []
       check('renaming a Bot replaces it instead of adding a second one (P2)',
-        renamed.some(bot => bot.id === 'mine2') && !renamed.some(bot => bot.id === 'mine'),
+        renamed.some(bot => bot.id === 'mine2') && !renamed.some(bot => bot.id === 'mine')
+          && !renamed.some(bot => BUILTINS.includes(bot.id)),
         JSON.stringify(renamed.map(bot => bot.id)))
     }
     // A verified backend accepts the same store: remount so the group loads the verified evidence.
@@ -2639,11 +2652,32 @@ console.log('STEP pure projections')
     const verifiedRoot = ReactDOM.createRoot(host)
     verifiedRoot.render(React.createElement(Panel.Provider, { value: panel },
       React.createElement(PanelState.Provider, { value: { data: fixtures.status, error: undefined, reload: async () => {},
-        actions: { bots: async () => store('verified'), saveBots: async list => ({ ...store('verified'), bots: list }),
+        actions: { bots: async () => store('verified'),
+          saveBots: async list => { lists.push(list); return { ...store('verified'), bots: list } },
           verifyBotBackend: async () => ({}) } } },
         React.createElement(BotsCard))))
     await sleep(160)
     check('a verified backend renders as verified (§13.2)', /已核验/.test(botsText()), botsText().slice(0, 240))
+    // Create a Bot end to end: the draw is a success, so this is the path that used to fail against the real host
+    // because the payload still carried the three built-ins (1.2.5).
+    ;[...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建 Bot')
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const formInputs = [...host.querySelectorAll('.sa-bots-editor input')]
+    const setInput = (input, value) => {
+      const key = input ? Object.keys(input).find(name => name.startsWith('__reactProps$')) : undefined
+      if (key) input[key].onChange?.({ target: { value } })
+    }
+    setInput(formInputs[0], '探针 Bot')
+    setInput(formInputs[1], 'probe')
+    await sleep(120)
+    ;[...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '保存')
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(180)
+    const created = lists.at(-1) ?? []
+    check('creating a Bot sends only the store, so the host does not reject it as a built-in edit (1.2.5)',
+      created.some(bot => bot.id === 'probe') && !created.some(bot => BUILTINS.includes(bot.id)),
+      JSON.stringify(created.map(bot => bot.id)).slice(0, 200))
     verifiedRoot.unmount()
     host.remove()
   }
