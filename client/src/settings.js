@@ -10,10 +10,6 @@ import { apply } from "./apply.js"
 import { React, h, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
-  'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
-  'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
-  'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
-    'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
   // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
   'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
   'st.routeDeliverable': ['交付目标', 'Deliverable'],
@@ -249,34 +245,16 @@ Object.assign(PAGE_TEXT, {
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式、闸门与超时。改完保存后立即生效；手工建单在「执行」页，worker 后端在「Worker」分组。',
     'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
-  'st.workerHint': ['路由模式决定“建议 / 自动 / 单后端”；启用多个后端后按任务类型分发。suggest 只记录建议、仍用默认后端执行。',
-    'The routing mode decides suggest / auto / single. With several backends enabled, work is dispatched by task type; suggest only records the choice and still runs the default backend.'],
-  'st.routingTitle': ['路由模式', 'Routing mode'],
-  'st.routingModeSingle': ['单后端（沿用旧配置）', 'Single backend (legacy)'],
-  'st.routingModeSuggest': ['建议（只记录，不改变执行）', 'Suggest (record only)'],
-  'st.routingModeAuto': ['自动（按任务类型分发）', 'Auto (dispatch by work type)'],
-  'st.routingModeHint': ['建议模式先在运行记录里展示“会交给谁”，确认准确后再切自动。',
-    'Suggest mode shows who would run the Ticket in the run record; switch to auto once the choices look right.'],
+  'st.workerHint': ['启用哪些后端，以及没有特别指定时由哪个后端执行。默认后端跑不了这类活时才会轮到降级后端。',
+    'Which backends are available, and which one runs when nothing says otherwise. The fallback only takes over when the default cannot do the work.'],
   'st.defaultBackend': ['默认后端', 'Default backend'],
-  'st.defaultBackendHint': ['没有偏好规则、或偏好后端不可用时使用。', 'Used when no preference matches or the preferred backend is unavailable.'],
+  'st.defaultBackendHint': ['一单该由谁执行，就看这里；它跑不了这类活时才会轮到降级后端。',
+    'This is who runs a Ticket; the fallback only takes over when it cannot do the work.'],
   'st.fallbackBackend': ['降级后端（可选）', 'Fallback backend (optional)'],
   'st.fallbackNone': ['不降级', 'No fallback'],
   'st.enabledBackends': ['启用的后端', 'Enabled backends'],
-  'st.enabledBackendsHint': ['至少启用一个。启用多个后默认进入建议模式；CLI 后端需要本机已登录。',
-    'Enable at least one. Several enabled defaults to suggest mode; CLI backends require a local login.'],
-  'st.routePreferences': ['任务类型偏好', 'Work-type preferences'],
-  'st.routePreferencesHint': ['按任务类型指定后端；留空跟随默认后端。硬约束优先：需要向人提问的交互只能 DSH；联网调研这类能力，Claude 与 Codex 现在都能做，仍以运行期探测为准。',
-    'Bind each work type to a backend; leave it on “follow default” when unsure. Hard limits win: interactive work that asks a person can only run on DSH; research needs web, which Claude and Codex both carry now — the runtime probe still has the last word.'],
-  'st.routeFollowDefault': ['跟随默认', 'Follow default'],
-  'st.workTypeAnalysis': ['需求分析', 'Analysis'],
-  'st.workTypeReview': ['代码 review', 'Code review'],
-  'st.workTypeTest': ['功能测试验证', 'Verification'],
-  'st.workTypeDev': ['代码开发', 'Development'],
-  'st.workTypeDocs': ['文档', 'Documentation'],
-  'st.workTypeResearch': ['联网调研', 'Web research'],
-  'st.workTypeInteractive': ['需提问/确认', 'Interactive'],
-  'st.routeReadOnly': ['只读', 'read-only'],
-  'st.routeWrite': ['可写', 'write'],
+  'st.enabledBackendsHint': ['至少启用一个。启用的后端既可以在默认/降级里选，也可以被 Bot 指定；CLI 后端需要本机已登录。',
+    'Enable at least one. An enabled backend can be the default, the fallback, or a Bot\u2019s own backend; CLI backends need a local login.'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
   'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址在上方仓库列表里逐行编辑。',
@@ -660,7 +638,7 @@ export function settingsPatchOf(group, draft) {
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -764,22 +742,6 @@ export const ROUTE_BACKENDS = [
   { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
   { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
 ]
-export const ROUTE_WORK_TYPES = [
-  { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
-  { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
-  { key: 'test', labelKey: 'st.workTypeTest', hintKey: 'st.routeWrite' },
-  { key: 'dev', labelKey: 'st.workTypeDev', hintKey: 'st.routeWrite' },
-  { key: 'docs', labelKey: 'st.workTypeDocs', hintKey: 'st.routeWrite' },
-  { key: 'research', labelKey: 'st.workTypeResearch', hintKey: 'st.routeReadOnly' },
-  { key: 'interactive', labelKey: 'st.workTypeInteractive', hintKey: 'st.routeReadOnly' },
-]
-/** Built-in preference table mirroring lib/live/routing.js: capability first, then the operator's intent. */
-export const ROUTE_DEFAULT_PREFERENCES = [
-  { workTypes: ['research', 'interactive'], backend: 'dsh' },
-  { workTypes: ['analysis', 'review', 'test'], backend: 'codex' },
-  { workTypes: ['dev', 'docs'], backend: 'claude' },
-]
-
 export const WORKER_CAPABILITIES = [
   { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
     stream: { yes: true },
@@ -2452,27 +2414,15 @@ export function LiveSettingsPage({ route }) {
     const routing = draft['executor.routing'] ?? baseRouting
     const enabled = ROUTE_BACKENDS.map(backend => backend.value)
       .filter(backend => backend in workers && workers[backend]?.enabled !== false)
-    const visible = (routing.mode ?? (enabled.length > 1 ? 'suggest' : 'single'))
     const defaultBackend = enabled.includes(routing.defaultBackend) ? routing.defaultBackend
       : enabled.includes(legacyBackend) ? legacyBackend : enabled[0] ?? 'dsh'
     const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
-    const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
     const setRouting = next => editRouting({ ...routing, ...next })
     const toggleBackend = (backend, on) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), enabled: on } })
     const setBackendField = (backend, key, value) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), [key]: value } })
-    const preferenceOf = type => preferences.find(rule => Array.isArray(rule.workTypes) && rule.workTypes.includes(type))?.backend ?? ''
-    const setPreference = (type, backend) => {
-      const rules = preferences.map(rule => ({ workTypes: [...(rule.workTypes ?? [])].filter(item => item !== type), backend: rule.backend }))
-      if (backend) {
-        const existing = rules.find(rule => rule.backend === backend)
-        if (existing) existing.workTypes.push(type)
-        else rules.push({ workTypes: [type], backend })
-      }
-      setRouting({ preferences: rules.filter(rule => rule.workTypes.length) })
-    }
     const backendCard = backend => {
       const entry = workers[backend.value] ?? {}
       const on = backend.value in workers && entry.enabled !== false
@@ -2500,22 +2450,6 @@ export function LiveSettingsPage({ route }) {
       {settingsHeading()}
       <Hint>{pt(t, 'st.workerHint')}</Hint>
       <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'wf.workerPreset')}</span>
-        <Input value={draft['executor.workerPreset'] ?? executor.workerPreset ?? ''} disabled={frozen}
-          placeholder={pt(t, 'wf.workerPresetPlaceholder')} aria-label={pt(t, 'wf.workerPreset')}
-          onChange={event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '')} />
-        <Hint>{pt(t, 'wf.workerPresetHint')}</Hint>
-      </div>
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'st.routingTitle')}</span>
-        <Select label={pt(t, 'st.routingTitle')} disabled={frozen} value={visible}
-          options={[{ value: 'single', label: pt(t, 'st.routingModeSingle') },
-            { value: 'suggest', label: pt(t, 'st.routingModeSuggest') },
-            { value: 'auto', label: pt(t, 'st.routingModeAuto') }]}
-          onChange={next => setRouting({ mode: next })} />
-        <Hint>{pt(t, 'st.routingModeHint')}</Hint>
-      </div>
-      <div className="sa-field">
         <span className="sa-field-head">{pt(t, 'st.enabledBackends')}</span>
         <Hint>{pt(t, 'st.enabledBackendsHint')}</Hint>
         {ROUTE_BACKENDS.map(backendCard)}
@@ -2532,23 +2466,6 @@ export function LiveSettingsPage({ route }) {
           <Select label={pt(t, 'st.fallbackBackend')} disabled={frozen} value={fallback}
             options={[{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions]}
             onChange={next => setRouting({ fallback: next ? [next] : [] })} />
-        </div>
-      </div>
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'st.routePreferences')}</span>
-        <Hint>{pt(t, 'st.routePreferencesHint')}</Hint>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
-          {ROUTE_WORK_TYPES.map(type => <div key={type.key} className="sa-switch-row">
-            <div className="sa-switch-row-text">
-              <span>{pt(t, type.labelKey)}</span>
-              <span className="sa-hint">{type.hintKey ? pt(t, type.hintKey) : ''}</span>
-            </div>
-            <div style={{ flex: '0 0 200px', minWidth: 0 }}>
-              <Select label={pt(t, type.labelKey)} disabled={frozen} value={preferenceOf(type.key)}
-                options={[{ value: '', label: pt(t, 'st.routeFollowDefault') }, ...backendOptions]}
-                onChange={next => setPreference(type.key, next)} />
-            </div>
-          </div>)}
         </div>
       </div>
       {/* P2-5: static capability matrix, read-only; highlights the default backend. */}

@@ -1313,27 +1313,29 @@ clickByText('Worker', '.sa-settings-nav button')
 await sleep(800)
 const workerText = text()
 const workerTitles = [...rootElement.querySelectorAll('.sa-main .sa-settings-title')].map(node => (node.textContent ?? '').trim())
-check('worker settings patch retains the worker fields', JSON.stringify(settingsPatchOf('worker', { 'executor.workerPreset': 'cordis' })) === JSON.stringify({ 'executor.workerPreset': 'cordis' }))
+check('worker settings patch sends the enablement and routing tables it edits',
+  JSON.stringify(settingsPatchOf('worker', { 'executor.workers': { dsh: { enabled: true } }, 'executor.routing': { defaultBackend: 'dsh' } }))
+    === JSON.stringify({ 'executor.workers': { dsh: { enabled: true } }, 'executor.routing': { defaultBackend: 'dsh' } }))
 // 1.3.0 removed staged execution: the worker group must not grow those three controls back.
 check('worker group has no staged-execution controls',
   !/分阶段执行|实现后端|独立验收后端/.test(workerText)
     && !rootElement.querySelector('select[aria-label="实现后端"]')
     && !rootElement.querySelector('select[aria-label="独立验收后端"]'),
   workerText.slice(0, 400))
-check('worker preset keeps its visible label',
-  workerText.includes('Worker 预设（DSH）') && Boolean(rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')),
-  workerText.slice(0, 400))
+// 1.4.0 deleted the preset picker, the routing mode and the work-type preference table: one backend choice, no tables
+// the operator has to fill in.
+check('worker group no longer offers a preset, a routing mode or work-type preferences',
+  !/Worker 预设|路由模式|任务类型偏好/.test(workerText)
+    && !rootElement.querySelector('input[aria-label="Worker 预设（DSH）"]')
+    && !rootElement.querySelector('select[aria-label="路由模式"]'),
+  workerText.slice(0, 600))
 check('worker group is its own H2 group', workerTitles.length === 1 && workerTitles[0] === 'Worker', JSON.stringify(workerTitles))
-check('worker group carries the routing mode control',
-  Boolean(rootElement.querySelector('.sa-main select[aria-label="路由模式"]')),
-  JSON.stringify([...rootElement.querySelectorAll('.sa-main select')].map(select => select.getAttribute('aria-label'))))
 check('worker group lists every backend with its own enable switch',
   ['DSH（进程内）', 'Codex CLI（本机）', 'Claude Code CLI（本机）'].every(label => workerText.includes(label))
     && rootElement.querySelectorAll('.sa-main .sa-switch-row').length >= 3,
   String(rootElement.querySelectorAll('.sa-main .sa-switch-row').length))
-check('worker group carries the work-type preference table',
-  workerText.includes('任务类型偏好') && workerText.includes('需求分析') && workerText.includes('代码 review')
-    && workerText.includes('功能测试验证'), workerText.slice(0, 800))
+check('worker group keeps one default backend and one fallback', workerText.includes('默认后端') && workerText.includes('降级后端'),
+  workerText.slice(0, 600))
 check('worker group carries the capability matrix', workerText.includes('运行后端能力')
   && workerText.includes('流式事件') && workerText.includes('工具调用审批'), workerText.slice(0, 600))
 check('capability matrix highlights the saved backend',

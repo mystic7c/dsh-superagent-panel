@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.4.0] — 2026-11-26
+
+### 设置 → Worker 只剩「启用哪些后端、谁做默认」
+
+删掉三件事，配置项从 6 组降到 3 组：
+
+- **Worker 预设（DSH）**：`executor.workerPreset` 与按仓库的 `repos[].workerPreset` 整个删掉。进程内 DSH worker 一律
+  跟随宿主默认预设；只有 Bot 自己可以带 preset（`bot.preset` 仍生效）。
+- **路由模式**（`executor.routing.mode`：单后端 / 建议 / 自动）删掉。不再有「建议模式只记录不改变执行」这种状态：
+  路由永远生效，工单实际由哪台后端跑，运行记录与工单上写的就是它。
+- **任务类型偏好**（`executor.routing.preferences`：需求分析/代码 review/测试/开发/文档/调研/确认 → 各指一个后端）删掉，
+  连同 `DEFAULT_PREFERENCES` 与 `preference` 这个 reason 码。一单一个后端，不再按标题猜「这算什么活」来换执行者。
+
+留下的：三个后端的启用开关（各自可填模型与 CLI 路径）、**默认后端**、**降级后端**（默认后端缺能力时才轮到它）、
+运行后端能力表。交付类型判定（改动 vs 报告）与「只分析 / 不要修改」的只读约束完全没动——它们由请求文本决定，不是配置。
+
+旧 `live.json` 里残留的 `executor.workerPreset` / `routing.mode` / `routing.preferences` 加载时静默忽略，不报错
+（有测试守住）；补丁里再写这几个键会被拒，`executor.routing` 仍只接受 `defaultBackend` 与 `fallback`。
+
+面板：设置 → Worker 少了预设输入框、路由模式下拉与 7 行任务类型偏好表，3 条对应文案删除；运行记录/工单上的路由标签
+不再有「建议」分支；手工建单的「自动判断」预览只显示实际会跑的后端。
+
+门禁：`node --test lib/live/*.test.js` 716 通过、`render-check` 333 条全过、`check-keys` / `types` / `check:js` 全绿、
+bundle 847062 B。真实实例复核：设置 → Worker 只剩三组，能力表与默认/降级后端正常。
+
 ## [1.3.0] — 2026-11-26
 
 ### 删掉分阶段执行：工单只有一种执行形态

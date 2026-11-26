@@ -54,9 +54,7 @@ Object.assign(PAGE_TEXT, {
   'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → Worker → CLI 路径」填写绝对路径后重试。',
     'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Worker → CLI path, then retry.'],
   // P1 routing: who ran (or would run) a Ticket, independent of ticket status.
-  'detail.routeSuggest': ['建议 {backend} · {workType}', 'suggested {backend} · {workType}'],
   'detail.routeLabel': ['执行路由', 'Route'],
-  'detail.routeSuggested': ['建议', 'suggested'],
   'detail.routeApplied': ['{backend} · {workType}', '{backend} · {workType}'],
   'detail.routeReadOnly': ['只读', 'read-only'],
   'detail.routeWrite': ['可写', 'write'],
@@ -913,17 +911,16 @@ export function RunBot({ run, choices = [], onRerun }) {
   </div>
 }
 
-/** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
+/** Route tag: the work type and the backend that ran this Ticket. 1.4.0 deleted the suggest mode, so there is no
+    "would run" state any more — the tag always names what actually executed. */
 export function runRouteTag(t, run) {
   const route = run?.route
   if (!route || typeof route !== 'object') return null
   const workType = pt(t, `detail.workType.${route.workType}`)
   const backend = route.execBackend ?? route.backend
-  const text = route.applied
-    ? pt(t, 'detail.routeApplied', { backend, workType })
-    : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
-  return <Tag tone={route.applied ? 'outline' : 'info'}
-    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>{text}</Tag>
+  return <Tag tone="outline"
+    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>
+    {pt(t, 'detail.routeApplied', { backend, workType })}</Tag>
 }
 
 /** A CLI run leaves a conversation behind: `claude --resume <id>` is the same Claude Code session, so the run row can
@@ -1819,7 +1816,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
       `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)

@@ -1265,7 +1265,6 @@ export function ManualTicketForm({ onDone, onCancel, heading = true }) {
           {`${pt(t, 'st.routeDeliverable')}: ${pt(t, route.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')} · `}
           {`${pt(t, 'st.routeCapabilities')}: ${capabilityText} · `}
           {`${pt(t, 'st.routeBackend')}: ${route.backend}`}
-          {route.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}
         </p>
         {route.unsupported
           ? <p className="sa-error">{pt(t, 'st.routeUnsupported', { caps: route.unsupported })}</p>
