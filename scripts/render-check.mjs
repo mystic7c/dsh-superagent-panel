@@ -2545,8 +2545,13 @@ console.log('STEP pure projections')
     // The store list carries no per-row action cluster: selection opens the right pane, and the actions live there.
     const firstRow = host.querySelector('.sa-bot-row')
     const detailPane = () => host.querySelector('.sa-bots-detail')
+    // The list identifies a Bot; the right pane owns its tags and actions, so none of them are printed twice.
+    check('the store list identifies a Bot without repeating its tag row',
+      /通用/.test(firstRow?.textContent ?? '') && /generalist/.test(firstRow?.textContent ?? '')
+        && !/内置/.test(firstRow?.textContent ?? '') && !firstRow?.querySelector('button'),
+      firstRow?.textContent?.slice(0, 120) ?? 'no row')
     check('a built-in bot offers copy but not edit or delete (§4.5/§13.2)',
-      /内置/.test(firstRow?.textContent ?? '') && /另存为副本/.test(detailPane()?.textContent ?? '')
+      /内置/.test(detailPane()?.textContent ?? '') && /另存为副本/.test(detailPane()?.textContent ?? '')
         && !/删除/.test(detailPane()?.textContent ?? '') && [...(detailPane()?.querySelectorAll('button') ?? [])]
           .every(node => (node.textContent ?? '').trim() !== '编辑'),
       detailPane()?.textContent?.slice(0, 160) ?? 'no detail pane')

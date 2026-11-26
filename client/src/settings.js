@@ -1312,9 +1312,10 @@ export function BotsCard() {
     [pt(t, 'st.botsDetailTimeout'), detailForm.timeoutMs || pt(t, 'st.botsPreviewEmpty')],
     [pt(t, 'st.botsFieldRepairs'), detailForm.maxRepairRounds || pt(t, 'st.botsPreviewEmpty')],
   ] : []
+  // No heading action: the editor's own row already ends with 取消 / 保存, and a second 取消 in the corner read as a
+  // different command (1.2.4).
   const editorPane = editor ? <Section
-    title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}
-    action={<Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>}>
+    title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
     <div className="sa-bots-editor-body sa-bots-editor">
       <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
       {/* First-run surface: who the bot is, which backend runs it, what it takes on. Every other field keeps its
@@ -1447,11 +1448,6 @@ export function BotsCard() {
                     <span>{bot.name ?? bot.id}</span>
                     <span className="sa-mono sa-hint">{bot.id}</span>
                   </div>
-                  <div className="sa-row-meta">
-                    <Tag tone="outline">{bot.backend}</Tag>
-                    {builtinOf(bot) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
-                    {capabilityOf(bot).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
-                  </div>
                 </div>
               </button>
             </li>)}
@@ -1463,12 +1459,8 @@ export function BotsCard() {
         <div className="sa-pane sa-bots-detail">
           {editorPane ?? (selected
             ? <Section title={selected.name ?? selected.id}
-              badge={capabilityOf(selected).length || builtinOf(selected)
-                ? <span className="sa-row-meta">
-                  {builtinOf(selected) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
-                  {capabilityOf(selected).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
-                </span>
-                : null}
+              /* Only 内置 stays in the heading: the capability tags repeated the 能力 row two lines below. */
+              badge={builtinOf(selected) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
               action={<span className="sa-actions">
                 {builtinOf(selected)
                   ? null
