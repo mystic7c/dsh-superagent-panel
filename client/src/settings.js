@@ -1048,6 +1048,14 @@ Object.assign(PAGE_TEXT, {
   'st.botsBackendNone': ['无', 'none'],
   'st.botsBackendVerify': ['重新核验', 'Verify'],
   'st.botsEditorTitle': ['编辑 Bot', 'Edit bot'],
+  'st.botsEdit': ['编辑 Bot', 'Edit bot'],
+  'st.botsEditorNew': ['新建 Bot', 'New bot'],
+  'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
+  'st.botsDetailStages': ['阶段', 'Stages'],
+  'st.botsDetailRequires': ['能力', 'Capabilities'],
+  'st.botsDetailDeny': ['禁止工具', 'Denied tools'],
+  'st.botsDetailMcp': ['MCP 服务器', 'MCP servers'],
+  'st.botsDetailTimeout': ['超时（毫秒）', 'Timeout (ms)'],
   'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
     'Saving validates against the backend evidence; error codes are shown right here.'],
   'st.botsAdvanced': ['高级设置', 'Advanced'],
@@ -1205,6 +1213,8 @@ export function BotsCard() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
+  // Master-detail: the picked Bot drives the right pane; the store list itself carries no per-row actions.
+  const [pickedId, setPickedId] = useState('')
   const seq = useRef(0)
   const load = async () => {
     const seqNow = ++seq.current
@@ -1286,84 +1296,26 @@ export function BotsCard() {
     editor.form.timeoutMs, editor.form.idleTimeoutMs, editor.form.maxRepairRounds,
     Object.keys(editor.form.stageSpecs ?? {}).length].filter(Boolean).length : 0
   const problem = saveError
-  return <>
-    <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
-      <div className="sa-settings-stack">
-        <KeyValues rows={[[pt(t, 'st.botsFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
-          [pt(t, 'st.botsBuiltin'), pt(t, 'st.botsBuiltinNote')]]} />
-        {view.code
-          ? <p className="sa-hint sa-info-warn">
-            {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
-          </p>
-          : null}
-        {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
-          ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
-          : null}
-        {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
-          <p key={`${warning.index}-${warning.bot}`} className="sa-hint sa-info-warn">
-            {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
-          </p>
-        ))}
-        {bots.map(bot => <div key={bot.id} className="sa-row sa-bot-row">
-          <div className="sa-row-main">
-            <div className="sa-row-title">
-              <span>{bot.name ?? bot.id}</span>
-              <span className="sa-mono sa-hint">{bot.id}</span>
-              <Tag tone="outline">{bot.backend}</Tag>
-              {builtinOf(bot) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
-              {capabilityOf(bot).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
-            </div>
-            {bot.description ? <p className="sa-hint">{bot.description}</p> : null}
-          </div>
-          <div className="sa-row-meta">
-            {builtinOf(bot) ? null
-              : <Button size="sm" variant="ghost" onClick={() => openEditor(bot)}>{t('edit')}</Button>}
-            <CopyButton value={JSON.stringify(stripBotForSave(bot), null, 2)} label={pt(t, 'st.botsCopy')} />
-            {builtinOf(bot)
-              ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...bot, id: `${bot.id}-copy`,
-                name: `${bot.name ?? bot.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
-              : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
-                message={pt(t, 'st.botsDeleteMessage', { id: bot.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
-                onConfirm={async () => { await remove(bot) }} />}
-          </div>
-        </div>)}
-        <Button size="sm" variant="outline" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
-      </div>
-    </Section>
-    <Section title={pt(t, 'st.botsBackends')} hint={pt(t, 'st.botsBackendsHint')}>
-      <div className="sa-settings-stack">
-        {BOT_BACKEND_OPTIONS.map(backend => {
-          const evidence = backends[backend] ?? { state: 'unverified' }
-          const verified = evidence.state === 'verified' || evidence.source === 'smoke'
-          return <div key={backend} className="sa-row">
-            <div className="sa-row-main">
-              <div className="sa-row-title">
-                <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
-                <span>{pt(t, `st.botsBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
-                {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
-              </div>
-              <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
-                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
-                  || pt(t, 'st.botsBackendNone') })}</p>
-            </div>
-            <Button size="sm" variant="ghost" disabled={verifying === backend}
-              onClick={() => { void verify(backend) }}>{pt(t, 'st.botsBackendVerify')}</Button>
-          </div>
-        })}
-      </div>
-    </Section>
-    {problem && problem.details?.code
-      ? <p className="sa-error" role="alert">{`${String(problem.details.code)}：${problem.message}`}
-        {Array.isArray(problem.details.problems) && problem.details.problems.length
-          ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
-          : null}</p>
-      : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
-    {editor ? <Modal open={true} onClose={closeEditor} title={pt(t, 'st.botsEditorTitle')} closeLabel={t('close')}
-      className="sa-bot-modal"
-      footer={<>
-        <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
-        <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
-      </>}>
+  const selected = bots.find(bot => bot.id === pickedId) ?? bots[0]
+  // Picking a Bot always shows that Bot: an open editor is closed first, exactly as its 取消 button would.
+  const pick = id => { setPickedId(id); setEditor(undefined); setSaveError(undefined) }
+  const detailForm = selected ? botToForm(selected) : undefined
+  const detailRows = selected ? [
+    [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
+    [pt(t, 'st.botsFieldPreset'), detailForm.preset || pt(t, 'st.botsPreviewEmpty')],
+    [pt(t, 'st.botsFieldModel'), detailForm.modelProvider && detailForm.modelModel
+      ? `${detailForm.modelProvider} · ${detailForm.modelModel}` : pt(t, 'st.botsPreviewEmpty')],
+    [pt(t, 'st.botsDetailStages'), detailForm.stages.length ? detailForm.stages.join(' → ') : pt(t, 'st.botsStagesAll')],
+    [pt(t, 'st.botsDetailRequires'), detailForm.requires.join(', ') || pt(t, 'st.botsBackendNone')],
+    [pt(t, 'st.botsDetailDeny'), detailForm.deny || pt(t, 'st.botsPreviewEmpty')],
+    [pt(t, 'st.botsDetailMcp'), detailForm.allowMcp || pt(t, 'st.botsPreviewEmpty')],
+    [pt(t, 'st.botsDetailTimeout'), detailForm.timeoutMs || pt(t, 'st.botsPreviewEmpty')],
+    [pt(t, 'st.botsFieldRepairs'), detailForm.maxRepairRounds || pt(t, 'st.botsPreviewEmpty')],
+  ] : []
+  const editorPane = editor ? <Section
+    title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}
+    action={<Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>}>
+    <div className="sa-bots-editor-body sa-bots-editor">
       <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
       {/* First-run surface: who the bot is, which backend runs it, what it takes on. Every other field keeps its
           store default and lives behind 「高级设置」 — same fields, one disclosure away, so nothing is lost. */}
@@ -1461,7 +1413,115 @@ export function BotsCard() {
       </DisclosureRow>
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
-    </Modal> : null}
+    <div className="sa-actions">
+      <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
+      <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
+    </div>
+    </div>
+  </Section> : null
+  return <>
+    <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
+      {/* Master-detail: the store is a list on the left, the picked Bot fills the right pane. A flat stack of rows each
+          carrying its own action cluster made reading one Bot mean scrolling past four (§13.2, review A). */}
+      {view.code
+        ? <p className="sa-hint sa-info-warn">
+          {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
+        </p>
+        : null}
+      {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
+        ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
+        : null}
+      {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
+        <p key={`${warning.index}-${warning.bot}`} className="sa-hint sa-info-warn">
+          {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
+        </p>
+      ))}
+      <div className="sa-panes">
+        <div className="sa-pane sa-pane-aside">
+          <ul className="sa-list sa-bot-list">
+            {bots.map(bot => <li key={bot.id}>
+              <button type="button" className="sa-row sa-bot-row" aria-current={selected?.id === bot.id}
+                onClick={() => pick(bot.id)}>
+                <div className="sa-row-main">
+                  <div className="sa-row-title">
+                    <span>{bot.name ?? bot.id}</span>
+                    <span className="sa-mono sa-hint">{bot.id}</span>
+                  </div>
+                  <div className="sa-row-meta">
+                    <Tag tone="outline">{bot.backend}</Tag>
+                    {builtinOf(bot) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
+                    {capabilityOf(bot).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
+                  </div>
+                </div>
+              </button>
+            </li>)}
+          </ul>
+          <Button size="sm" variant="outline" icon="plus" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
+          <p className="sa-hint sa-bots-store">{pt(t, 'st.botsFile')} · <span className="sa-mono">{String(view.file ?? '—')}</span></p>
+          <p className="sa-hint">{pt(t, 'st.botsBuiltin')}：{pt(t, 'st.botsBuiltinNote')}</p>
+        </div>
+        <div className="sa-pane sa-bots-detail">
+          {editorPane ?? (selected
+            ? <Section title={selected.name ?? selected.id}
+              badge={capabilityOf(selected).length || builtinOf(selected)
+                ? <span className="sa-row-meta">
+                  {builtinOf(selected) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
+                  {capabilityOf(selected).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
+                </span>
+                : null}
+              action={<span className="sa-actions">
+                {builtinOf(selected)
+                  ? null
+                  : <Button size="sm" variant="outline" onClick={() => openEditor(selected)}>{t('edit')}</Button>}
+                <CopyButton value={JSON.stringify(stripBotForSave(selected), null, 2)} label={pt(t, 'st.botsCopy')} />
+                {builtinOf(selected)
+                  ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...selected, id: `${selected.id}-copy`,
+                    name: `${selected.name ?? selected.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
+                  : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
+                    message={pt(t, 'st.botsDeleteMessage', { id: selected.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
+                    onConfirm={async () => { await remove(selected) }} />}
+              </span>}>
+              <div className="sa-settings-stack">
+                {selected.description ? <p className="sa-hint">{selected.description}</p> : null}
+                <KeyValues rows={detailRows} />
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
+                  <p className="sa-hint sa-role-text">{detailForm.role || pt(t, 'st.botsPreviewEmpty')}</p>
+                </div>
+              </div>
+            </Section>
+            : <EmptyState title={pt(t, 'st.botsPick')} />)}
+        </div>
+      </div>
+    </Section>
+    <Section title={pt(t, 'st.botsBackends')} hint={pt(t, 'st.botsBackendsHint')}>
+      <div className="sa-settings-stack">
+        {BOT_BACKEND_OPTIONS.map(backend => {
+          const evidence = backends[backend] ?? { state: 'unverified' }
+          const verified = evidence.state === 'verified' || evidence.source === 'smoke'
+          return <div key={backend} className="sa-row">
+            <div className="sa-row-main">
+              <div className="sa-row-title">
+                <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
+                <span>{pt(t, `st.botsBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
+                {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
+              </div>
+              <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
+                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
+                  || pt(t, 'st.botsBackendNone') })}</p>
+            </div>
+            <Button size="sm" variant="ghost" disabled={verifying === backend}
+              onClick={() => { void verify(backend) }}>{pt(t, 'st.botsBackendVerify')}</Button>
+          </div>
+        })}
+      </div>
+    </Section>
+    {problem && problem.details?.code
+      ? <p className="sa-error" role="alert">{`${String(problem.details.code)}：${problem.message}`}
+        {Array.isArray(problem.details.problems) && problem.details.problems.length
+          ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
+          : null}</p>
+      : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
     {/* A synthesised bot is review-only input: saving always goes through the button above (§8.4). */}
     {editor?.resolved ? null : null}
   </>

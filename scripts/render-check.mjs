@@ -1540,9 +1540,10 @@ if (evalReady) {
     String(rootElement.querySelectorAll('.sa-main .sa-row-meta .sa-mono').length))
   check('eval rows show the shadow model opinion', evalText.includes('模型 93%') && evalText.includes('倾向接单'),
     evalText.slice(0, 500))
-  // One way in instead of a run-id short link beside a ticket link (ui audit B): the row keeps 查看工单 and adds
-  // 查看运行, whose tooltip still carries the run id.
-  check('eval rows lead to the run they caused', evalText.includes('查看运行'), evalText.slice(0, 500))
+  // One way in instead of a run-id short link beside a ticket link (ui audit B). The two buttons that used to sit here
+  // (查看工单 / 查看运行) opened the same page, so only one remains and it carries the run focus (user report 2026-11-26).
+  check('eval rows offer one way into the Ticket they caused',
+    evalText.includes('查看工单') && !evalText.includes('查看运行'), evalText.slice(0, 500))
   // One filter idiom on every page: kind, time window and the divergence/override view are segmented chip groups.
   check('eval filters keep chip groups for kind, window and view',
     rootElement.querySelectorAll('.sa-main .sa-filters .sa-segment').length >= 4
@@ -1839,13 +1840,17 @@ if (threadReady) {
     String(rootElement.querySelectorAll('.sa-main .sa-pane-aside .sa-segment').length))
   const threadSections = [...rootElement.querySelectorAll('.sa-main .sa-section-title')]
     .map(node => (node.textContent ?? '').trim().replace(/\d+$/, ''))
-  // The detail is a conversation, not a second ledger: facts, the Tickets it produced, and the timeline. The graded
-  // decision ledger lives on the Eval page, which the facts section links to.
+  // The detail is a conversation, not a second ledger: facts and the timeline (each message opens the Ticket it
+  // produced). The graded decision ledger lives on the Eval page, which the facts section links to.
   check('thread detail no longer repeats a separate decision section',
     !threadSections.includes('决定') && !threadSections.includes('评估过程') && threadSections.includes('线程信息') &&
       threadSections.includes('消息时间线'), JSON.stringify(threadSections))
   check('thread detail links to the Eval ledger instead of copying it', /查看评估记录/.test(triggerText), triggerText.slice(0, 400))
   check('thread detail keeps the ticket jump in the evaluation flow', /打开工单/.test(triggerText), triggerText.slice(0, 400))
+  // The produced-Tickets list said the same thing as the messages, so the jump moved onto the message row itself.
+  check('the ticket jump sits on the timeline row, not in a second list',
+    !threadSections.includes('产生的工单') && Boolean(rootElement.querySelector('.sa-event-foot .sa-event-actions button')),
+    JSON.stringify(threadSections))
   check('thread timeline renders messages through the Markdown renderer', rootElement.querySelectorAll('.sa-event-text .sa-md').length >= 1,
     String(rootElement.querySelectorAll('.sa-event-text .sa-md').length))
   check('thread key is copyable from the detail head', Boolean(rootElement.querySelector('.sa-page-head-meta .sa-copy-btn')),
@@ -2537,25 +2542,31 @@ console.log('STEP pure projections')
       /通用/.test(botsText()) && /我的 Bot/.test(botsText()) && /内置/.test(botsText()), botsText().slice(0, 200))
     check('an unverified backend is shown as unverified, not as ready (AC-B1)',
       /未核验/.test(botsText()) && /dsh/.test(botsText()), botsText().slice(0, 240))
+    // The store list carries no per-row action cluster: selection opens the right pane, and the actions live there.
     const firstRow = host.querySelector('.sa-bot-row')
+    const detailPane = () => host.querySelector('.sa-bots-detail')
     check('a built-in bot offers copy but not edit or delete (§4.5/§13.2)',
-      /内置/.test(firstRow?.textContent ?? '') && /另存为副本/.test(firstRow?.textContent ?? '')
-        && !/删除/.test(firstRow?.textContent ?? '') && [...firstRow.querySelectorAll('button')]
+      /内置/.test(firstRow?.textContent ?? '') && /另存为副本/.test(detailPane()?.textContent ?? '')
+        && !/删除/.test(detailPane()?.textContent ?? '') && [...(detailPane()?.querySelectorAll('button') ?? [])]
           .every(node => (node.textContent ?? '').trim() !== '编辑'),
-      firstRow?.textContent?.slice(0, 160) ?? 'no row')
+      detailPane()?.textContent?.slice(0, 160) ?? 'no detail pane')
     check('a dispatch rule pointing at a missing bot is reported (§5.1)',
       /分派规则 #1/.test(botsText()) && /ghost/.test(botsText()), botsText().slice(0, 300))
     // §10.2/P6: a stored stage-level bot and budget are editable per stage; `gates` has no row (the executor runs it).
     const mineRow = [...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
-    const editMine = [...(mineRow?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
+    mineRow?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    check('picking a Bot swaps the right pane to that Bot', /只做最小改动|我的 Bot/.test(detailPane()?.textContent ?? ''),
+      detailPane()?.textContent?.slice(0, 200) ?? 'no detail pane')
+    const editMine = [...(detailPane()?.querySelectorAll('button') ?? [])].find(node => (node.textContent ?? '').trim() === '编辑')
     editMine?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
     // The first screen stays small: stage/budget/tool fields sit behind 高级设置 and are not even mounted until it opens.
     check('the bot editor keeps advanced fields behind a disclosure (§13.2)',
       !host.querySelector('[data-testid="sa-bot-stage-review"]')
-        && /高级设置/.test(host.querySelector('.sa-bot-modal')?.textContent ?? ''),
-      host.querySelector('.sa-bot-modal')?.textContent?.slice(0, 200) ?? 'no modal')
-    const advancedToggle = [...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+        && /高级设置/.test(host.querySelector('.sa-bots-editor')?.textContent ?? ''),
+      host.querySelector('.sa-bots-editor')?.textContent?.slice(0, 200) ?? 'no modal')
+    const advancedToggle = [...host.querySelectorAll('.sa-bots-editor .sa-disclosure-row')]
       .find(node => /高级设置/.test(node.textContent ?? ''))
     advancedToggle?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
@@ -2566,14 +2577,14 @@ console.log('STEP pure projections')
       reviewSelect?.value === 'reviewer' && reviewInput?.value === '600000'
         && !host.querySelector('[data-testid="sa-bot-stage-gates"]'),
       `select=${reviewSelect?.value ?? 'none'} budget=${reviewInput?.value ?? 'none'} row=${reviewRow?.textContent?.slice(0, 80) ?? 'none'}`)
-    const cancelEdit = [...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '取消')
+    const cancelEdit = [...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '取消')
     cancelEdit?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(100)
     const newButton = [...host.querySelectorAll('button')].find(node => (node.textContent ?? '').trim() === '新建 Bot')
     newButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
-    const modalText = () => [...host.querySelectorAll('.sa-bot-modal')].map(node => node.textContent).join('')
-    ;[...host.querySelectorAll('.sa-bot-modal .sa-disclosure-row')]
+    const modalText = () => [...host.querySelectorAll('.sa-bots-editor')].map(node => node.textContent).join('')
+    ;[...host.querySelectorAll('.sa-bots-editor .sa-disclosure-row')]
       .find(node => /高级设置/.test(node.textContent ?? ''))
       ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(120)
@@ -2581,7 +2592,7 @@ console.log('STEP pure projections')
       /预览它能拿到什么/.test(modalText()) && /禁止的工具/.test(modalText()), modalText().slice(0, 240))
     check('the editor warns that an unverified backend cannot be saved (AC-B1)',
       /未核验/.test(modalText()), modalText().slice(0, 240))
-    const saveButton = [...host.querySelectorAll('.sa-bot-modal button')]
+    const saveButton = [...host.querySelectorAll('.sa-bots-editor button')]
       .find(node => (node.textContent ?? '').trim() === '保存')
     saveButton?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(160)
@@ -2598,18 +2609,19 @@ console.log('STEP pure projections')
     // Renaming a Bot edits the row it opened: excluding only the *new* id left the old one in the store, so one
     // save turned one Bot into two.
     ;[...host.querySelectorAll('.sa-bot-row')].find(node => /我的 Bot/.test(node.textContent ?? ''))
-      ?.querySelectorAll('button') && [...([...host.querySelectorAll('.sa-bot-row')]
-        .find(node => /我的 Bot/.test(node.textContent ?? ''))?.querySelectorAll('button') ?? [])]
-        .find(node => (node.textContent ?? '').trim() === '编辑')
-        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
-    const renameInput = [...host.querySelectorAll('.sa-bot-modal input')].find(node => node.value === 'mine')
+    ;[...(host.querySelector('.sa-bots-detail')?.querySelectorAll('button') ?? [])]
+      .find(node => (node.textContent ?? '').trim() === '编辑')
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(160)
+    const renameInput = [...host.querySelectorAll('.sa-bots-editor input')].find(node => node.value === 'mine')
     const renameKey = renameInput ? Object.keys(renameInput).find(key => key.startsWith('__reactProps$')) : undefined
     if (!renameKey) skip('renaming a Bot replaces it instead of adding a second one', 'the id input was not found')
     else {
       renameInput[renameKey].onChange?.({ target: { value: 'mine2' } })
       await sleep(120)
-      ;[...host.querySelectorAll('.sa-bot-modal button')].find(node => (node.textContent ?? '').trim() === '保存')
+      ;[...host.querySelectorAll('.sa-bots-editor button')].find(node => (node.textContent ?? '').trim() === '保存')
         ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
       await sleep(160)
       const renamed = lists.at(-1) ?? []

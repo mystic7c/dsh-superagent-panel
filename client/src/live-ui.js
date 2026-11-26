@@ -132,7 +132,7 @@ Object.assign(PAGE_TEXT, {
     unknownMode: ['未知方式（{mode}）', 'Unknown mode ({mode})'],
     default: ['默认', 'Default'], mixed: ['多仓库', 'Multiple repositories'] },
   // ---- thread detail ----
-  thread: { facts: ['线程信息', 'Thread facts'], tickets: ['产生的工单', 'Produced Tickets'], decision: ['决定', 'Decision'],
+  thread: { facts: ['线程信息', 'Thread facts'], decision: ['决定', 'Decision'],
     timeline: ['消息时间线', 'Message timeline'], fieldKey: ['线程', 'Thread'], fieldSource: ['来源', 'Source'],
     fieldChannel: ['渠道 ID', 'Channel id'], fieldCreated: ['创建', 'Created'], fieldLast: ['最近活动', 'Last activity'],
     fieldTriggers: ['消息', 'Messages'], fieldTickets: ['工单', 'Tickets'],
@@ -143,7 +143,6 @@ Object.assign(PAGE_TEXT, {
     noSelection: ['从左侧选择一个线程', 'Pick a thread on the left'],
     noSelectionHint: ['选中线程后，这里会展示事实、评估、决定与消息去向。',
       'Pick a thread to see its facts, evaluation, decision and where each message went.'],
-    noTicketProduced: ['这个决定没有产生工单。', 'This decision produced no Ticket.'],
     rulesDetail: ['逐条规则', 'Rule by rule'] },
   // ---- ticket detail ----
   ticket: { loading: ['正在读取工单…', 'Loading the Ticket…'], runs: ['运行记录', 'Runs'], noRuns: ['还没有运行记录。', 'No run yet.'],

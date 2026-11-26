@@ -11,7 +11,7 @@ import { same, stay, usePanel, usePanelData } from "./api.js"
 import { EmptyState, ErrorState, Folded, Hint, KeyValues, MarkdownLite, PageHead, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { useLiveResource } from "./live-model.js"
-import { TicketStatusTag, dispositionView } from "./live-ui.js"
+import { dispositionView } from "./live-ui.js"
 import { Fragment, React, h, useState } from "./react.js"
 Object.assign(PAGE_TEXT, {
   'thread.octoConversation': ['Octo 会话', 'Octo conversation'],
@@ -22,7 +22,7 @@ Object.assign(PAGE_TEXT, {
   // history stays one keyboard-reachable click away, exactly like the Ticket detail timeline.
   'thread.timelineShowAll': ['展开全部（{count} 条消息）', 'Show all ({count} messages)'],
   'thread.timelineCollapse': ['收起', 'Collapse'],
-  'thread.noSelectionHint': ['选中线程后，这里会展示事实、消息去向与产生的工单。',
+  'thread.noSelectionHint': ['选中线程后，这里会展示事实与消息去向。',
     'Pick a Thread to see its facts, where each message went and the Tickets it produced.'],
 })
 
@@ -77,7 +77,7 @@ export function actorDisplay(t, actor) {
   return { text: name, title: actor?.id && actor.id !== name ? String(actor.id) : undefined }
 }
 
-export function ThreadTimeline({ triggers, decisions }) {
+export function ThreadTimeline({ triggers, decisions, onOpenTicket }) {
   const { t } = usePanel()
   const [expanded, setExpanded] = useState(false)
   if (!triggers.length) return h(Hint, null, pt(t, 'thread.noMessages'))
@@ -108,7 +108,14 @@ export function ThreadTimeline({ triggers, decisions }) {
         })()),
         h('div', { className: 'sa-event-foot' },
           h(Tag, { tone: dispositionTone(view.state) }, pt(t, view.labelKey)),
-          decision ? h('span', { className: 'sa-hint' }, reasonLabel(t, decision.reason)) : null))
+          decision ? h('span', { className: 'sa-hint' }, reasonLabel(t, decision.reason)) : null,
+          // The Ticket a message produced opens from the message: the separate 产生的工单 list said the same thing twice
+          // (review, 2026-11-26). A deep link keeps the anchor so the row does not shift while it navigates.
+          decision?.ticketId && onOpenTicket
+            ? h('span', { className: 'sa-event-actions' },
+              h(Button, { variant: 'ghost', size: 'sm', onClick: () => onOpenTicket(decision.ticketId) },
+                pt(t, 'thread.openTicket')))
+            : null))
     })),
     folded
       ? h('div', { className: 'sa-actions', style: { marginTop: 'var(--sa-sp-8)' } },
@@ -165,16 +172,6 @@ export function ThreadDetail(props) {
             onClick: () => navigate({ page: 'eval', thread: threadKey }) },
           pt(t, 'thread.openEval', { count: decisions.length })))
         : null),
-    tickets.length
-      ? h(Section, { title: pt(t, 'thread.tickets'), count: tickets.length },
-        h('ul', { className: 'sa-list' }, tickets.map(ticket => h('li', { key: ticket.id, className: 'sa-row' },
-          h('div', { className: 'sa-row-main' },
-            h('div', { className: 'sa-row-title' },
-              h(TicketStatusTag, { ticket }),
-              h('span', { className: 'sa-ellipsis' }, ticket.title ?? ticket.id)),
-            h('div', { className: 'sa-row-actions' },
-              h(Button, { variant: 'ghost', size: 'sm', onClick: () => openTicket(ticket.id) },
-                pt(t, 'thread.openTicket'))))))))
-      : h(Section, { title: pt(t, 'thread.tickets') }, h(Hint, null, pt(t, 'thread.noTicketProduced'))),
-    h(Section, { title: pt(t, 'thread.timeline'), count: triggers.length }, h(ThreadTimeline, { triggers, decisions })))
+    h(Section, { title: pt(t, 'thread.timeline'), count: triggers.length },
+      h(ThreadTimeline, { triggers, decisions, onOpenTicket: openTicket })))
 }

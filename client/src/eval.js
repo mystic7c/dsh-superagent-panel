@@ -38,7 +38,6 @@ Object.assign(PAGE_TEXT, {
   'ev.emptyFilterHint': ['换个决定类型，或清除筛选。', 'Try another decision kind, or clear the filter.'],
   'ev.clearFilter': ['清除筛选', 'Clear filters'],
   'ev.openTicket': ['查看工单', 'Open Ticket'],
-  'ev.openRun': ['查看运行', 'Open the run'],
   'ev.sameDecision': ['相同判断 {count} 次', 'Same judgement ×{count}'],
   'ev.dismiss': ['忽略', 'Dismiss'],
   'ev.dismissHint': ['引擎还没有「忽略未完成评估」的接口，这里只展示记录，不会发请求。',
@@ -227,16 +226,12 @@ export function evalDecisionRow(t, navigate, decision, count = 1, ticketIds = []
             : null,
           evalModelTag(t, decision),
           decision.at ? h(When, { at: decision.at }) : null,
-          // One way into the work, not five: the ticket ids and run ids used to sit in the meta line as cryptic short
-          // links (run_2006…) beside a 查看工单 button that led to the same page (ui audit B). The ids stay in the title.
+          // One button, one destination: 查看工单 and 查看运行 both opened the Ticket page, the second only with its run
+          // focused (user report 2026-11-26). The single button carries that focus when the run is known.
           ticketIds.length
             ? h(Button, { variant: 'ghost', size: 'sm', title: ticketIds.join('\n'),
-              onClick: () => navigate({ page: 'execution', id: ticketIds[0] }) }, pt(t, 'ev.openTicket'))
-            : null,
-          runLinks.length && runLinks[0].runId
-            ? h(Button, { variant: 'ghost', size: 'sm', title: runLinks[0].runId,
-              onClick: () => navigate({ page: 'execution', id: runLinks[0].ticketId, run: runLinks[0].runId }) },
-            pt(t, 'ev.openRun'))
+              onClick: () => navigate({ page: 'execution', id: ticketIds[0], run: runLinks[0]?.runId }) },
+            pt(t, 'ev.openTicket'))
             : null,
           contextOnly ? h('span', null, t('contextOnlyHint')) : null),
         unavailable ? h('p', { id: dismissHintId, className: 'sa-hint' }, pt(t, 'ev.dismissHint')) : null,

@@ -537,6 +537,21 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-token-row .sa-input-full { flex: 1 1 200px; min-width: 0; }
 
 /* ---------- panes (trigger: list + detail; settings: nav + form) ---------- */
+/* Bots: the store list is the left pane, the picked Bot the right one. The list rows are real buttons, so they need the
+   same chrome-strip the search-result rows get plus a selected state (2026-11-26 master-detail rewrite). */
+.sa-bot-list { display: flex; flex-direction: column; }
+.sa-bot-row { cursor: pointer; }
+.sa-bot-row:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-bot-row[aria-current='true'] { background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); }
+.sa-bot-row[aria-current='true'] .sa-row-title > span:first-child { font-weight: 600; }
+.sa-bots-detail { gap: var(--sa-sp-12); }
+.sa-bots-editor-body { display: flex; flex-direction: column; gap: var(--sa-sp-16); }
+/* The store path is long and mono: break it instead of pushing the aside wider than its grid column. */
+.sa-bots-store { overflow-wrap: anywhere; }
+/* The role prompt is prose, not a ledger value: keep its line breaks and cap the height so a long prompt cannot push
+   the action row out of the pane. */
+.sa-role-text { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+
 .sa-panes { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
 /* The trigger list is not its own scroller: a 160px-capped sticky pane showed three rows and then a second scrollbar
@@ -820,6 +835,11 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-event-quiet .sa-event-text { color: var(--sa-label-tertiary); }
 .sa-event-foot { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
+/* The Ticket a message produced opens from that message's own foot: keep the control on the right so the disposition
+   tag and the reason still start the line. */
+/* The Ticket jump sits right after the disposition reason it belongs to; pushing it to the far edge of a 1200px pane
+   read as a row-level action instead of a footnote on one message (1.2.3). */
+.sa-event-actions { margin-left: var(--sa-sp-8); display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
 .sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
   margin: 0; padding: 0; list-style: none; }
 /* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
