@@ -23,20 +23,28 @@ export async function apiCall(t, path, method, body, options = {}) {
   const timeoutMs = options.timeoutMs ?? (method === 'GET' ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS)
   const controller = timeoutMs > 0 && typeof AbortController === 'function' ? new AbortController() : undefined
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined
+  const timeoutError = () => new ApiError(t('requestTimeout', { seconds: Math.round(timeoutMs / 1000) }), 0,
+    { unreachable: true, timeout: true })
   let response
   try {
     response = await fetch(`${API}/${path}`, { method, headers: { 'x-superagent-request': '1', ...body === undefined ? {} : { 'content-type': 'application/json' } },
       ...controller ? { signal: controller.signal } : {},
       body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
-    if (controller?.signal.aborted) {
-      throw new ApiError(t('requestTimeout', { seconds: Math.round(timeoutMs / 1000) }), 0, { unreachable: true, timeout: true })
-    }
-    throw new ApiError(t('offline'), 0, { unreachable: true })
+    clearTimeout(timer)
+    throw controller?.signal.aborted ? timeoutError() : new ApiError(t('offline'), 0, { unreachable: true })
+  }
+  // The clock must cover the body too: clearing it once headers arrive let a stalled response hang the poll queue
+  // forever, so every page kept its last data and the write button stayed busy (review P2).
+  let text
+  try {
+    text = await response.text()
+  } catch (error) {
+    if (controller?.signal.aborted) throw timeoutError()
+    throw error instanceof Error ? new ApiError(error.message, 0, { unreachable: true }) : new ApiError(t('offline'), 0, { unreachable: true })
   } finally {
     clearTimeout(timer)
   }
-  const text = await response.text()
   let value
   try { value = text ? JSON.parse(text) : {} } catch { value = undefined }
   if (!response.ok) {
@@ -126,8 +134,14 @@ export function useAction(action, options = {}) {
     setBusy(true)
     // A handler that resolves `false` has refused the action (it already notified): the dialog stays open, exactly as
     // it does when the handler throws. Without this the confirm closed on a failed host call that did not throw.
-    try { const result = await action(...args); await options.reload?.(); return result !== false }
-    catch (failure) { notify(errorText(failure)); return false }
+    try {
+      const result = await action(...args)
+      if (result === false) return false
+      // The action has committed at this point. A refresh that fails afterwards is a stale-screen problem, not a
+      // failed action: reporting it as one kept a confirm dialog open on an already-applied pause/delete (review P2).
+      try { await options.reload?.() } catch (failure) { notify(errorText(failure)) }
+      return true
+    } catch (failure) { notify(errorText(failure)); return false }
     finally { running.current = false; setBusy(false) }
   }
   return { run, busy }

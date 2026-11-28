@@ -84,7 +84,9 @@ Object.assign(PAGE_TEXT, {
     'Tickets a person dropped after a failed run. They never run again; open one for the failure that preceded it.'],
   'ex.doneSummary': ['共 {total} 张：{accepted} 已验收、{dismissed} 已忽略；其中 {retried} 张在失败重试后完成',
     '{total} Tickets: {accepted} accepted, {dismissed} dismissed; {retried} completed after a failed-run retry'],
-  'ex.doneShowAll': ['查看全部（{count}）', 'Show all ({count})'],
+  // The ended history used to be revealed by three controls: this cap reveal, a 展开已结束 button, and the include-ended
+  // switch. The switch now carries the count and the cap reveal says what it adds, so only two things to read (review A).
+  'ex.doneMore': ['显示其余 {rest} 张（共 {total} 张）', 'Show the other {rest} of {total}'],
   'ex.doneCollapse': ['收起', 'Collapse'],
   'ex.stageEmptyTitle': ['这个阶段还没有工单。', 'No Tickets in this stage yet.'],
   'ex.stageEmptyAction': ['显示全部工单', 'Show all Tickets'],
@@ -102,7 +104,6 @@ Object.assign(PAGE_TEXT, {
   'ex.sortUpdated': ['最近更新', 'Last updated'],
   'ex.sortCreated': ['最近创建', 'Newest'],
   'ex.showDone': ['显示已结束', 'Show ended'],
-  'ex.showDoneGroup': ['展开已结束（{count}）', 'Show ended ({count})'],
   'ex.clearFilters': ['清除筛选', 'Clear filters'],
   'ex.filterEmptyTitle': ['没有符合当前筛选的工单。', 'No Tickets match the current filter.'],
   'ex.noRepo': ['（未指定仓库）', '(No repository)'],
@@ -288,7 +289,11 @@ export function ExecutionQueuePage({ route }) {
               onSelect: () => updateView({ sort: 'created' }) },
           ] }),
         h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
-        h('label', { className: 'sa-switch-field' },
+        // Plain container: the visible chip is not a toggle target — only the switch pill is (a click on the words
+        // used to flip the filter, which read as an accident).
+        h('span', { className: 'sa-switch-field' },
+          // No count here: the 已结束 chip already carries it, and the group badge repeats it — a third copy 40 px from
+          // the first two (review A: the ended history had three reveals; the switch is the only include-control now).
           h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),
           h(Switch, { checked: execView.showDone, onChange: value => updateView({ showDone: value }),
             className: 'sa-switch-compact' }))))
@@ -318,7 +323,8 @@ export function ExecutionQueuePage({ route }) {
     ? h('div', { className: 'sa-actions' },
       h(Button, { variant: 'outline', size: 'sm', 'aria-expanded': doneExpanded,
         onClick: () => setDoneExpanded(value => !value) },
-        pt(t, doneExpanded ? 'ex.doneCollapse' : 'ex.doneShowAll', { count: doneTickets.length })))
+        doneExpanded ? pt(t, 'ex.doneCollapse')
+          : pt(t, 'ex.doneMore', { rest: doneTickets.length - EXEC_DONE_RECENT, total: doneTickets.length })))
     : null
   const pauseConfirm = h(ConfirmButton, {
     label: paused ? pt(t, 'resumeProcessing') : pt(t, 'pauseProcessing'),
@@ -343,7 +349,12 @@ export function ExecutionQueuePage({ route }) {
       : null,
     h(Section, { title: pt(t, 'ex.executor'),
       badge: paused && !barShown ? h(Tag, { tone: 'warning' }, pt(t, 'loadbarPaused')) : null,
-      action: h('span', { className: 'sa-actions' }, refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
+      // Manual entry is an executor action, not a band of its own: as a body row it pushed the queue down by ~40 px and
+      // repeated the same sentence on every visit (review A: four chrome clusters above row 1).
+      action: h('span', { className: 'sa-actions' },
+        h(Button, { variant: 'outline', size: 'sm', icon: 'plus', title: pt(t, 'ex.createHint'),
+          onClick: () => setManualOpen(true) }, pt(t, 'ex.createTicket')),
+        refreshButton, automationNeeded && automationReady ? null : pauseConfirm) },
       h('div', { className: 'sa-executor-band' },
         h('div', { className: 'sa-executor-load-col' }, h(ExecutorLoad, { load: status.load })),
         h('div', { className: 'sa-executor-recent' },
@@ -378,10 +389,6 @@ export function ExecutionQueuePage({ route }) {
             pt(t, 'ex.runs24hFailed', { count: Number(status.runs24hFailed) }) + ' →')
             : h('span', { className: 'sa-hint' }, pt(t, 'ex.runs24hNone')))),
       !executorOn(status.config) && !barShown ? h(Hint, null, pt(t, 'ex.executorDisabled')) : null,
-      h('div', { className: 'sa-actions' },
-        h(Button, { variant: 'outline', size: 'sm', icon: 'plus', onClick: () => setManualOpen(true) },
-          pt(t, 'ex.createTicket')),
-        h('span', { className: 'sa-hint' }, pt(t, 'ex.createHint'))),
       status.engine?.lastError ? h(ErrorState, { error: status.engine.lastError, onRetry: () => { void poll.run() } }) : null),
     list.error ? h(ErrorState, { error: list.error, onRetry: list.reload }) : null,
     listBar,
@@ -391,12 +398,7 @@ export function ExecutionQueuePage({ route }) {
           : !inStage.length ? stageEmptyState
             : h(Fragment, null,
               queueBody,
-              doneReveal,
-              !execView.showDone && stage !== 'done' && doneTickets.length
-                ? h('div', { className: 'sa-actions' },
-                  h(Button, { variant: 'outline', size: 'sm', onClick: () => updateView({ showDone: true }) },
-                    pt(t, 'ex.showDoneGroup', { count: doneTickets.length })))
-                : null),
+              doneReveal),
     h(Modal, { open: manualOpen, onClose: () => setManualOpen(false), title: pt(t, 'ex.createTicket'),
       closeLabel: t('close'), description: pt(t, 'ex.createHint') },
       h(ManualTicketForm, { heading: false, onDone: () => { setManualOpen(false); void reloadBoth() },

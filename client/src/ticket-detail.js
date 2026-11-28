@@ -2,50 +2,34 @@ import { Icon, executorSessionId, safeHttpUrl, scrollPanelTo, shortId } from "./
 import { errorText, fullTime, localized, reasonLabel, timeLocale, when } from "./i18n.js"
 import { Button, CopyButton, InfoTip, Input, Menu, Modal, SegmentedControl, Select, StatusIcon, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
-import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, RawValue, Section, Skeleton, When } from "./widgets.js"
+import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, MarkdownLite, PageHead, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { routeLabel } from "./router.js"
 import { useLiveResource } from "./live-model.js"
-import { GateSummary, MergeRequestCard, RunSessionLink, StageRail, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
+import { GateSummary, MergeRequestCard, RunSessionLink, TicketRow, TicketStatusTag, publishableStatusOf, UatCard, autoSkipReasonText, automationSummaryText, failureKnown, failureLabel, latestGatesOf, latestRunFor, liveShortId, liveText, panelDefaultRepo, panelRepos, executorOn, repoAcceptanceText, repoVerifyModeText, runStopLabel, runTriggerLabel, runView, sortRunsNewestFirst, ticketAcceptanceOf, ticketStatus } from "./live-ui.js"
 import { ThreadRuleRows } from "./thread-detail.js"
 import { React, h, useCallback, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
-  'wf.progress': ['执行流程', 'Execution workflow'],
-  'wf.assess': ['难度评估', 'Assessment'], 'wf.plan': ['方案设计', 'Planning'],
-  'wf.implement': ['实现', 'Implementation'], 'wf.gates': ['程序闸门', 'Gates'],
-  'wf.review': ['独立验收', 'Independent review'],
-  // Host workflow state and stage status are backend enums; render them through these keys (unknown values stay raw).
-  'wf.statePending': ['待开始', 'Pending'], 'wf.stateRunning': ['进行中', 'Running'],
-  'wf.stateAssess': ['评估中', 'Assessing'], 'wf.statePlan': ['规划中', 'Planning'],
-  'wf.stateImplement': ['实现中', 'Implementing'], 'wf.stateGates': ['闸门检查中', 'Checking gates'],
-  'wf.stateReview': ['评审中', 'Reviewing'], 'wf.stateBlocked': ['已阻塞', 'Blocked'],
-  'wf.stateReady': ['已就绪', 'Ready'],
-  'wf.stagePending': ['等待', 'Pending'], 'wf.stageRunning': ['进行中', 'Running'],
-  'wf.stageCompleted': ['已完成', 'Completed'], 'wf.stageFailed': ['失败', 'Failed'],
-  'wf.stageBlocked': ['已阻塞', 'Blocked'],
-})
-Object.assign(PAGE_TEXT, {
   // §13.1: a run says which bot ran it, who chose it and what the choice was based on.
   'detail.botLabel': ['Bot', 'Bot'],
   'detail.botAdhoc': ['现拉（{id}）', 'Synthesised ({id})'],
-  'detail.botSource.explicit': ['手动指定', 'Manual'],
-  'detail.botSource.rule': ['规则', 'Rule'],
-  'detail.botSource.model': ['决策模型', 'Judge model'],
-  'detail.botSource.default': ['默认', 'Default'],
-  'detail.botSource.adhoc': ['现拉', 'Synthesised'],
-  'detail.botDegraded.explicit': ['指定的 Bot 不可用', 'The requested bot is unusable'],
-  'detail.botDegraded.model': ['决策模型回答无效，已回退', 'The judge answered invalidly; fell back'],
-  'detail.botDegraded.null': ['决策模型没有选出 Bot', 'The judge chose none'],
-  'detail.botDegraded.budget': ['本轮回合的分派预算已用完', 'Dispatch budget for this poll is spent'],
+  'detail.botSource.explicit-ticket': ['1 显式 · 工单手动指定', '1 explicit · picked on the Ticket'],
+  'detail.botSource.explicit-repo': ['1 显式 · 仓库指定', '1 explicit · named by the repository'],
+  'detail.botSource.pick': ['2 挑选 · 决策模型', '2 pick · judge model'],
+  'detail.botSource.default': ['3 默认 · executor.bot', '3 default · executor.bot'],
+  'detail.botDegraded.pick-unavailable': ['决策模型不可用，已回退默认 Bot', 'Judge unavailable; fell back to the default bot'],
+  'detail.botDegraded.pick-failed': ['模型调用失败，已回退默认 Bot', 'Judge call failed; fell back to the default bot'],
+  'detail.botDegraded.pick-invalid': ['模型选了候选之外的 Bot，已回退默认 Bot', 'Judge picked a bot outside the candidates; fell back'],
+  'detail.botDegraded.pick-none': ['模型认为都不合适，已回退默认 Bot', 'Judge found none suitable; fell back to the default bot'],
+  'detail.botDegraded.no-candidate': ['没有后端可用的 Bot，已回退默认 Bot', 'No bot had an available backend; fell back to the default bot'],
   'detail.botDegraded.other': ['降级：{code}', 'Degraded: {code}'],
   'detail.botDegradedHint': ['这次运行用的不是首选 Bot，原因见右侧说明。', 'This run did not use its first-choice bot; the reason is beside it.'],
-  'detail.botCapability': ['能力：{caps}（{source}{at}）', 'Capabilities: {caps} ({source}{at})'],
-  'detail.botCapabilityNone': ['能力：无（后端未核验）', 'Capabilities: none (backend unverified)'],
-  'detail.botCapabilitySource.probe': ['探针', 'probe'],
-  'detail.botCapabilitySource.smoke': ['冒烟核验', 'smoke check'],
-  'detail.botCapabilitySource.fallback': ['降级默认表，未核验', 'conservative default, unverified'],
-  'detail.botUnverified': ['后端 {backend} 未核验，需先 smoke 核验。', 'Backend {backend} is unverified; run a smoke check first.'],
+  'detail.dispatchCandidates': ['候选：{ids}', 'Candidates: {ids}'],
+  'detail.dispatchNoCandidates': ['候选：无（后端都不可用）', 'Candidates: none (no backend available)'],
+  'detail.dispatchCache': ['缓存命中，未调模型', 'cache hit — no model call'],
+  'detail.dispatchSkipped': ['未进候选：{list}', 'Skipped: {list}'],
+  'detail.dispatchBecause': ['理由：{text}', 'Because: {text}'],
   'detail.botSave': ['存为 Bot', 'Save as bot'],
   'detail.botSaveReady': ['已填入「设置 → Bot」的编辑器，确认后手动保存。', 'Loaded into Settings → Bots; review and save it yourself.'],
   'detail.botRerun': ['换 Bot 重跑', 'Rerun with bot'],
@@ -56,7 +40,7 @@ Object.assign(PAGE_TEXT, {
     'The repository bot file is ignored (bots come from the state dir only): {path}; reading {store}'],
 })
 
-/* Ticket detail (spec 6.5 / 7.4): changes → acceptance → stage rail → gate results → run records → timeline,
+/* Ticket detail (spec 6.5 / 7.4): changes → acceptance → gate results → run records → timeline,
    with the authorization basis and the raw JSON folded at the bottom. Actions are one state-following primary action
    plus a ⋯ menu; destructive ones always confirm (retry, publish MR, accept/reject).
    Data: GET engine/ticket/:id (host increments, contract §4), refreshed every 10s. */
@@ -69,9 +53,7 @@ Object.assign(PAGE_TEXT, {
   'detail.failedCli': ['本地 CLI 不可用或未登录。安装/登录 CLI，或在「设置 → Worker → CLI 路径」填写绝对路径后重试。',
     'The local CLI is missing or not logged in. Install/log in, or set its absolute path under Settings → Worker → CLI path, then retry.'],
   // P1 routing: who ran (or would run) a Ticket, independent of ticket status.
-  'detail.routeSuggest': ['建议 {backend} · {workType}', 'suggested {backend} · {workType}'],
   'detail.routeLabel': ['执行路由', 'Route'],
-  'detail.routeSuggested': ['建议', 'suggested'],
   'detail.routeApplied': ['{backend} · {workType}', '{backend} · {workType}'],
   'detail.routeReadOnly': ['只读', 'read-only'],
   'detail.routeWrite': ['可写', 'write'],
@@ -95,11 +77,8 @@ Object.assign(PAGE_TEXT, {
   'detail.errorCli': ['本地 CLI 缺失或未登录。', 'The local CLI is missing or not signed in.'],
   'detail.errorTimeout': ['执行超时。', 'The run timed out.'],
   'detail.errorGate': ['闸门未通过。', 'A gate failed.'],
-  // U-11: a staged workflow block and any unrecognised host error keep their English sentence as the *detail* of a
-  // Chinese conclusion, and the untruncated text is folded below (`detail.rawError`).
-  'detail.errorWorkflowBlocked': ['分阶段流程被阻塞：{detail}', 'The staged workflow was blocked: {detail}'],
-  'detail.workflowReview': ['独立审查仍要求修改（返工轮次已用完）',
-    'The independent review still requested changes (repair budget spent)'],
+  // U-11: any unrecognised host error keeps its English sentence as the *detail* of a Chinese conclusion, and the
+  // untruncated text is folded below (`detail.rawError`).
   'detail.errorOther': ['其他原因：{cause}', 'Other cause: {cause}'],
   'detail.rawError': ['技术详情', 'Technical details'],
   'detail.copyTicketId': ['复制工单 ID', 'Copy Ticket ID'],
@@ -308,9 +287,6 @@ Object.assign(PAGE_TEXT, {
     'The last run was stopped by a person; its worktree and checkpoint are kept and it can resume.'],
   'detail.interruptedHint': ['上一次运行被插件重载或宿主重启中断，可以从检查点继续。',
     'The last run was interrupted by a plugin reload or host restart; it can resume from its checkpoint.'],
-  'detail.resumeWorkflowTitle': ['从断点继续？', 'Continue where it stopped?'],
-  'detail.resumeWorkflowConfirm': ['不会重跑已完成的分析、实现与闸门：只从停下的那一步继续（失败的一步，或验收要求修改后的下一轮返工），通过后提交、推送并按仓库策略开 MR。要整单重来请用「重试执行」：{title}',
-    'Finished assessment, implementation and gates are kept: only the stage where it stopped runs again (the failed one, or the next repair round after a rejection), then the change is committed, pushed and delivered as MR. Use Retry to start over: {title}'],
 
   // ---- P2-1: ticket-level automation ----------------------------------------------------------------------------
   'auto.section': ['自动化', 'Automation'],
@@ -362,7 +338,6 @@ Object.assign(PAGE_TEXT, {
   'detail.confirmPublish': ['发布并开 MR', 'Publish and open MR'],
   'detail.confirmStop': ['终止工单', 'Stop Ticket'],
   'detail.confirmDismiss': ['忽略并删除分支', 'Dismiss and delete branch'],
-  'detail.confirmResume': ['从断点继续', 'Resume from checkpoint'],
   'detail.confirmGateRelease': ['放行闸门', 'Release gate'],
   'detail.confirmAcceptPass': ['确认验收通过', 'Accept delivery'],
   'detail.confirmAcceptFail': ['确认打回', 'Reject delivery'],
@@ -874,51 +849,50 @@ export function TicketActivities({ activities }) {
   </>
 }
 
-/** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§13.1 item 5). */
-export const BOT_DEGRADED = { 'explicit-unusable': 'detail.botDegraded.explicit', model: 'detail.botDegraded.model',
-  'model-null': 'detail.botDegraded.null', 'model-budget': 'detail.botDegraded.budget' }
+/** A degraded dispatch is not a footnote: the operator has to see the choice was a fallback (§2.4). */
+export const BOT_DEGRADED = { 'pick-unavailable': 'detail.botDegraded.pick-unavailable',
+  'pick-failed': 'detail.botDegraded.pick-failed', 'pick-invalid': 'detail.botDegraded.pick-invalid',
+  'pick-none': 'detail.botDegraded.pick-none', 'no-candidate': 'detail.botDegraded.no-candidate' }
 
-/** One run's dispatch record (§7.5): which bot, who chose it and why, and the capability evidence behind it. */
+/**
+ * One run's dispatch record (1.5.0 §2.5): the three layers with the layer that hit, the candidates as they stood,
+ * what the judge answered and why, and — when the answer was not a pick — the degradation code in plain words.
+ * The counterfactual the doc asks for is the candidate list plus the because: what the judge was offered and said.
+ */
 export function RunBot({ run, choices = [], onRerun }) {
-  const { t, navigate, notify } = usePanel()
+  const { t, notify } = usePanel()
   const [choice, setChoice] = useState('')
   const bot = run?.bot && typeof run.bot === 'object' ? run.bot : undefined
-  if (!bot || !bot.id) return null
-  const id = String(bot.id)
-  const adhoc = String(bot.source ?? '') === 'adhoc' || id.startsWith('adhoc:')
-  const source = pt(t, `detail.botSource.${String(bot.source ?? 'default')}`)
-  const degraded = typeof bot.degraded === 'string' && bot.degraded
-    ? pt(t, BOT_DEGRADED[bot.degraded] ?? 'detail.botDegraded.other', { code: bot.degraded })
+  const dispatch = run?.dispatch && typeof run.dispatch === 'object' ? run.dispatch : undefined
+  const id = String(bot?.id ?? dispatch?.picked ?? '')
+  if (!id) return null
+  const source = String(dispatch?.source ?? bot.source ?? 'default')
+  const because = String(dispatch?.because ?? bot.because ?? bot.reason ?? '')
+  const candidates = Array.isArray(dispatch?.candidates) ? dispatch.candidates : Array.isArray(bot.candidates) ? bot.candidates : []
+  const skipped = Array.isArray(dispatch?.skipped) ? dispatch.skipped : Array.isArray(bot.skipped) ? bot.skipped : []
+  const degradedCode = dispatch?.degraded ?? bot.degraded
+  const degraded = typeof degradedCode === 'string' && degradedCode
+    ? pt(t, BOT_DEGRADED[degradedCode] ?? 'detail.botDegraded.other', { code: degradedCode })
     : ''
-  const capabilities = Array.isArray(bot.capability) ? bot.capability : []
-  const capabilitySource = pt(t, `detail.botCapabilitySource.${String(bot.capabilitySource ?? 'fallback')}`)
-  // The capability line names when the evidence was taken; an absent or unparseable stamp simply renders none.
-  const verifiedAt = typeof bot.verifiedAt === 'string' && Number.isFinite(Date.parse(bot.verifiedAt))
-    ? fullTime(bot.verifiedAt, timeLocale(t.lang)) : ''
-  const unverified = bot.capabilitySource !== 'probe' && bot.capabilitySource !== 'smoke'
+  const cacheHit = dispatch?.cacheHit === true || bot.cacheHit === true
   const options = choices.filter(item => typeof item === 'string' && item !== id)
-  const save = () => {
-    if (!bot.resolved) return
-    try { window.sessionStorage.setItem('superagent-panel/bot-draft', JSON.stringify(bot.resolved)) } catch { /* private mode */ }
-    notify(pt(t, 'detail.botSaveReady'))
-    navigate({ page: 'bots' })
-  }
   return <div className="sa-run-bot" data-degraded={degraded ? 'true' : undefined}>
     <p className="sa-row-meta">
       <Tag tone="outline">{pt(t, 'detail.botLabel')}</Tag>
-      <span>{adhoc ? pt(t, 'detail.botAdhoc', { id }) : id}</span>
-      <span className="sa-hint">{`${source} · ${String(bot.reason ?? '')}`}</span>
+      <span>{id}</span>
+      <span className="sa-hint">{source ? pt(t, `detail.botSource.${source}`) : ''}</span>
+      {cacheHit ? <Tag tone="quiet">{pt(t, 'detail.dispatchCache')}</Tag> : null}
       {degraded ? <Tag tone="warning" title={pt(t, 'detail.botDegradedHint')}>{degraded}</Tag> : null}
     </p>
+    {because ? <p className="sa-hint">{pt(t, 'detail.dispatchBecause', { text: because })}</p> : null}
     <p className="sa-hint">
-      {capabilities.length
-        ? pt(t, 'detail.botCapability', { caps: capabilities.join(', '), source: capabilitySource,
-          at: verifiedAt ? ` / ${verifiedAt}` : '' })
-        : pt(t, 'detail.botCapabilityNone')}
+      {candidates.length
+        ? pt(t, 'detail.dispatchCandidates', { ids: candidates.join('、') })
+        : pt(t, 'detail.dispatchNoCandidates')}
     </p>
-    {unverified
-      ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
-        {pt(t, 'detail.botUnverified', { backend: String(bot.backend ?? bot.resolved?.backend ?? run?.worker?.backend ?? '—') })}</p>
+    {skipped.length
+      ? <p className="sa-hint">{pt(t, 'detail.dispatchSkipped', {
+        list: skipped.map(item => `${item.id}（${item.reason || item.state}）`).join('；') })}</p>
       : null}
     <p className="sa-row-meta">
       {onRerun
@@ -930,22 +904,20 @@ export function RunBot({ run, choices = [], onRerun }) {
             {pt(t, 'detail.botRerun')}</Button>
         </>
         : null}
-      {bot.resolved ? <Button size="sm" variant="ghost" onClick={save}>{pt(t, 'detail.botSave')}</Button> : null}
     </p>
   </div>
 }
 
-/** P1 route tag: the work type and the backend that ran (or would run) this Ticket; suggest runs name both. */
+/** Route tag: the work type and the backend that ran this Ticket. 1.4.0 deleted the suggest mode, so there is no
+    "would run" state any more — the tag always names what actually executed. */
 export function runRouteTag(t, run) {
   const route = run?.route
   if (!route || typeof route !== 'object') return null
   const workType = pt(t, `detail.workType.${route.workType}`)
   const backend = route.execBackend ?? route.backend
-  const text = route.applied
-    ? pt(t, 'detail.routeApplied', { backend, workType })
-    : pt(t, 'detail.routeSuggest', { backend: route.backend, workType })
-  return <Tag tone={route.applied ? 'outline' : 'info'}
-    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>{text}</Tag>
+  return <Tag tone="outline"
+    title={`${pt(t, 'detail.routeReadOnly')} / ${pt(t, 'detail.routeWrite')} · ${route.bot ?? ''}`}>
+    {pt(t, 'detail.routeApplied', { backend, workType })}</Tag>
 }
 
 /** A CLI run leaves a conversation behind: `claude --resume <id>` is the same Claude Code session, so the run row can
@@ -1193,21 +1165,6 @@ export function failureHint(t, error, steps) {
   return pt(t, 'detail.failedGeneric')
 }
 
-/** Host workflow state → localized text; an unknown value stays visible instead of leaking a backend enum (audit P2). */
-export const WORKFLOW_STATE_KEYS = { pending: 'wf.statePending', running: 'wf.stateRunning', assess: 'wf.stateAssess',
-  plan: 'wf.statePlan', implement: 'wf.stateImplement', gates: 'wf.stateGates', review: 'wf.stateReview',
-  blocked: 'wf.stateBlocked', ready: 'wf.stateReady' }
-export const WORKFLOW_STAGE_KEYS = { pending: 'wf.stagePending', running: 'wf.stageRunning', completed: 'wf.stageCompleted',
-  failed: 'wf.stageFailed', blocked: 'wf.stageBlocked' }
-export function ticketWorkflowStateLabel(t, status) {
-  const key = WORKFLOW_STATE_KEYS[String(status ?? '')]
-  return key ? pt(t, key) : String(status ?? '—')
-}
-export function ticketWorkflowStageLabel(t, status) {
-  const key = WORKFLOW_STAGE_KEYS[String(status ?? '')]
-  return key ? pt(t, key) : String(status ?? '—')
-}
-
 /** The three automation modes, mirroring lib/live/schedule.js AUTOMATION_MODES. */
 export const AUTOMATION_MODES = ['off', 'heartbeat', 'schedule']
 
@@ -1243,8 +1200,17 @@ export function AutomationCard({ ticket, onSaved }) {
   const intervalRef = useRef(null)
   const atRef = useRef(null)
   const maxExecutionsRef = useRef(null)
-  // Re-sync only when the stored config actually changed (a poll of unchanged data never wipes a half-typed form).
-  useEffect(() => { setForm(automationFormOf(automation)) }, [signature])
+  // Re-sync only when the stored config actually changed AND the form is still untouched: a poll that returned a config
+  // edited elsewhere used to wipe a half-typed form (review P3). `synced` is the snapshot the form was last filled from.
+  const synced = useRef(automationFormOf(automation))
+  useEffect(() => {
+    const next = automationFormOf(automation)
+    setForm(previous => {
+      if (JSON.stringify(previous) !== JSON.stringify(synced.current)) return previous
+      synced.current = next
+      return next
+    })
+  }, [signature])
   // A Ticket without a stored config still needs an entry point to opt in; only the terminal "put away" states hide
   // the card (a dismissed/closed Ticket will never run again by schedule).
   const update = patch => { setForm(previous => ({ ...previous, ...patch })); setFieldErrors({}) }
@@ -1327,13 +1293,13 @@ export function AutomationCard({ ticket, onSaved }) {
       <div className="sa-card">
         <div className="sa-card-head">
           <span className="sa-card-title">{automationSummaryText(t, stored) || pt(t, 'auto.modeOff')}</span>
-          <label className="sa-actions">
+          <div className="sa-actions">
             <span className="sa-hint">{pt(t, 'auto.enabled')}</span>
             {/* With mode 'off' the host persists enabled=false whatever the switch says, so the switch would spring
                 back on save (automationFormOf ANDs mode !== 'off'). Disable it instead of accepting a lie. */}
             <Switch checked={form.enabled && form.mode !== 'off'} disabled={form.mode === 'off'}
               onChange={value => update({ enabled: value })} label={pt(t, 'auto.enabled')} />
-          </label>
+          </div>
         </div>
         <div className="sa-field">
           <span className="sa-field-head">{pt(t, 'auto.mode')}</span>
@@ -1416,7 +1382,6 @@ export const DETAIL_JUMPS = [
   { id: 'sa-ticket-changes', labelKey: 'ticket.changes' },
   { id: 'sa-acceptance', labelKey: 'ticket.acceptCard' },
   { id: 'sa-automation', labelKey: 'auto.section' },
-  { id: 'sa-ticket-stages', labelKey: 'ticket.stages' },
   { id: 'sa-ticket-gates', labelKey: 'ticket.gates' },
   { id: 'sa-ticket-runs', labelKey: 'ticket.runs' },
   { id: 'sa-ticket-timeline', labelKey: 'ticket.timeline' },
@@ -1848,7 +1813,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
     const capabilities = (routePreview.capabilities ?? []).map(capability => pt(t,
       `st.routeCap${capability.charAt(0).toUpperCase()}${capability.slice(1)}`)).join(' · ')
     authRows.push([pt(t, 'detail.routeLabel'),
-      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}${routePreview.applied ? '' : ` · ${pt(t, 'detail.routeSuggested')}`}`])
+      `${pt(t, routePreview.deliverable === 'report' ? 'st.routeReport' : 'st.routeChange')}${capabilities ? ` · ${capabilities}` : ''} · ${routePreview.backend}`])
   }
 
   // Acceptance is a human decision: it gets its own card, its own two sign-off buttons, and (unlike the action row)
@@ -1881,8 +1846,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
   const activeRun = ticket.status === 'working' || ticket.status === 'queued' || ticket.status === 'preparing'
     || Boolean(ticket.stopRequested)
   const failed = view.state === 'error'
-  // A failed run whose staged workflow stopped at a replayable stage can continue from there (host: workflowResumable).
-  const workflowResumable = failed && ticket.workflowResumable === true
   const needsAcceptance = !accepted && view.group === 'waiting' && canAccept
   // A finished dry run is not "run it again": the next decision is publish. The rerun stays in the ⋯ menu.
   const dryRunReady = ticket.status === 'ready' && !interrupted && !accepted && !failed
@@ -1893,14 +1856,9 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       scrollPanelTo('sa-answer', { behavior: ticketReduceMotion() ? 'auto' : 'smooth' })}>{pt(t, 'primary.answer')}</Button>
     : failed
     ? canRun
-      // A blocked staged workflow continues at its failed stage; "retry" (start over) stays in the ⋯ menu.
-      ? workflowResumable
-        ? <ConfirmButton label={pt(t, 'detail.resume')} title={pt(t, 'detail.resumeWorkflowTitle')}
-          message={pt(t, 'detail.resumeWorkflowConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="play"
-          confirmLabel={pt(t, 'detail.confirmResume')} onConfirm={async () => { await resume.run() }} />
-        : <ConfirmButton label={pt(t, 'ticket.retry')} title={pt(t, 'retryTitle')}
-          message={pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="refresh"
-          confirmLabel={pt(t, 'detail.confirmRetry')} onConfirm={async () => { await retry.run() }} />
+      ? <ConfirmButton label={pt(t, 'ticket.retry')} title={pt(t, 'retryTitle')}
+        message={pt(t, 'retryConfirm', { title: ticket.title ?? ticket.id })} variant="primary" icon="refresh"
+        confirmLabel={pt(t, 'detail.confirmRetry')} onConfirm={async () => { await retry.run() }} />
       // A disabled control still has to say why; the reason is a focusable InfoTip next to it, not a title tooltip.
       : <>
         <Button variant="primary" size="sm" disabled>{pt(t, 'ticket.retry')}</Button>
@@ -2212,18 +2170,6 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       {headStuck ? <div className="sa-detail-context-action">{primaryAction}{overflowAction}</div> : null}
     </nav>
 
-    {ticket.workflow ? <Section title={pt(t, 'wf.progress')}>
-      {/* The host records why a workflow stopped (reason code + one-line detail); show both instead of bare "blocked". */}
-      <p>{ticketWorkflowStateLabel(t, ticket.workflow.status)}
-        {ticket.workflow.detail ? <span className="sa-hint">{` · ${ticket.workflow.detail}`}</span> : null}</p>
-      {(ticket.workflow.stages ?? []).map((stage, index) => <Folded
-        key={index} summary={`${pt(t, `wf.${stage.role}`)} · ${stage.backend ?? 'host'}${stage.bot ? ` (${stage.bot})` : ''} · ${ticketWorkflowStageLabel(t, stage.status)}`}>
-        <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-          {stage.error ?? JSON.stringify(stage.result ?? {}, null, 2)}
-        </pre>
-      </Folded>)}
-    </Section> : null}
-
     {/* R2-09: the request is read first, expanded by default; it used to be folded inside "what changed", which hid
         the one thing a Ticket is about behind a disclosure on the far side of the grid. A Ticket whose body is just
         its title printed the same paragraph twice (the head already shows it), so that case renders the head alone. */}
@@ -2409,8 +2355,7 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
         operator can opt in; dismissed/closed Tickets do not offer scheduling). */}
     {['dismissed', 'closed'].includes(ticket.status) ? null : <AutomationCard ticket={ticket} onSaved={refreshAll} />}
 
-    {/* 3. Stage rail, 4. gate results, 5. run records, 6. timeline (older events folded by default). */}
-    <Section id="sa-ticket-stages" title={pt(t, 'ticket.stages')}><StageRail ticket={{ ...ticket, runs }} detail /></Section>
+    {/* 3. gate results, 4. run records, 5. timeline (older events folded by default). */}
     {hasGateResults
       ? <Section id="sa-ticket-gates" title={pt(t, 'ticket.gates')}>
         <TicketGateResults ticket={{ ...ticket, runs }} record={acceptanceRecord} />
@@ -2438,11 +2383,10 @@ export function TicketDetail({ id, page = 'execution', focusRun }) {
       <TicketTimeline ticket={ticket} runs={runs} />
     </Section>
 
-    {/* Secondary evidence and the raw escape hatch stay at the bottom. */}
+    {/* Secondary evidence stays at the bottom: the authorization basis and the rule table. */}
     <Folded summary={pt(t, 'ticket.auth')}>
       <KeyValues rows={authRows} />
       {rules.length ? <Folded summary={pt(t, 'thread.rulesDetail')}><ThreadRuleRows rules={rules} /></Folded> : null}
     </Folded>
-    <RawValue label={pt(t, 'ticket.raw')} json={data} />
   </>
 }

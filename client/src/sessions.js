@@ -91,7 +91,7 @@ const ticketOf = (tickets, id) => Array.isArray(tickets)
   ? tickets.find(ticket => ticket?.id === id)
   : tickets?.[id]
 
-export function SessionsList({ rows, selected, onPick }) {
+export function SessionsList({ rows, selected, onPick, text }) {
   return <ul className="sa-session-list">
     {rows.map(row => <li key={row.sessionId}>
       <button type="button" className="sa-session-row" aria-current={row.sessionId === selected ? 'true' : undefined}
@@ -100,7 +100,7 @@ export function SessionsList({ rows, selected, onPick }) {
           <span className="sa-session-ticket">{row.title || row.ticketId || row.runId}</span>
           <span className="sa-mono sa-hint">{shortId(row.sessionId)}</span>
         </span>
-        <span className="sa-session-meta">{when(row.at)}</span>
+        <span className="sa-session-meta">{when(row.at, text.lang)}</span>
       </button>
     </li>)}
   </ul>
@@ -141,8 +141,12 @@ export function SessionChat({ row, thread, draft, busy, onDraft, onSend, onTermi
           placeholder={pt(text, 'sessions.placeholder')} disabled={busy || !row.resumable}
           onChange={event => onDraft(event.target.value)}
           onKeyDown={event => {
-            // Enter sends, Shift+Enter breaks the line — a chat box, not a document editor.
-            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void onSend() }
+            // Enter sends, Shift+Enter breaks the line — a chat box, not a document editor. An IME is the exception:
+            // the Enter that commits a candidate (isComposing, or the legacy keyCode 229) must reach the IME, or the
+            // half-composed message is sent and the candidate is never committed.
+            if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing || event.keyCode === 229) return
+            event.preventDefault()
+            void onSend()
           }} />
         <Button variant="primary" size="sm" className="sa-chat-send" type="submit"
           disabled={busy || !row.resumable || !draft.trim()}>{pt(text, 'sessions.send')}</Button>
@@ -159,7 +163,9 @@ export function LiveSessionsPage({ route }) {
     title: ticketOf(data?.tickets, row.ticketId)?.title ?? '',
   }))
   const [picked, setPicked] = useState('')
-  const [terminal, setTerminal] = useState('')
+  // The terminal belongs to the session it was opened for: one shared id kept the old terminal (and its title) on
+  // screen after switching sessions (review P3).
+  const [terminal, setTerminal] = useState({ id: '', sessionId: '' })
   const [drafts, setDrafts] = useState({})
   const [threads, setThreads] = useState({})
   const [sending, setSending] = useState({})
@@ -177,7 +183,7 @@ export function LiveSessionsPage({ route }) {
     })
     const terminalId = String(result?.terminalId ?? '')
     if (!terminalId) return false
-    setTerminal(terminalId)
+    setTerminal({ id: terminalId, sessionId: target.sessionId })
     return true
   })
   // The conversation is not this page's: Claude Code keeps the record, so opening a session shows its history.
@@ -255,19 +261,21 @@ export function LiveSessionsPage({ route }) {
     <p className="sa-hint sa-page-hint">{pt(t, 'sessions.hint')}</p>
     <div className="sa-sessions">
       <div className="sa-sessions-list">
-        <SessionsList rows={rows} selected={selected} onPick={setPicked} />
+        <SessionsList rows={rows} selected={selected} text={t}
+          onPick={next => { setPicked(next); setTerminal({ id: '', sessionId: '' }) }} />
       </div>
       <div className="sa-sessions-pane" data-session={selected}>
         {row === undefined
           ? <EmptyState icon="session" title={pt(t, 'sessions.pick')} />
-          : terminal
+          : terminal.id && terminal.sessionId === row.sessionId
             ? <div className="sa-session-terminal-pane">
               <div className="sa-session-terminal-bar">
                 <Button variant="ghost" size="sm" className="sa-session-back"
-                  onClick={() => setTerminal('')}>{pt(t, 'sessions.toChat')}</Button>
+                  onClick={() => setTerminal({ id: '', sessionId: '' })}>{pt(t, 'sessions.toChat')}</Button>
               </div>
-              <RunTerminalPane inline sessionId={guiSessionId} terminalId={terminal}
-                title={`${pt(t, 'sessions.session')} ${shortId(row.sessionId)}`} onClose={() => setTerminal('')} />
+              <RunTerminalPane inline sessionId={guiSessionId} terminalId={terminal.id}
+                title={`${pt(t, 'sessions.session')} ${shortId(row.sessionId)}`}
+                onClose={() => setTerminal({ id: '', sessionId: '' })} />
             </div>
             : <SessionChat row={row} thread={threads[row.sessionId]} draft={drafts[row.sessionId] ?? ''}
               busy={busy} text={t}

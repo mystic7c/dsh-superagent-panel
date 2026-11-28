@@ -140,17 +140,80 @@ export function Select({ options = [], value, onChange, label, className, disabl
   </select>
 }
 
-/** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
-    hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
-    visible text lives outside the label (it may be omitted when the text is inside). */
+/** One searchable grouped list of models — the shape of the host's model menu, with a search field, a group heading per
+    provider and a check on the current model. Group labels are the provider names the host reports, so nothing here is
+    invented. `onChange` gets both halves of the choice; a CLI group has no provider and passes an empty one. */
+/** @param {{ groups?: { provider?: string, label: string, models: { id: string, name: string }[] }[], value?: string, valueLabel?: any, label?: any, searchLabel?: any, emptyLabel?: any, disabled?: any, onChange?: (choice: { provider: string, model: string }) => void }} props */
+/** Stable id source for the picker's listbox (`useId` is not re-exported by the panel runtime shim). */
+let MODEL_PICKER_SEQ = 0
+export function ModelPicker({ groups = [], value, valueLabel, label, searchLabel, emptyLabel, disabled, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const root = useRef(null)
+  const search = useRef(null)
+  const seq = useRef(0)
+  if (!seq.current) seq.current = ++MODEL_PICKER_SEQ
+  useEffect(() => {
+    if (!open) return undefined
+    const onPointer = event => { if (!root.current?.contains(event.target)) setOpen(false) }
+    document.addEventListener('mousedown', onPointer)
+    return () => document.removeEventListener('mousedown', onPointer)
+  }, [open])
+  useEffect(() => { if (!open) setQuery('') }, [open])
+  const needle = query.trim().toLowerCase()
+  const visible = groups.map(group => ({
+    ...group,
+    models: (Array.isArray(group.models) ? group.models : []).filter(model => !needle
+      || `${group.label} ${model.name} ${model.id}`.toLowerCase().includes(needle)),
+  })).filter(group => group.models.length)
+  const totals = groups.reduce((sum, group) => sum + (Array.isArray(group.models) ? group.models.length : 0), 0)
+  const pick = (group, model) => {
+    setOpen(false)
+    if (onChange) onChange({ provider: group.provider ?? '', model: model.id })
+  }
+  const trigger = valueLabel ?? (value || label)
+  const pickerId = `sa-model-picker-${seq.current}`
+  return <span ref={root} className="sa-model-picker">
+    <button type="button" className="sa-btn sa-btn-outline sa-btn-sm sa-menu-picker" aria-label={label}
+      aria-haspopup="listbox" aria-expanded={open} disabled={disabled}
+      onClick={() => setOpen(current => !current)}>
+      <span className="sa-menu-picker-text">{trigger || emptyLabel}</span>
+      <Icon name="chevron-down" size={14} />
+    </button>
+    {open ? <div className="sa-menu-pop sa-model-pop" role="dialog" aria-label={label}>
+      <Input icon="search" className="sa-input-full" type="search" autoComplete="off" value={query}
+        inputRef={search} placeholder={searchLabel} aria-label={searchLabel}
+        onChange={event => setQuery(event.target.value)}
+        onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }} />
+      <div className="sa-model-groups" role="listbox" aria-label={label} id={pickerId}>
+        {visible.length || totals === 0
+          ? visible.map(group => <section key={group.label} className="sa-section" role="group" aria-label={group.label}>
+            <h3 className="sa-model-group" aria-hidden="true">{group.label}</h3>
+            {group.models.map(model => <button key={`${group.label}/${model.id}`} type="button" role="option"
+              aria-selected={model.id === value} className="sa-menu-item sa-model-item" onClick={() => pick(group, model)}>
+              <span className="sa-menu-item-label"><span>{model.name}</span></span>
+              {model.id === value ? <span className="sa-menu-item-check"><Icon name="check" size={14} /></span> : null}
+            </button>)}
+          </section>)
+          : <p className="sa-hint sa-model-none" role="status">{emptyLabel}</p>}
+      </div>
+      {value ? <div className="sa-model-foot">{valueLabel ?? value}</div> : null}
+    </div> : null}
+  </span>
+}
+
+/** Render the track only; the caller keeps the visible text beside it as a sibling. A wrapping `<label>` would make
+    the whole row toggle, which reads as an accident on a long line. `label` is the accessible name of the input. */
 /** @param {{ checked?: any, onChange?: (checked: boolean) => void, label?: any, className?: string, disabled?: any, inputRef?: any }} props */
 export function Switch({ checked, onChange, label, className, disabled, inputRef }) {
-  return <span className={cx('sa-switch', className)}>
+  // The track itself is the label: it is a real toggle target for pointer and keyboard, while the row text beside it
+  // stays plain text — a click on a long explanation must not change a setting.
+  return <label className={cx('sa-switch', className)}>
     <input ref={inputRef} type="checkbox" role="switch" className="sa-switch-input"
       checked={Boolean(checked)} disabled={disabled} aria-label={typeof label === 'string' ? label : undefined}
       onChange={event => onChange(event.target.checked)} />
     <span className="sa-switch-track" aria-hidden="true"><span className="sa-switch-thumb" /></span>
-  </span>
+  </label>
 }
 
 /** Module counter behind the dialog description ids (React's `useId` is not re-exported by the panel's runtime shim). */
@@ -425,8 +488,11 @@ export function CopyButton({ value, label }) {
         area.style.opacity = '0'
         document.body.appendChild(area)
         area.select()
-        document.execCommand('copy')
+        // The legacy command returns false when the browser refuses it (no user gesture, or a sandbox); reporting
+        // "copied" anyway made the button lie (review P2).
+        const copied = document.execCommand('copy')
         area.remove()
+        if (!copied) return
       }
       setCopied(true)
       clearTimeout(timer.current)

@@ -16,7 +16,6 @@ import { executeTicket, refreshTicketCi, injectTicket, publishTicket, checkUat, 
   PUBLISHABLE_STATUSES } from './lib/live/executor.js'
 import { openWorkerTerminal } from './lib/live/worker-terminal.js'
 import { chatWithClaude, readTranscript } from './lib/live/worker-chat.js'
-import { registerReviewJsonMode } from './lib/live/review-json.js'
 
 // The `DSH.*` types used in the JSDoc below are the hand-written globals in types/dsh.d.ts: this file never imports
 // the host's own type packages, so reading and checking it does not tie the plugin to one DSH release.
@@ -126,12 +125,6 @@ const segmentsOf = (url) => {
  */
 export function apply(ctx, config = {}) {
   const stateDir = stateDirOf(config)
-  // DeepSeek JSON Output for review turns (lib/live/review-json.js); a host without the extension registry still runs,
-  // the reviewer just answers free-form JSON and the workflow parses that.
-  if (!registerReviewJsonMode(ctx, line => ctx.logger?.warn?.(`superagent review json mode: ${line}`))) {
-    ctx.logger?.debug?.('superagent review json mode: deepseekLlmApiExtensions is unavailable')
-  }
-
   // The live engine is the plugin: it only starts when live.json exists and enabled=true. Every route below it is
   // the engine's own API; there is no second "demo" document behind it.
   let engine
@@ -275,7 +268,11 @@ export function apply(ctx, config = {}) {
         if (method === 'GET' && second === 'config') { send(res, 200, engine.configView()); return }
         // Worker bots ("Bot") live in the state dir, never in a repository (§4.1). The view carries every backend's
         // verification state too, so the panel can warn about an unverified backend without a second request.
-        if (method === 'GET' && second === 'bots') { send(res, 200, await engine.botsView()); return }
+        if (method === 'GET' && second === 'bots' && third === undefined) { send(res, 200, await engine.botsView()); return }
+        // Recent per-bot performance plus the ad-hoc ids worth turning into a Bot (1.5.0 §5.5/§5.6). Read-only.
+        if (method === 'GET' && second === 'bots' && third === 'stats') { send(res, 200, engine.botStatsView()); return }
+        // §5.4: what this host can actually run — presets, provider/model rows, skills. One lazy read, cached 60s.
+        if (method === 'GET' && second === 'bots' && third === 'catalog') { send(res, 200, await engine.botCatalog()); return }
         if (method === 'POST' && second === 'bots' && third === undefined) {
           try {
             send(res, 200, await engine.saveBots({ bots: body?.bots }))
@@ -286,7 +283,7 @@ export function apply(ctx, config = {}) {
           }
           return
         }
-        // "smoke 核验": re-probe one backend now instead of trusting a cached answer (§3.7).
+        // "核验": ask one backend whether it can take work right now instead of trusting a cached answer (§4).
         if (method === 'POST' && second === 'bots' && third === 'verify') {
           try {
             send(res, 200, await engine.verifyBackend(body?.backend))
@@ -366,7 +363,9 @@ export function apply(ctx, config = {}) {
             throw new ActionError(400, `恢复配置失败：${error instanceof Error ? error.message : String(error)}`)
           }
         }
-        if (method === 'POST' && second === 'settings') {
+        // Exactly `POST engine/settings`: any deeper path is its own route (history/restore above) or unknown. Without
+        // this guard a POST to an unmapped settings sub-path was silently applied as a settings patch (review H19).
+        if (method === 'POST' && second === 'settings' && segments.length === 2) {
           const patch = body ?? {}
           // Group ↔ repository bindings must stay consistent: a bound chat has to be watched, and the repository has
           // to exist. Rejecting here keeps a half-written binding out of live.json.
@@ -395,7 +394,16 @@ export function apply(ctx, config = {}) {
           }
           const result = await updateLiveConfig(engine.stateDir, patch)
           const reloaded = await engine.refresh()
-          send(res, 200, { applied: result.applied, ...reloaded, config: engine.configView() })
+          // §4: saving the backend configuration re-checks availability once, so the panel can render the new answer
+          // without a second click (a CLI path or model change invalidates the old smoke evidence).
+          const backendTouched = Object.keys(patch).some(key => key === 'executor.workerBackend'
+            || key.startsWith('executor.workers') || key === 'executor.routing')
+          const backends = backendTouched ? await engine.backendStates() : undefined
+          // The save only reports states; the CLI smoke behind a "no evidence yet" answer runs in the background so
+          // saving a backend never waits on a model call.
+          if (backendTouched) void engine.smokeCliBackends()
+          send(res, 200, { applied: result.applied, ...reloaded, config: engine.configView(),
+            ...(backends ? { backends } : {}) })
           return
         }
         // Store one repository's GitLab token in the token file that repository already declares (never returns it).
@@ -481,12 +489,8 @@ export function apply(ctx, config = {}) {
           if (selection?.deliverable !== undefined && !DELIVERABLES.includes(selection.deliverable)) {
             throw new ActionError(400, `未知交付类型：${selection.deliverable}`)
           }
-          // A manual route that the chosen backend cannot execute is rejected at creation, not persisted and left to
-          // fail on the first run: it still cannot bypass the capability limit.
-          const preview = engine.routePreview({ title: body?.title, body: body?.body, selection })
-          if (preview?.route?.unsupported) {
-            throw new ActionError(400, `所选路由不可用：${preview.route.unsupported}`)
-          }
+          // 1.5.0 §3: a backend's fitness is no longer judged here — dispatch asks whether the backend is available
+          // and the Bot names it, so creation only validates the fields it accepts.
           const ticket = await injectTicket({ engine, title: body?.title, body: body?.body, channelId: body?.channelId,
             repoId, route: selection })
           send(res, 200, { ticket, route: ticket.routePreview })
@@ -729,6 +733,8 @@ export function apply(ctx, config = {}) {
             q: url.searchParams.get('q') ?? '', repoId: url.searchParams.get('repo') ?? '',
             reason: url.searchParams.get('reason') ?? '',
             from: url.searchParams.get('from') ?? '', to: url.searchParams.get('to') ?? '',
+            // One Thread's decisions: the Trigger detail links here instead of printing the ledger a second time.
+            threadKey: url.searchParams.get('threadKey') ?? '',
             view: url.searchParams.get('view') ?? 'all',
             offset: Number(url.searchParams.get('offset') ?? 0), limit: Number(url.searchParams.get('limit') ?? 50) }))
           return

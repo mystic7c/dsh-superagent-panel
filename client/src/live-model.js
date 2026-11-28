@@ -76,6 +76,9 @@ export function useEngineActions(call) {
       { id, body: { dryRun, wait, ...(bot ? { bot } : {}) }, ...wait ? { timeoutMs: 0 } : {} }),
     // Worker bots live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
     bots: () => call('GET engine/bots'),
+    botStats: () => call('GET engine/bots/stats'),
+    botCatalog: () => call('GET engine/bots/catalog'),
+    config: () => call('GET engine/config'),
     saveBots: bots => call('POST engine/bots', { body: { bots } }),
     verifyBotBackend: backend => call('POST engine/bots/verify', { body: { backend } }),
     publishTicket: (id, commitMessage) => call('POST engine/ticket/:id/publish', { id, body: commitMessage ? { commitMessage } : {} }),
@@ -94,7 +97,7 @@ export function useEngineActions(call) {
     addRevision: (id, text) => call('POST engine/ticket/:id/revision', { id, body: { text } }),
     // P1 (§7): resume an interrupted run from its checkpoint (the host falls back to re-running the whole Ticket).
     resumeTicket: (id) => call('POST engine/ticket/:id/resume', { id }),
-    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next stage boundary.
+    // AC-02/03: cooperative stop. The host records the request and the executor stops at the next step boundary.
     stopTicket: (id, { note } = /** @type {any} */ ({})) => call('POST engine/ticket/:id/stop', { id, body: { ...(note ? { note } : {}) } }),
     // P1 (§6.2): answer a parked question; the host re-runs the Ticket with every previous answer in context.
     answerTicket: (id, answer) => call('POST engine/ticket/:id/answer', { id, body: { answer } }),

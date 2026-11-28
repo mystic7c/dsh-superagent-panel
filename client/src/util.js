@@ -90,18 +90,11 @@ export function shortId(value, len = 6) {
 /** The DSH Session that executed this run, or '' when no Session this UI can open carried it.
     A DSH worker creates its Session under the id the executor asked for (`worker-<ticket>-<run tail>`), and the panel
     links the run ID into that conversation. Codex / Claude run their own CLI thread and record a thread id there, so
-    only a DSH-backed worker names an openable Session; a staged workflow keeps one Session per stage, and its newest
-    DSH stage is the transcript that answers "what did the executor do" when the implementer itself was a CLI. */
+    only a DSH-backed worker names an openable Session. */
 export function executorSessionId(run) {
   if (!run || typeof run !== 'object') return ''
   const worker = run.worker && typeof run.worker === 'object' ? run.worker : undefined
   if (worker?.backend === 'dsh' && typeof worker.sessionId === 'string' && worker.sessionId) return worker.sessionId
-  const stages = Array.isArray(run.workflow?.stages) ? run.workflow.stages : []
-  for (let index = stages.length - 1; index >= 0; index -= 1) {
-    const stage = stages[index]
-    if (stage && typeof stage === 'object' && stage.backend === 'dsh'
-      && typeof stage.sessionId === 'string' && stage.sessionId) return stage.sessionId
-  }
   return ''
 }
 
@@ -167,7 +160,11 @@ export function plainTitle(text) {
 /** A deep-linked or remembered page offset can point past the end of a shrinking result set. Returns the last page's
     offset when that happens, and `undefined` when the requested offset is fine (or the total is not known yet). */
 export function clampPageOffset(offset, total, pageSize) {
-  if (!Number.isFinite(offset) || !Number.isFinite(total) || total <= 0 || offset < total) return undefined
+  if (!Number.isFinite(offset) || !Number.isFinite(total)) return undefined
+  // An empty result set has exactly one page: an offset from a stale link or a shrinking filter returns to page 1
+  // instead of leaving the pager on a page that no longer exists (review P3).
+  if (total <= 0) return offset > 0 ? 0 : undefined
+  if (offset < total) return undefined
   return Math.max(0, Math.floor((total - 1) / pageSize) * pageSize)
 }
 

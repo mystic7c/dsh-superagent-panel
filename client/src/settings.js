@@ -1,6 +1,6 @@
 import { API, Icon, hhmmss, hostName, hostOfUrl, panelScroller, scrollPanelTo } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
-import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
+import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, ModelPicker, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
 import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
@@ -10,19 +10,6 @@ import { apply } from "./apply.js"
 import { React, h, useEffect, useRef, useState } from "./react.js"
 
 Object.assign(PAGE_TEXT, {
-  'wf.title': ['分阶段执行', 'Staged execution'],
-  'wf.off': ['关闭（沿用单 worker）', 'Off (single worker)'],
-  'wf.auto': ['自动评估难度', 'Assess complexity automatically'],
-  'wf.simple': ['直接实现', 'Direct implementation'],
-  'wf.planned': ['Codex 规划与独立验收', 'Codex planning and independent review'],
-  'wf.implementer': ['实现后端', 'Implementation backend'],
-  'wf.reviewer': ['独立验收后端', 'Independent review backend'],
-  'wf.reviewerHint': ['评估、规划与最终验收由它只读执行：Codex / Claude Code 的 CLI 会话，或 DSH 的独立只读会话。', 'Runs assessment, planning and the final review read-only: a Codex / Claude Code CLI session, or an independent read-only DSH session.'],
-  'wf.workerPreset': ['Worker 预设（DSH）', 'Worker preset (DSH)'],
-  'wf.workerPresetPlaceholder': ['standard / ptc / minimal / cordis（留空跟随默认）', 'standard / ptc / minimal / cordis (empty = host default)'],
-  'wf.workerPresetHint': ['仅影响进程内 DSH worker；留空跟随宿主默认。发行版自带 standard / ptc / minimal / cordis（创造模式），live.json 里也可按仓库覆盖 repos[].workerPreset。',
-    'Applies to the in-process DSH worker only; empty follows the host default. Shipped presets: standard / ptc / minimal / cordis (Creator); live.json can override per repository via repos[].workerPreset.'],
-  'wf.hint': ['自动模式先由验收后端只读评估；复杂任务按 规划 → 实现 → 闸门 → 独立验收 执行。返工预算在「运行」里调。', 'Auto mode uses a read-only assessment by the review backend; complex tasks run planning, implementation, gates and independent review. The repair budget lives under Run.'],
   // ---- AC-01: routing preview and manual override on the create form ---------------------------------------------
   'st.routePreviewTitle': ['自动判断', 'Automatic routing'],
   'st.routeDeliverable': ['交付目标', 'Deliverable'],
@@ -193,6 +180,7 @@ Object.assign(PAGE_TEXT, {
   'settingsGroup.review': ['评估确认', 'Review'],
   'settingsGroup.run': ['运行', 'Runtime'],
   'settingsGroup.worker': ['Worker', 'Worker'],
+  'settingsGroup.dispatch': ['派单', 'Dispatch'],
   'settingsGroup.write': ['写权限', 'Write access'],
   'st.unsaved': ['未保存', 'Unsaved'],
   'st.bindings': ['自动接单群（群 → 仓库）', 'Intake groups (group → repository)'],
@@ -258,34 +246,35 @@ Object.assign(PAGE_TEXT, {
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式、闸门与超时。改完保存后立即生效；手工建单在「执行」页，worker 后端在「Worker」分组。',
     'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
-  'st.workerHint': ['路由模式决定“建议 / 自动 / 单后端”；启用多个后端后按任务类型分发。suggest 只记录建议、仍用默认后端执行。',
-    'The routing mode decides suggest / auto / single. With several backends enabled, work is dispatched by task type; suggest only records the choice and still runs the default backend.'],
-  'st.routingTitle': ['路由模式', 'Routing mode'],
-  'st.routingModeSingle': ['单后端（沿用旧配置）', 'Single backend (legacy)'],
-  'st.routingModeSuggest': ['建议（只记录，不改变执行）', 'Suggest (record only)'],
-  'st.routingModeAuto': ['自动（按任务类型分发）', 'Auto (dispatch by work type)'],
-  'st.routingModeHint': ['建议模式先在运行记录里展示“会交给谁”，确认准确后再切自动。',
-    'Suggest mode shows who would run the Ticket in the run record; switch to auto once the choices look right.'],
   'st.defaultBackend': ['默认后端', 'Default backend'],
-  'st.defaultBackendHint': ['没有偏好规则、或偏好后端不可用时使用。', 'Used when no preference matches or the preferred backend is unavailable.'],
   'st.fallbackBackend': ['降级后端（可选）', 'Fallback backend (optional)'],
   'st.fallbackNone': ['不降级', 'No fallback'],
   'st.enabledBackends': ['启用的后端', 'Enabled backends'],
-  'st.enabledBackendsHint': ['至少启用一个。启用多个后默认进入建议模式；CLI 后端需要本机已登录。',
-    'Enable at least one. Several enabled defaults to suggest mode; CLI backends require a local login.'],
-  'st.routePreferences': ['任务类型偏好', 'Work-type preferences'],
-  'st.routePreferencesHint': ['按任务类型指定后端；留空跟随默认后端。硬约束优先：需要向人提问的交互只能 DSH；联网调研这类能力，Claude 与 Codex 现在都能做，仍以运行期探测为准。',
-    'Bind each work type to a backend; leave it on “follow default” when unsure. Hard limits win: interactive work that asks a person can only run on DSH; research needs web, which Claude and Codex both carry now — the runtime probe still has the last word.'],
-  'st.routeFollowDefault': ['跟随默认', 'Follow default'],
-  'st.workTypeAnalysis': ['需求分析', 'Analysis'],
-  'st.workTypeReview': ['代码 review', 'Code review'],
-  'st.workTypeTest': ['功能测试验证', 'Verification'],
-  'st.workTypeDev': ['代码开发', 'Development'],
-  'st.workTypeDocs': ['文档', 'Documentation'],
-  'st.workTypeResearch': ['联网调研', 'Web research'],
-  'st.workTypeInteractive': ['需提问/确认', 'Interactive'],
-  'st.routeReadOnly': ['只读', 'read-only'],
-  'st.routeWrite': ['可写', 'write'],
+  'st.dispatchHint': ['派单只筛一条硬事实——后端此刻可用；选谁由决策模型读 Bot 自己写的「什么时候派给它」回答。',
+    'Dispatch filters on one hard fact — the backend can take work right now — and a judge model picks the bot by reading its own when-to-use note.'],
+  'st.dispatchHow': ['怎么决定', 'How it decides'],
+  'st.dispatchCandidates': ['候选', 'Candidates'],
+  'st.dispatchCandidatesText': ['所有 Bot 里，它自己的后端此刻可用的那些；不看预算、不看能力声明。只写报告的 Bot 也在候选里。',
+    'Every bot whose own backend is available right now; budgets and capability declarations are not filters, so a report-only bot still competes.'],
+  'st.dispatchPick': ['挑选', 'Pick'],
+  'st.dispatchPickText': ['一次模型调用，把候选的说明与工单标题正文给它（截断 4000 字）；它答 {"botId","because"} 或 {"botId":null}。',
+    'One model call sees each candidate note and the Ticket text (cut at 4000 characters) and answers {"botId","because"} or {"botId":null}.'],
+  'st.dispatchNoModel': ['不调模型', 'No model call'],
+  'st.dispatchNoModelText': ['显式指定已命中、候选只有 1 个、或同一工单 {cacheSeconds} 秒内缓存命中。缓存按候选集合与它们的说明 + 工单标题正文算，说明一改旧答案就失效。',
+    'An explicit choice hit, only one candidate, or the same Ticket inside the {cacheSeconds}s cache. The cache key covers the candidate set with its notes plus the Ticket text, so editing a note invalidates it.'],
+  'st.dispatchFallback': ['失败回退', 'On failure'],
+  'st.dispatchFallbackText': ['模型不可用、失败、答了候选之外或认为都不合适 → 一律回退默认 Bot，并把降级原因记在这次运行里，执行页与 Bot 统计都看得到。',
+    'Unavailable, failed, answered outside the candidates or found none suitable: all fall back to the default bot, and the reason is recorded on the run and counted in the bot stats.'],
+  'st.dispatchDanger': ['危险行为', 'Dangerous actions'],
+  'st.dispatchDangerText': ['闸门（standards/backend/frontend）、沙箱与拒绝规则是唯一的裁决权；派单不申请权限，UI 也不承诺隔离。只写报告的 Bot 由执行器置只读，改动不落盘、不提交、不推送。',
+    'The gates, the sandbox and the deny rules decide. Dispatch grants no permission and the UI promises no isolation; a report-only bot runs read-only, writing nothing and pushing nothing.'],
+  'st.dispatchExplicit': ['显式指定', 'Explicit choice'],
+  'st.dispatchExplicitText': ['仓库指定（repos[].bot）与工单手动指定（ticket.botOverride）永远先于挑选；即使后端此刻不可用也不会被静默换人，执行器会带着原因拒绝。',
+    'The repository bot and the one-run Ticket override always come before the pick; an explicit choice is never silently swapped, the executor refuses with the reason.'],
+  'st.dispatchDefaultNote': ['默认 Bot（{id}）在「Bot」页选中它后点「设为默认」改；后端可用性在「Worker」组看。',
+    'The default bot ({id}) is changed on the Bot page; backend availability lives in the Worker group.'],
+  'st.dispatchOpenBots': ['打开 Bot 页', 'Open the Bot page'],
+  'st.botsMakeDefault': ['设为默认', 'Make default'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
   'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址在上方仓库列表里逐行编辑。',
@@ -374,8 +363,7 @@ Object.assign(PAGE_TEXT, {
     'In shadow mode the model only records an opinion; in hybrid it takes part in intake (repo_task opens, risky blocks, the rest goes to review). Configure endpoint/model in live.json eval.decision; write the token through the token endpoint.'],
   'st.rules': ['规则目录', 'Rule catalog'],
   'st.noRules': ['没有可显示的规则。', 'No rules to show.'],
-  'st.decisionsTotal': ['累计决定', 'Decisions so far'],
-  'st.decisions24h': ['最近 24 小时决定', 'Decisions in the last 24 hours'],
+  'st.evalOpenLedger': ['在评估页查看判定记录', 'See the decision ledger'],
 
   // ---- execution group ----
   'st.execEnabled': ['启用执行器', 'Executor enabled'],
@@ -439,18 +427,10 @@ Object.assign(PAGE_TEXT, {
   'st.workerClaude': ['Claude Code CLI（本机）', 'Claude Code CLI (local)'],
   'st.workerBackendHint': ['DSH 在宿主进程内跑；Codex / Claude 在工单 worktree 里拉起本机 CLI 会话。无论哪种，提交、推送、MR、闸门与部署仍由执行器负责。',
     'DSH runs in-process; Codex / Claude start a local CLI session inside the ticket worktree. In every case the executor still owns commit, push, MR, gates and deployment.'],
-  'st.workerDshHint': ['使用宿主模型的 DSH agent（当前默认，无额外登录或 CLI 依赖）。',
-    'Uses the host model through the in-process DSH agent (current default; no extra login or CLI dependency).'],
-  'st.workerCodexHint': ['需要本机已 `codex login`。CLI 以 workspace-write 沙箱运行并关闭网络；路径留空时自动探测 ChatGPT.app / OctoBuddy 自带的 codex。',
-    'Requires a logged-in local Codex CLI. It runs in the workspace-write sandbox with network disabled; an empty path auto-detects the codex bundled with ChatGPT.app / OctoBuddy.'],
-  'st.workerClaudeHint': ['就是本机那个 Claude Code：沿用它的登录、模型与 MCP 配置（本机当前指向 DeepSeek 网关），工具不设限——Bash、联网、子 agent 都能用，和你在终端里开一个 claude 一样。提交、推送、MR、闸门与部署仍由执行器负责。',
-    'The local Claude Code itself: its login, model and MCP configuration (this machine currently targets the DeepSeek gateway), with no tool restrictions — Bash, web and sub-agents all work, exactly as when you run claude in a terminal. The executor still owns commit, push, MR, gates and deployment.'],
-  'st.workerModel': ['模型（可选）', 'Model (optional)'],
-  'st.workerModelHint': ['留空使用 CLI 自己的默认模型；Claude 例：deepseek-flash[1m]，Codex 例：gpt-6-astra。',
-    'Leave empty to use the CLI default; e.g. deepseek-flash[1m] for Claude, gpt-6-astra for Codex.'],
-  'st.workerCommand': ['CLI 路径（可选）', 'CLI path (optional)'],
-  'st.workerCommandHint': ['留空自动探测：Claude 用 PATH 里的 claude；Codex 优先用 ChatGPT.app / OctoBuddy 自带的 codex。',
-    'Empty auto-detects: claude from PATH; codex from the ChatGPT.app / OctoBuddy bundles first.'],
+  'st.workerModel': ['模型', 'Model'],
+  'st.workerModelDefault': ['CLI 自己的默认模型', 'CLI default model'],
+  'st.workerPathMissing': ['未找到 CLI', 'CLI not found'],
+  'st.workerCommand': ['CLI 路径', 'CLI path'],
   'st.gates': ['闸门', 'Gates'],
   'st.timeout': ['执行超时', 'Run timeout'],
   'st.timeoutHint': ['单位分钟，范围 1–1440。超时以 timeout 结束本次运行（工作树保留，可调大后重试）。',
@@ -469,8 +449,8 @@ Object.assign(PAGE_TEXT, {
   'st.create': ['建单', 'Create Ticket'],
   'st.created': ['已建单', 'Ticket created'],
   'st.repairBudget': ['返工预算', 'Repair budget'],
-  'st.repairBudgetHint': ['0–6 轮，默认 2。分阶段流程里验收要求修改时最多自动返工几轮；用完会停下并说明原因，调大后可点「继续执行」接着返工。',
-    'Rounds from 0 to 6, default 2. How many implement→gates→review rounds a staged workflow may spend when its independent review keeps asking for changes; when spent the workflow stops and says why, and raising it lets Continue run the next round.'],
+  'st.repairBudgetHint': ['0–6 轮，默认 2。闸门失败时最多自动返工几轮；用完会停下并说明原因。',
+    'Rounds from 0 to 6, default 2. How many times a failing gate may send the worker back for repairs; when spent the run stops and says why.'],
   'st.repairBudgetInvalid': ['返工预算需为 0–6 的整数。', 'Repair budget must be an integer from 0 to 6.'],
 
   // ---- prompt group ----
@@ -528,6 +508,7 @@ export const SETTINGS_GROUPS = [
   { id: 'eval', labelKey: 'settingsGroup.eval', icon: 'decision', reference: true },
   { id: 'run', labelKey: 'settingsGroup.run', icon: 'play' },
   { id: 'worker', labelKey: 'settingsGroup.worker', icon: 'robot' },
+  { id: 'dispatch', labelKey: 'settingsGroup.dispatch', icon: 'decision', reference: true },
   { id: 'write', labelKey: 'settingsGroup.write', icon: 'blocked' },
   { id: 'repos', labelKey: 'settingsGroup.repos', icon: 'pull' },
   { id: 'prompt', labelKey: 'settingsGroup.prompts', icon: 'message', reference: true },
@@ -670,8 +651,7 @@ export function settingsPatchOf(group, draft) {
     }
     // P1 multi-backend routing: workers and routing are sent as whole objects by the Worker group.
     if (group === 'worker') {
-      for (const key of ['executor.workers', 'executor.routing', 'executor.workflowMode', 'executor.implementer',
-        'executor.reviewer', 'executor.workerPreset']) if (key in draft) patch[key] = draft[key]
+      for (const key of ['executor.workers', 'executor.routing']) if (key in draft) patch[key] = draft[key]
     }
   }
   return patch
@@ -714,18 +694,19 @@ export function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, d
     if (hintId) node.setAttribute('aria-describedby', hintId)
     else node.removeAttribute('aria-describedby')
   }, [hintId])
-  return <label className="sa-switch-row">
+  // Not a <label>: wrapping the row made every click on the title or hint toggle the switch. Only the track itself
+  // changes it now; the input keeps the visible text as its accessible name.
+  return <div className="sa-switch-row">
     <span className="sa-switch-row-text">
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
         {label}
         {badge ?? null}
         {tip ? <InfoTip text={tip} warn={tipWarn === true} /> : null}
       </span>
-      {/* A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>. */}
       {hint ? <span className="sa-hint" id={hintId} style={{ display: 'block' }}>{hint}</span> : null}
     </span>
     <Switch checked={Boolean(checked)} label={label} disabled={disabled} inputRef={inputRef} onChange={onChange} />
-  </label>
+  </div>
 }
 
 /** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
@@ -771,31 +752,11 @@ export const WORKER_CAP_COLUMNS = [
 ]
 /** P1 routing controls: the same enums the host validates (routing.js). Labels are page-local i18n keys. */
 export const ROUTE_BACKENDS = [
-  { value: 'dsh', labelKey: 'st.workerDsh', hintKey: 'st.workerDshHint' },
-  { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
-  { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
+  { value: 'dsh', labelKey: 'st.workerDsh' },
+  { value: 'codex', labelKey: 'st.workerCodex' },
+  { value: 'claude', labelKey: 'st.workerClaude' },
 ]
-/** Staged-flow backends, mirroring lib/live/config.js: the implementer is the in-process DSH worker or Claude,
-    the reviewer (assessment, planning and final review) is a read-only CLI (Codex or Claude). Options follow the
-    enabled backends; a disabled one stays visible (marked) only while it is the saved value. */
-export const STAGED_IMPLEMENTERS = [{ value: 'dsh', label: 'DSH' }, { value: 'claude', label: 'Claude Code' }]
-export const STAGED_REVIEWERS = [{ value: 'codex', label: 'Codex' }, { value: 'claude', label: 'Claude Code' }, { value: 'dsh', label: 'DSH' }]
-export const ROUTE_WORK_TYPES = [
-  { key: 'analysis', labelKey: 'st.workTypeAnalysis', hintKey: 'st.routeReadOnly' },
-  { key: 'review', labelKey: 'st.workTypeReview', hintKey: 'st.routeReadOnly' },
-  { key: 'test', labelKey: 'st.workTypeTest', hintKey: 'st.routeWrite' },
-  { key: 'dev', labelKey: 'st.workTypeDev', hintKey: 'st.routeWrite' },
-  { key: 'docs', labelKey: 'st.workTypeDocs', hintKey: 'st.routeWrite' },
-  { key: 'research', labelKey: 'st.workTypeResearch', hintKey: 'st.routeReadOnly' },
-  { key: 'interactive', labelKey: 'st.workTypeInteractive', hintKey: 'st.routeReadOnly' },
-]
-/** Built-in preference table mirroring lib/live/routing.js: capability first, then the operator's intent. */
-export const ROUTE_DEFAULT_PREFERENCES = [
-  { workTypes: ['research', 'interactive'], backend: 'dsh' },
-  { workTypes: ['analysis', 'review', 'test'], backend: 'codex' },
-  { workTypes: ['dev', 'docs'], backend: 'claude' },
-]
-
+/** Static backend contract; the live question (can it take work right now) lives on the Bot page. */
 export const WORKER_CAPABILITIES = [
   { backend: 'dsh', nameKey: 'st.capDsh', capabilities: {
     stream: { yes: true },
@@ -819,46 +780,6 @@ export const WORKER_CAPABILITIES = [
     report: { yes: false },
   } },
 ]
-
-/** The read-only「运行后端能力」card: current backend highlighted, every cell tagged with yes/no plus its caveat. */
-export function WorkerCapabilityCard({ currentBackend }) {
-  const { t, navigate } = usePanel()
-  const current = WORKER_CAPABILITIES.some(entry => entry.backend === currentBackend) ? currentBackend : 'dsh'
-  return <div className="sa-field">
-    <span className="sa-field-head">{pt(t, 'st.capTitle')}</span>
-    <Hint>{pt(t, 'st.capHint')}</Hint>
-    {/* The static contract above and the live backend check on the Bot page answer different questions; say so once
-        here instead of letting the two tables look like two owners of the same fact. */}
-    <p className="sa-hint">{pt(t, 'st.capLive')}
-      {' '}<button type="button" className="sa-textlink" onClick={() => navigate({ page: 'bots' })}>
-        {pt(t, 'st.capLiveLink')}</button></p>
-    <table className="sa-glossary sa-capabilities">
-      <thead><tr>
-        <th>{pt(t, 'st.capBackend')}</th>
-        {WORKER_CAP_COLUMNS.map(column => <th key={column.key}>{pt(t, column.labelKey)}</th>)}
-      </tr></thead>
-      <tbody>{WORKER_CAPABILITIES.map(entry => {
-        const active = entry.backend === current
-        return <tr key={entry.backend} data-current={active ? 'true' : undefined}
-          style={active ? { background: 'var(--dsw-alias-bg-subtle, transparent)' } : undefined}>
-          <th scope="row">
-            <span className="sa-actions" style={{ gap: 'var(--sa-sp-4)' }}>
-              <span>{pt(t, entry.nameKey)}</span>
-              {active ? <Tag tone="info">{pt(t, 'st.capCurrent')}</Tag> : null}
-            </span>
-          </th>
-          {WORKER_CAP_COLUMNS.map(column => {
-            const cell = entry.capabilities[column.key] ?? { yes: false }
-            return <td key={column.key}>
-              <Tag tone={cell.yes ? 'success' : 'neutral'}>{pt(t, cell.yes ? 'st.capYes' : 'st.capNo')}</Tag>
-              {cell.noteKey ? <div className="sa-hint">{pt(t, cell.noteKey)}</div> : null}
-            </td>
-          })}
-        </tr>
-      })}</tbody>
-    </table>
-  </div>
-}
 
 export const TEST_LABELS = { config: 'repos.check.config', node: 'repos.check.node', repo: 'repos.check.repo',
   token: 'repos.check.token', connection: 'repos.check.connection', enabled: 'repos.check.enabled' }
@@ -1018,334 +939,479 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 }
 
 Object.assign(PAGE_TEXT, {
-  'st.botsTitle': ['Bot 列表', 'Worker bots'],
-  'st.botsHint': ['Bot 决定一次运行能用的后端、预设、模型、工具与阶段。内置三个 Bot 不可编辑，可复制后改。',
-    'A bot decides which backend, preset, model, tools and stages a run may use. The built-ins cannot be edited — copy one instead.'],
+  'st.botsTitle': ['Bot', 'Bots'],
   'st.botsFile': ['Bot 文件', 'Bot file'],
-  'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会拒绝，修好文件后重试。',
-    'The bot file cannot be read ({code}): {message}. Dispatch refuses until the file is repaired.'],
+  'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会回退默认 Bot，修好文件后重试。',
+    'The bot file cannot be read ({code}): {message}. Dispatch falls back to the default bot until it is repaired.'],
   'st.botsDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
     'Unknown fields were dropped: {keys}. The rest of the bot was kept.'],
-  'st.botsRuleWarn': ['分派规则 #{index} 指向不存在的 Bot {bot}，该条会被跳过。',
-    'Dispatch rule #{index} names a bot that does not exist ({bot}); the rule is skipped.'],
-  'st.botsBuiltin': ['内置 Bot', 'Built-in bots'],
-  'st.botsBuiltinNote': ['内置三个 Bot 始终可用，不写入文件，也不能删除。', 'The three built-ins are always available, are never written to the file and cannot be deleted.'],
   'st.botsBuiltinTag': ['内置', 'built-in'],
   'st.botsCopy': ['复制为 JSON', 'Copy as JSON'],
-  // Sits right next to 「复制为 JSON」, so the same verb read as the same action. This one creates an editable copy.
   'st.botsDuplicate': ['另存为副本', 'Save a copy'],
   'st.botsDelete': ['删除', 'Delete'],
   'st.botsDeleteTitle': ['删除 Bot', 'Delete bot'],
-  'st.botsDeleteMessage': ['删除 Bot {id}？引用它的规则和显式指定会失效。', 'Delete bot {id}? Rules and explicit choices that name it will stop working.'],
+  'st.botsDeleteMessage': ['删除 Bot {id}？仓库或工单上显式指定它的地方会失效，落回正常派单。',
+    'Delete bot {id}? Repositories and Tickets that name it fall back to normal dispatch.'],
   'st.botsDeleteConfirm': ['删除', 'Delete'],
   'st.botsNew': ['新建 Bot', 'New bot'],
-  'st.botsBackends': ['后端核验状态', 'Backend verification'],
-  'st.botsBackendsHint': ['未核验或版本变化的后端不能保存新 Bot，也不会进入分派候选集。',
-    'An unverified backend (or one whose version changed) cannot back a new bot and never enters the dispatch candidate set.'],
-  'st.botsBackend.verified': ['已核验', 'verified'],
-  'st.botsBackend.stale': ['版本已变，需要重新核验', 'version changed — verify again'],
-  'st.botsBackend.unverified': ['未核验', 'unverified'],
-  'st.botsBackendCap': ['能力：{caps}', 'Capabilities: {caps}'],
-  'st.botsBackendNone': ['无', 'none'],
-  'st.botsBackendVerify': ['重新核验', 'Verify'],
-  'st.botsEditorTitle': ['编辑 Bot', 'Edit bot'],
-  'st.botsEditorHint': ['保存时会按后端核验状态校验；错误码会直接显示在这里。',
-    'Saving validates against the backend evidence; error codes are shown right here.'],
-  'st.botsAdvanced': ['高级设置', 'Advanced'],
-  'st.botsAdvancedHint': ['模型 · 能力 · 工具 · 阶段 · 预算（默认都不填）', 'Model, capabilities, tools, stages, budget (empty by default)'],
-  'st.botsAdvancedSet': ['已设置 {count} 项', '{count} set'],
-  'st.botsFieldId': ['标识（小写字母/数字/横线）', 'ID (lowercase, digits, dashes)'],
+  'st.botsBackends': ['后端与派单', 'Backends and dispatch'],
+  'st.botsBackendsHint': ['只有「派单可用」的后端会让它的 Bot 进入候选。核验在保存后端配置或引擎启动时自动跑一次，失败才需要手动介入。',
+    'Only a backend marked "available" puts its bots in the candidate set. Verification runs when the backend settings are saved and once at engine start; manual checks are for failures.'],
+  'st.botsBackend.available': ['派单可用', 'available'],
+  'st.botsBackend.unverified': ['没有证据，暂不进入候选', 'no evidence yet'],
+  'st.botsBackend.checking': ['版本变了，复核期间不派单', 'version changed — not dispatched while re-checking'],
+  'st.botsBackend.missing': ['CLI 不在', 'CLI missing'],
+  'st.botsBackendPath': ['CLI：{path}', 'CLI: {path}'],
+  'st.botsBackendVerify': ['核验', 'Verify'],
+  'st.botsEdit': ['编辑 Bot', 'Edit bot'],
+  'st.botsEditorNew': ['新建 Bot', 'New bot'],
+  'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
+  'st.botsCreate': ['创建', 'Create'],
   'st.botsFieldName': ['名称', 'Name'],
-  'st.botsFieldDescription': ['一句话说明（它接什么活）', 'One line: what it takes on'],
-  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随工作流默认。', 'The bot works to this prompt; empty follows the workflow default.'],
+  'st.botsFieldDescription': ['一句话说明', 'One line'],
+  'st.botsFieldDescriptionHint': ['给人扫列表看的，不超过 120 字。', 'For a human scanning the list; up to 120 characters.'],
+  'st.botsFieldWhenToUse': ['什么时候派给它', 'When to send it work'],
   'st.botsFieldBackend': ['后端', 'Backend'],
-  'st.botsFieldPreset': ['预设', 'Preset'],
-  'st.botsFieldModelProvider': ['模型 provider', 'Model provider'],
-  'st.botsFieldModel': ['模型', 'Model'],
-  'st.botsFieldRequires': ['需要的能力', 'Required capabilities'],
-  'st.botsFieldStages': ['阶段（有序，必须含 implement 与 gates）', 'Stages (ordered; must include implement and gates)'],
-  'st.botsFieldDeny': ['额外禁止的工具（逗号分隔）', 'Extra denied tools (comma separated)'],
-  'st.botsFieldAllowMcp': ['允许的 MCP 服务器（留空=不限制）', 'Allowed MCP servers (empty = no restriction)'],
   'st.botsFieldRole': ['角色提示词', 'Role prompt'],
-  'st.botsFieldMust': ['必须遵守（每行一条）', 'Must rules (one per line)'],
-  'st.botsFieldTimeout': ['超时毫秒', 'Timeout (ms)'],
-  'st.botsFieldIdle': ['空闲超时毫秒', 'Idle timeout (ms)'],
-  'st.botsFieldRepairs': ['修复轮数', 'Repair rounds'],
-  'st.botsPreview': ['预览它能拿到什么', 'Preview what it gets'],
-  'st.botsPreviewUnverified': ['后端 {backend} 未核验：这个 Bot 只能预览，不能保存。',
-    'Backend {backend} is unverified: this bot can be previewed but not saved.'],
-  'st.botsPreviewCaps': ['能力', 'Capabilities'],
-  'st.botsPreviewDeny': ['禁止的工具', 'Denied tools'],
-  'st.botsPreviewMcp': ['可用的 MCP', 'Allowed MCP'],
-  'st.botsPreviewStages': ['阶段', 'Stages'],
+  'st.botsAdvanced': ['高级设置', 'Advanced'],
+  'st.botsFieldPreset': ['预设', 'Preset'],
+  'st.botsFieldModel': ['模型', 'Model'],
+  'st.botsFieldPrefer': ['偏好 Skill', 'Preferred skills'],
+  'st.botsSearchModel': ['搜索模型…', 'Search models…'],
+  'st.botsNoModel': ['没有读到可用模型', 'No models found'],
+  'st.botsNoSkills': ['没有读到可用 Skill', 'No skills found'],
+  'st.botsFieldSkillsPolicy': ['Skill 策略', 'Skill policy'],
+  'st.botsPresetHostDefault': ['跟随宿主默认', 'Host default'],
+  'st.botsBudget': ['预算（只读，继承自设置）', 'Budget (read-only, inherited)'],
+  'st.botsBudgetTimeout': ['超时', 'Timeout'],
+  'st.botsBudgetIdle': ['空闲超时', 'Idle timeout'],
+  'st.botsBudgetRepairs': ['最多返工', 'Max repairs'],
+  'st.botsBudgetInherit': ['跟随设置', 'From settings'],
+  'st.botsClaims': ['谁会把活派给它', 'Who sends it work'],
+  'st.botsClaimsDefault': ['默认 Bot：派单失败或候选为空时兜底。', 'Default bot: catches the run when a pick fails or no candidate is available.'],
+  'st.botsClaimsRepo': ['仓库指定：{repos}。命中即用，不再调模型。', 'Repositories name it: {repos}. An explicit choice skips the model.'],
+  'st.botsClaimsTicket': ['工单手动指定：执行页「用这个 Bot 跑一次」，只影响这一次 run。',
+    'Picked on a Ticket: "run once with this bot" affects that run only.'],
+  'st.botsClaimsNone': ['没有仓库指定它；工单上可以手动指定。', 'No repository names it; a Ticket can still name it for one run.'],
+  'st.botsStats': ['最近表现', 'Recent performance'],
+  'st.botsStatsPass': ['通过率', 'Pass rate'],
+  'st.botsStatsRepairs': ['平均返工', 'Avg repairs'],
+  'st.botsStatsGate': ['闸门通过率', 'Gate pass rate'],
+  'st.botsStatsMedian': ['中位耗时', 'Median duration'],
+  'st.botsStatsLast': ['最近一次', 'Last run'],
+  'st.botsStatsEmpty': ['还没有它跑过的记录（最近 20 单）。', 'No runs yet (last 20).'],
+  'st.botsStatsRuns': ['最近 {count} 单', 'last {count} runs'],
+  'st.botsPending': ['待沉淀', 'Worth saving'],
+  'st.botsPendingHint': ['这些是 1.4 时代现拉的临时 Bot，同一个名字跑过至少三次。点一下预填编辑器，保存后才成为正式 Bot。',
+    'These are ad-hoc bots from 1.4 that ran at least three times. Click one to prefill the editor; it becomes a real Bot only when saved.'],
+  'st.botsPendingCount': ['跑过 {count} 次', '{count} runs'],
   'st.botsPreviewEmpty': ['—', '—'],
-  'st.botsStagesAll': ['全部内置阶段', 'all built-in stages'],
-  'st.botsStageBot': ['阶段 Bot（留空=用整单 Bot）', 'Stage bot (empty = the whole-ticket bot)'],
-  'st.botsStageBudget': ['阶段超时毫秒（留空=跟随 Bot）', 'Stage timeout in ms (empty = follow the bot)'],
-  'st.botsPresetDefault': ['（宿主默认）', '(host default)'],
 })
 /* ---------------------------------------------------------------------------------------------------------------
-   Worker bots (worker-bots spec §4, §13.2). The store lives under the state dir, so this group edits the
-   file the engine actually reads — a repository's own worker-bots.json is ignored on purpose (§4.1).
+   Bots (1.5.0 §5): identity + whenToUse + role. The store lives under the state dir, so this page edits the file the
+   engine actually reads — a repository's own worker-bots.json is ignored on purpose.
    --------------------------------------------------------------------------------------------------------------- */
 
 export const BOT_BACKEND_OPTIONS = ['dsh', 'claude', 'codex']
-/** The three built-ins ship with the plugin (§4.5): always available, never editable, copy to change (§13.2). */
-export const BOT_BUILTIN_IDS = ['generalist', 'surgical', 'reviewer']
-export const BOT_STAGE_OPTIONS = ['assess', 'plan', 'implement', 'gates', 'review']
-export const BOT_CAPABILITY_OPTIONS = ['edit', 'exec', 'web']
+/** The two built-ins ship with the plugin: always available, never editable, copy to change. */
+export const BOT_BUILTIN_IDS = ['generalist', 'reviewer']
+
+/** A display name becomes the internal id: lowercase kebab, and the caller appends a suffix when it is taken. */
+export const slugOf = name => String(name ?? '').toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
 
 export const emptyBotForm = () => ({
-  id: '', name: '', description: '', backend: 'dsh', preset: '', modelProvider: '', modelModel: '',
-  reasoningEffort: 'auto', requires: [], deny: '', allowMcp: '', prefer: '', skillsPolicy: 'prompt',
-  role: '', must: '', timeoutMs: '', idleTimeoutMs: '', maxRepairRounds: '', stages: [], stageSpecs: {},
+  id: '', name: '', description: '', whenToUse: '', backend: 'dsh', preset: '', modelProvider: '',
+  modelModel: '', reasoningEffort: 'auto', prefer: '', skillsPolicy: 'prompt', role: '', budget: undefined,
 })
 
-/** A stage entry is either a name or a §10.2 object; the form edits the name, the spec rides along untouched. */
-const stageNameOf = entry => (typeof entry === 'string' ? entry : entry?.stage)
 const isPlainObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** Store shape → form strings, so a form value is always editable text and never a half-typed number. */
 export function botToForm(bot) {
   const model = bot?.model && typeof bot.model === 'object' ? bot.model : {}
-  const tools = bot?.tools && typeof bot.tools === 'object' ? bot.tools : {}
   const skills = bot?.skills && typeof bot.skills === 'object' ? bot.skills : {}
   const prompt = bot?.prompt && typeof bot.prompt === 'object' ? bot.prompt : {}
-  const budget = bot?.budget && typeof bot.budget === 'object' ? bot.budget : {}
   return {
     ...emptyBotForm(),
     id: String(bot?.id ?? ''), name: String(bot?.name ?? ''), description: String(bot?.description ?? ''),
-    backend: String(bot?.backend ?? 'dsh'), preset: String(bot?.preset ?? ''),
+    whenToUse: String(bot?.whenToUse ?? ''), backend: String(bot?.backend ?? 'dsh'), preset: String(bot?.preset ?? ''),
     modelProvider: String(model.provider ?? ''), modelModel: String(model.model ?? ''),
     reasoningEffort: String(model.reasoningEffort ?? 'auto'),
-    requires: Array.isArray(bot?.requires) ? bot.requires.filter(capability => BOT_CAPABILITY_OPTIONS.includes(capability)) : [],
-    deny: (Array.isArray(tools.deny) ? tools.deny : []).join(', '),
-    allowMcp: (Array.isArray(tools.allowMcp) ? tools.allowMcp : []).join(', '),
     prefer: (Array.isArray(skills.prefer) ? skills.prefer : []).join(', '),
     skillsPolicy: String(skills.policy ?? 'prompt'),
-    role: String(prompt.role ?? ''), must: (Array.isArray(prompt.must) ? prompt.must : []).join('\n'),
-    timeoutMs: budget.timeoutMs === undefined ? '' : String(budget.timeoutMs),
-    idleTimeoutMs: budget.idleTimeoutMs === undefined ? '' : String(budget.idleTimeoutMs),
-    maxRepairRounds: budget.maxRepairRounds === undefined ? '' : String(budget.maxRepairRounds),
-    stages: Array.isArray(bot?.stages) ? bot.stages.map(stageNameOf).filter(stage => BOT_STAGE_OPTIONS.includes(stage)) : [],
-    stageSpecs: Object.fromEntries((Array.isArray(bot?.stages) ? bot.stages : [])
-      .filter(entry => entry && typeof entry === 'object' && (entry.bot || entry.budget))
-      .map(entry => [entry.stage, { ...(entry.bot ? { bot: entry.bot } : {}), ...(entry.budget ? { budget: entry.budget } : {}) }])),
+    role: String(prompt.role ?? ''),
+    // The editor shows no budget inputs; the stored override rides along untouched so a save cannot erase it.
+    budget: isPlainObject(bot?.budget) ? bot.budget : undefined,
   }
 }
 
 const listOf = value => String(value ?? '').split(/[,，\n]/).map(item => item.trim()).filter(Boolean)
-const countOf = value => { const text = String(value ?? '').trim(); return text === '' ? undefined : Number(text) }
 
 /** Form → bot. Empty fields are omitted so the store only carries what the operator actually set. */
 export function formToBot(form) {
   const bot = { id: String(form.id ?? '').trim().toLowerCase(), name: String(form.name ?? '').trim(),
     backend: String(form.backend ?? 'dsh') }
   if (form.description) bot.description = form.description
+  if (form.whenToUse) bot.whenToUse = form.whenToUse
   if (form.preset) bot.preset = form.preset.trim()
   const model = {}
   if (form.modelProvider) model.provider = form.modelProvider.trim()
   if (form.modelModel) model.model = form.modelModel.trim()
   if (form.reasoningEffort && form.reasoningEffort !== 'auto') model.reasoningEffort = form.reasoningEffort
-  if (model.provider && model.model) bot.model = model
-  if (form.requires.length) bot.requires = [...form.requires]
-  const tools = {}
-  const deny = listOf(form.deny)
-  if (deny.length) tools.deny = deny
-  if (String(form.allowMcp ?? '').trim()) tools.allowMcp = listOf(form.allowMcp)
-  if (Object.keys(tools).length) bot.tools = tools
+  if (model.model) bot.model = model
   const skills = {}
   const prefer = listOf(form.prefer)
   if (prefer.length) skills.prefer = prefer
   if (form.skillsPolicy && form.skillsPolicy !== 'prompt') skills.policy = form.skillsPolicy
   if (Object.keys(skills).length) bot.skills = skills
-  const prompt = {}
-  if (form.role) prompt.role = form.role
-  const must = listOf(form.must)
-  if (must.length) prompt.must = must
-  if (Object.keys(prompt).length) bot.prompt = prompt
-  const budget = {}
-  for (const [key, value] of [['timeoutMs', countOf(form.timeoutMs)], ['idleTimeoutMs', countOf(form.idleTimeoutMs)],
-    ['maxRepairRounds', countOf(form.maxRepairRounds)]]) {
-    if (Number.isFinite(value)) budget[key] = value
-  }
-  if (Object.keys(budget).length) bot.budget = budget
-  if (form.stages.length) {
-    // Keep a stage-level bot/budget this form cannot edit, so saving a Bot never silently drops §10.2 settings.
-    bot.stages = form.stages.map(name => {
-      const spec = isPlainObject(form.stageSpecs)?.[name]
-      return spec ? { stage: name, ...spec } : name
-    })
-  }
+  if (form.role) bot.prompt = { role: form.role }
+  if (form.budget) bot.budget = form.budget
   return bot
 }
 
-/** §13.2 "预览它能拿到什么": the effective deny list, MCP prefixes, capability set and stages, computed client-side. */
-export function botPreview(t, form, backendState) {
-  const capabilities = BOT_CAPABILITY_OPTIONS
-    .filter(capability => backendState?.capabilities?.[capability] === true && (form.requires.length === 0
-      || form.requires.includes(capability)))
-  const mcp = listOf(form.allowMcp).map(server => `mcp__${server}__*`)
-  return {
-    capabilities,
-    unverified: !backendState || (backendState.state !== 'verified' && backendState.source !== 'smoke'),
-    deny: listOf(form.deny),
-    mcp,
-    stages: form.stages.length ? form.stages : [pt(t, 'st.botsStagesAll')],
-  }
+const formatDuration = ms => {
+  if (!Number.isFinite(ms)) return undefined
+  if (ms < 60_000) return `${Math.round(ms / 1000)} 秒`
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} 分`
+  return `${Math.round(ms / 3_600_000)} 小时`
+}
+const formatPercent = ratio => Number.isFinite(ratio) ? `${Math.round(ratio * 100)}%` : undefined
+
+/** The backend card's badge tone: only `available` is green; everything else explains why it is skipped. */
+const backendToneOf = state => state === 'available' ? 'done' : state === 'missing' ? 'warn' : 'quiet'
+
+/** One Bot's recent-run aggregate; empty until the first run, and never invented. */
+function BotStats({ t, stats }) {
+  if (!stats || !stats.runs) return <p className="sa-hint">{pt(t, 'st.botsStatsEmpty')}</p>
+  const rows = [
+    [pt(t, 'st.botsStatsPass'), formatPercent(stats.passRate)],
+    [pt(t, 'st.botsStatsRepairs'), String(stats.avgRepairs ?? 0)],
+    [pt(t, 'st.botsStatsGate'), formatPercent(stats.gatePassRate)],
+    [pt(t, 'st.botsStatsMedian'), formatDuration(stats.medianMs)],
+    [pt(t, 'st.botsStatsLast'), stats.lastAt ? when(stats.lastAt) : undefined],
+  ].filter(([, value]) => value !== undefined && value !== '')
+  return <>
+    <p className="sa-hint">{pt(t, 'st.botsStatsRuns', { count: stats.runs })}</p>
+    <KeyValues rows={rows} />
+  </>
 }
 
-/** The store list, the backend evidence and the editor: one component so the group needs no live.json draft. */
+/** The Bot page: list on the left, five-field detail on the right, then the backends and the pending ad-hoc bots. */
 export function BotsCard() {
   const { t } = usePanel()
   const { actions } = usePanelData()
   const [state, setState] = useState({ busy: true, data: undefined, error: undefined })
   const [editor, setEditor] = useState(undefined)
-  // The editor opens on identity + prompt only; the rest is one disclosure away (§13.2 keeps every field reachable).
-  const [advancedOpen, setAdvancedOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
+  const verifySeq = useRef(0)
+  const [settingDefault, setSettingDefault] = useState('')
+  const [pickedId, setPickedId] = useState('')
+  const [advanced, setAdvanced] = useState(false)
   const seq = useRef(0)
   const load = async () => {
     const seqNow = ++seq.current
     try {
-      const data = await actions.bots()
-      if (seq.current === seqNow) setState({ busy: false, data, error: undefined })
+      const [view, stats, config, catalog] = await Promise.all([
+        actions.bots(),
+        actions.botStats(),
+        actions.config(),
+        // §5.4: the editor offers real presets/models/skills. Optional — a host that cannot list them still renders
+        // the editor with free-text fields.
+        Promise.resolve().then(() => actions.botCatalog?.()).catch(() => ({})),
+      ])
+      if (seq.current === seqNow) setState({ busy: false, data: { view, stats, config, catalog }, error: undefined })
     } catch (failure) {
       if (seq.current === seqNow) setState({ busy: false, data: undefined, error: failure })
     }
   }
   useEffect(() => { void load() }, [])
-  // "存为 Bot" on the Ticket page hands its synthesised bot over through sessionStorage (§8.4): review, then save.
+  // An old "存为 Bot" hand-off still lands here: review the draft, then save it as a normal Bot.
   useEffect(() => {
     let draft
     try { draft = window.sessionStorage.getItem('superagent-panel/bot-draft') } catch { draft = undefined }
     if (!draft) return
     try {
       const parsed = JSON.parse(draft)
-      if (parsed && typeof parsed === 'object') setEditor({ form: botToForm(parsed), id: parsed.id, resolved: parsed })
+      if (parsed && typeof parsed === 'object') setEditor({ form: botToForm(parsed), id: parsed.id })
     } catch { /* a corrupt draft is simply not preloaded */ }
     try { window.sessionStorage.removeItem('superagent-panel/bot-draft') } catch { /* private mode */ }
   }, [])
   if (state.error) return <ErrorState error={state.error} onRetry={() => { void load() }} />
   if (!state.data) return <Skeleton rows={4} />
-  const view = state.data
+  const { view, stats, config, catalog } = state.data
   const bots = Array.isArray(view.bots) ? view.bots : []
   const presetIds = Array.isArray(view.presets) ? view.presets : []
-  const botIds = bots.map(bot => bot.id)
+  const dshCatalog = catalog && typeof catalog.dsh === 'object' && catalog.dsh ? catalog.dsh : {}
+  const catalogPresets = Array.isArray(dshCatalog.presets) ? dshCatalog.presets : []
+  const catalogProviders = Array.isArray(dshCatalog.providers) ? dshCatalog.providers : []
+  const catalogSkills = Array.isArray(dshCatalog.skills) ? dshCatalog.skills : []
+  const presetChoices = [...new Set([...presetIds, ...catalogPresets])]
   const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
   const builtinOf = bot => BOT_BUILTIN_IDS.includes(bot?.id)
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
-  // §10.2: a stage may name a bot and its own timeout. Empty means "follow the whole-ticket bot", so the key is
-  // dropped instead of saved as an empty object the schema would reject.
-  const setStageSpec = (stage, patch) => {
-    if (!editor) return
-    const specs = { ...(editor.form.stageSpecs ?? {}) }
-    const next = { ...(specs[stage] ?? {}), ...patch }
-    if (!next.bot) delete next.bot
-    if (!next.budget || !Object.keys(next.budget).length) delete next.budget
-    if (next.bot || next.budget) specs[stage] = next
-    else delete specs[stage]
-    editField('stageSpecs', specs)
+  const openEditor = (bot, prefill) => {
+    setSaveError(undefined)
+    setEditor({ form: botToForm(bot ?? prefill), id: bot?.id })
   }
-  const openEditor = bot => { setSaveError(undefined); setAdvancedOpen(false); setEditor({ form: botToForm(bot), id: bot?.id }) }
   const closeEditor = () => { if (!saving) setEditor(undefined) }
   const save = async () => {
     if (!editor) return
     setSaving(true)
     setSaveError(undefined)
     try {
-      const bot = formToBot(editor.form)
-      // Exclude both the saved id and the one this editor opened: renaming a Bot must not leave the old one behind.
-      const others = bots.filter(item => item.id !== bot.id && item.id !== editor.id).map(item => stripBotForSave(item))
-      const saved = await actions.saveBots([...others, bot])
-      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
+      let bot = formToBot(editor.form)
+      if (!editor.id) {
+        const base = slugOf(editor.form.name) || `bot-${Date.now().toString(36).slice(-4)}`
+        let candidate = base
+        let suffix = 2
+        while (bots.some(item => item.id === candidate)) candidate = `${base}-${suffix++}`
+        bot = formToBot({ ...editor.form, id: candidate })
+      }
+      const others = bots.filter(item => !builtinOf(item) && item.id !== bot.id && item.id !== editor.id)
+        .map(item => stripBotForSave(item))
+      await actions.saveBots([...others, bot])
+      if (!editor.id) setPickedId(bot.id)
       setEditor(undefined)
+      await load()
     } catch (failure) { setSaveError(failure) } finally { setSaving(false) }
   }
   const remove = async bot => {
-    // Swallowing the failure made ConfirmButton treat the delete as done and close the dialog while the Bot was still
-    // there. Re-throw so the dialog stays open with the reason next to it.
     try {
-      const saved = await actions.saveBots(bots.filter(item => item.id !== bot.id).map(stripBotForSave))
-      if (saved?.bots) setState({ busy: false, data: saved, error: undefined })
+      await actions.saveBots(bots.filter(item => !builtinOf(item) && item.id !== bot.id).map(stripBotForSave))
+      await load()
     } catch (failure) { setSaveError(failure); throw failure }
   }
+  // The default bot is `executor.bot`: it is the fallback when the pick cannot run. It is a setting, not a bot edit,
+  // so it lives here rather than in the editor — a built-in can be the default without being editable.
+  const makeDefault = async id => {
+    setSettingDefault(id)
+    try {
+      await actions.patchSettings({ 'executor.bot': id })
+      await load()
+    } catch (failure) { setSaveError(failure) } finally { setSettingDefault('') }
+  }
+  // The host starts the CLI smoke and answers `checking` immediately: keep reloading until the backend settles, so
+  // the card never stays on "核验中" after the CLI has already answered.
   const verify = async backend => {
+    const token = ++verifySeq.current
     setVerifying(backend)
     try {
       await actions.verifyBotBackend(backend)
       await load()
-    } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
+      for (let round = 0; round < 30; round++) {
+        await new Promise(done => setTimeout(done, 4000))
+        if (verifySeq.current !== token) return
+        const fresh = await actions.bots()
+        const states = Object.values(fresh?.backends ?? {}).map(entry => entry?.state)
+        if (!states.includes('checking')) break
+      }
+      if (verifySeq.current === token) await load()
+    } catch (failure) { setSaveError(failure) } finally { if (verifySeq.current === token) setVerifying('') }
   }
-  const capabilityOf = bot => capabilitiesOfForm(bot, backends[bot.backend])
-  const preview = editor ? botPreview(t, editor.form, backends[editor.form.backend]) : undefined
-  // What the collapsed row advertises: fields that moved off the first screen and already carry a value.
-  const advancedCount = editor ? [editor.form.preset, editor.form.modelProvider && editor.form.modelModel,
-    editor.form.requires.length, editor.form.stages.length, editor.form.deny, editor.form.allowMcp, editor.form.must,
-    editor.form.timeoutMs, editor.form.idleTimeoutMs, editor.form.maxRepairRounds,
-    Object.keys(editor.form.stageSpecs ?? {}).length].filter(Boolean).length : 0
-  const problem = saveError
-  return <>
-    <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
-      <div className="sa-settings-stack">
-        <KeyValues rows={[[pt(t, 'st.botsFile'), <span className="sa-mono">{String(view.file ?? '—')}</span>],
-          [pt(t, 'st.botsBuiltin'), pt(t, 'st.botsBuiltinNote')]]} />
-        {view.code
-          ? <p className="sa-hint sa-info-warn">
-            {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
-          </p>
-          : null}
-        {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
-          ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
-          : null}
-        {(Array.isArray(view.ruleWarnings) ? view.ruleWarnings : []).map(warning => (
-          <p key={`${warning.index}-${warning.bot}`} className="sa-hint sa-info-warn">
-            {pt(t, 'st.botsRuleWarn', { index: warning.index, bot: warning.bot })}
-          </p>
-        ))}
-        {bots.map(bot => <div key={bot.id} className="sa-row sa-bot-row">
-          <div className="sa-row-main">
-            <div className="sa-row-title">
-              <span>{bot.name ?? bot.id}</span>
-              <span className="sa-mono sa-hint">{bot.id}</span>
-              <Tag tone="outline">{bot.backend}</Tag>
-              {builtinOf(bot) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
-              {capabilityOf(bot).map(capability => <Tag key={capability} tone="info">{capability}</Tag>)}
+  const selected = bots.find(bot => bot.id === pickedId) ?? bots[0]
+  const pick = id => { setPickedId(id); setEditor(undefined); setSaveError(undefined) }
+  const detailForm = selected ? botToForm(selected) : undefined
+  const repoClaims = (Array.isArray(config?.repos) ? config.repos : [])
+    .filter(repo => repo.bot === selected?.id).map(repo => repo.id)
+  const defaultBot = config?.executor?.bot ?? 'generalist'
+  const statsOf = stats?.bots?.[selected?.id]
+  const pending = Array.isArray(stats?.pending) ? stats.pending : []
+  // A backend decides what can be configured: DSH answers from host services, a CLI from its own configuration files.
+  // Both get real lists, so the editor never asks for an id from memory.
+  const editorIsDsh = editor?.form?.backend === 'dsh'
+  const backendCatalog = catalog && typeof catalog[editor?.form?.backend] === 'object' && catalog[editor?.form?.backend]
+    ? catalog[editor?.form?.backend] : {}
+  const cliModels = Array.isArray(backendCatalog.models) ? backendCatalog.models : []
+  const modelGroups = editorIsDsh
+    ? catalogProviders.map(row => ({ provider: row.provider, label: row.name, models: Array.isArray(row.models) ? row.models : [] }))
+    : [{ provider: '', label: String(editor?.form?.backend ?? ''), models: cliModels }]
+  const modelLabel = modelGroups.flatMap(group => group.models).find(model => model.id === editor?.form?.modelModel)?.name
+  const skillChoices = editorIsDsh ? catalogSkills : (Array.isArray(backendCatalog.skills) ? backendCatalog.skills : [])
+  const preferTokens = listOf(editor?.form?.prefer ?? '')
+  // A stored preference the catalogue does not know yet (an older save, a skill removed from the host) stays visible
+  // and checkable, so saving the editor never drops it silently.
+  const unknownPrefers = preferTokens.filter(name => !skillChoices.some(skill => skill.name === name))
+    .map(name => ({ name, description: '' }))
+  const allSkills = [...skillChoices, ...unknownPrefers]
+  const togglePrefer = name => {
+    const next = preferTokens.includes(name) ? preferTokens.filter(item => item !== name) : [...preferTokens, name]
+    editField('prefer', next.join(', '))
+  }
+  // A backend change resets everything that is scoped to the previous backend: its preset, its model pair and its
+  // skill preferences. Empty means "this backend's own default", which is what the advanced section shows.
+  const changeBackend = value => setEditor(current => current ? { ...current, form: {
+    ...current.form, backend: value,
+    preset: '', modelProvider: '', modelModel: '', prefer: '', skillsPolicy: 'prompt',
+  } } : current)
+  // Five questions, no capability toggles: who it is, what it is for, when to send it work, which backend, and how it
+  // should behave. Budget and claims stay read-only so the editor never duplicates the settings pages.
+  const editorPane = editor ? <Section title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
+    <div className="sa-bots-editor-body sa-bots-editor">
+      <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
+          <Input value={editor.form.name} maxLength={40}
+            onChange={event => editField('name', event.target.value)} /></label>
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
+          <Select value={editor.form.backend} onChange={changeBackend}
+            options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
+        <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
+          <Input value={editor.form.description} maxLength={120}
+            onChange={event => editField('description', event.target.value)} /></label>
+      </div>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldWhenToUse')}</span>
+        <textarea className="sa-textarea" rows={3} maxLength={300} value={editor.form.whenToUse}
+          aria-label={pt(t, 'st.botsFieldWhenToUse')}
+          onChange={event => editField('whenToUse', event.target.value)} /></label>
+      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
+        <textarea className="sa-textarea" rows={4} value={editor.form.role}
+          aria-label={pt(t, 'st.botsFieldRole')}
+          onChange={event => editField('role', event.target.value)} /></label>
+      <DisclosureRow title={pt(t, 'st.botsAdvanced')} open={advanced}
+        onToggle={() => setAdvanced(value => !value)} />
+      {advanced ? <div className="sa-field-grid">
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
+          <Select value={editor.form.preset} disabled={!editorIsDsh}
+            onChange={value => editField('preset', value)}
+            options={[{ value: '', label: pt(t, 'st.botsPresetHostDefault') },
+              ...presetChoices.map(id => ({ value: id, label: id }))]} /></label>
+        <span className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+          <ModelPicker groups={modelGroups} value={editor.form.modelModel} valueLabel={modelLabel}
+            label={pt(t, 'st.botsFieldModel')} searchLabel={pt(t, 'st.botsSearchModel')}
+            emptyLabel={pt(t, 'st.botsNoModel')} disabled={!modelGroups.some(group => group.models.length)}
+            onChange={choice => setEditor(current => current ? { ...current, form: {
+              ...current.form, modelProvider: choice.provider, modelModel: choice.model,
+            } } : current)} /></span>
+        {allSkills.length
+          ? <div className="sa-field sa-field-wide">
+            <span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+            <div className="sa-check-row">
+              {allSkills.map(skill => <label key={skill.name} className="sa-check">
+                <input type="checkbox" checked={preferTokens.includes(skill.name)} onChange={() => togglePrefer(skill.name)} />
+                <span>{skill.name}</span>
+              </label>)}
             </div>
-            {bot.description ? <p className="sa-hint">{bot.description}</p> : null}
           </div>
-          <div className="sa-row-meta">
-            {builtinOf(bot) ? null
-              : <Button size="sm" variant="ghost" onClick={() => openEditor(bot)}>{t('edit')}</Button>}
-            <CopyButton value={JSON.stringify(stripBotForSave(bot), null, 2)} label={pt(t, 'st.botsCopy')} />
-            {builtinOf(bot)
-              ? <Button size="sm" variant="ghost" onClick={() => openEditor({ ...bot, id: `${bot.id}-copy`,
-                name: `${bot.name ?? bot.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
-              : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
-                message={pt(t, 'st.botsDeleteMessage', { id: bot.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
-                onConfirm={async () => { await remove(bot) }} />}
-          </div>
-        </div>)}
-        <Button size="sm" variant="outline" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
+          : <span className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+            <span className="sa-hint">{pt(t, 'st.botsNoSkills')}</span></span>}
+        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldSkillsPolicy')}</span>
+          <Select value={editor.form.skillsPolicy} onChange={value => editField('skillsPolicy', value)}
+            options={[{ value: 'prompt', label: 'prompt' }, { value: 'preset', label: 'preset' }]} /></label>
+      </div> : null}
+      {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
+        ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
+      <div className="sa-actions">
+        <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
+        <Button variant="primary" disabled={saving || String(editor.form.name ?? '').trim() === ''
+          || String(editor.form.whenToUse ?? '').trim() === ''}
+          onClick={() => { void save() }}>
+          {saving ? t('saving') : editor.id ? t('save') : pt(t, 'st.botsCreate')}
+        </Button>
+      </div>
+    </div>
+  </Section> : null
+  const detailRows = selected ? [
+    [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
+    [pt(t, 'st.botsFieldWhenToUse'), detailForm.whenToUse || pt(t, 'st.botsPreviewEmpty')],
+    ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
+    ...(detailForm.modelModel
+      ? [[pt(t, 'st.botsFieldModel'), detailForm.modelProvider
+        ? `${detailForm.modelProvider} · ${detailForm.modelModel}` : detailForm.modelModel]] : []),
+    [pt(t, 'st.botsBudget'),
+      `${pt(t, 'st.botsBudgetTimeout')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetIdle')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetRepairs')} ${pt(t, 'st.botsBudgetInherit')}`],
+  ] : []
+  return <>
+    <Section title={pt(t, 'st.botsTitle')}>
+      {view.code
+        ? <p className="sa-hint sa-info-warn">
+          {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
+        </p> : null}
+      {(Array.isArray(view.droppedKeys) && view.droppedKeys.length)
+        ? <p className="sa-hint sa-info-warn">{pt(t, 'st.botsDropped', { keys: view.droppedKeys.join(', ') })}</p>
+        : null}
+      <div className="sa-panes">
+        <div className="sa-pane sa-pane-aside">
+          <ul className="sa-list sa-bot-list">
+            {bots.map(bot => <li key={bot.id}>
+              <button type="button" className="sa-row sa-bot-row" aria-current={selected?.id === bot.id}
+                onClick={() => pick(bot.id)}>
+                <div className="sa-row-main">
+                  <div className="sa-row-title">
+                    <span>{bot.name ?? bot.id}</span>
+                    <span className="sa-mono sa-hint">{bot.id}</span>
+                  </div>
+                  {bot.description ? <div className="sa-row-meta">{bot.description}</div> : null}
+                </div>
+              </button>
+            </li>)}
+          </ul>
+          <Button size="sm" variant="outline" icon="plus" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
+          <p className="sa-hint sa-bots-store">{pt(t, 'st.botsFile')} · <span className="sa-mono">{String(view.file ?? '—')}</span></p>
+
+        </div>
+        <div className="sa-pane sa-bots-detail">
+          {editorPane ?? (selected
+            ? <Section title={selected.name ?? selected.id}
+              badge={builtinOf(selected) ? <Tag tone="quiet">{pt(t, 'st.botsBuiltinTag')}</Tag> : null}
+              action={<span className="sa-actions">
+                {builtinOf(selected)
+                  ? null
+                  : <Button size="sm" variant="outline" onClick={() => openEditor(selected)}>{t('edit')}</Button>}
+                {selected.id === defaultBot ? null : <Button size="sm" variant="ghost"
+                  disabled={settingDefault === selected.id}
+                  onClick={() => { void makeDefault(selected.id) }}>{pt(t, 'st.botsMakeDefault')}</Button>}
+                <CopyButton value={JSON.stringify(stripBotForSave(selected), null, 2)} label={pt(t, 'st.botsCopy')} />
+                {builtinOf(selected)
+                  ? <Button size="sm" variant="ghost" onClick={() => openEditor(undefined, { ...selected, id: `${selected.id}-copy`,
+                    name: `${selected.name ?? selected.id} 副本` })}>{pt(t, 'st.botsDuplicate')}</Button>
+                  : <ConfirmButton label={pt(t, 'st.botsDelete')} title={pt(t, 'st.botsDeleteTitle')}
+                    message={pt(t, 'st.botsDeleteMessage', { id: selected.id })} confirmLabel={pt(t, 'st.botsDeleteConfirm')}
+                    onConfirm={async () => { await remove(selected) }} />}
+              </span>}>
+              <div className="sa-settings-stack">
+                {selected.description ? <p className="sa-hint">{selected.description}</p> : null}
+                <KeyValues rows={detailRows} />
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
+                  <p className="sa-hint sa-role-text">{detailForm.role || pt(t, 'st.botsPreviewEmpty')}</p>
+                </div>
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsClaims')}</span>
+                  <p className="sa-hint">
+                    {selected.id === defaultBot ? <>{pt(t, 'st.botsClaimsDefault')}<br /></> : null}
+                    {repoClaims.length
+                      ? <>{pt(t, 'st.botsClaimsRepo', { repos: repoClaims.join('、') })}<br /></>
+                      : <>{pt(t, 'st.botsClaimsNone')}<br /></>}
+                    {pt(t, 'st.botsClaimsTicket')}
+                  </p>
+                </div>
+                <div className="sa-field">
+                  <span className="sa-field-head">{pt(t, 'st.botsStats')}</span>
+                  <BotStats t={t} stats={statsOf} />
+                </div>
+              </div>
+            </Section>
+            : <EmptyState title={pt(t, 'st.botsPick')} />)}
+        </div>
       </div>
     </Section>
     <Section title={pt(t, 'st.botsBackends')} hint={pt(t, 'st.botsBackendsHint')}>
       <div className="sa-settings-stack">
         {BOT_BACKEND_OPTIONS.map(backend => {
-          const evidence = backends[backend] ?? { state: 'unverified' }
-          const verified = evidence.state === 'verified' || evidence.source === 'smoke'
+          const entry = backends[backend] ?? { state: 'unverified' }
           return <div key={backend} className="sa-row">
             <div className="sa-row-main">
               <div className="sa-row-title">
-                <Tag tone={verified ? 'done' : 'warn'}>{backend}</Tag>
-                <span>{pt(t, `st.botsBackend.${verified ? 'verified' : evidence.state === 'stale' ? 'stale' : 'unverified'}`)}</span>
-                {evidence.verifiedAt ? <When at={evidence.verifiedAt} /> : null}
+                <Tag tone={backendToneOf(entry.state)}>{backend}</Tag>
+                <span>{pt(t, `st.botsBackend.${entry.state ?? 'unverified'}`)}</span>
+                {entry.verifiedAt ? <When at={entry.verifiedAt} /> : null}
               </div>
-              <p className="sa-hint">{pt(t, 'st.botsBackendCap', {
-                caps: BOT_CAPABILITY_OPTIONS.filter(capability => evidence.capabilities?.[capability] === true).join(', ')
-                  || pt(t, 'st.botsBackendNone') })}</p>
+              <p className="sa-hint">
+                {entry.reason ? <>{entry.reason}</> : null}
+                {entry.cliPath ? <span className="sa-mono">{` · ${pt(t, 'st.botsBackendPath', { path: entry.cliPath })}`}</span> : null}
+              </p>
             </div>
             <Button size="sm" variant="ghost" disabled={verifying === backend}
               onClick={() => { void verify(backend) }}>{pt(t, 'st.botsBackendVerify')}</Button>
@@ -1353,136 +1419,47 @@ export function BotsCard() {
         })}
       </div>
     </Section>
-    {problem && problem.details?.code
-      ? <p className="sa-error" role="alert">{`${String(problem.details.code)}：${problem.message}`}
-        {Array.isArray(problem.details.problems) && problem.details.problems.length
-          ? <span className="sa-hint">{` · ${problem.details.problems.join('；')}`}</span>
-          : null}</p>
-      : problem ? <p className="sa-error" role="alert">{errorText(problem)}</p> : null}
-    {editor ? <Modal open={true} onClose={closeEditor} title={pt(t, 'st.botsEditorTitle')} closeLabel={t('close')}
-      className="sa-bot-modal"
-      footer={<>
-        <Button variant="ghost" disabled={saving} onClick={closeEditor}>{t('cancel')}</Button>
-        <Button variant="primary" disabled={saving} onClick={() => { void save() }}>{saving ? t('saving') : t('save')}</Button>
-      </>}>
-      <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
-      {/* First-run surface: who the bot is, which backend runs it, what it takes on. Every other field keeps its
-          store default and lives behind 「高级设置」 — same fields, one disclosure away, so nothing is lost. */}
-      <div className="sa-field-grid">
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
-          <Input value={editor.form.name}
-            onChange={event => editField('name', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldId')}</span>
-          <Input value={editor.form.id} onChange={event => editField('id', event.target.value)} /></label>
-        <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
-          <Input value={editor.form.description} onChange={event => editField('description', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
-          <Select value={editor.form.backend} onChange={value => editField('backend', value)}
-            options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
-      </div>
-      <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
-        <textarea className="sa-textarea" rows={4} value={editor.form.role}
-          aria-label={pt(t, 'st.botsFieldRole')} placeholder={pt(t, 'st.botsFieldRoleHint')}
-          onChange={event => editField('role', event.target.value)} /></label>
-      <DisclosureRow open={advancedOpen} onToggle={() => setAdvancedOpen(current => !current)}
-        title={pt(t, 'st.botsAdvanced')}
-        collapsedContent={advancedCount
-          ? pt(t, 'st.botsAdvancedSet', { count: advancedCount }) : pt(t, 'st.botsAdvancedHint')}>
-        <div className="sa-disclosure-body">
-          <div className="sa-field-grid">
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
-              {presetIds.length
-                ? <Select value={editor.form.preset} onChange={value => editField('preset', value)}
-                  options={[{ value: '', label: pt(t, 'st.botsPresetDefault') },
-                    ...presetIds.map(id => ({ value: id, label: id }))]} />
-                : <Input value={editor.form.preset} onChange={event => editField('preset', event.target.value)} />}</label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModelProvider')}</span>
-              <Input value={editor.form.modelProvider} onChange={event => editField('modelProvider', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-              <Input value={editor.form.modelModel} onChange={event => editField('modelModel', event.target.value)} /></label>
-          </div>
-          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRequires')}</span>
-            {BOT_CAPABILITY_OPTIONS.map(capability => <label key={capability} style={{ marginRight: 12 }}>
-              <Switch checked={editor.form.requires.includes(capability)}
-                onChange={next => editField('requires', next
-                  ? [...editor.form.requires, capability] : editor.form.requires.filter(item => item !== capability))} />
-              {capability}</label>)}
-          </div>
-          <div className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldStages')}</span>
-            {BOT_STAGE_OPTIONS.map(stage => <label key={stage} style={{ marginRight: 12 }}>
-              <Switch checked={editor.form.stages.includes(stage)}
-                onChange={next => editField('stages', next
-                  ? BOT_STAGE_OPTIONS.filter(item => item === stage || editor.form.stages.includes(item))
-                  : editor.form.stages.filter(item => item !== stage))} />
-              {stage}</label>)}
-          </div>
-          {/* §10.2: which bot runs which stage, and that stage's own timeout. `gates` has no row: the executor runs it. */}
-          {editor.form.stages.filter(stage => stage !== 'gates').map(stage => {
-            const spec = isPlainObject(editor.form.stageSpecs?.[stage]) ? editor.form.stageSpecs[stage] : {}
-            const budget = isPlainObject(spec.budget) ? spec.budget : {}
-            return <div className="sa-field-grid" key={`stage-${stage}`} data-testid={`sa-bot-stage-${stage}`}>
-              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBot')} · ${stage}`}</span>
-                <Select value={String(spec.bot ?? '')} options={[{ value: '', label: pt(t, 'st.botsPreviewEmpty') },
-                  ...botIds.map(id => ({ value: id, label: id }))]}
-                  onChange={value => setStageSpec(stage, { bot: value || undefined })} /></label>
-              <label className="sa-field"><span className="sa-field-head">{`${pt(t, 'st.botsStageBudget')} · ${stage}`}</span>
-                <Input value={budget.timeoutMs === undefined ? '' : String(budget.timeoutMs)}
-                  onChange={event => {
-                    const text = String(event.target.value).trim()
-                    setStageSpec(stage, { budget: text === '' ? undefined : { ...budget, timeoutMs: Number(text) } })
-                  }} /></label>
+    {pending.length ? <Section title={pt(t, 'st.botsPending')}>
+      <div className="sa-settings-stack">
+        {pending.map(item => <div key={item.id} className="sa-row">
+          <div className="sa-row-main">
+            <div className="sa-row-title">
+              <span>{item.name}</span>
+              <span className="sa-mono sa-hint">{item.id}</span>
+              <span className="sa-hint">{pt(t, 'st.botsPendingCount', { count: item.count })}</span>
             </div>
-          })}
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldDeny')}</span>
-            <Input value={editor.form.deny} onChange={event => editField('deny', event.target.value)} /></label>
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldAllowMcp')}</span>
-            <Input value={editor.form.allowMcp} onChange={event => editField('allowMcp', event.target.value)} /></label>
-          <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldMust')}</span>
-            <Input value={editor.form.must} onChange={event => editField('must', event.target.value)} /></label>
-          <div className="sa-field-grid">
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldTimeout')}</span>
-              <Input value={editor.form.timeoutMs} onChange={event => editField('timeoutMs', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldIdle')}</span>
-              <Input value={editor.form.idleTimeoutMs} onChange={event => editField('idleTimeoutMs', event.target.value)} /></label>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRepairs')}</span>
-              <Input value={editor.form.maxRepairRounds} onChange={event => editField('maxRepairRounds', event.target.value)} /></label>
+            {item.description ? <div className="sa-row-meta">{item.description}</div> : null}
           </div>
-          {preview ? <div className="sa-field" data-testid="sa-bot-preview">
-            <span className="sa-field-head">{pt(t, 'st.botsPreview')}</span>
-            {preview.unverified
-              ? <p className="sa-hint" style={{ color: 'var(--sa-warn-text)' }}>
-                {pt(t, 'st.botsPreviewUnverified', { backend: editor.form.backend })}</p>
-              : null}
-            <KeyValues rows={[[pt(t, 'st.botsPreviewCaps'), preview.capabilities.join(', ') || pt(t, 'st.botsBackendNone')],
-              [pt(t, 'st.botsPreviewDeny'), preview.deny.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-              [pt(t, 'st.botsPreviewMcp'), preview.mcp.join(', ') || pt(t, 'st.botsPreviewEmpty')],
-              [pt(t, 'st.botsPreviewStages'), preview.stages.join(' → ')]]} />
-          </div> : null}
-        </div>
-      </DisclosureRow>
-      {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
-        ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
-    </Modal> : null}
-    {/* A synthesised bot is review-only input: saving always goes through the button above (§8.4). */}
-    {editor?.resolved ? null : null}
+          <Button size="sm" variant="outline" onClick={() => openEditor(undefined, {
+            name: item.name, description: item.description, whenToUse: item.whenToUse,
+            backend: item.backend, prompt: { role: item.role } })}>{t('edit')}</Button>
+        </div>)}
+      </div>
+    </Section> : null}
+    {saveError && !editor ? <p className="sa-error" role="alert">{saveError.details?.code
+      ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
   </>
 }
 
 /** Strip host-added keys before re-saving a listed bot: only the store's own fields may round-trip. */
 function stripBotForSave(bot) {
-  const keys = ['id', 'name', 'description', 'backend', 'model', 'preset', 'requires', 'edit', 'exec', 'web', 'tools',
-    'skills', 'prompt', 'budget', 'stages']
+  const keys = ['id', 'name', 'description', 'whenToUse', 'backend', 'model', 'preset', 'skills', 'prompt', 'budget']
   const out = {}
   for (const key of keys) if (bot?.[key] !== undefined) out[key] = bot[key]
   return out
 }
 
-const capabilitiesOfForm = (bot, backendState) => BOT_CAPABILITY_OPTIONS
-  .filter(capability => (bot?.requires ?? []).includes(capability) && backendState?.capabilities?.[capability] === true)
-
 export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
   const { data, error, reload, actions } = usePanelData()
+  // The Worker group shows what the CLIs are actually configured with — the binary the executor will spawn and the
+  // models their own config files name — so neither is typed in by hand.
+  const [botCatalog, setBotCatalog] = useState({})
+  useEffect(() => {
+    let active = true
+    Promise.resolve().then(() => actions.botCatalog?.()).then(value => { if (active) setBotCatalog(value ?? {}) }).catch(() => {})
+    return () => { active = false }
+  }, [])
   const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
   const [active, setActive] = useState(requestedGroup)
   // Editable groups keep a group-local draft. A draft that exists only in memory is lost on reload / tab close, so it
@@ -1855,6 +1832,16 @@ export function LiveSettingsPage({ route }) {
     </div>
   }
 
+  /** The bindings as the editor sees them: the unsaved draft first, the saved config second. */
+  const bindingDraft = () => {
+    const draft = drafts.source ?? {}
+    const watched = draft['octo.watchChatIds'] ?? octo.watchChatIds
+    return {
+      watched: Array.isArray(watched) ? watched : [],
+      titles: draft['octo.chatTitles'] ?? octo.chatTitles ?? {},
+      repos: draft['octo.chatRepos'] ?? octo.chatRepos ?? {},
+    }
+  }
   /** Stage a binding change in the source draft; the group's 保存 (with its risk confirmation) writes it. */
   const editBindings = (watched, titles, bindings) => {
     editField('source', 'octo.watchChatIds', watched, octo.watchChatIds ?? [])
@@ -1872,9 +1859,11 @@ export function LiveSettingsPage({ route }) {
     }
     setBindingError(undefined)
     const repoId = bindingForm.repoId || defaultRepoId
-    const watched = [...new Set([...(octo.watchChatIds ?? []), chatId])]
-    const titles = { ...(octo.chatTitles ?? {}), ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
-    const bindings = { ...(octo.chatRepos ?? {}), [chatId]: repoId }
+    // Merge onto the draft, not the saved file: a second chat added before 保存 used to drop the first unsaved binding.
+    const current = bindingDraft()
+    const watched = [...new Set([...current.watched, chatId])]
+    const titles = { ...current.titles, ...bindingForm.title.trim() ? { [chatId]: bindingForm.title.trim() } : {} }
+    const bindings = { ...current.repos, [chatId]: repoId }
     editBindings(watched, titles, bindings)
     closeBindingForm()
   }
@@ -2208,10 +2197,7 @@ export function LiveSettingsPage({ route }) {
     const pollSeconds = 'pollSeconds' in draft ? draft.pollSeconds : String(config.pollSeconds ?? '')
     // Bindings are a source-group draft like every other setting here: writing them straight to live.json bypassed
     // both the dirty indicator and the high-risk confirmation in the save bar (review M-4).
-    const chatIds = Array.isArray(draft['octo.watchChatIds'] ?? octo.watchChatIds)
-      ? (draft['octo.watchChatIds'] ?? octo.watchChatIds) : []
-    const chatTitles = draft['octo.chatTitles'] ?? octo.chatTitles ?? {}
-    const chatRepos = draft['octo.chatRepos'] ?? octo.chatRepos ?? {}
+    const { watched: chatIds, titles: chatTitles, repos: chatRepos } = bindingDraft()
     const chatNames = chatIds.map(id => chatTitles[id] ?? id)
     const senders = senderValuesOf(draft)
     const cursors = engine.channelCursors ?? {}
@@ -2269,13 +2255,17 @@ export function LiveSettingsPage({ route }) {
           ? <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-8)' }}>
             {chatIds.map(chatId => <div key={chatId} className="sa-switch-row">
               <div className="sa-switch-row-text">
-                <span>{octo.chatTitles?.[chatId] ?? chatId}</span>
-                <span className="sa-mono sa-hint" translate="no">{String(chatId)}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  title={chatTitles[chatId] ?? String(chatId)}>{chatTitles[chatId] ?? chatId}</span>
+                {/* A 32-character chat key wrapped mid-hash on a phone; one ellipsised line keeps the row readable and the
+                    full key stays in the tooltip. */}
+                <span className="sa-mono sa-hint" translate="no" title={String(chatId)}
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{String(chatId)}</span>
               </div>
               {/* The control row never wraps: the repository select and its 移除 button stay on one line (critique §27). */}
               <div className="sa-actions" style={{ flexWrap: 'nowrap', minWidth: 0 }}>
                 <div style={{ flex: '0 1 240px', minWidth: 0 }}>
-                  <Select label={pt(t, 'st.bindingRepo')} value={octo.chatRepos?.[chatId] ?? defaultRepoId}
+                  <Select label={pt(t, 'st.bindingRepo')} value={chatRepos[chatId] ?? defaultRepoId}
                     options={repoOptions}
                     onChange={next => editBindings(chatIds, chatTitles, { ...chatRepos, [chatId]: next })} />
                 </div>
@@ -2331,13 +2321,17 @@ export function LiveSettingsPage({ route }) {
       [pt(t, 'st.judgeModel'), decision.model || t('empty')],
       [pt(t, 'st.judgeToken'), configured(decision.tokenConfigured)],
       [pt(t, 'st.judgeCalls'), `${judge.calls ?? 0} / ${judge.ok ?? 0} / ${judge.errors ?? 0} / ${judge.skipped ?? 0}`],
-      [pt(t, 'st.decisionsTotal'), String(data.counts?.decisions ?? 0)],
-      [pt(t, 'st.decisions24h'), String(data.flow24h?.judged ?? 0)],
+      // The decision counts and their 24-hour window belong to the Eval ledger and the Overview summary; showing them
+      // here too meant three pages quoting the same number (review P3). One link instead.
     ]
     return <div className="sa-settings-group">
       {settingsHeading()}
       <Hint>{pt(t, 'st.evalHint')}</Hint>
       <KeyValues rows={rows} />
+      <div className="sa-actions">
+        <Button variant="ghost" size="sm" icon={<Icon name="decision" size={14} />}
+          onClick={() => navigate({ page: 'eval' })}>{pt(t, 'st.evalOpenLedger')}</Button>
+      </div>
       <Hint>{pt(t, 'st.judgeHint')}</Hint>
       <div className="sa-field">
         <span className="sa-field-head">{pt(t, 'st.rules')}</span>
@@ -2407,7 +2401,7 @@ export function LiveSettingsPage({ route }) {
     const gateText = gates.length ? gates.map(gate => settingsGateLabel(t, gate)).join(t('listSeparator')) : t('empty')
     const timeout = Number(executor.timeoutMs)
     const timeoutMinutes = Number.isFinite(timeout) ? Math.round(timeout / 60000) : 25
-    // One budget shared by gate auto-repair and the staged review loop (0..6, default 2).
+    // The gate auto-repair budget (0..6, default 2).
     const repairBudget = Number.isFinite(Number(executor.maxRepairRounds)) ? Number(executor.maxRepairRounds) : 2
     const rows = [
       [pt(t, 'st.gates'), gateText],
@@ -2485,92 +2479,42 @@ export function LiveSettingsPage({ route }) {
     const routing = draft['executor.routing'] ?? baseRouting
     const enabled = ROUTE_BACKENDS.map(backend => backend.value)
       .filter(backend => backend in workers && workers[backend]?.enabled !== false)
-    const visible = (routing.mode ?? (enabled.length > 1 ? 'suggest' : 'single'))
     const defaultBackend = enabled.includes(routing.defaultBackend) ? routing.defaultBackend
       : enabled.includes(legacyBackend) ? legacyBackend : enabled[0] ?? 'dsh'
-    const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
-    const preferences = Array.isArray(routing.preferences) ? routing.preferences : ROUTE_DEFAULT_PREFERENCES
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
-    const stagedOptions = (choices, current) => choices
-      .filter(choice => enabled.includes(choice.value) || choice.value === current)
-      .map(choice => ({ ...choice, disabled: !enabled.includes(choice.value) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
     const setRouting = next => editRouting({ ...routing, ...next })
     const toggleBackend = (backend, on) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), enabled: on } })
     const setBackendField = (backend, key, value) => editWorkers({ ...workers, [backend]: { ...(workers[backend] ?? {}), [key]: value } })
-    const preferenceOf = type => preferences.find(rule => Array.isArray(rule.workTypes) && rule.workTypes.includes(type))?.backend ?? ''
-    const setPreference = (type, backend) => {
-      const rules = preferences.map(rule => ({ workTypes: [...(rule.workTypes ?? [])].filter(item => item !== type), backend: rule.backend }))
-      if (backend) {
-        const existing = rules.find(rule => rule.backend === backend)
-        if (existing) existing.workTypes.push(type)
-        else rules.push({ workTypes: [type], backend })
-      }
-      setRouting({ preferences: rules.filter(rule => rule.workTypes.length) })
-    }
     const backendCard = backend => {
       const entry = workers[backend.value] ?? {}
       const on = backend.value in workers && entry.enabled !== false
+      const catalog = botCatalog && typeof botCatalog[backend.value] === 'object' ? botCatalog[backend.value] : {}
+      const models = Array.isArray(catalog.models) ? catalog.models : []
       return <div key={backend.value} className="sa-field">
-        <SettingsSwitchRow label={pt(t, backend.labelKey)} hint={pt(t, backend.hintKey)} disabled={frozen}
+        <SettingsSwitchRow label={pt(t, backend.labelKey)} disabled={frozen}
           checked={on} onChange={next => toggleBackend(backend.value, next)} />
         {backend.value === 'dsh' ? null : <>
           <div style={{ display: 'flex', gap: 'var(--sa-sp-8)', flexWrap: 'wrap', maxWidth: '560px', minWidth: 0 }}>
             <div style={{ flex: '1 1 180px', minWidth: 0, display: 'flex' }}>
-              <Input className="sa-input-full" value={entry.model ?? ''} disabled={frozen}
-                placeholder={pt(t, 'st.workerModel')} aria-label={pt(t, 'st.workerModel')}
-                onChange={event => setBackendField(backend.value, 'model', event.target.value)} />
+              <Select className="sa-input-full" label={pt(t, 'st.workerModel')} disabled={frozen}
+                value={models.some(model => model.id === entry.model) ? entry.model : ''}
+                onChange={next => setBackendField(backend.value, 'model', next)}
+                options={[{ value: '', label: pt(t, 'st.workerModelDefault') },
+                  ...models.map(model => ({ value: model.id, label: model.name }))]} />
             </div>
-            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex' }}>
-              <Input className="sa-input-full" value={entry.command ?? ''} disabled={frozen}
-                placeholder={pt(t, 'st.workerCommand')} aria-label={pt(t, 'st.workerCommand')}
-                onChange={event => setBackendField(backend.value, 'command', event.target.value)} />
+            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+              <span className="sa-mono">{catalog.path ?? pt(t, 'st.workerPathMissing')}</span>
             </div>
           </div>
-          <Hint>{pt(t, 'st.workerModelHint')}</Hint>
         </>}
       </div>
     }
     return <div className="sa-settings-group">
       {settingsHeading()}
-      <Hint>{pt(t, 'st.workerHint')}</Hint>
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'wf.title')}</span>
-        <Select label={pt(t, 'wf.title')} disabled={frozen}
-          value={draft['executor.workflowMode'] ?? executor.workflowMode ?? 'off'}
-          options={['off', 'auto', 'simple', 'planned'].map(value => ({ value, label: pt(t, `wf.${value}`) }))}
-          onChange={value => editField('worker', 'executor.workflowMode', value, executor.workflowMode ?? 'off')} />
-        <Hint>{pt(t, 'wf.hint')}</Hint>
-        <span className="sa-field-head">{pt(t, 'wf.implementer')}</span>
-        <Select label={pt(t, 'wf.implementer')} disabled={frozen}
-          value={draft['executor.implementer'] ?? executor.implementer ?? 'dsh'}
-          options={stagedOptions(STAGED_IMPLEMENTERS, draft['executor.implementer'] ?? executor.implementer ?? 'dsh')}
-          onChange={value => editField('worker', 'executor.implementer', value, executor.implementer ?? 'dsh')} />
-        <span className="sa-field-head">{pt(t, 'wf.reviewer')}</span>
-        <Select label={pt(t, 'wf.reviewer')} disabled={frozen}
-          value={draft['executor.reviewer'] ?? executor.reviewer ?? 'codex'}
-          options={stagedOptions(STAGED_REVIEWERS, draft['executor.reviewer'] ?? executor.reviewer ?? 'codex')}
-          onChange={value => editField('worker', 'executor.reviewer', value, executor.reviewer ?? 'codex')} />
-        <Hint>{pt(t, 'wf.reviewerHint')}</Hint>
-        <span className="sa-field-head">{pt(t, 'wf.workerPreset')}</span>
-        <Input value={draft['executor.workerPreset'] ?? executor.workerPreset ?? ''} disabled={frozen}
-          placeholder={pt(t, 'wf.workerPresetPlaceholder')} aria-label={pt(t, 'wf.workerPreset')}
-          onChange={event => editField('worker', 'executor.workerPreset', event.target.value, executor.workerPreset ?? '')} />
-        <Hint>{pt(t, 'wf.workerPresetHint')}</Hint>
-      </div>
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'st.routingTitle')}</span>
-        <Select label={pt(t, 'st.routingTitle')} disabled={frozen} value={visible}
-          options={[{ value: 'single', label: pt(t, 'st.routingModeSingle') },
-            { value: 'suggest', label: pt(t, 'st.routingModeSuggest') },
-            { value: 'auto', label: pt(t, 'st.routingModeAuto') }]}
-          onChange={next => setRouting({ mode: next })} />
-        <Hint>{pt(t, 'st.routingModeHint')}</Hint>
-      </div>
       <div className="sa-field">
         <span className="sa-field-head">{pt(t, 'st.enabledBackends')}</span>
-        <Hint>{pt(t, 'st.enabledBackendsHint')}</Hint>
         {ROUTE_BACKENDS.map(backendCard)}
       </div>
       <div style={{ display: 'flex', gap: 'var(--sa-sp-16)', flexWrap: 'wrap' }}>
@@ -2578,35 +2522,39 @@ export function LiveSettingsPage({ route }) {
           <span className="sa-field-head">{pt(t, 'st.defaultBackend')}</span>
           <Select label={pt(t, 'st.defaultBackend')} disabled={frozen} value={defaultBackend}
             options={backendOptions} onChange={next => setRouting({ defaultBackend: next })} />
-          <Hint>{pt(t, 'st.defaultBackendHint')}</Hint>
-        </div>
-        <div className="sa-field" style={{ flex: '1 1 220px', minWidth: 0 }}>
-          <span className="sa-field-head">{pt(t, 'st.fallbackBackend')}</span>
-          <Select label={pt(t, 'st.fallbackBackend')} disabled={frozen} value={fallback}
-            options={[{ value: '', label: pt(t, 'st.fallbackNone') }, ...backendOptions]}
-            onChange={next => setRouting({ fallback: next ? [next] : [] })} />
         </div>
       </div>
-      <div className="sa-field">
-        <span className="sa-field-head">{pt(t, 'st.routePreferences')}</span>
-        <Hint>{pt(t, 'st.routePreferencesHint')}</Hint>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)' }}>
-          {ROUTE_WORK_TYPES.map(type => <div key={type.key} className="sa-switch-row">
-            <div className="sa-switch-row-text">
-              <span>{pt(t, type.labelKey)}</span>
-              <span className="sa-hint">{type.hintKey ? pt(t, type.hintKey) : ''}</span>
-            </div>
-            <div style={{ flex: '0 0 200px', minWidth: 0 }}>
-              <Select label={pt(t, type.labelKey)} disabled={frozen} value={preferenceOf(type.key)}
-                options={[{ value: '', label: pt(t, 'st.routeFollowDefault') }, ...backendOptions]}
-                onChange={next => setPreference(type.key, next)} />
-            </div>
-          </div>)}
-        </div>
-      </div>
-      {/* P2-5: static capability matrix, read-only; highlights the default backend. */}
-      <WorkerCapabilityCard currentBackend={defaultBackend} />
       {saveBarFor('worker')}
+    </div>
+  }
+
+  /**
+   * 「派单」— the read-only explanation (§5.7). Dispatch is not a setting any more: this page says how the engine
+   * decides, what never reaches the model, what happens when the model cannot answer, and where dangerous actions are
+   * stopped instead. The only editable facts are the default bot (Bot page) and backend availability (Worker group).
+   */
+  const renderDispatch = () => {
+    const dispatch = executor.dispatch && typeof executor.dispatch === 'object' ? executor.dispatch : {}
+    const defaultBot = String(executor.bot ?? 'generalist')
+    const facts = [
+      ['st.dispatchCandidates', {}],
+      ['st.dispatchPick', {}],
+      ['st.dispatchNoModel', { cacheSeconds: String(dispatch.cacheSeconds ?? 600) }],
+      ['st.dispatchFallback', {}],
+      ['st.dispatchDanger', {}],
+      ['st.dispatchExplicit', {}],
+    ]
+    return <div className="sa-settings-group">
+      {settingsHeading()}
+      <Hint>{pt(t, 'st.dispatchHint')}</Hint>
+      <div className="sa-field">
+        <span className="sa-field-head">{pt(t, 'st.dispatchHow')}</span>
+        <KeyValues rows={facts.map(([key, params]) => [pt(t, key), pt(t, `${key}Text`, params)])} />
+      </div>
+      <p className="sa-hint">{pt(t, 'st.dispatchDefaultNote', { id: defaultBot })}</p>
+      <div className="sa-actions">
+        <Button size="sm" variant="outline" onClick={() => navigate({ page: 'bots' })}>{pt(t, 'st.dispatchOpenBots')}</Button>
+      </div>
     </div>
   }
 
@@ -2659,6 +2607,7 @@ export function LiveSettingsPage({ route }) {
     if (active === 'eval') return renderEval()
     if (active === 'run') return renderRun()
     if (active === 'worker') return renderWorker()
+    if (active === 'dispatch') return renderDispatch()
     if (active === 'write') return renderWrite()
     if (active === 'repos') return renderRepos()
     if (active === 'prompt') return renderPrompt()

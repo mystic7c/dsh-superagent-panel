@@ -276,6 +276,18 @@ export const PANEL_CSS = `
 .sa-menu-item-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-menu-item-note { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--sa-label-tertiary); }
 .sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
+/* The model picker is a menu that holds a listbox: search on top, grouped rows, the current model at the bottom (the
+   shape the host's own model menu uses). It needs more width than a plain action menu, and it must scroll. */
+.sa-model-picker { position: relative; display: flex; min-width: 0; }
+.sa-model-picker > .sa-menu-picker { width: 100%; justify-content: space-between; }
+.sa-model-pop { min-width: 260px; max-width: 380px; gap: var(--sa-sp-6); }
+.sa-model-groups { display: flex; flex-direction: column; gap: var(--sa-sp-6); max-height: 320px; overflow: auto; }
+.sa-model-group { margin: 0; padding: var(--sa-sp-4) var(--sa-sp-8) var(--sa-sp-2); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-caption); font-weight: 500; text-transform: none; }
+.sa-model-item { white-space: normal; }
+.sa-model-foot { padding: var(--sa-sp-4) var(--sa-sp-8); border-top: 0.5px solid var(--sa-line);
+  color: var(--sa-label-tertiary); font-size: var(--sa-fs-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-model-none { padding: var(--sa-sp-8); }
 
 /* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
    selected while its detail is off-screen. */
@@ -284,10 +296,10 @@ export const PANEL_CSS = `
 
 /* ---------- shape-coded status ---------- */
 .sa-status-icon { flex: none; display: inline-block; vertical-align: -2px; }
-.sa-status-icon[data-state='done'] { color: var(--dsw-alias-state-success-primary); }
+.sa-status-icon[data-state='done'] { color: var(--sa-success-text); }
 .sa-status-icon[data-state='ongoing'] { color: var(--dsw-alias-brand-primary); }
-.sa-status-icon[data-state='warning'] { color: var(--dsw-alias-state-warn-primary); }
-.sa-status-icon[data-state='error'] { color: var(--dsw-alias-state-error-primary); }
+.sa-status-icon[data-state='warning'] { color: var(--sa-warn-text); }
+.sa-status-icon[data-state='error'] { color: var(--sa-danger-text); }
 .sa-status-icon[data-state='idle'] { color: var(--dsw-alias-state-idle-primary, var(--dsw-alias-label-tertiary)); }
 .sa-status-icon[data-state='queued'] { color: var(--sa-label-tertiary); }
 .sa-status-text { display: inline-flex; align-items: center; gap: var(--sa-sp-4); font-size: var(--sa-fs-meta);
@@ -517,6 +529,9 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 @container (max-width: 900px) { .sa-cards-2 { grid-template-columns: minmax(0, 1fr); } }
 /* A source group with a single card should use the row, not leave its right half empty. */
 .sa-cards-2:has(> :only-child) { grid-template-columns: minmax(0, 1fr); }
+/* An odd third card used to sit alone at half width with ~380 px of dead space beside it (ui audit B). Let the odd
+   last card take the row it would otherwise half-fill. */
+.sa-cards-2 > :last-child:nth-child(odd) { grid-column: 1 / -1; }
 .sa-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sa-sp-12); min-width: 0; }
 /* Settings → 仓库 is a list, not a card gallery: one repository per row, its facts as wrapping label/value pairs so the
    row still answers project / branch / gates without the two-up cards' empty half. */
@@ -534,6 +549,21 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-token-row .sa-input-full { flex: 1 1 200px; min-width: 0; }
 
 /* ---------- panes (trigger: list + detail; settings: nav + form) ---------- */
+/* Bots: the store list is the left pane, the picked Bot the right one. The list rows are real buttons, so they need the
+   same chrome-strip the search-result rows get plus a selected state (2026-11-26 master-detail rewrite). */
+.sa-bot-list { display: flex; flex-direction: column; }
+.sa-bot-row { cursor: pointer; }
+.sa-bot-row:hover { background: var(--dsw-alias-interactive-bg-hover, var(--dsw-alias-bg-layer-2)); }
+.sa-bot-row[aria-current='true'] { background: var(--dsw-alias-interactive-bg-active, var(--dsw-alias-bg-layer-2)); }
+.sa-bot-row[aria-current='true'] .sa-row-title > span:first-child { font-weight: 600; }
+.sa-bots-detail { gap: var(--sa-sp-12); }
+.sa-bots-editor-body { display: flex; flex-direction: column; gap: var(--sa-sp-16); }
+/* The store path is long and mono: break it instead of pushing the aside wider than its grid column. */
+.sa-bots-store { overflow-wrap: anywhere; }
+/* The role prompt is prose, not a ledger value: keep its line breaks and cap the height so a long prompt cannot push
+   the action row out of the pane. */
+.sa-role-text { white-space: pre-wrap; max-height: 180px; overflow: auto; }
+
 .sa-panes { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: var(--sa-sp-24); align-items: start; min-width: 0; }
 .sa-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-8); }
 /* The trigger list is not its own scroller: a 160px-capped sticky pane showed three rows and then a second scrollbar
@@ -631,6 +661,9 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 /* A number/time field is as wide as its value, not the card (T20). */
 .sa-field-narrow .sa-input { max-width: 200px; }
 .sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sa-sp-16); min-height: 36px; font-size: var(--sa-fs-body); }
+/* Capability pickers read as one sentence of choices, not as three stacked form rows (1.2.6). */
+.sa-check-row { display: flex; flex-wrap: wrap; gap: var(--sa-sp-16); }
+.sa-check { display: inline-flex; align-items: center; gap: var(--sa-sp-8); min-height: 32px; font-size: var(--sa-fs-body); }
 .sa-switch-row-text { min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-input { box-sizing: border-box; display: inline-flex; align-items: center; gap: var(--sa-sp-4); height: 32px; min-width: 0;
   padding: 0 var(--sa-sp-8); border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-sm);
@@ -817,24 +850,11 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-event-quiet .sa-event-text { color: var(--sa-label-tertiary); }
 .sa-event-foot { display: flex; align-items: center; gap: var(--sa-sp-8); flex-wrap: wrap; font-size: var(--sa-fs-meta);
   line-height: 1.4; color: var(--sa-label-tertiary); font-variant-numeric: tabular-nums; }
-.sa-rail { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--sa-sp-8); min-width: 0;
-  margin: 0; padding: 0; list-style: none; }
-/* Detail variant: one breadcrumb line (trigger › eval › ticket › run › gate › MR › UAT) instead of seven equal
-   columns whose labels scatter across the page width. */
-.sa-rail-detail { align-items: center; gap: var(--sa-sp-8) var(--sa-sp-12); }
-.sa-rail-detail .sa-rail-step { flex: 0 0 auto; min-width: 0; flex-direction: row; align-items: center; gap: var(--sa-sp-4); }
-.sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: '›'; color: var(--sa-label-tertiary); }
-.sa-rail-detail .sa-rail-dot { min-height: 0; gap: var(--sa-sp-4); }
-.sa-rail-detail .sa-rail-result { font-size: var(--sa-fs-meta); }
-.sa-rail-step { display: flex; flex-direction: column; gap: var(--sa-sp-4); min-width: 76px; flex: 1 1 76px; }
-.sa-rail-dot { display: inline-flex; align-items: center; gap: var(--sa-sp-4); min-height: 16px; }
-.sa-rail-label { font-size: var(--sa-fs-meta); line-height: 1.4; color: var(--dsw-alias-label-secondary); }
-.sa-rail-step[data-state='done'] .sa-rail-label { color: var(--dsw-alias-label-secondary); }
-.sa-rail-step[data-state='ongoing'] .sa-rail-label { color: var(--dsw-alias-label-primary); font-weight: 600; }
-.sa-rail-step[data-state='error'] .sa-rail-label { color: var(--sa-danger-text); }
-.sa-rail-step[data-state='warning'] .sa-rail-label { color: var(--sa-warn-text); }
-.sa-rail-result { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--dsw-alias-label-secondary);
-  overflow-wrap: normal; word-break: keep-all; }
+/* The Ticket a message produced opens from that message's own foot: keep the control on the right so the disposition
+   tag and the reason still start the line. */
+/* The Ticket jump sits right after the disposition reason it belongs to; pushing it to the far edge of a 1200px pane
+   read as a row-level action instead of a footnote on one message (1.2.3). */
+.sa-event-actions { margin-left: var(--sa-sp-8); display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
 .sa-gates { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sa-sp-2) var(--sa-sp-12);
   font-size: var(--sa-fs-meta); line-height: 1.4; }
 .sa-gate { display: inline-flex; align-items: center; gap: var(--sa-sp-4); }
@@ -900,14 +920,14 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 /* The Claude Code TUI the panel hosts itself. It floats over the page so a run row stays readable next to it; the
    screen is xterm's own canvas, so only the frame around it follows the panel's tokens. */
 .sa-terminal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; width: 100%; height: 100%;
-  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface-raised);
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface-raised);
   overflow: hidden; }
 /* Floating variant for a host surface without a place to put a pane; the sessions page uses the inline one. */
 .sa-terminal.is-floating { position: fixed; right: var(--sa-sp-24, 24px); bottom: var(--sa-sp-24, 24px); z-index: 1100;
   width: min(760px, calc(100vw - var(--sa-sp-32, 32px) * 2)); height: min(520px, 62vh);
   box-shadow: var(--dsw-elevation-prominent); }
 .sa-terminal-bar { display: flex; align-items: center; gap: var(--sa-sp-8, 8px); padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px);
-  border-bottom: 1px solid var(--sa-line); background: var(--sa-surface-raised); color: var(--sa-label-tertiary);
+  border-bottom: 0.5px solid var(--sa-line); background: var(--sa-surface-raised); color: var(--sa-label-tertiary);
   font-size: var(--sa-fs-meta, 12px); }
 .sa-terminal-title { font-weight: 600; color: var(--dsw-alias-label-primary); }
 .sa-terminal-spacer { flex: 1 1 auto; }
@@ -916,14 +936,14 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-terminal-close:focus-visible { outline: var(--sa-focus); outline-offset: 1px; }
 .sa-terminal-screen { min-height: 0; padding: var(--sa-sp-4, 4px) 0 0 var(--sa-sp-4, 4px); background: var(--sa-surface-raised); }
 .sa-terminal-screen .xterm { height: 100%; }
-.sa-terminal-error { margin: 0; padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-top: 1px solid var(--sa-line); }
+.sa-terminal-error { margin: 0; padding: var(--sa-sp-4, 4px) var(--sa-sp-8, 8px); border-top: 0.5px solid var(--sa-line); }
 @container (max-width: 760px) {
   .sa-terminal.is-floating { left: var(--sa-sp-8, 8px); right: var(--sa-sp-8, 8px); width: auto; height: 52vh; }
 }
 /* Sessions: the Host's own shape — a session list on the left, the conversation on the right. */
 .sa-sessions { display: grid; grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); gap: var(--sa-sp-16, 16px);
   height: max(420px, calc(100vh - 260px)); min-height: 0; }
-.sa-sessions-list { min-height: 0; overflow: auto; border-right: 1px solid var(--sa-line);
+.sa-sessions-list { min-height: 0; overflow: auto; border-right: 0.5px solid var(--sa-line);
   padding-right: var(--sa-sp-8, 8px); }
 .sa-session-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .sa-session-row { display: flex; align-items: baseline; gap: var(--sa-sp-8, 8px); width: 100%; text-align: left;
@@ -959,7 +979,10 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
 .sa-chat-reply { min-width: 0; font-size: var(--sa-fs-body, 13px); line-height: 1.65;
   color: var(--dsw-alias-label-primary); }
 .sa-chat-input { display: flex; gap: var(--sa-sp-8, 8px); align-items: flex-end; padding: var(--sa-sp-8, 8px);
-  border: 1px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface, transparent); }
+  border: 0.5px solid var(--sa-line); border-radius: var(--sa-r-lg, 12px); background: var(--sa-surface, transparent); }
+/* The composer's own box is the control: it takes the focus ring as a whole, since the textarea inside has neither a
+   border nor an outline of its own (review P1 — an invisible focus stop is a WCAG 2.4.7 failure). */
+.sa-chat-input:focus-within { outline: var(--sa-focus); outline-offset: 1px; }
 .sa-chat-text { flex: 1 1 auto; min-height: 44px; max-height: 200px; resize: vertical; border: 0; outline: none;
   background: none; color: var(--dsw-alias-label-primary); font: inherit; line-height: 1.5; }
 .sa-chat-text:focus-visible { outline: none; }
@@ -1065,7 +1088,13 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
     border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
   .sa-settings-nav .sa-settings-group[aria-current='true'] { border-left-color: transparent;
     border-bottom-color: var(--dsw-alias-brand-primary); }
-  .sa-settings-nav-sep, .sa-settings-nav-label { display: none; }
+  .sa-settings-nav-sep { display: none; }
+  /* The 参考 label used to disappear with the separator, so reference sections looked writable (ui audit B). In the
+     horizontal row it becomes a small prefix instead of being hidden. */
+  .sa-settings-nav-label { display: inline-flex; align-items: center; flex: none; padding: 0 var(--sa-sp-8);
+    font-size: var(--sa-fs-meta); color: var(--sa-label-tertiary); white-space: nowrap; }
+  /* The nav chip already names the open group; the H2 right below it read as a second 来源 tab 40 px lower. */
+  .sa-settings-title { display: none; }
   .sa-list-bar { gap: var(--sa-sp-8) var(--sa-sp-12); }
   .sa-tabs { gap: var(--sa-sp-16); }
   .sa-page-head-title { font-size: var(--sa-fs-title); }
@@ -1076,7 +1105,6 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
   /* Phones: the metadata grid and the two evidence cards become one column; 768 keeps both two-up. */
   .sa-card-grid { grid-template-columns: minmax(0, 1fr); }
   .sa-kv { grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-2); }
-  .sa-rail-detail .sa-rail-step + .sa-rail-step::before { content: none; }
 }
 @container (max-width: 560px) {
   .sa-list-bar { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sa-sp-8); }
@@ -1088,8 +1116,39 @@ button.sa-signal-toggle, button.sa-signal-text { border: 0; background: none; pa
   .sa-control-divider { display: none; }
   .sa-switch-field { grid-column: 1 / -1; }
 }
+@container (max-width: 560px) {
+  /* A Bot row's name and its action list shared one line: the actions (4 controls, ~180 px) left the name ~55 px, so
+     generalist broke as gene|rali|st (ui audit B). The actions move under the text instead. */
+  .sa-bot-row { flex-direction: column; align-items: stretch; gap: var(--sa-sp-8); }
+  /* .sa-row-main carries a 220px flex-basis meant as a *width*; in a column row that becomes a 220px height and left a
+     dead band under every Bot description. */
+  .sa-bot-row > .sa-row-main { flex: 0 1 auto; }
+  .sa-bot-row .sa-row-meta, .sa-bot-row > .sa-row-actions { margin-left: 0; justify-content: flex-start; }
+  /* Path-prefixed titles truncated to the same prefix (完成/Users/mlamp/.../agent-acce…) and hid the only part that
+     told four rows apart. Two lines keep the discriminating tail. */
+  .sa-row-title .sa-ellipsis { white-space: normal; overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* The execution row's status glyph is a flex sibling of a content-sized button; when the button's min-content is the
+     whole title it wrapped alone and orphaned the glyph on its own line. A zero flex-basis lets the column shrink. */
+  .sa-exec-queue .sa-row .sa-row-open, .sa-exec-queue .sa-row .sa-row-main { flex-basis: 0; }
+  .sa-exec-queue .sa-row-evidence { padding-left: 0; }
+  /* A Section action used to wrap alone under its title (the Eval refresh button at 28×28 on its own row). Keep the
+     title row one line and let the title ellipsise instead. */
+  .sa-section-title { flex-wrap: nowrap; }
+  .sa-section-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sa-section-action { flex: none; }
+}
+@container (max-width: 560px) {
+  /* A Ticket head splintered into four ragged bands (title, 查看验收 + 打开 MR, a lone overflow button, then 仓库:
+     alone). One left-aligned action band, and the meta line flows under it. */
+  .sa-page-head-main { flex-wrap: wrap; gap: var(--sa-sp-8); }
+  .sa-page-head-actions { flex: 1 1 100%; justify-content: flex-start; }
+  .sa-page-head-meta { flex: 1 1 100%; }
+}
 @container (max-width: 480px) {
   .sa-settings-nav .sa-settings-group { min-height: 40px; }
+  /* A native select cannot ellipsise: give it the full row so a long repository name is not cut to "DSH Superagent Par". */
+  .sa-settings select, .sa-settings .sa-field select { width: 100%; max-width: 100%; }
 }
 @container (max-width: 600px) {
   .sa-head-tools > .sa-icon-btn { display: none; }

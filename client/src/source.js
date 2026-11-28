@@ -1,14 +1,14 @@
-/* LiveSourcePage (contract §6.2): one thin health line, then one card per Source with the three numbers that answer
-   "did messages arrive, were any filtered, did they become Tickets", the reason a Source is off shown in place, and
-   the one primary action plus one secondary. Under the Octo card every filtered message shows a human reason and
-   keeps the original text folded. The page reads the shared status model (`usePanelData().data.sources`) and issues
-   no request of its own. */
+/* LiveSourcePage (contract §6.2): one thin health line, the intake ledger (one record per message — verdict, human
+   reason, replay and quality label), then one card per Source with the three numbers that answer "did messages
+   arrive, were any filtered, did they become Tickets". The skipped messages are a status filter of that one ledger,
+   not a second list. The page reads the shared status model (`usePanelData().data.sources`) and issues no request of
+   its own for it. */
 
-import { API, Icon, clampPageOffset, hostName, hostOfUrl, hhmm, scrollPanelTo, shortId } from "./util.js"
+import { API, Icon, clampPageOffset, hostName, hostOfUrl, hhmm, scrollPanelTo } from "./util.js"
 import { errorText, localized, translate, when } from "./i18n.js"
 import { Button, InfoTip, Input, Menu, SegmentedControl, StatusIcon, StatusText, Tag } from "./controls.js"
 import { same, stay, useAction, usePanel, usePanelData } from "./api.js"
-import { ClampText, EmptyState, ErrorState, ExternalLink, Folded, Hint, Section, Skeleton, When } from "./widgets.js"
+import { EmptyState, ErrorState, ExternalLink, Hint, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
 import { useLiveResource } from "./live-model.js"
 import { initialPageQuery, rememberPageState } from "./router.js"
@@ -52,9 +52,6 @@ Object.assign(PAGE_TEXT, {
     'Executor off: turn on “Executor enabled” under Settings → Runtime and save.'],
   'src.uatOk': ['UAT 正常（{status}）', 'UAT healthy ({status})'],
   'src.uatFail': ['UAT 检查失败：{error}', 'UAT check failed: {error}'],
-  'src.filtered': ['被过滤消息', 'Filtered messages'],
-  'src.filteredEmpty': ['最近 24 小时没有被过滤的消息。', 'No filtered messages in the last 24 hours.'],
-  'src.raw': ['原始文本', 'Original text'],
   'src.reason.highRisk': ['命中高风险主题（生产 / DDL / 合并 / 密钥）', 'High-risk topic (production / DDL / merge / secret)'],
   'src.reason.sourceNotWatched': ['不在监听群', 'Chat is not watched'],
   'src.reason.senderNotAllowed': ['发送者不在允许名单', 'Sender is not in the allow list'],
@@ -149,21 +146,6 @@ export function sourceStatRows(source) {
   return []
 }
 
-/** One filter reason in the active language; an unknown code falls back to the host's own human text. */
-export function filteredReason(t, item) {
-  const key = `src.reason.${item?.reasonCode ?? ''}`
-  const text = pt(t, key)
-  return text === key ? String(item?.reason ?? item?.reasonCode ?? '') : text
-}
-
-/** Thread label for a filtered message: the watched chat title when known, otherwise a short channel id. */
-export function filteredThread(source, item) {
-  const key = String(item?.threadKey ?? '')
-  const channelId = key.includes(':') ? key.slice(key.indexOf(':') + 1) : key
-  const title = channelId ? source?.config?.chatTitles?.[channelId] : undefined
-  return title || (channelId ? shortId(channelId, 12) : key || '—')
-}
-
 /** Three equal-width statistics (`--sa-stats` scale in 05-style): label 12/tertiary over a 20/600 value. */
 export function SourceStats({ rows }) {
   const { t } = usePanel()
@@ -171,22 +153,6 @@ export function SourceStats({ rows }) {
     h('div', { key: labelKey, className: 'sa-stat' },
       h('div', { className: 'sa-stat-label' }, pt(t, labelKey)),
       h('div', { className: 'sa-stat-value' }, String(value ?? 0)))))
-}
-
-/** Messages the Octo Source filtered out: thread, reason in plain words, and the raw text folded away. */
-export function FilteredMessages({ source, items }) {
-  const { t } = usePanel()
-  return h('ul', { className: 'sa-list' }, items.map(item => h('li', { key: item.id, className: 'sa-row' },
-    h('div', { className: 'sa-row-main' },
-      h('div', { className: 'sa-row-title' },
-        h(StatusIcon, { state: 'idle', size: 14 }),
-        h('span', { className: 'sa-ellipsis' }, filteredThread(source, item))),
-      h('div', { className: 'sa-row-meta' },
-        h('span', null, localized(t, source.title) || source.id),
-        h('span', null, filteredReason(t, item)),
-        item.at ? h(When, { at: item.at }) : null),
-      item.text ? h(Folded, { summary: pt(t, 'src.raw') },
-        h(ClampText, { text: item.text, limit: 480, lines: 8 })) : null))))
 }
 
 /** Signal status → the shared shape vocabulary; the label always comes from `src.signalStatus.*`. */
@@ -377,7 +343,6 @@ export function LiveSourcePage({ route }) {
   // Which repository is being checked, not a single global flag: one card's spinner used to grey out every card's UAT
   // button (review P3).
   const [uatBusy, setUatBusy] = useState('')
-  const filteredRef = useRef(null)
   const poll = useAction(() => actions.poll({ dryRun: true }), { reload })
   const startAutomation = useAction(async () => {
     await actions.patchSettings({ paused: false, enabled: true, 'executor.enabled': true })
@@ -390,7 +355,6 @@ export function LiveSourcePage({ route }) {
     catch (failure) { setUat(previous => ({ ...previous, [repoId]: { ok: false, error: errorText(failure) } })) }
     finally { setUatBusy(current => current === repoId ? '' : current) }
   }
-  const focusFiltered = () => scrollPanelTo(filteredRef.current)
   // P1-1 raw signal log: a host with the endpoint answers; an older host 404s once and the section stays hidden
   // (the poll switches itself off on that first miss instead of retrying a route that will never exist).
   const [signalsOff, setSignalsOff] = useState(false)
@@ -418,6 +382,7 @@ export function LiveSourcePage({ route }) {
   const [sigFrom, setSigFrom] = useState(srcInitial.current.from)
   const [sigTo, setSigTo] = useState(srcInitial.current.to)
   const [sigOffset, setSigOffset] = useState(srcInitial.current.offset)
+  const signalsRef = useRef(null)
   useEffect(() => {
     const timer = setTimeout(() => { setSigQ(sigQuery); setSigRepo(sigRepoInput); setSigReason(sigReasonInput) }, 300)
     return () => clearTimeout(timer)
@@ -511,20 +476,34 @@ export function LiveSourcePage({ route }) {
     const lastPage = clampPageOffset(sigOffset, signalTotal, 20)
     if (lastPage !== undefined) setSigOffset(lastPage)
   }, [signalTotal, sigOffset])
+  // Any narrowing at all keeps the filters on screen even at zero rows: that is a filter result, not an empty ledger.
+  const signalFilterActive = Boolean(String(sigQ ?? '').trim() || sigStatus !== 'all' || sigRepo || sigReason || sigFrom || sigTo)
   const label = useAction(async (signal, labelId) => {
     await actions.labelSignal(signal.id, labelId)
     notify(pt(t, 'src.labelSaved', { label: signalLabelText(t, labelId) }))
   }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
+  // The Octo card's 查看被过滤 action now filters the one ledger instead of scrolling to a duplicate list of the same rows.
+  const showFiltered = () => {
+    setSigStatus('skipped')
+    scrollPanelTo(signalsRef.current)
+  }
+  // A replay that lands on a Ticket navigates away; reloading this page first issued two requests nobody would see
+  // (review P3). The flag tells the shared reload to stand down for that one case.
+  const replayLeaving = useRef(false)
   const replay = useAction(async signal => {
     const result = await actions.replaySignal(signal.id)
     const ticket = result?.ticket
     if (ticket?.id) {
       notify(pt(t, 'src.signalReplayTicket'))
+      replayLeaving.current = true
       leaveTo({ page: 'execution', id: ticket.id })
       return
     }
     notify(pt(t, 'src.signalReplayed', { status: result?.signal?.status ?? signal.status ?? '—' }))
-  }, { reload: async () => { await Promise.all([reload(), signals.reload?.()]) } })
+  }, { reload: async () => {
+    if (replayLeaving.current) { replayLeaving.current = false; return }
+    await Promise.all([reload(), signals.reload?.()])
+  } })
 
   if (!data) return error ? h(ErrorState, { error, onRetry: reload }) : h(Skeleton, { rows: 4 })
 
@@ -549,7 +528,6 @@ export function LiveSourcePage({ route }) {
         onClick: () => navigate({ page: 'settings', group: 'source' }) }, pt(t, 'src.openSettings')) })
   }
 
-  const filtered = Array.isArray(octo?.filtered) ? octo.filtered : []
   const signalItems = Array.isArray(signals.data?.items) ? signals.data.items : []
   const labelCounts = signals.data?.counts?.labels ?? {}
   const labelTotal = SIGNAL_LABEL_ORDER.reduce((sum, label) => sum + (Number(labelCounts[label]) || 0), 0)
@@ -588,8 +566,10 @@ export function LiveSourcePage({ route }) {
           // A disabled control still has to say why: the reason is a focusable tip, not a title tooltip (A3).
           !source.enabled && data.config?.octo?.tokenConfigured !== true
             ? h(InfoTip, { text: pt(t, 'src.checkNeedsToken'), warn: true }) : null),
+        // The ledger is the only list of filtered messages now: the card action narrows its status filter instead of
+        // scrolling to a second copy of the same rows.
         h(Button, { key: 'filtered', variant: 'outline', size: 'sm', icon: h(Icon, { name: 'filter', size: 14 }),
-          onClick: focusFiltered }, pt(t, 'src.action.filtered')),
+          onClick: showFiltered }, pt(t, 'src.action.filtered')),
       ]
     }
     const config = source.config ?? {}
@@ -675,16 +655,12 @@ export function LiveSourcePage({ route }) {
         onOpenTicket: id => leaveTo({ page: 'execution', id }),
         onOpenThread: key => leaveTo({ page: 'trigger', id: key }) })
       : null,
-    octo ? h('div', { ref: filteredRef },
-      h(Section, { title: pt(t, 'src.filtered'), count: filtered.length },
-        filtered.length ? h(FilteredMessages, { source: octo, items: filtered }) : h(Hint, null, pt(t, 'src.filteredEmpty'))))
-      : null,
-    // The raw log is evidence, so it sits last and hides entirely while the host does not expose it. The section itself
-    // must not vanish while the first load is pending or a poll failed, so it keeps its heading and renders a skeleton
-    // or the retryable error instead (P2).
+    // The ledger is this page's job — what arrived and what happened to it — so it renders before the configuration
+    // cards, and hides entirely while the host does not expose it. The section itself must not vanish while the first
+    // load is pending or a poll failed, so it keeps its heading and renders a skeleton or the retryable error (P2).
     signalsOff
       ? null
-      : h('div', { 'aria-busy': signals.loading ? 'true' : undefined },
+      : h('div', { ref: signalsRef, 'aria-busy': signals.loading ? 'true' : undefined },
         h(Section, { title: pt(t, 'src.signals'),
           count: signalTotal,
           badge: signals.data && labelTotal > 0
@@ -694,7 +670,11 @@ export function LiveSourcePage({ route }) {
             : null,
           action: h(Button, { variant: 'ghost', size: 'sm', icon: 'refresh', onClick: () => { void signals.reload() } },
             pt(t, 'src.signalsRefresh')) },
-          h('div', { className: 'sa-filters' },
+          // Nothing recorded and nothing filtered: the rows of inputs would only be a wall of controls over an empty
+          // list (ui review P1). The first message brings the filters back.
+          signalTotal === 0 && !signalFilterActive
+            ? null
+            : h('div', { className: 'sa-filters' },
             h(Input, { value: sigQuery, placeholder: pt(t, 'src.signalSearchPlaceholder'), label: pt(t, 'src.signalSearch'),
               onChange: event => setSigQuery(event?.target?.value ?? '') }),
             h(Input, { value: sigRepoInput, placeholder: pt(t, 'src.signalRepoPlaceholder'), label: pt(t, 'src.signalRepo'),
@@ -708,7 +688,10 @@ export function LiveSourcePage({ route }) {
             h(SegmentedControl, { options: [
               { value: 'all', label: pt(t, 'decisionFilter.all') },
               ...Object.keys(SIGNAL_SHAPE).map(value => ({ value, label: pt(t, `src.signalStatus.${value}`) }))],
-            value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' })),
+            value: sigStatus, onChange: setSigStatus, label: pt(t, 'src.signalFilter'), className: 'sa-segmented-chips' }),
+            sigFrom && sigTo && sigFrom > sigTo
+              ? h('p', { className: 'sa-hint', role: 'status', style: { flexBasis: '100%' } }, t('dateRangeReversed'))
+              : null),
           signals.error ? h(ErrorState, { error: signals.error, onRetry: signals.reload }) : null,
           !signals.data
             ? signals.error ? null : h(Skeleton, { rows: 3 })

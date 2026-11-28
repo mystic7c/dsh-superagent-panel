@@ -93,6 +93,7 @@ export const TEXT = {
     channel: ['会话地址', 'Channel'],
     trigger: ['触发', 'Trigger'],
     thread: ['线程', 'Thread'],
+    signal: ['信号', 'Signal'],
     correlation: ['关联线程', 'Correlation'],
     subscription: ['订阅', 'Subscription'],
     fanout: ['扇出', 'Fan-out'],
@@ -210,6 +211,8 @@ export const TEXT = {
   pendingCount: ['排队 {count}', '{count} queued'],
   evaluatingSince: ['评估中（截止 {deadline}）', 'Evaluating (due {deadline})'],
   threadFacts: ['线程信息', 'Thread facts'],
+  // A reversed date range silently read as "no data" (review P3); say which way round it is.
+  dateRangeReversed: ['开始日期晚于结束日期，这段时间不会有记录。', 'The start date is after the end date, so this range stays empty.'],
   threadTickets: ['订阅的工单', 'Subscribed Tickets'],
   threadDecisions: ['评估决定', 'Decisions'],
   threadTimeline: ['消息时间线', 'Timeline'],

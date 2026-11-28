@@ -732,14 +732,17 @@ export function LiveOverviewPage({ route }) {
         h(Section, { title: pt(t, 'ov.flow24h') },
           hasFlow ? h(FunnelBar, { flow }) : h(Hint, null, pt(t, 'ov.noFlow')),
           // The policy ledger is a second reading of the same window and stays visible even when the 24h flow is
-          // empty but decisions exist (an empty funnel is not proof that nothing was judged).
-          h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)', marginTop: 'var(--sa-sp-8)' } },
+          // empty but decisions exist (an empty funnel is not proof that nothing was judged). With neither, the
+          // section says one thing instead of stacking three empty statements (ui audit B).
+          hasFlow || ruleLedger.rows.length
+            ? h('div', { style: { display: 'flex', flexDirection: 'column', gap: 'var(--sa-sp-4)', marginTop: 'var(--sa-sp-8)' } },
             h('h3', { className: 'sa-ledger-title' }, pt(t, 'ov.rulesTitle')),
             ruleLedger.rows.length
               ? h('div', { className: 'sa-ledger' }, ruleLedger.rows.map(row =>
                 h(Tag, { key: row.name, tone: row.blocked > 0 ? 'warning' : 'outline' },
                   pt(t, 'ov.ruleValue', { name: row.name, blocked: row.blocked, hits: row.hits }))))
-              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty')))),
+              : h('p', { className: 'sa-hint' }, pt(t, 'ov.rulesEmpty')))
+            : null),
 
         // P2-9: run quality sits directly under the 24h funnel it summarises; hidden when metrics are unavailable.
         qualitySection),
