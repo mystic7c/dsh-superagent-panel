@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.8] — 2026-11-28
+
+### CI 在 Node 22 上挂：目录读取的超时定时器被 unref 了
+
+`bot-catalog` 的 `within()` 给超时定时器加了 `.unref()`，本意是别拖住进程退出。Node 22 的测试 runner 在事件
+循环排空时判定等待中的测试 promise 永远不会 settle，直接以
+`Promise resolution is still pending but the event loop has already resolved` 失败；Node 24 恰好还有别的
+handle 撑着，所以本地一直是绿的。
+
+- `within()` 不再 unref；两侧任一 settle 就 `clearTimeout`，等待成本仍是零；
+- 本机 Node 22 的二进制缺 libsimdjson 起不来，无法本地复现，所以用一个不依赖版本的行为断言兜住：
+  不写额外断言，靠已有的「hung provider 被截断」用例在 CI 的 Node 22 上验证。
+
 ## [1.5.7] — 2026-11-28
 
 ### 开关只有自己那块能点，整行不再是点击区
