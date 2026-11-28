@@ -1,6 +1,6 @@
 import { API, Icon, hhmmss, hostName, hostOfUrl, panelScroller, scrollPanelTo } from "./util.js"
 import { errorText, translate, when } from "./i18n.js"
-import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, Select, StatusText, Switch, Tag } from "./controls.js"
+import { Button, CopyButton, DisclosureRow, InfoTip, Input, Modal, ModelPicker, Select, StatusText, Switch, Tag } from "./controls.js"
 import { same, stay, usePanel, usePanelData } from "./api.js"
 import { ConfirmButton, EmptyState, ErrorState, ExternalLink, Folded, Hint, KeyValues, RawValue, SaveBar, Section, Skeleton, When } from "./widgets.js"
 import { PAGE_TEXT, pt } from "./localtext.js"
@@ -246,18 +246,10 @@ Object.assign(PAGE_TEXT, {
     'The evaluation mode, decision model and rule catalog come from live.json and the code version; shown read-only here.'],
   'st.runHint': ['执行器总开关、运行方式、闸门与超时。改完保存后立即生效；手工建单在「执行」页，worker 后端在「Worker」分组。',
     'The executor master switch, how work runs, gates/timeout and the manual Ticket form. Changes apply after saving; the worker backend lives in its own Worker group.'],
-  'st.workerHint': ['启用哪些后端，以及预览与兜底用哪个后端。真正执行的后端由派单选中的 Bot 自己决定。',
-    'Enable the backends you have and pick the one used for previews and fallbacks. The backend that actually runs a Ticket comes from the dispatched Bot.'],
-  'st.fallbackGone': ['没有「降级后端」了：执行中不重试；后端不可用时按派单规则回退默认 Bot，并在这次运行里写明原因。',
-    'There is no fallback backend any more: a run is never retried on another one. An unavailable backend falls back to the default bot through dispatch and the reason is recorded on the run.'],
   'st.defaultBackend': ['默认后端', 'Default backend'],
-  'st.defaultBackendHint': ['一单该由谁执行，就看这里；它跑不了这类活时才会轮到降级后端。',
-    'This is who runs a Ticket; the fallback only takes over when it cannot do the work.'],
   'st.fallbackBackend': ['降级后端（可选）', 'Fallback backend (optional)'],
   'st.fallbackNone': ['不降级', 'No fallback'],
   'st.enabledBackends': ['启用的后端', 'Enabled backends'],
-  'st.enabledBackendsHint': ['至少启用一个。启用的后端既可以在默认/降级里选，也可以被 Bot 指定；CLI 后端需要本机已登录。',
-    'Enable at least one. An enabled backend can be the default, the fallback, or a Bot\u2019s own backend; CLI backends need a local login.'],
   'st.dispatchHint': ['派单只筛一条硬事实——后端此刻可用；选谁由决策模型读 Bot 自己写的「什么时候派给它」回答。',
     'Dispatch filters on one hard fact — the backend can take work right now — and a judge model picks the bot by reading its own when-to-use note.'],
   'st.dispatchHow': ['怎么决定', 'How it decides'],
@@ -440,18 +432,10 @@ Object.assign(PAGE_TEXT, {
   'st.workerClaude': ['Claude Code CLI（本机）', 'Claude Code CLI (local)'],
   'st.workerBackendHint': ['DSH 在宿主进程内跑；Codex / Claude 在工单 worktree 里拉起本机 CLI 会话。无论哪种，提交、推送、MR、闸门与部署仍由执行器负责。',
     'DSH runs in-process; Codex / Claude start a local CLI session inside the ticket worktree. In every case the executor still owns commit, push, MR, gates and deployment.'],
-  'st.workerDshHint': ['使用宿主模型的 DSH agent（当前默认，无额外登录或 CLI 依赖）。',
-    'Uses the host model through the in-process DSH agent (current default; no extra login or CLI dependency).'],
-  'st.workerCodexHint': ['需要本机已 `codex login`。CLI 以 workspace-write 沙箱运行并关闭网络；路径留空时自动探测 ChatGPT.app / OctoBuddy 自带的 codex。',
-    'Requires a logged-in local Codex CLI. It runs in the workspace-write sandbox with network disabled; an empty path auto-detects the codex bundled with ChatGPT.app / OctoBuddy.'],
-  'st.workerClaudeHint': ['就是本机那个 Claude Code：沿用它的登录、模型与 MCP 配置（本机当前指向 DeepSeek 网关），工具不设限——Bash、联网、子 agent 都能用，和你在终端里开一个 claude 一样。提交、推送、MR、闸门与部署仍由执行器负责。',
-    'The local Claude Code itself: its login, model and MCP configuration (this machine currently targets the DeepSeek gateway), with no tool restrictions — Bash, web and sub-agents all work, exactly as when you run claude in a terminal. The executor still owns commit, push, MR, gates and deployment.'],
-  'st.workerModel': ['模型（可选）', 'Model (optional)'],
-  'st.workerModelHint': ['留空使用 CLI 自己的默认模型；Claude 例：deepseek-flash[1m]，Codex 例：gpt-6-astra。',
-    'Leave empty to use the CLI default; e.g. deepseek-flash[1m] for Claude, gpt-6-astra for Codex.'],
-  'st.workerCommand': ['CLI 路径（可选）', 'CLI path (optional)'],
-  'st.workerCommandHint': ['留空自动探测：Claude 用 PATH 里的 claude；Codex 优先用 ChatGPT.app / OctoBuddy 自带的 codex。',
-    'Empty auto-detects: claude from PATH; codex from the ChatGPT.app / OctoBuddy bundles first.'],
+  'st.workerModel': ['模型', 'Model'],
+  'st.workerModelDefault': ['CLI 自己的默认模型', 'CLI default model'],
+  'st.workerPathMissing': ['未找到 CLI', 'CLI not found'],
+  'st.workerCommand': ['CLI 路径', 'CLI path'],
   'st.gates': ['闸门', 'Gates'],
   'st.timeout': ['执行超时', 'Run timeout'],
   'st.timeoutHint': ['单位分钟，范围 1–1440。超时以 timeout 结束本次运行（工作树保留，可调大后重试）。',
@@ -772,9 +756,9 @@ export const WORKER_CAP_COLUMNS = [
 ]
 /** P1 routing controls: the same enums the host validates (routing.js). Labels are page-local i18n keys. */
 export const ROUTE_BACKENDS = [
-  { value: 'dsh', labelKey: 'st.workerDsh', hintKey: 'st.workerDshHint' },
-  { value: 'codex', labelKey: 'st.workerCodex', hintKey: 'st.workerCodexHint' },
-  { value: 'claude', labelKey: 'st.workerClaude', hintKey: 'st.workerClaudeHint' },
+  { value: 'dsh', labelKey: 'st.workerDsh' },
+  { value: 'codex', labelKey: 'st.workerCodex' },
+  { value: 'claude', labelKey: 'st.workerClaude' },
 ]
 /** Static backend contract; the live question (can it take work right now) lives on the Bot page. */
 export const WORKER_CAPABILITIES = [
@@ -960,16 +944,11 @@ export function HistoryChanges({ t, entry, open, onToggle }) {
 
 Object.assign(PAGE_TEXT, {
   'st.botsTitle': ['Bot', 'Bots'],
-  'st.botsHint': ['Bot 只描述「我是谁、什么样的活派给我」。派单只筛一条硬事实：后端此刻可用；选谁由模型读下面的「什么时候派给它」回答。',
-    'A Bot only says who it is and what kind of work belongs to it. Dispatch filters on one hard fact — the backend can run now — and the model reads "when to send it work" below to choose.'],
   'st.botsFile': ['Bot 文件', 'Bot file'],
   'st.botsBroken': ['Bot 文件无法读取（{code}）：{message}。派单会回退默认 Bot，修好文件后重试。',
     'The bot file cannot be read ({code}): {message}. Dispatch falls back to the default bot until it is repaired.'],
   'st.botsDropped': ['已忽略不认识的字段：{keys}（不影响其它字段）。',
     'Unknown fields were dropped: {keys}. The rest of the bot was kept.'],
-  'st.botsBuiltin': ['内置 Bot', 'Built-in bots'],
-  'st.botsBuiltinNote': ['内置两个 Bot 始终可用，不写入文件，也不能删除。',
-    'The two built-ins are always available, are never written to the file and cannot be deleted.'],
   'st.botsBuiltinTag': ['内置', 'built-in'],
   'st.botsCopy': ['复制为 JSON', 'Copy as JSON'],
   'st.botsDuplicate': ['另存为副本', 'Save a copy'],
@@ -992,34 +971,21 @@ Object.assign(PAGE_TEXT, {
   'st.botsEditorNew': ['新建 Bot', 'New bot'],
   'st.botsPick': ['从左侧选择一个 Bot', 'Pick a Bot on the left'],
   'st.botsCreate': ['创建', 'Create'],
-  'st.botsEditorHint': ['名称、后端、一句话说明、什么时候派给它、角色提示词——五项。预算不在编辑器里，详情里只读显示继承值。',
-    'Five fields: name, backend, one-line description, when to send it work, and the role prompt. Budget has no input — the detail page shows the inherited values read-only.'],
   'st.botsFieldName': ['名称', 'Name'],
   'st.botsFieldDescription': ['一句话说明', 'One line'],
   'st.botsFieldDescriptionHint': ['给人扫列表看的，不超过 120 字。', 'For a human scanning the list; up to 120 characters.'],
   'st.botsFieldWhenToUse': ['什么时候派给它', 'When to send it work'],
-  'st.botsFieldWhenToUseHint': ['写清接什么活、不接什么活，不超过 300 字。派单模型只读这一段来判断归属。',
-    'Say what it takes and what it does not; up to 300 characters. The picking model reads only this paragraph.'],
   'st.botsFieldBackend': ['后端', 'Backend'],
   'st.botsFieldRole': ['角色提示词', 'Role prompt'],
-  'st.botsFieldRoleHint': ['它会照着这段提示接活；留空就跟随执行器默认。', 'The bot works to this prompt; empty follows the executor default.'],
   'st.botsAdvanced': ['高级设置', 'Advanced'],
   'st.botsFieldPreset': ['预设', 'Preset'],
   'st.botsFieldModel': ['模型', 'Model'],
   'st.botsFieldPrefer': ['偏好 Skill', 'Preferred skills'],
+  'st.botsSearchModel': ['搜索模型…', 'Search models…'],
+  'st.botsNoModel': ['没有读到可用模型', 'No models found'],
+  'st.botsNoSkills': ['没有读到可用 Skill', 'No skills found'],
   'st.botsFieldSkillsPolicy': ['Skill 策略', 'Skill policy'],
-  'st.botsInheritHint': ['不填时：DSH 的预设与 Skill 跟随宿主默认；模型跟随后端自己的默认（DSH 用宿主模型，Claude / Codex 用「设置 → Worker」里配的 CLI 模型）。',
-    'Left empty, a DSH bot follows the host default preset and skills; the model follows the backend default (DSH: the host model, Claude / Codex: the CLI model configured under Settings → Worker).'],
   'st.botsPresetHostDefault': ['跟随宿主默认', 'Host default'],
-  'st.botsPresetDshOnly': ['预设只有 DSH 后端有；Claude / Codex 使用它们自己的默认配置。',
-    'Only the DSH backend has host presets; Claude / Codex use their own defaults.'],
-  'st.botsModelHostDefault': ['跟随宿主默认', 'Host default'],
-  'st.botsModelCliPlaceholder': ['留空用「设置 → Worker」里的 CLI 模型', 'Empty uses the CLI model from Settings → Worker'],
-  'st.botsPreferHint': ['多选；只作为一句提示写进角色提示词，不是硬开关。',
-    'Multi-select; rendered as one hint line in the role prompt, not a hard switch.'],
-  'st.botsPreferMore': ['还有没列出来的 Skill？手填，逗号分隔', 'Not listed? Type names, comma separated'],
-  'st.botsPreferCliHint': ['该后端没有可从面板读取的 Skill 清单；需要时手填名称，逗号分隔。',
-    'This backend exposes no skill list to the panel; type names separated by commas if needed.'],
   'st.botsBudget': ['预算（只读，继承自设置）', 'Budget (read-only, inherited)'],
   'st.botsBudgetTimeout': ['超时', 'Timeout'],
   'st.botsBudgetIdle': ['空闲超时', 'Idle timeout'],
@@ -1235,12 +1201,23 @@ export function BotsCard() {
   const defaultBot = config?.executor?.bot ?? 'generalist'
   const statsOf = stats?.bots?.[selected?.id]
   const pending = Array.isArray(stats?.pending) ? stats.pending : []
-  // A backend decides what can be configured: only DSH has host presets, host models and a skill list. A CLI keeps
-  // those inside its binary, so the editor greys the preset out and falls back to free text instead of inventing rows.
+  // A backend decides what can be configured: DSH answers from host services, a CLI from its own configuration files.
+  // Both get real lists, so the editor never asks for an id from memory.
   const editorIsDsh = editor?.form?.backend === 'dsh'
-  const providerRow = catalogProviders.find(row => row.provider === editor?.form?.modelProvider)
-  const modelChoices = Array.isArray(providerRow?.models) ? providerRow.models : []
+  const backendCatalog = catalog && typeof catalog[editor?.form?.backend] === 'object' && catalog[editor?.form?.backend]
+    ? catalog[editor?.form?.backend] : {}
+  const cliModels = Array.isArray(backendCatalog.models) ? backendCatalog.models : []
+  const modelGroups = editorIsDsh
+    ? catalogProviders.map(row => ({ provider: row.provider, label: row.name, models: Array.isArray(row.models) ? row.models : [] }))
+    : [{ provider: '', label: String(editor?.form?.backend ?? ''), models: cliModels }]
+  const modelLabel = modelGroups.flatMap(group => group.models).find(model => model.id === editor?.form?.modelModel)?.name
+  const skillChoices = editorIsDsh ? catalogSkills : (Array.isArray(backendCatalog.skills) ? backendCatalog.skills : [])
   const preferTokens = listOf(editor?.form?.prefer ?? '')
+  // A stored preference the catalogue does not know yet (an older save, a skill removed from the host) stays visible
+  // and checkable, so saving the editor never drops it silently.
+  const unknownPrefers = preferTokens.filter(name => !skillChoices.some(skill => skill.name === name))
+    .map(name => ({ name, description: '' }))
+  const allSkills = [...skillChoices, ...unknownPrefers]
   const togglePrefer = name => {
     const next = preferTokens.includes(name) ? preferTokens.filter(item => item !== name) : [...preferTokens, name]
     editField('prefer', next.join(', '))
@@ -1253,7 +1230,6 @@ export function BotsCard() {
   // should behave. Budget and claims stay read-only so the editor never duplicates the settings pages.
   const editorPane = editor ? <Section title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
     <div className="sa-bots-editor-body sa-bots-editor">
-      <p className="sa-hint">{pt(t, 'st.botsEditorHint')}</p>
       <div className="sa-field-grid">
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldName')}</span>
           <Input value={editor.form.name} maxLength={40}
@@ -1267,11 +1243,11 @@ export function BotsCard() {
       </div>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldWhenToUse')}</span>
         <textarea className="sa-textarea" rows={3} maxLength={300} value={editor.form.whenToUse}
-          aria-label={pt(t, 'st.botsFieldWhenToUse')} placeholder={pt(t, 'st.botsFieldWhenToUseHint')}
+          aria-label={pt(t, 'st.botsFieldWhenToUse')}
           onChange={event => editField('whenToUse', event.target.value)} /></label>
       <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldRole')}</span>
         <textarea className="sa-textarea" rows={4} value={editor.form.role}
-          aria-label={pt(t, 'st.botsFieldRole')} placeholder={pt(t, 'st.botsFieldRoleHint')}
+          aria-label={pt(t, 'st.botsFieldRole')}
           onChange={event => editField('role', event.target.value)} /></label>
       <DisclosureRow title={pt(t, 'st.botsAdvanced')} open={advanced}
         onToggle={() => setAdvanced(value => !value)} />
@@ -1281,50 +1257,29 @@ export function BotsCard() {
             onChange={value => editField('preset', value)}
             options={[{ value: '', label: pt(t, 'st.botsPresetHostDefault') },
               ...presetChoices.map(id => ({ value: id, label: id }))]} /></label>
-        {editorIsDsh
-          ? null
-          : <p className="sa-hint">{pt(t, 'st.botsPresetDshOnly')}</p>}
-        {editorIsDsh && catalogProviders.length
-          ? <>
-            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-              <Select value={editor.form.modelProvider} onChange={value => {
-                editField('modelProvider', value)
-                const models = catalogProviders.find(row => row.provider === value)?.models
-                if (!Array.isArray(models) || !models.some(model => model.id === editor.form.modelModel)) editField('modelModel', '')
-              }} options={[{ value: '', label: pt(t, 'st.botsModelHostDefault') },
-                ...catalogProviders.map(row => ({ value: row.provider, label: row.name }))]} /></label>
-            <label className="sa-field"><span className="sa-field-head"> </span>
-              <Select value={editor.form.modelModel} disabled={!editor.form.modelProvider}
-                onChange={value => editField('modelModel', value)}
-                options={[{ value: '', label: pt(t, 'st.botsPresetHostDefault') },
-                  ...modelChoices.map(model => ({ value: model.id, label: model.name }))]} /></label>
-          </>
-          : <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-            <Input value={editor.form.modelModel} placeholder={pt(t, 'st.botsModelCliPlaceholder')}
-              onChange={event => editField('modelModel', event.target.value)} /></label>}
-        {editorIsDsh && catalogSkills.length
+        <span className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+          <ModelPicker groups={modelGroups} value={editor.form.modelModel} valueLabel={modelLabel}
+            label={pt(t, 'st.botsFieldModel')} searchLabel={pt(t, 'st.botsSearchModel')}
+            emptyLabel={pt(t, 'st.botsNoModel')} disabled={!modelGroups.some(group => group.models.length)}
+            onChange={choice => setEditor(current => current ? { ...current, form: {
+              ...current.form, modelProvider: choice.provider, modelModel: choice.model,
+            } } : current)} /></span>
+        {allSkills.length
           ? <div className="sa-field sa-field-wide">
             <span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
             <div className="sa-check-row">
-              {catalogSkills.map(skill => <label key={skill.name} className="sa-check">
+              {allSkills.map(skill => <label key={skill.name} className="sa-check">
                 <input type="checkbox" checked={preferTokens.includes(skill.name)} onChange={() => togglePrefer(skill.name)} />
                 <span>{skill.name}</span>
               </label>)}
             </div>
-            <Input value={editor.form.prefer} aria-label={pt(t, 'st.botsPreferMore')}
-              placeholder={pt(t, 'st.botsPreferMore')} onChange={event => editField('prefer', event.target.value)} />
-            <p className="sa-hint">{pt(t, 'st.botsPreferHint')}</p>
           </div>
-          : <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
-            <Input value={editor.form.prefer} onChange={event => editField('prefer', event.target.value)} /></label>}
-        {editorIsDsh && catalogSkills.length
-          ? null
-          : <p className="sa-hint">{pt(t, 'st.botsPreferCliHint')}</p>}
+          : <span className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+            <span className="sa-hint">{pt(t, 'st.botsNoSkills')}</span></span>}
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldSkillsPolicy')}</span>
           <Select value={editor.form.skillsPolicy} onChange={value => editField('skillsPolicy', value)}
             options={[{ value: 'prompt', label: 'prompt' }, { value: 'preset', label: 'preset' }]} /></label>
       </div> : null}
-      <p className="sa-hint">{pt(t, 'st.botsInheritHint')}</p>
       {saveError ? <p className="sa-error" role="alert">{saveError.details?.code
         ? `${String(saveError.details.code)}：${saveError.message}` : errorText(saveError)}</p> : null}
       <div className="sa-actions">
@@ -1348,7 +1303,7 @@ export function BotsCard() {
       `${pt(t, 'st.botsBudgetTimeout')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetIdle')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetRepairs')} ${pt(t, 'st.botsBudgetInherit')}`],
   ] : []
   return <>
-    <Section title={pt(t, 'st.botsTitle')} hint={pt(t, 'st.botsHint')}>
+    <Section title={pt(t, 'st.botsTitle')}>
       {view.code
         ? <p className="sa-hint sa-info-warn">
           {pt(t, 'st.botsBroken', { code: String(view.code), message: String(view.error ?? '') })}
@@ -1374,7 +1329,7 @@ export function BotsCard() {
           </ul>
           <Button size="sm" variant="outline" icon="plus" onClick={() => openEditor(undefined)}>{pt(t, 'st.botsNew')}</Button>
           <p className="sa-hint sa-bots-store">{pt(t, 'st.botsFile')} · <span className="sa-mono">{String(view.file ?? '—')}</span></p>
-          <p className="sa-hint">{pt(t, 'st.botsBuiltin')}：{pt(t, 'st.botsBuiltinNote')}</p>
+
         </div>
         <div className="sa-pane sa-bots-detail">
           {editorPane ?? (selected
@@ -1441,7 +1396,7 @@ export function BotsCard() {
         })}
       </div>
     </Section>
-    {pending.length ? <Section title={pt(t, 'st.botsPending')} hint={pt(t, 'st.botsPendingHint')}>
+    {pending.length ? <Section title={pt(t, 'st.botsPending')}>
       <div className="sa-settings-stack">
         {pending.map(item => <div key={item.id} className="sa-row">
           <div className="sa-row-main">
@@ -1474,6 +1429,14 @@ function stripBotForSave(bot) {
 export function LiveSettingsPage({ route }) {
   const { t, notify, navigate } = usePanel()
   const { data, error, reload, actions } = usePanelData()
+  // The Worker group shows what the CLIs are actually configured with — the binary the executor will spawn and the
+  // models their own config files name — so neither is typed in by hand.
+  const [botCatalog, setBotCatalog] = useState({})
+  useEffect(() => {
+    let active = true
+    Promise.resolve().then(() => actions.botCatalog?.()).then(value => { if (active) setBotCatalog(value ?? {}) }).catch(() => {})
+    return () => { active = false }
+  }, [])
   const requestedGroup = route?.group && SETTINGS_GROUPS.some(group => group.id === route.group) ? route.group : 'source'
   const [active, setActive] = useState(requestedGroup)
   // Editable groups keep a group-local draft. A draft that exists only in memory is lost on reload / tab close, so it
@@ -2495,7 +2458,6 @@ export function LiveSettingsPage({ route }) {
       .filter(backend => backend in workers && workers[backend]?.enabled !== false)
     const defaultBackend = enabled.includes(routing.defaultBackend) ? routing.defaultBackend
       : enabled.includes(legacyBackend) ? legacyBackend : enabled[0] ?? 'dsh'
-    const fallback = enabled.includes(routing.fallback?.[0]) ? routing.fallback[0] : ''
     const backendOptions = ROUTE_BACKENDS.map(backend => ({ value: backend.value, label: pt(t, backend.labelKey) }))
     const editWorkers = next => editField('worker', 'executor.workers', next, baseWorkers)
     const editRouting = next => editField('worker', 'executor.routing', next, baseRouting)
@@ -2505,32 +2467,31 @@ export function LiveSettingsPage({ route }) {
     const backendCard = backend => {
       const entry = workers[backend.value] ?? {}
       const on = backend.value in workers && entry.enabled !== false
+      const catalog = botCatalog && typeof botCatalog[backend.value] === 'object' ? botCatalog[backend.value] : {}
+      const models = Array.isArray(catalog.models) ? catalog.models : []
       return <div key={backend.value} className="sa-field">
-        <SettingsSwitchRow label={pt(t, backend.labelKey)} hint={pt(t, backend.hintKey)} disabled={frozen}
+        <SettingsSwitchRow label={pt(t, backend.labelKey)} disabled={frozen}
           checked={on} onChange={next => toggleBackend(backend.value, next)} />
         {backend.value === 'dsh' ? null : <>
           <div style={{ display: 'flex', gap: 'var(--sa-sp-8)', flexWrap: 'wrap', maxWidth: '560px', minWidth: 0 }}>
             <div style={{ flex: '1 1 180px', minWidth: 0, display: 'flex' }}>
-              <Input className="sa-input-full" value={entry.model ?? ''} disabled={frozen}
-                placeholder={pt(t, 'st.workerModel')} aria-label={pt(t, 'st.workerModel')}
-                onChange={event => setBackendField(backend.value, 'model', event.target.value)} />
+              <Select className="sa-input-full" label={pt(t, 'st.workerModel')} disabled={frozen}
+                value={models.some(model => model.id === entry.model) ? entry.model : ''}
+                onChange={next => setBackendField(backend.value, 'model', next)}
+                options={[{ value: '', label: pt(t, 'st.workerModelDefault') },
+                  ...models.map(model => ({ value: model.id, label: model.name }))]} />
             </div>
-            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex' }}>
-              <Input className="sa-input-full" value={entry.command ?? ''} disabled={frozen}
-                placeholder={pt(t, 'st.workerCommand')} aria-label={pt(t, 'st.workerCommand')}
-                onChange={event => setBackendField(backend.value, 'command', event.target.value)} />
+            <div style={{ flex: '1 1 240px', minWidth: 0, display: 'flex', alignItems: 'center' }}>
+              <span className="sa-mono">{catalog.path ?? pt(t, 'st.workerPathMissing')}</span>
             </div>
           </div>
-          <Hint>{pt(t, 'st.workerModelHint')}</Hint>
         </>}
       </div>
     }
     return <div className="sa-settings-group">
       {settingsHeading()}
-      <Hint>{pt(t, 'st.workerHint')}</Hint>
       <div className="sa-field">
         <span className="sa-field-head">{pt(t, 'st.enabledBackends')}</span>
-        <Hint>{pt(t, 'st.enabledBackendsHint')}</Hint>
         {ROUTE_BACKENDS.map(backendCard)}
       </div>
       <div style={{ display: 'flex', gap: 'var(--sa-sp-16)', flexWrap: 'wrap' }}>
@@ -2538,10 +2499,8 @@ export function LiveSettingsPage({ route }) {
           <span className="sa-field-head">{pt(t, 'st.defaultBackend')}</span>
           <Select label={pt(t, 'st.defaultBackend')} disabled={frozen} value={defaultBackend}
             options={backendOptions} onChange={next => setRouting({ defaultBackend: next })} />
-          <Hint>{pt(t, 'st.defaultBackendHint')}</Hint>
         </div>
       </div>
-      <Hint>{pt(t, 'st.fallbackGone')}</Hint>
       {saveBarFor('worker')}
     </div>
   }

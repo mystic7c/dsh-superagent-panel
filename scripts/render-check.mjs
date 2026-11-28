@@ -337,6 +337,15 @@ window.fetch = global.fetch = async (input, init = {}) => {
     })
   }
   if (method === 'GET' && p === 'engine/status') return json(fixtures.status)
+  // The Worker group shows what each CLI is configured with; the stub mirrors a machine where both are installed and
+  // named a model, so the group must offer those exact ids instead of asking the operator to type them.
+  if (method === 'GET' && p === 'engine/bots/catalog') return json({
+    dsh: { presets: ['standard', 'minimal'], providers: [{ provider: 'deepseek', name: 'DeepSeek',
+      models: [{ id: 'deepseek-v4', name: 'DeepSeek V4' }] }], skills: [] },
+    claude: { path: '/usr/local/bin/claude', models: [{ id: 'claude-sonnet-4-5', name: 'claude-sonnet-4-5' }],
+      skills: [{ name: 'review', description: '评审' }] },
+    codex: { path: '/opt/homebrew/bin/codex', models: [{ id: 'gpt-6-astra', name: 'gpt-6-astra' }], skills: [] },
+  })
   if (method === 'GET' && p === 'engine/tickets') return json(fixtures.tickets)
   if (method === 'GET' && p === 'engine/inbox') return json(fixtures.inbox)
   if (method === 'GET' && p === 'engine/signals') {
@@ -1350,13 +1359,23 @@ check('worker group lists every backend with its own enable switch',
     && rootElement.querySelectorAll('.sa-main .sa-switch-row').length >= 3,
   String(rootElement.querySelectorAll('.sa-main .sa-switch-row').length))
 check('worker group keeps one default backend and no fallback backend',
-  workerText.includes('默认后端') && workerText.includes('没有「降级后端」了')
+  workerText.includes('默认后端') && !workerText.includes('降级后端')
     && !rootElement.querySelector('select[aria-label="降级后端（可选）"]'), workerText.slice(0, 600))
 // 1.5.0 deleted the capability matrix and the 降级后端 select: the only hard fact about a backend is whether it can
 // take work right now, and that answer lives on the Bot page next to the backend card (§4).
 check('worker group carries no capability matrix and no fallback select',
   !workerText.includes('运行后端能力') && !workerText.includes('流式事件')
     && !rootElement.querySelector('.sa-capabilities'), workerText.slice(0, 600))
+// 1.5.2: the CLI model is chosen from what the CLI's configuration names, and the path the executor will spawn is shown
+// read-only. Both are discovered — a text field here was asking the operator to guess.
+const workerCliOptions = backend => [...rootElement.querySelectorAll('.sa-main select')]
+  .filter(select => ['模型'].includes(select.getAttribute('aria-label')))
+  .flatMap(select => [...select.options].map(option => option.textContent))
+check('worker group offers each CLI its configured models and shows the resolved path read-only (1.5.2)',
+  workerText.includes('/usr/local/bin/claude') && workerText.includes('/opt/homebrew/bin/codex')
+    && !rootElement.querySelector('input[aria-label="CLI 路径"]')
+    && workerCliOptions().includes('claude-sonnet-4-5') && workerCliOptions().includes('gpt-6-astra'),
+  [...workerCliOptions()].join('|').slice(0, 200))
 clickByText('写权限', '.sa-settings-nav button')
 await sleep(800)
 const writeText = text()
@@ -1908,7 +1927,7 @@ const botsTabText = rootElement.querySelector('.sa-main')?.textContent ?? ''
 // backend card per CLI and the pending section — this walkthrough only proves the surface is mounted, since the fetch
 // stub answers every engine endpoint with `{}` and the detailed contract is pinned by the bots-group block above.
 check('the Bot tab carries the v3 bot surface: store line, built-ins, backend cards, new-bot action',
-  /Bot 文件/.test(botsTabText) && /内置 Bot/.test(botsTabText) && /后端与派单/.test(botsTabText)
+  /Bot 文件/.test(botsTabText) && /后端与派单/.test(botsTabText)
     && /新建 Bot/.test(botsTabText) && /没有证据|派单可用/.test(botsTabText)
     && !/Bot 列表|后端核验状态|运行后端能力/.test(botsTabText), botsTabText.slice(0, 240))
 check('Settings no longer carries a Bot group', ![...rootElement.querySelectorAll('.sa-settings-nav button')]
@@ -2579,8 +2598,12 @@ console.log('STEP pure projections')
         ],
         skills: [{ name: 'ponytail', description: '最简解法' }, { name: 'review', description: '评审' }],
       },
-      claude: { presets: [], providers: [], skills: [] },
-      codex: { presets: [], providers: [], skills: [] },
+      // The CLIs answer from their own configuration files: models and skills are lists too, never free text.
+      claude: { path: '/usr/local/bin/claude', models: [
+        { id: 'claude-sonnet-4-5', name: 'claude-sonnet-4-5' }, { id: 'deepseek-flash[1m]', name: 'deepseek-flash[1m]' }],
+      skills: [{ name: 'review', description: '评审' }] },
+      codex: { path: '/opt/homebrew/bin/codex', models: [{ id: 'gpt-6-astra', name: 'gpt-6-astra' }],
+        skills: [{ name: 'codex-skill', description: '' }] },
     }
     const host = document.createElement('div')
     document.body.appendChild(host)
@@ -2721,23 +2744,35 @@ console.log('STEP pure projections')
         && host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 1
         && advancedRow()?.getAttribute('aria-expanded') === 'false',
       `${editorControls().length} controls :: ${editorText().slice(0, 240)}`)
-    check('the editor says what is actually inherited instead of naming a settings page that lacks it',
-      /DSH 的预设与 Skill 跟随宿主默认/.test(editorText()) && /设置 → Worker/.test(editorText())
-        && !/设置 → 运行/.test(editorText()), editorText().slice(-220))
+    // 1.5.2: the editor carries no explanatory sentences at all — the fields and the pickers say what they hold, and
+    // a hint that named a settings page was wrong often enough to be removed rather than reworded.
+    check('the editor carries no explanatory hint sentences (1.5.2)',
+      host.querySelectorAll('.sa-bots-editor .sa-hint').length === 0,
+      editorText().slice(-220))
     host.querySelector('.sa-bots-editor .sa-disclosure-row')
       ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
-    // This Bot runs on Claude, so the preset select is greyed out and says why; model stays a free-text CLI id.
-    // The backend select comes first; the preset is the greyed one for a CLI bot.
+    // This Bot runs on Claude: the preset select is greyed out (only DSH has host presets) and the model is a picker
+    // fed by the CLI's own configuration, never a free-text id.
     const presetSelect = () => [...host.querySelectorAll('.sa-bots-editor select')].find(select => select.disabled)
+    const modelPicker = () => host.querySelector('.sa-bots-editor .sa-model-picker .sa-menu-picker')
     check('opening 高级设置 reveals the overrides without switching to a different editor',
-      host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 2 && editorControls().length === 9
+      host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 2 && editorControls().length === 7
         && /偏好 Skill/.test(editorText()) && /Skill 策略/.test(editorText()),
       `${editorControls().length} controls`)
-    check('a CLI backend greys out the preset and keeps a free-text model id (§5.4)',
-      presetSelect()?.disabled === true && /预设只有 DSH 后端有/.test(editorText())
-        && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length === 0,
+    check('a CLI bot greys out the preset and picks its model from the CLI catalogue (§5.4)',
+      presetSelect()?.disabled === true && Boolean(modelPicker())
+        && !host.querySelector('.sa-bots-editor input[aria-label="模型"]')
+        && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length >= 1,
       `${presetSelect()?.disabled} :: ${editorText().slice(-200)}`)
+    modelPicker()?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    check('the CLI model picker lists the models its configuration names',
+      [...host.querySelectorAll('.sa-model-pop .sa-model-item')].map(node => node.textContent)
+        .some(text => text.includes('deepseek-flash[1m]')),
+      host.querySelector('.sa-model-pop')?.textContent?.slice(0, 200) ?? 'no popover')
+    host.querySelector('.sa-model-pop .sa-model-item')?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
     // The DOM maxLength stops typing, not a paste from a script; the host is the authority and its code must land on
     // screen verbatim (§13.2).
     setValue(host.querySelector('.sa-bots-editor textarea[aria-label="什么时候派给它"]'), '长'.repeat(301))
@@ -2754,7 +2789,9 @@ console.log('STEP pure projections')
     check('a save sends only the v3 fields and keeps the advanced overrides',
       legacy !== undefined && Object.keys(legacy).every(key => BOT_KEYS.includes(key))
         && legacy.preset === 'default'
-        && legacy.model?.provider === 'anthropic' && legacy.skills?.prefer?.[0] === 'ponytail'
+        // A CLI model has no provider: the picker wrote the id the CLI's config named, which is what the CLI accepts.
+        && legacy.model?.model === 'claude-sonnet-4-5' && legacy.model?.provider === undefined
+        && legacy.skills?.prefer?.[0] === 'ponytail'
         && legacy.prompt?.role === '只做最小改动',
       JSON.stringify({ keys: Object.keys(legacy ?? {}), model: legacy?.model, preset: legacy?.preset }).slice(0, 260))
     check('a save sends no host-added or retired keys (§4.2)',
@@ -2808,21 +2845,38 @@ console.log('STEP pure projections')
     await sleep(140)
     const advancedSelects = () => [...host.querySelectorAll('.sa-bots-editor select')]
     const skillBoxes = () => [...host.querySelectorAll('.sa-bots-editor input[type="checkbox"]')]
-    // Selects, in DOM order: backend, preset, provider, model, skill policy. The model select stays disabled until a
-    // provider is chosen, which is what makes a provider/model pair impossible to half-fill.
+    const openModelPicker = async () => {
+      host.querySelector('.sa-bots-editor .sa-model-picker .sa-menu-picker')
+        ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+      await sleep(140)
+    }
+    // Selects, in DOM order: backend, preset, skill policy. The model is one picker, not a provider select followed by
+    // a model select, and both halves are chosen by picking a row in its grouped, searchable list.
     check('a DSH bot picks its preset and model from the host catalogue (§5.4)',
-      advancedSelects().length === 5 && advancedSelects()[1].disabled === false
-        && advancedSelects()[2].options.length === 3 && advancedSelects()[3].disabled === true
-        && skillBoxes().length === 2,
+      advancedSelects().length === 3 && advancedSelects()[1].disabled === false
+        && Boolean(host.querySelector('.sa-bots-editor .sa-model-picker')) && skillBoxes().length === 2,
       `${advancedSelects().length} selects, ${skillBoxes().length} skills :: ${editorText().slice(-240)}`)
-    setValue(advancedSelects()[2], 'deepseek')
-    await sleep(120)
-    check('choosing a provider narrows the model list to that provider',
-      advancedSelects()[3].disabled === false
-        && [...advancedSelects()[3].options].some(option => option.textContent === 'DeepSeek V4 Pro'),
-      [...(advancedSelects()[3]?.options ?? [])].map(option => option.textContent).join('|'))
-    setValue(advancedSelects()[3], 'deepseek-v4-pro')
-    await sleep(120)
+    await openModelPicker()
+    check('the model picker groups rows by provider and is searchable',
+      [...host.querySelectorAll('.sa-model-pop .sa-model-group')].map(node => node.textContent).join('|') === 'DeepSeek|Z.ai'
+        && host.querySelectorAll('.sa-model-pop .sa-model-item').length === 3,
+      host.querySelector('.sa-model-pop')?.textContent?.slice(0, 200) ?? 'no popover')
+    setValue(host.querySelector('.sa-model-pop input'), 'glm')
+    await sleep(140)
+    check('typing filters the list to the matching provider',
+      host.querySelectorAll('.sa-model-pop .sa-model-item').length === 1
+        && /GLM-4.7/.test(host.querySelector('.sa-model-pop')?.textContent ?? ''),
+      host.querySelector('.sa-model-pop')?.textContent?.slice(0, 200) ?? 'no popover')
+    setValue(host.querySelector('.sa-model-pop input'), 'deepseek')
+    await sleep(140)
+    const deepseekPro = [...host.querySelectorAll('.sa-model-pop .sa-model-item')]
+      .find(node => /DeepSeek V4 Pro/.test(node.textContent ?? ''))
+    deepseekPro?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    check('picking a row fills both halves of the model and shows the choice',
+      /DeepSeek V4 Pro/.test(editorText())
+        && !host.querySelector('.sa-model-pop'),
+      editorText().slice(-200))
     skillBoxes()[0]?.click()
     await sleep(120)
     setValue([...host.querySelectorAll('.sa-bots-editor input')].find(input => input.maxLength === 40), '探针 Bot')

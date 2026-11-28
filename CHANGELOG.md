@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.5.2] — 2026-11-28
+
+### Bot 的模型改成一次搜索式选择；Claude / Codex 的模型与 Skill 从它们自己的配置里读
+
+1.5.1 把 DSH 的模型做成 provider → model 两段下拉，给 CLI 留的却是「手填模型 id」：同一个编辑器里一半是列表、一半要人
+背参数。需求是反过来的——**CLI 配置了什么就列什么**，人只做选择。同时编辑器里那几句解释性提示（「跟随『设置 → 运行』」，
+而设置里并没有这些配置）被证明是错的，留着只会继续错。
+
+- **模型选择器**（`client/src/controls.js` 的 `ModelPicker`）：一个按钮弹出可搜索的分组列表——按 provider 分组、每行
+  一个模型、当前值打勾、底部显示选中项；点一行同时写回 `provider` 与 `model`。原来的两段下拉与 CLI 手填输入一起删掉。
+- **CLI 目录**（`lib/live/cli-catalog.js`，新）：Claude 的模型读 `~/.claude/settings.json` 的 `model` 与
+  `ANTHROPIC_*_MODEL`（含项目层 `.claude/settings.json` 覆盖），Codex 的模型读 `~/.codex/config.toml` 的
+  `model`、`[profiles.*].model` 与 `[tui.model_availability_nux]` 记住的模型；Skill 读 `~/.claude/skills`、
+  `~/.codex/skills` 及项目层同名目录的 `SKILL.md` frontmatter。CLI 路径用执行器的解析规则（显式配置 → `PATH` →
+  app bundle）解析后随目录返回。
+- **设置 → Worker**：CLI 的模型改成该 CLI 配置里的模型下拉，CLI 路径按解析结果只读显示；不再有可编辑的命令输入与
+  解释性提示。
+- **删提示**：Bot 页与设置 → Worker 里的解释性提示全部删除——编辑器的继承说明、字段占位说明、页面级 hint、
+  「没有降级后端」说明；字段标签与真实选项说明自身。
+- **测试**：`lib/live/cli-catalog.test.js` 6 项（Claude 设置与网关变量、项目层覆盖、Codex TOML 三段、Skill
+  frontmatter、项目层叠加与 `PATH` 解析、缺二进制/配置→空）；`bot-catalog.test.js` 补 CLI 目录端到端与路径解析；render-check 的 Bot 块改断言
+  picker 分组/搜索/一次写回 pair、CLI 模型来自目录、编辑器零提示；Worker 组断言模型下拉与只读路径。
+
 ## [1.5.1] — 2026-11-28
 
 ### Bot 编辑器的「高级设置」按后端给真选项，而不是编一排输入框

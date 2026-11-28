@@ -276,6 +276,18 @@ export const PANEL_CSS = `
 .sa-menu-item-label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sa-sp-2); }
 .sa-menu-item-note { font-size: var(--sa-fs-caption); line-height: 1.4; color: var(--sa-label-tertiary); }
 .sa-menu-item-check { display: inline-flex; flex: none; margin-left: var(--sa-sp-8); color: var(--dsw-alias-label-primary); }
+/* The model picker is a menu that holds a listbox: search on top, grouped rows, the current model at the bottom (the
+   shape the host's own model menu uses). It needs more width than a plain action menu, and it must scroll. */
+.sa-model-picker { position: relative; display: flex; min-width: 0; }
+.sa-model-picker > .sa-menu-picker { width: 100%; justify-content: space-between; }
+.sa-model-pop { min-width: 260px; max-width: 380px; gap: var(--sa-sp-6); }
+.sa-model-groups { display: flex; flex-direction: column; gap: var(--sa-sp-6); max-height: 320px; overflow: auto; }
+.sa-model-group { margin: 0; padding: var(--sa-sp-4) var(--sa-sp-8) var(--sa-sp-2); color: var(--sa-label-tertiary);
+  font-size: var(--sa-fs-caption); font-weight: 500; text-transform: none; }
+.sa-model-item { white-space: normal; }
+.sa-model-foot { padding: var(--sa-sp-4) var(--sa-sp-8); border-top: 0.5px solid var(--sa-line);
+  color: var(--sa-label-tertiary); font-size: var(--sa-fs-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-model-none { padding: var(--sa-sp-8); }
 
 /* Compact thread list: the row is a navigation affordance; without a visible disclosure the first grey row looks
    selected while its detail is off-screen. */
