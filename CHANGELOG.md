@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.5.3] — 2026-11-28
+
+### 换后端就清掉旧后端的预设/模型/Skill；DSH 的 Skill 列表不再只有宿主内置的 3 个
+
+两处反馈：① Bot 换成另一个后端后，上一个后端挑的模型（比如 Claude 的 id）还留在表单里，保存的是一个那个后端
+不认识的模型；② DSH 后端的「偏好 Skill」只出现 3 个——那是宿主 `skills.list()` 在插件上下文里的可见范围，它只看
+到一个 agent preset 的层，用户装在 `~/.dsh/skills`、`~/.agents/skills` 的 Skill 全被挡在外面。
+
+- **换后端即重置**：`changeBackend` 清空 preset、model（provider 与 id 一起）、偏好 Skill 与策略，空值就是「跟随该
+  后端自己的默认」；不再区分 DSH/CLI 只清一半。
+- **DSH 的 Skill 从文件系统补全**（`lib/live/bot-catalog.js`）：除宿主服务给出的清单外，再按宿主的扫描顺序读
+  `<cwd>/.dsh/skills`、`<cwd>/.agents/skills`、`~/.dsh/skills`、`~/.agents/skills`，同名以项目层为先；宿主内置的
+  Skill 仍在列表里。真机从 3 个变成 19 个。
+- **测试**：`bot-catalog.test.js` 新增「文件系统根参与、项目层同名覆盖用户层、内置不丢」；render-check 增加切换后端
+  清空（Claude → DSH 往返）的断言，352 项 / 0 失败 / 1 跳过。
+
 ## [1.5.2] — 2026-11-28
 
 ### Bot 的模型改成一次搜索式选择；Claude / Codex 的模型与 Skill 从它们自己的配置里读

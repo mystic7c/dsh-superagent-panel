@@ -1222,9 +1222,11 @@ export function BotsCard() {
     const next = preferTokens.includes(name) ? preferTokens.filter(item => item !== name) : [...preferTokens, name]
     editField('prefer', next.join(', '))
   }
+  // A backend change resets everything that is scoped to the previous backend: its preset, its model pair and its
+  // skill preferences. Empty means "this backend's own default", which is what the advanced section shows.
   const changeBackend = value => setEditor(current => current ? { ...current, form: {
     ...current.form, backend: value,
-    ...(value === 'dsh' ? {} : { preset: '', modelProvider: '' }),
+    preset: '', modelProvider: '', modelModel: '', prefer: '', skillsPolicy: 'prompt',
   } } : current)
   // Five questions, no capability toggles: who it is, what it is for, when to send it work, which backend, and how it
   // should behave. Budget and claims stay read-only so the editor never duplicates the settings pages.

@@ -2879,6 +2879,31 @@ console.log('STEP pure projections')
       editorText().slice(-200))
     skillBoxes()[0]?.click()
     await sleep(120)
+    // A backend switch resets everything scoped to the previous backend: a Claude model id must never survive into a
+    // DSH Bot, and the skill picks belong to the backend that offered them.
+    const backendSelect = () => [...host.querySelectorAll('.sa-bots-editor select')][0]
+    setValue(backendSelect(), 'claude')
+    await sleep(180)
+    const switchedSelects = [...host.querySelectorAll('.sa-bots-editor select')]
+    check('switching the backend resets its preset, model and skill picks to that backend’s defaults',
+      switchedSelects[1]?.disabled === true
+        && !/DeepSeek V4 Pro|deepseek-v4-pro|GLM-4.7/.test(editorText())
+        && [...host.querySelectorAll('.sa-bots-editor input[type="checkbox"]')].every(box => box.checked === false),
+      `${switchedSelects.map(select => select.disabled)} :: ${editorText().slice(-220)}`)
+    setValue(backendSelect(), 'dsh')
+    await sleep(180)
+    check('switching back offers the previous backend’s catalogue again, still with nothing picked',
+      [...host.querySelectorAll('.sa-bots-editor select')][1]?.disabled === false
+        && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length === 2
+        && !/DeepSeek V4 Pro/.test(editorText()),
+      editorText().slice(-200))
+    await openModelPicker()
+    ;[...host.querySelectorAll('.sa-model-pop .sa-model-item')]
+      .find(node => /DeepSeek V4 Pro/.test(node.textContent ?? ''))
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    host.querySelectorAll('.sa-bots-editor input[type="checkbox"]')[0]?.click()
+    await sleep(120)
     setValue([...host.querySelectorAll('.sa-bots-editor input')].find(input => input.maxLength === 40), '探针 Bot')
     setValue(host.querySelector('.sa-bots-editor textarea[aria-label="什么时候派给它"]'), '只跑冒烟测试')
     await sleep(120)
