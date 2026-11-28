@@ -1105,6 +1105,7 @@ export function BotsCard() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
+  const verifySeq = useRef(0)
   const [settingDefault, setSettingDefault] = useState('')
   const [pickedId, setPickedId] = useState('')
   const [advanced, setAdvanced] = useState(false)
@@ -1191,12 +1192,23 @@ export function BotsCard() {
       await load()
     } catch (failure) { setSaveError(failure) } finally { setSettingDefault('') }
   }
+  // The host starts the CLI smoke and answers `checking` immediately: keep reloading until the backend settles, so
+  // the card never stays on "核验中" after the CLI has already answered.
   const verify = async backend => {
+    const token = ++verifySeq.current
     setVerifying(backend)
     try {
       await actions.verifyBotBackend(backend)
       await load()
-    } catch (failure) { setSaveError(failure) } finally { setVerifying('') }
+      for (let round = 0; round < 30; round++) {
+        await new Promise(done => setTimeout(done, 4000))
+        if (verifySeq.current !== token) return
+        const fresh = await actions.bots()
+        const states = Object.values(fresh?.backends ?? {}).map(entry => entry?.state)
+        if (!states.includes('checking')) break
+      }
+      if (verifySeq.current === token) await load()
+    } catch (failure) { setSaveError(failure) } finally { if (verifySeq.current === token) setVerifying('') }
   }
   const selected = bots.find(bot => bot.id === pickedId) ?? bots[0]
   const pick = id => { setPickedId(id); setEditor(undefined); setSaveError(undefined) }

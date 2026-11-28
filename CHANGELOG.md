@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.5.6] — 2026-11-28
+
+### 「核验」现在真的跑一次 CLI，而不是只读旧证据
+
+Claude/Codex 一直显示「没有证据，暂不进入候选」：1.5.0 把能力探测换成可用性四态后，`availabilityOf` 只读
+`backend-verify.json`，而重写时没有任何代码再写这个文件——核验按钮只清掉版本缓存再读一遍同样的空台账，
+保存后端也只是重算状态。于是 CLI 永远停在 `unverified`，候选永远只有 DSH。
+
+现在：`backend-smoke.js` 用一行短提示真的启动一次 CLI（Claude `-p`，Codex `exec --skip-git-repo-check -s read-only`），
+退出码 0 且回答里有 `ok` 才把版本、时间、命令、输出末行写进 `backend-verify.json`；失败不写证据，只把原因留在
+面板上（CLI 不在 / 退出码 / 超过 60 秒未回答 / 没回答 ok）。触发点三个：核验按钮（后台跑，接口立刻返回
+`checking`）、保存后端配置后（后台）、引擎启动时对没有有效证据的已启用 CLI 后端（后台）。
+
+- 面板在冒烟进行时显示「核验中：正在跑一次 CLI 短提示」，结束后自动刷新回真实四态；`checking` 不再只用于版本变化。
+- 冒烟是每版本一次的成本（一次模型调用）；证据里有版本，CLI 升级后自动复核，不升级不重复跑。失败的冒烟
+  5 分钟内不重试（页面刷新不会反复起 CLI），只有版本变化（`checking`）与「核验」会强制再跑一次。
+- 修掉「面板探 PATH、执行器跑 app bundle」的分裂：`cliCommandOf` 改用执行器同一个 `resolveCliCommand`
+  （Codex 优先 app bundle）。此前面板看到 `codex` 0.171.0、冒烟写的是 app bundle 0.171.0-alpha.13.2，
+  版本永远对不上，会一直自我判成「复核中」。
+- `backend-smoke.test.js` 5 项（参数形状、成功后写证据、非零退出、超时被杀并带末行原因、CLI 不在）；
+  真机：Claude 2.1.329 冒烟通过（1.7s）；Codex 重新登录后 8.5s 通过，写证据、状态变派单可用；
+  Codex 登录失效时面板显示「CLI 超过 60 秒没有回答：ERROR: Reconnecting... 5/5」而不是「没有证据」。
+
 ## [1.5.5] — 2026-11-28
 
 ### 默认 Bot 现在能在 Bot 页改

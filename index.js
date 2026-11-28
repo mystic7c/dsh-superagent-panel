@@ -399,6 +399,9 @@ export function apply(ctx, config = {}) {
           const backendTouched = Object.keys(patch).some(key => key === 'executor.workerBackend'
             || key.startsWith('executor.workers') || key === 'executor.routing')
           const backends = backendTouched ? await engine.backendStates() : undefined
+          // The save only reports states; the CLI smoke behind a "no evidence yet" answer runs in the background so
+          // saving a backend never waits on a model call.
+          if (backendTouched) void engine.smokeCliBackends()
           send(res, 200, { applied: result.applied, ...reloaded, config: engine.configView(),
             ...(backends ? { backends } : {}) })
           return
