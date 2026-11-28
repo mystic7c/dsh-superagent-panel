@@ -202,17 +202,18 @@ export function ModelPicker({ groups = [], value, valueLabel, label, searchLabel
   </span>
 }
 
-/** Render the track only; the caller wraps it (and its visible text) in a `<label>`, so the text and the track form one
-    hit target and a click on either toggles the switch natively. `label` is the accessible name for switch rows whose
-    visible text lives outside the label (it may be omitted when the text is inside). */
+/** Render the track only; the caller keeps the visible text beside it as a sibling. A wrapping `<label>` would make
+    the whole row toggle, which reads as an accident on a long line. `label` is the accessible name of the input. */
 /** @param {{ checked?: any, onChange?: (checked: boolean) => void, label?: any, className?: string, disabled?: any, inputRef?: any }} props */
 export function Switch({ checked, onChange, label, className, disabled, inputRef }) {
-  return <span className={cx('sa-switch', className)}>
+  // The track itself is the label: it is a real toggle target for pointer and keyboard, while the row text beside it
+  // stays plain text — a click on a long explanation must not change a setting.
+  return <label className={cx('sa-switch', className)}>
     <input ref={inputRef} type="checkbox" role="switch" className="sa-switch-input"
       checked={Boolean(checked)} disabled={disabled} aria-label={typeof label === 'string' ? label : undefined}
       onChange={event => onChange(event.target.checked)} />
     <span className="sa-switch-track" aria-hidden="true"><span className="sa-switch-thumb" /></span>
-  </span>
+  </label>
 }
 
 /** Module counter behind the dialog description ids (React's `useId` is not re-exported by the panel's runtime shim). */

@@ -1412,6 +1412,25 @@ check('settings rail separates writable groups from reference groups',
     && navLabels.slice(6).join('/') === '评估/派单/提示词'
     && Boolean(rootElement.querySelector('.sa-settings-nav-sep')) && text().includes('参考'), JSON.stringify(navLabels))
 
+// A switch row is text plus a control, not one big click target: clicking the title or the hint used to flip the
+// setting (the row was a <label>). Only the track toggles now.
+const pushRow = () => [...rootElement.querySelectorAll('.sa-main .sa-switch-row')]
+  .find(node => node.querySelector('input[aria-label="允许推送分支"]'))
+const pushInputOf = () => pushRow()?.querySelector('input')
+const pushInitial = pushInputOf()?.checked
+if (pushRow()) {
+  pushRow().querySelector('.sa-switch-row-text').click()
+  await sleep(120)
+  check('clicking a switch row text does not toggle it',
+    pushInputOf()?.checked === pushInitial, JSON.stringify({ before: pushInitial, after: pushInputOf()?.checked }))
+  pushRow().querySelector('.sa-switch-track').click()
+  await sleep(120)
+  check('clicking the switch track still toggles it',
+    pushInputOf()?.checked === !pushInitial, JSON.stringify({ before: pushInitial, after: pushInputOf()?.checked }))
+  pushRow().querySelector('.sa-switch-track').click()
+  await sleep(120)
+}
+
 // U-06: turning on a permission is not a one-step save. The save bar expands a plain-language change list first and
 // the write happens only from that confirmation — a merge cannot be undone by turning the switch back off.
 const settingsWrites = () => calls.filter(call => call === 'POST /superagent/api/engine/settings').length

@@ -1293,13 +1293,13 @@ export function AutomationCard({ ticket, onSaved }) {
       <div className="sa-card">
         <div className="sa-card-head">
           <span className="sa-card-title">{automationSummaryText(t, stored) || pt(t, 'auto.modeOff')}</span>
-          <label className="sa-actions">
+          <div className="sa-actions">
             <span className="sa-hint">{pt(t, 'auto.enabled')}</span>
             {/* With mode 'off' the host persists enabled=false whatever the switch says, so the switch would spring
                 back on save (automationFormOf ANDs mode !== 'off'). Disable it instead of accepting a lie. */}
             <Switch checked={form.enabled && form.mode !== 'off'} disabled={form.mode === 'off'}
               onChange={value => update({ enabled: value })} label={pt(t, 'auto.enabled')} />
-          </label>
+          </div>
         </div>
         <div className="sa-field">
           <span className="sa-field-head">{pt(t, 'auto.mode')}</span>

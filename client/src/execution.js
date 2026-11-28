@@ -289,7 +289,9 @@ export function ExecutionQueuePage({ route }) {
               onSelect: () => updateView({ sort: 'created' }) },
           ] }),
         h('span', { className: 'sa-control-divider', 'aria-hidden': 'true' }),
-        h('label', { className: 'sa-switch-field' },
+        // Plain container: the visible chip is not a toggle target — only the switch pill is (a click on the words
+        // used to flip the filter, which read as an accident).
+        h('span', { className: 'sa-switch-field' },
           // No count here: the 已结束 chip already carries it, and the group badge repeats it — a third copy 40 px from
           // the first two (review A: the ended history had three reveals; the switch is the only include-control now).
           h('span', { className: 'sa-switch-label' }, pt(t, 'ex.showDone')),

@@ -694,18 +694,19 @@ export function SettingsSwitchRow({ label, hint, badge, tip, tipWarn, checked, d
     if (hintId) node.setAttribute('aria-describedby', hintId)
     else node.removeAttribute('aria-describedby')
   }, [hintId])
-  return <label className="sa-switch-row">
+  // Not a <label>: wrapping the row made every click on the title or hint toggle the switch. Only the track itself
+  // changes it now; the input keeps the visible text as its accessible name.
+  return <div className="sa-switch-row">
     <span className="sa-switch-row-text">
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--sa-sp-8)', flexWrap: 'wrap' }}>
         {label}
         {badge ?? null}
         {tip ? <InfoTip text={tip} warn={tipWarn === true} /> : null}
       </span>
-      {/* A <label> may only contain phrasing content, so the hint is a block-level span, not a <p>. */}
       {hint ? <span className="sa-hint" id={hintId} style={{ display: 'block' }}>{hint}</span> : null}
     </span>
     <Switch checked={Boolean(checked)} label={label} disabled={disabled} inputRef={inputRef} onChange={onChange} />
-  </label>
+  </div>
 }
 
 /** Result line for a one-shot action; the raw error is folded, never a bare stack. It is a polite live region so a
