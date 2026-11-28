@@ -77,6 +77,7 @@ export function useEngineActions(call) {
     // Worker bots live in their own store under the state dir (spec §4.1); the Settings page owns the editing.
     bots: () => call('GET engine/bots'),
     botStats: () => call('GET engine/bots/stats'),
+    botCatalog: () => call('GET engine/bots/catalog'),
     config: () => call('GET engine/config'),
     saveBots: bots => call('POST engine/bots', { body: { bots } }),
     verifyBotBackend: backend => call('POST engine/bots/verify', { body: { backend } }),

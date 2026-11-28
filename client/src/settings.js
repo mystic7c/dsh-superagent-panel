@@ -1008,8 +1008,18 @@ Object.assign(PAGE_TEXT, {
   'st.botsFieldModel': ['模型', 'Model'],
   'st.botsFieldPrefer': ['偏好 Skill', 'Preferred skills'],
   'st.botsFieldSkillsPolicy': ['Skill 策略', 'Skill policy'],
-  'st.botsInheritHint': ['预设、模型与 Skill 都跟随「设置 → 运行」；需要给这个 Bot 单独覆盖时才填。',
-    'Preset, model and skills follow 设置 → 运行; fill these only to override them for this bot.'],
+  'st.botsInheritHint': ['不填时：DSH 的预设与 Skill 跟随宿主默认；模型跟随后端自己的默认（DSH 用宿主模型，Claude / Codex 用「设置 → Worker」里配的 CLI 模型）。',
+    'Left empty, a DSH bot follows the host default preset and skills; the model follows the backend default (DSH: the host model, Claude / Codex: the CLI model configured under Settings → Worker).'],
+  'st.botsPresetHostDefault': ['跟随宿主默认', 'Host default'],
+  'st.botsPresetDshOnly': ['预设只有 DSH 后端有；Claude / Codex 使用它们自己的默认配置。',
+    'Only the DSH backend has host presets; Claude / Codex use their own defaults.'],
+  'st.botsModelHostDefault': ['跟随宿主默认', 'Host default'],
+  'st.botsModelCliPlaceholder': ['留空用「设置 → Worker」里的 CLI 模型', 'Empty uses the CLI model from Settings → Worker'],
+  'st.botsPreferHint': ['多选；只作为一句提示写进角色提示词，不是硬开关。',
+    'Multi-select; rendered as one hint line in the role prompt, not a hard switch.'],
+  'st.botsPreferMore': ['还有没列出来的 Skill？手填，逗号分隔', 'Not listed? Type names, comma separated'],
+  'st.botsPreferCliHint': ['该后端没有可从面板读取的 Skill 清单；需要时手填名称，逗号分隔。',
+    'This backend exposes no skill list to the panel; type names separated by commas if needed.'],
   'st.botsBudget': ['预算（只读，继承自设置）', 'Budget (read-only, inherited)'],
   'st.botsBudgetTimeout': ['超时', 'Timeout'],
   'st.botsBudgetIdle': ['空闲超时', 'Idle timeout'],
@@ -1087,7 +1097,7 @@ export function formToBot(form) {
   if (form.modelProvider) model.provider = form.modelProvider.trim()
   if (form.modelModel) model.model = form.modelModel.trim()
   if (form.reasoningEffort && form.reasoningEffort !== 'auto') model.reasoningEffort = form.reasoningEffort
-  if (model.provider && model.model) bot.model = model
+  if (model.model) bot.model = model
   const skills = {}
   const prefer = listOf(form.prefer)
   if (prefer.length) skills.prefer = prefer
@@ -1140,12 +1150,15 @@ export function BotsCard() {
   const load = async () => {
     const seqNow = ++seq.current
     try {
-      const [view, stats, config] = await Promise.all([
+      const [view, stats, config, catalog] = await Promise.all([
         actions.bots(),
         actions.botStats(),
         actions.config(),
+        // §5.4: the editor offers real presets/models/skills. Optional — a host that cannot list them still renders
+        // the editor with free-text fields.
+        Promise.resolve().then(() => actions.botCatalog?.()).catch(() => ({})),
       ])
-      if (seq.current === seqNow) setState({ busy: false, data: { view, stats, config }, error: undefined })
+      if (seq.current === seqNow) setState({ busy: false, data: { view, stats, config, catalog }, error: undefined })
     } catch (failure) {
       if (seq.current === seqNow) setState({ busy: false, data: undefined, error: failure })
     }
@@ -1164,9 +1177,14 @@ export function BotsCard() {
   }, [])
   if (state.error) return <ErrorState error={state.error} onRetry={() => { void load() }} />
   if (!state.data) return <Skeleton rows={4} />
-  const { view, stats, config } = state.data
+  const { view, stats, config, catalog } = state.data
   const bots = Array.isArray(view.bots) ? view.bots : []
   const presetIds = Array.isArray(view.presets) ? view.presets : []
+  const dshCatalog = catalog && typeof catalog.dsh === 'object' && catalog.dsh ? catalog.dsh : {}
+  const catalogPresets = Array.isArray(dshCatalog.presets) ? dshCatalog.presets : []
+  const catalogProviders = Array.isArray(dshCatalog.providers) ? dshCatalog.providers : []
+  const catalogSkills = Array.isArray(dshCatalog.skills) ? dshCatalog.skills : []
+  const presetChoices = [...new Set([...presetIds, ...catalogPresets])]
   const backends = view.backends && typeof view.backends === 'object' ? view.backends : {}
   const builtinOf = bot => BOT_BUILTIN_IDS.includes(bot?.id)
   const editField = (key, value) => setEditor(current => current ? { ...current, form: { ...current.form, [key]: value } } : current)
@@ -1217,6 +1235,20 @@ export function BotsCard() {
   const defaultBot = config?.executor?.bot ?? 'generalist'
   const statsOf = stats?.bots?.[selected?.id]
   const pending = Array.isArray(stats?.pending) ? stats.pending : []
+  // A backend decides what can be configured: only DSH has host presets, host models and a skill list. A CLI keeps
+  // those inside its binary, so the editor greys the preset out and falls back to free text instead of inventing rows.
+  const editorIsDsh = editor?.form?.backend === 'dsh'
+  const providerRow = catalogProviders.find(row => row.provider === editor?.form?.modelProvider)
+  const modelChoices = Array.isArray(providerRow?.models) ? providerRow.models : []
+  const preferTokens = listOf(editor?.form?.prefer ?? '')
+  const togglePrefer = name => {
+    const next = preferTokens.includes(name) ? preferTokens.filter(item => item !== name) : [...preferTokens, name]
+    editField('prefer', next.join(', '))
+  }
+  const changeBackend = value => setEditor(current => current ? { ...current, form: {
+    ...current.form, backend: value,
+    ...(value === 'dsh' ? {} : { preset: '', modelProvider: '' }),
+  } } : current)
   // Five questions, no capability toggles: who it is, what it is for, when to send it work, which backend, and how it
   // should behave. Budget and claims stay read-only so the editor never duplicates the settings pages.
   const editorPane = editor ? <Section title={editor.id ? pt(t, 'st.botsEdit') : pt(t, 'st.botsEditorNew')}>
@@ -1227,7 +1259,7 @@ export function BotsCard() {
           <Input value={editor.form.name} maxLength={40}
             onChange={event => editField('name', event.target.value)} /></label>
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldBackend')}</span>
-          <Select value={editor.form.backend} onChange={value => editField('backend', value)}
+          <Select value={editor.form.backend} onChange={changeBackend}
             options={BOT_BACKEND_OPTIONS.map(backend => ({ value: backend, label: backend }))} /></label>
         <label className="sa-field sa-field-wide"><span className="sa-field-head">{pt(t, 'st.botsFieldDescription')}</span>
           <Input value={editor.form.description} maxLength={120}
@@ -1245,19 +1277,49 @@ export function BotsCard() {
         onToggle={() => setAdvanced(value => !value)} />
       {advanced ? <div className="sa-field-grid">
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPreset')}</span>
-          <Input value={editor.form.preset} list="sa-bot-presets"
-            onChange={event => editField('preset', event.target.value)} /></label>
-        {presetIds.length
-          ? <datalist id="sa-bot-presets">{presetIds.map(id => <option key={id} value={id} />)}</datalist>
-          : null}
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
-          <Input value={editor.form.modelProvider} placeholder="provider"
-            onChange={event => editField('modelProvider', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head"> </span>
-          <Input value={editor.form.modelModel} placeholder="model"
-            onChange={event => editField('modelModel', event.target.value)} /></label>
-        <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
-          <Input value={editor.form.prefer} onChange={event => editField('prefer', event.target.value)} /></label>
+          <Select value={editor.form.preset} disabled={!editorIsDsh}
+            onChange={value => editField('preset', value)}
+            options={[{ value: '', label: pt(t, 'st.botsPresetHostDefault') },
+              ...presetChoices.map(id => ({ value: id, label: id }))]} /></label>
+        {editorIsDsh
+          ? null
+          : <p className="sa-hint">{pt(t, 'st.botsPresetDshOnly')}</p>}
+        {editorIsDsh && catalogProviders.length
+          ? <>
+            <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+              <Select value={editor.form.modelProvider} onChange={value => {
+                editField('modelProvider', value)
+                const models = catalogProviders.find(row => row.provider === value)?.models
+                if (!Array.isArray(models) || !models.some(model => model.id === editor.form.modelModel)) editField('modelModel', '')
+              }} options={[{ value: '', label: pt(t, 'st.botsModelHostDefault') },
+                ...catalogProviders.map(row => ({ value: row.provider, label: row.name }))]} /></label>
+            <label className="sa-field"><span className="sa-field-head"> </span>
+              <Select value={editor.form.modelModel} disabled={!editor.form.modelProvider}
+                onChange={value => editField('modelModel', value)}
+                options={[{ value: '', label: pt(t, 'st.botsPresetHostDefault') },
+                  ...modelChoices.map(model => ({ value: model.id, label: model.name }))]} /></label>
+          </>
+          : <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldModel')}</span>
+            <Input value={editor.form.modelModel} placeholder={pt(t, 'st.botsModelCliPlaceholder')}
+              onChange={event => editField('modelModel', event.target.value)} /></label>}
+        {editorIsDsh && catalogSkills.length
+          ? <div className="sa-field sa-field-wide">
+            <span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+            <div className="sa-check-row">
+              {catalogSkills.map(skill => <label key={skill.name} className="sa-check">
+                <input type="checkbox" checked={preferTokens.includes(skill.name)} onChange={() => togglePrefer(skill.name)} />
+                <span>{skill.name}</span>
+              </label>)}
+            </div>
+            <Input value={editor.form.prefer} aria-label={pt(t, 'st.botsPreferMore')}
+              placeholder={pt(t, 'st.botsPreferMore')} onChange={event => editField('prefer', event.target.value)} />
+            <p className="sa-hint">{pt(t, 'st.botsPreferHint')}</p>
+          </div>
+          : <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldPrefer')}</span>
+            <Input value={editor.form.prefer} onChange={event => editField('prefer', event.target.value)} /></label>}
+        {editorIsDsh && catalogSkills.length
+          ? null
+          : <p className="sa-hint">{pt(t, 'st.botsPreferCliHint')}</p>}
         <label className="sa-field"><span className="sa-field-head">{pt(t, 'st.botsFieldSkillsPolicy')}</span>
           <Select value={editor.form.skillsPolicy} onChange={value => editField('skillsPolicy', value)}
             options={[{ value: 'prompt', label: 'prompt' }, { value: 'preset', label: 'preset' }]} /></label>
@@ -1279,8 +1341,9 @@ export function BotsCard() {
     [pt(t, 'st.botsFieldBackend'), selected.backend ?? 'dsh'],
     [pt(t, 'st.botsFieldWhenToUse'), detailForm.whenToUse || pt(t, 'st.botsPreviewEmpty')],
     ...(detailForm.preset ? [[pt(t, 'st.botsFieldPreset'), detailForm.preset]] : []),
-    ...(detailForm.modelProvider && detailForm.modelModel
-      ? [[pt(t, 'st.botsFieldModel'), `${detailForm.modelProvider} · ${detailForm.modelModel}`]] : []),
+    ...(detailForm.modelModel
+      ? [[pt(t, 'st.botsFieldModel'), detailForm.modelProvider
+        ? `${detailForm.modelProvider} · ${detailForm.modelModel}` : detailForm.modelModel]] : []),
     [pt(t, 'st.botsBudget'),
       `${pt(t, 'st.botsBudgetTimeout')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetIdle')} ${pt(t, 'st.botsBudgetInherit')} · ${pt(t, 'st.botsBudgetRepairs')} ${pt(t, 'st.botsBudgetInherit')}`],
   ] : []

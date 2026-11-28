@@ -271,6 +271,8 @@ export function apply(ctx, config = {}) {
         if (method === 'GET' && second === 'bots' && third === undefined) { send(res, 200, await engine.botsView()); return }
         // Recent per-bot performance plus the ad-hoc ids worth turning into a Bot (1.5.0 §5.5/§5.6). Read-only.
         if (method === 'GET' && second === 'bots' && third === 'stats') { send(res, 200, engine.botStatsView()); return }
+        // §5.4: what this host can actually run — presets, provider/model rows, skills. One lazy read, cached 60s.
+        if (method === 'GET' && second === 'bots' && third === 'catalog') { send(res, 200, await engine.botCatalog()); return }
         if (method === 'POST' && second === 'bots' && third === undefined) {
           try {
             send(res, 200, await engine.saveBots({ bots: body?.bots }))

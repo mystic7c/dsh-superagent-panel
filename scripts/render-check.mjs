@@ -2567,6 +2567,21 @@ console.log('STEP pure projections')
     // claimants, which is why the detail pane is the only place that answer can come from.
     const config = { executor: { bot: 'generalist' },
       repos: [{ id: primaryRepoId, bot: 'mine' }, { id: 'repo-other', bot: 'generalist' }] }
+    // §5.4: the advanced editor offers what the host says it can run — named presets, provider → model rows, and the
+    // discovered skills. The stub mirrors a real DSH catalogue; the CLI backends expose nothing, which is the point.
+    const catalog = {
+      dsh: {
+        presets: ['standard', 'minimal'],
+        providers: [
+          { provider: 'deepseek', name: 'DeepSeek', models: [
+            { id: 'deepseek-v4', name: 'DeepSeek V4' }, { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }] },
+          { provider: 'zai', name: 'Z.ai', models: [{ id: 'glm-4.7', name: 'GLM-4.7' }] },
+        ],
+        skills: [{ name: 'ponytail', description: '最简解法' }, { name: 'review', description: '评审' }],
+      },
+      claude: { presets: [], providers: [], skills: [] },
+      codex: { presets: [], providers: [], skills: [] },
+    }
     const host = document.createElement('div')
     document.body.appendChild(host)
     const root = ReactDOM.createRoot(host)
@@ -2575,6 +2590,7 @@ console.log('STEP pure projections')
     const actions = {
       bots: async () => store('available'),
       botStats: async () => stats,
+      botCatalog: async () => catalog,
       config: async () => config,
       saveBots: async list => {
         lists.push(list)
@@ -2705,15 +2721,23 @@ console.log('STEP pure projections')
         && host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 1
         && advancedRow()?.getAttribute('aria-expanded') === 'false',
       `${editorControls().length} controls :: ${editorText().slice(0, 240)}`)
-    check('the editor says preset, model and skills follow 设置 → 运行',
-      /跟随「设置 → 运行」/.test(editorText()), editorText().slice(-200))
+    check('the editor says what is actually inherited instead of naming a settings page that lacks it',
+      /DSH 的预设与 Skill 跟随宿主默认/.test(editorText()) && /设置 → Worker/.test(editorText())
+        && !/设置 → 运行/.test(editorText()), editorText().slice(-220))
     host.querySelector('.sa-bots-editor .sa-disclosure-row')
       ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
     await sleep(140)
+    // This Bot runs on Claude, so the preset select is greyed out and says why; model stays a free-text CLI id.
+    // The backend select comes first; the preset is the greyed one for a CLI bot.
+    const presetSelect = () => [...host.querySelectorAll('.sa-bots-editor select')].find(select => select.disabled)
     check('opening 高级设置 reveals the overrides without switching to a different editor',
-      host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 2 && editorControls().length === 10
+      host.querySelectorAll('.sa-bots-editor .sa-field-grid').length === 2 && editorControls().length === 9
         && /偏好 Skill/.test(editorText()) && /Skill 策略/.test(editorText()),
       `${editorControls().length} controls`)
+    check('a CLI backend greys out the preset and keeps a free-text model id (§5.4)',
+      presetSelect()?.disabled === true && /预设只有 DSH 后端有/.test(editorText())
+        && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length === 0,
+      `${presetSelect()?.disabled} :: ${editorText().slice(-200)}`)
     // The DOM maxLength stops typing, not a paste from a script; the host is the authority and its code must land on
     // screen verbatim (§13.2).
     setValue(host.querySelector('.sa-bots-editor textarea[aria-label="什么时候派给它"]'), '长'.repeat(301))
@@ -2773,12 +2797,35 @@ console.log('STEP pure projections')
     // Create a Bot end to end: the draw is derived from the name, and the payload carries the v3 fields only — this is
     // the path that used to fail against the real host because it still carried the three built-ins (1.2.5).
     await clickIn(host, '新建 Bot')
-    const formInputs = [...host.querySelectorAll('.sa-bots-editor input')]
     check('creating a Bot asks only for the five fields, not a capability matrix (§5)',
       /创建/.test(editorText()) && editorControls().length === 5
         && host.querySelectorAll('.sa-bots-editor input[type="checkbox"]').length === 0,
       `${editorControls().length} controls :: ${editorText().slice(0, 200)}`)
-    setValue(formInputs[0], '探针 Bot')
+    // A new Bot defaults to DSH, so the advanced section now offers the host catalogue: a preset picker, a
+    // provider → model pair of selects, and the discovered skills as checkboxes.
+    host.querySelector('.sa-bots-editor .sa-disclosure-row')
+      ?.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    await sleep(140)
+    const advancedSelects = () => [...host.querySelectorAll('.sa-bots-editor select')]
+    const skillBoxes = () => [...host.querySelectorAll('.sa-bots-editor input[type="checkbox"]')]
+    // Selects, in DOM order: backend, preset, provider, model, skill policy. The model select stays disabled until a
+    // provider is chosen, which is what makes a provider/model pair impossible to half-fill.
+    check('a DSH bot picks its preset and model from the host catalogue (§5.4)',
+      advancedSelects().length === 5 && advancedSelects()[1].disabled === false
+        && advancedSelects()[2].options.length === 3 && advancedSelects()[3].disabled === true
+        && skillBoxes().length === 2,
+      `${advancedSelects().length} selects, ${skillBoxes().length} skills :: ${editorText().slice(-240)}`)
+    setValue(advancedSelects()[2], 'deepseek')
+    await sleep(120)
+    check('choosing a provider narrows the model list to that provider',
+      advancedSelects()[3].disabled === false
+        && [...advancedSelects()[3].options].some(option => option.textContent === 'DeepSeek V4 Pro'),
+      [...(advancedSelects()[3]?.options ?? [])].map(option => option.textContent).join('|'))
+    setValue(advancedSelects()[3], 'deepseek-v4-pro')
+    await sleep(120)
+    skillBoxes()[0]?.click()
+    await sleep(120)
+    setValue([...host.querySelectorAll('.sa-bots-editor input')].find(input => input.maxLength === 40), '探针 Bot')
     setValue(host.querySelector('.sa-bots-editor textarea[aria-label="什么时候派给它"]'), '只跑冒烟测试')
     await sleep(120)
     await clickIn(editorEl(), '创建', 200)
@@ -2790,6 +2837,10 @@ console.log('STEP pure projections')
         && Object.keys(minted ?? {}).every(key => BOT_KEYS.includes(key))
         && !created.some(item => BUILTIN_IDS.includes(item.id)),
       JSON.stringify(created.map(item => [item.id, item.name])).slice(0, 240))
+    check('a catalogue pick reaches the save as a real provider/model pair plus the chosen skill (§5.4)',
+      minted?.model?.provider === 'deepseek' && minted?.model?.model === 'deepseek-v4-pro'
+        && Array.isArray(minted?.skills?.prefer) && minted.skills.prefer.includes('ponytail'),
+      JSON.stringify({ model: minted?.model, skills: minted?.skills }))
     checkingRoot.unmount()
     host.remove()
   }

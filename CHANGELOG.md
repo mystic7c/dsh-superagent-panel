@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.5.1] — 2026-11-28
+
+### Bot 编辑器的「高级设置」按后端给真选项，而不是编一排输入框
+
+新建 Bot 的提示写着「预设、模型与 Skill 都跟随『设置 → 运行』」，可设置里只有一个 Worker 模型字段——预设、Skill
+与 Skill 策略在那里根本没有入口。同时高级设置把三项都做成自由文本：预设只对 DSH 生效却照样能填，模型要人肉拼
+`provider/model`，Skill 只能靠记名字。
+
+- **Host 新增目录**（`lib/live/bot-catalog.js`）：`GET engine/bots/catalog` 读宿主的 `agentPresets`、`llm`
+  （`listProviders` + 每个 provider 的 `listModels`）与 `skills`，返回 DSH 的预设、provider → 模型、Skill 清单；
+  单个 provider 失败或 1.5s 不答只丢它自己，整页不陪葬；引擎内缓存 60s。CLI 后端的清单为空——模型名在二进制里，
+  面板不编。
+- **编辑器**：DSH 的预设是下拉、模型是 provider → model 两段下拉（未选 provider 时模型禁用，配不出半对）、
+  偏好 Skill 是来自目录的多选，目录没列出的仍可手填；Claude / Codex 的预设置灰并说明原因，模型退化成手填 id；
+  提示语改成真正继承了什么。
+- **契约放宽**：`model` 只要求 `model`（模型 id），`provider` 改可选——DSH 仍要求成对；CLI 只把 id 传给 `--model`。
+  之前 `formToBot` 要求 `provider && model`，CLI 只填模型会被静默丢弃。
+- **验证**：`lib/live/bot-catalog.test.js` 4 项（真实清单 / 服务缺失或抛错 → 空 / 单 provider 失败只丢它 / 卡死的
+  provider 被 1.5s 截断）；render-check 新增目录目录与置灰/多选/落盘断言（346 项，0 失败 1 跳过）；`worker-bot.test.js` 补
+  「CLI 只给 id 合法、DSH 必须成对」。门禁：`node --test lib/live/*.test.js` 738 通过，render-check 346/0/1，
+  check-keys（1038 literal / 557 shared / 1480 page-local）、types、check:js、build-client 全绿（855391 B）。
+
 ## [1.5.0] — 2026-11-26
 
 ### 派单只筛一条硬事实：后端此刻可用；选谁由模型读 Bot 自己写的 whenToUse
