@@ -1394,7 +1394,7 @@ check('dispatch group is its own read-only H2 group',
   dispatchTitles.length === 1 && dispatchTitles[0] === '派单'
     && !rootElement.querySelector('.sa-main .sa-savebar'), JSON.stringify({ dispatchTitles }))
 check('dispatch group explains candidates, pick, no-model, fallback, danger and explicit choice',
-  ['候选：所有 Bot 里', '挑选：一次模型调用', '不调模型', '失败怎么办', '危险行为在哪拦', '两种显式指定']
+  ['候选', '所有 Bot 里，它自己的后端此刻可用的那些', '挑选', '一次模型调用', '不调模型', '失败回退', '危险行为', '显式指定']
     .every(fact => dispatchText.includes(fact)), dispatchText.slice(0, 500))
 check('dispatch group points at the Bot page and the Worker group instead of editing anything here',
   dispatchText.includes('打开 Bot 页') && dispatchText.includes('在「Bot」页改')
