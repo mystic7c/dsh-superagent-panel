@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.5] — 2026-11-28
+
+### 默认 Bot 现在能在 Bot 页改
+
+「派单」页说默认 Bot 在 Bot 页改，但 Bot 页只有编辑/复制/删除——`executor.bot` 根本没有入口。默认 Bot 是设置
+不是 Bot 编辑（内置 Bot 也能当默认），所以在 Bot 详情页加了「设为默认」：写 `executor.bot`、重载视图，
+已经是默认的那个不显示按钮。派单页的说明同步改成「选中它后点『设为默认』改」。
+
+- `live-json` 的允许清单补上 `executor.bot`（`bot-id` 校验：小写字母/数字/连字符，防止把「no bot found」写进配置）；
+  `live-json.test.js` 增加接受/拒绝用例。
+- render-check +2 项（按钮存在、点击写的是 `executor.bot` 而不是 bot store），355 项 0 失败；747 tests。
+
 ## [1.5.4] — 2026-11-28
 
 ### 设置 → 派单 不再竖着读

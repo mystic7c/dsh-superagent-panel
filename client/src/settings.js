@@ -271,9 +271,10 @@ Object.assign(PAGE_TEXT, {
   'st.dispatchExplicit': ['显式指定', 'Explicit choice'],
   'st.dispatchExplicitText': ['仓库指定（repos[].bot）与工单手动指定（ticket.botOverride）永远先于挑选；即使后端此刻不可用也不会被静默换人，执行器会带着原因拒绝。',
     'The repository bot and the one-run Ticket override always come before the pick; an explicit choice is never silently swapped, the executor refuses with the reason.'],
-  'st.dispatchDefaultNote': ['默认 Bot（{id}）在「Bot」页改；后端可用性在「Worker」组看。',
+  'st.dispatchDefaultNote': ['默认 Bot（{id}）在「Bot」页选中它后点「设为默认」改；后端可用性在「Worker」组看。',
     'The default bot ({id}) is changed on the Bot page; backend availability lives in the Worker group.'],
   'st.dispatchOpenBots': ['打开 Bot 页', 'Open the Bot page'],
+  'st.botsMakeDefault': ['设为默认', 'Make default'],
   'st.writeHint': ['执行器对远端仓库和来源群的写权限。关闭时执行器只准备改动：不推送分支、不合并 MR、不回群。',
     'What the executor may write to the remote repository and to the source group. When off it only prepares changes: no branch push, no MR merge, no group reply.'],
   'st.deployHint': ['这里只读展示 live.json 的位置与工作树根目录；项目、分支、令牌、UAT 与健康检查地址在上方仓库列表里逐行编辑。',
@@ -1104,6 +1105,7 @@ export function BotsCard() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(undefined)
   const [verifying, setVerifying] = useState('')
+  const [settingDefault, setSettingDefault] = useState('')
   const [pickedId, setPickedId] = useState('')
   const [advanced, setAdvanced] = useState(false)
   const seq = useRef(0)
@@ -1179,6 +1181,15 @@ export function BotsCard() {
       await actions.saveBots(bots.filter(item => !builtinOf(item) && item.id !== bot.id).map(stripBotForSave))
       await load()
     } catch (failure) { setSaveError(failure); throw failure }
+  }
+  // The default bot is `executor.bot`: it is the fallback when the pick cannot run. It is a setting, not a bot edit,
+  // so it lives here rather than in the editor — a built-in can be the default without being editable.
+  const makeDefault = async id => {
+    setSettingDefault(id)
+    try {
+      await actions.patchSettings({ 'executor.bot': id })
+      await load()
+    } catch (failure) { setSaveError(failure) } finally { setSettingDefault('') }
   }
   const verify = async backend => {
     setVerifying(backend)
@@ -1335,6 +1346,9 @@ export function BotsCard() {
                 {builtinOf(selected)
                   ? null
                   : <Button size="sm" variant="outline" onClick={() => openEditor(selected)}>{t('edit')}</Button>}
+                {selected.id === defaultBot ? null : <Button size="sm" variant="ghost"
+                  disabled={settingDefault === selected.id}
+                  onClick={() => { void makeDefault(selected.id) }}>{pt(t, 'st.botsMakeDefault')}</Button>}
                 <CopyButton value={JSON.stringify(stripBotForSave(selected), null, 2)} label={pt(t, 'st.botsCopy')} />
                 {builtinOf(selected)
                   ? <Button size="sm" variant="ghost" onClick={() => openEditor(undefined, { ...selected, id: `${selected.id}-copy`,

@@ -1397,7 +1397,7 @@ check('dispatch group explains candidates, pick, no-model, fallback, danger and 
   ['候选', '所有 Bot 里，它自己的后端此刻可用的那些', '挑选', '一次模型调用', '不调模型', '失败回退', '危险行为', '显式指定']
     .every(fact => dispatchText.includes(fact)), dispatchText.slice(0, 500))
 check('dispatch group points at the Bot page and the Worker group instead of editing anything here',
-  dispatchText.includes('打开 Bot 页') && dispatchText.includes('在「Bot」页改')
+  dispatchText.includes('打开 Bot 页') && dispatchText.includes('在「Bot」页选中它后点「设为默认」改')
     && dispatchText.includes('后端可用性在「Worker」组看'), dispatchText.slice(0, 500))
 check('dispatch group no longer describes probes, rules or capability declarations as editable facts',
   !/分派规则|探针|能力声明可编辑/.test(dispatchText), dispatchText.slice(0, 500))
@@ -2609,8 +2609,10 @@ console.log('STEP pure projections')
     document.body.appendChild(host)
     const root = ReactDOM.createRoot(host)
     const lists = []
+    const patches = []
     const panel = { t, call: async () => ({}), navigate() {}, notify() {}, back() {}, openSession() {}, backLabel: '' }
     const actions = {
+      patchSettings: async patch => { patches.push(patch); return {} },
       bots: async () => store('available'),
       botStats: async () => stats,
       botCatalog: async () => catalog,
@@ -2699,6 +2701,15 @@ console.log('STEP pure projections')
         && /预设/.test(detailPane()?.textContent ?? '') && /default/.test(detailPane()?.textContent ?? '')
         && /anthropic · claude-sonnet/.test(detailPane()?.textContent ?? ''),
       detailPane()?.textContent?.slice(0, 300) ?? 'no detail pane')
+    // The default Bot is `executor.bot` — a setting, not a Bot edit — so the pane offers the switch in place and a
+    // built-in can hold it without becoming editable.
+    check('the detail pane offers 设为默认 for a Bot that is not the default',
+      /设为默认/.test(detailPane()?.textContent ?? ''), detailPane()?.textContent?.slice(0, 200) ?? 'no pane')
+    await clickIn(detailPane(), '设为默认')
+    await sleep(160)
+    check('making a Bot the default writes executor.bot, not the bot store (§2.2)',
+      patches.some(patch => patch['executor.bot'] === 'mine') && lists.length === 0,
+      JSON.stringify({ patches, lists: lists.length }))
     // Preset, model, skills and budget are inherited from 设置 → 运行: the pane reports them, an input would duplicate a
     // setting that has exactly one home.
     check('the detail pane reports the inherited budget and offers no input for it',
